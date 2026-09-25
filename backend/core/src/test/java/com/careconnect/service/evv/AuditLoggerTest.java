@@ -19,15 +19,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuditLoggerTest {
 
-    @Mock EvvAuditEventRepository repo;
-    @Mock EvvRecord               evvRecord;
+    @Mock
+    EvvAuditEventRepository repo;
+    @Mock
+    EvvRecord evvRecord;
 
-    @InjectMocks AuditLogger auditLogger;
+    @InjectMocks
+    AuditLogger auditLogger;
 
     @Test
     void log_savesAuditEventWithCorrectFields() throws Exception {
         final Map<String, Object> deviceInfo = Map.of("device", "mobile");
-        final Map<String, Object> details   = Map.of("key", "value");
+        final Map<String, Object> details = Map.of("key", "value");
 
         when(evvRecord.getDeviceInfo()).thenReturn(deviceInfo);
 

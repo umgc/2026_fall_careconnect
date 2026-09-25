@@ -56,8 +56,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.resetPassword(req);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertThat(body).containsEntry("message", "Password updated successfully");
     }
 
@@ -73,8 +72,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.resetPassword(req);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertThat(body).containsEntry("error", "Invalid token");
     }
 
@@ -88,8 +86,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.setupPassword(req);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertThat(body).containsEntry("message", "Password setup completed successfully");
     }
 
@@ -102,8 +99,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.setupPassword(req);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertThat(body).containsEntry("error", "Expired token");
     }
 
@@ -164,8 +160,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.toggleLeaderboardOptIn(1L, Collections.emptyMap());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertThat(body).containsKey("error");
     }
 
@@ -213,8 +208,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.checkEmailExists("found@test.com");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsEntry("exists", true);
         assertThat(body).containsKey("role");
         assertThat(body).containsKey("userId");
@@ -227,8 +221,7 @@ class UserControllerTest {
         final ResponseEntity<?> response = controller.checkEmailExists("missing@test.com");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsEntry("exists", false);
     }
 }

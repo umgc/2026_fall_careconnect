@@ -63,7 +63,7 @@ class ScheduledNotificationControllerTest {
     }
 
     private ScheduledNotification buildNotification(Long receiverId, String title, String body,
-                                                     String type, LocalDateTime scheduledTime) {
+                                                    String type, LocalDateTime scheduledTime) {
         return ScheduledNotification.builder()
                 .id(100L)
                 .receiverId(receiverId)

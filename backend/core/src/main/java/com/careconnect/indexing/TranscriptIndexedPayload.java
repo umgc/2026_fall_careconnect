@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+
 import java.io.IOException;
 
 /**
@@ -21,12 +22,12 @@ import java.io.IOException;
  * Deserialization prefers canonical {@code totalSegmentCount}/{@code snapshotVersion}
  * when both canonical and legacy keys are present, so dual-key payloads remain ingestible.
  *
- * @param callId       call identifier the segments belong to
- * @param patientId    patient the call is associated with; nullable
- *                     until the call telemetry lookup lands or the
- *                     caller can supply it directly
+ * @param callId            call identifier the segments belong to
+ * @param patientId         patient the call is associated with; nullable
+ *                          until the call telemetry lookup lands or the
+ *                          caller can supply it directly
  * @param totalSegmentCount number of segments in the complete authoritative snapshot
- * @param snapshotVersion deterministic version of that complete snapshot
+ * @param snapshotVersion   deterministic version of that complete snapshot
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonDeserialize(using = TranscriptIndexedPayload.Deserializer.class)
@@ -43,24 +44,6 @@ public record TranscriptIndexedPayload(
      * Prefers canonical field names over legacy aliases when both appear in JSON.
      */
     static final class Deserializer extends JsonDeserializer<TranscriptIndexedPayload> {
-        @Override
-        public TranscriptIndexedPayload deserialize(
-                final JsonParser parser,
-                final DeserializationContext context) throws IOException {
-            final JsonNode node = parser.getCodec().readTree(parser);
-            final String callId = textOrNull(node.get("callId"));
-            final Long patientId = longOrNull(node.get("patientId"));
-            final int totalSegmentCount = firstInt(
-                    node.get("totalSegmentCount"),
-                    node.get("segmentCount"),
-                    0);
-            final String snapshotVersion = firstText(
-                    node.get("snapshotVersion"),
-                    node.get("source"));
-            return new TranscriptIndexedPayload(
-                    callId, patientId, totalSegmentCount, snapshotVersion);
-        }
-
         private static String textOrNull(final JsonNode node) {
             return node == null || node.isNull() ? null : node.asText();
         }
@@ -93,6 +76,24 @@ public record TranscriptIndexedPayload(
                 return fallback.asText();
             }
             return null;
+        }
+
+        @Override
+        public TranscriptIndexedPayload deserialize(
+                final JsonParser parser,
+                final DeserializationContext context) throws IOException {
+            final JsonNode node = parser.getCodec().readTree(parser);
+            final String callId = textOrNull(node.get("callId"));
+            final Long patientId = longOrNull(node.get("patientId"));
+            final int totalSegmentCount = firstInt(
+                    node.get("totalSegmentCount"),
+                    node.get("segmentCount"),
+                    0);
+            final String snapshotVersion = firstText(
+                    node.get("snapshotVersion"),
+                    node.get("source"));
+            return new TranscriptIndexedPayload(
+                    callId, patientId, totalSegmentCount, snapshotVersion);
         }
     }
 }

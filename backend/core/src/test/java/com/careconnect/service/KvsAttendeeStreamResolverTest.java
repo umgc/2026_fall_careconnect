@@ -7,9 +7,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.careconnect.model.CallAttendee;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,11 +28,21 @@ class KvsAttendeeStreamResolverTest {
     private static final String MEETING_ID = "meeting-uuid";
     private static final String MEDIA_PIPELINE_ID = "media-pipeline-1";
 
-    @Mock private KvsPoolStreamDiscoveryService poolStreamDiscoveryService;
-    @Mock private KvsStreamPoolService kvsStreamPoolService;
+    @Mock
+    private KvsPoolStreamDiscoveryService poolStreamDiscoveryService;
+    @Mock
+    private KvsStreamPoolService kvsStreamPoolService;
 
     private KvsAttendeeStreamRegistry registry;
     private KvsAttendeeStreamResolver resolver;
+
+    private static CallAttendee buildAttendee(final String chimeAttendeeId, final int joinOrderMinutes) {
+        final CallAttendee attendee = new CallAttendee();
+        attendee.setCallId(CALL_ID);
+        attendee.setChimeAttendeeId(chimeAttendeeId);
+        attendee.setJoinedAt(LocalDateTime.now().minusMinutes(joinOrderMinutes));
+        return attendee;
+    }
 
     @BeforeEach
     void setUp() {
@@ -85,13 +97,5 @@ class KvsAttendeeStreamResolverTest {
                         "att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1");
         verify(poolStreamDiscoveryService)
                 .discoverAndRegister(eq(CALL_ID), eq(MEETING_ID), eq(List.of("att-caregiver")));
-    }
-
-    private static CallAttendee buildAttendee(final String chimeAttendeeId, final int joinOrderMinutes) {
-        final CallAttendee attendee = new CallAttendee();
-        attendee.setCallId(CALL_ID);
-        attendee.setChimeAttendeeId(chimeAttendeeId);
-        attendee.setJoinedAt(LocalDateTime.now().minusMinutes(joinOrderMinutes));
-        return attendee;
     }
 }

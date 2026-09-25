@@ -72,10 +72,10 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for CallRecordingService.
- *
+ * <p>
  * Uses pure Mockito (no Spring context). @Value fields are injected
  * via ReflectionTestUtils in @BeforeEach.
- *
+ * <p>
  * AWS SDK v2 methods have both (Request) and (Consumer<Builder>) overloads;
  * typed matchers such as any(SomeRequest.class) are used throughout to avoid
  * ambiguity.
@@ -87,43 +87,69 @@ class CallRecordingServiceTest {
 
     // ── Mocked dependencies ───────────────────────────────────────────────────
 
-    @Mock private ChimeSdkMediaPipelinesClient pipelinesClient;
-    @Mock private StsClient stsClient;
-    @Mock private S3Presigner s3Presigner;
-    @Mock private S3Client s3Client;
-    @Mock private IamClient iamClient;
-    @Mock private ChimeService chimeService;
-    @Mock private CallRecordingRepository recordingRepository;
-    @Mock private CallAttendeeRepository callAttendeeRepository;
-    @Mock private PostCallTranscriptionService postCallTranscriptionService;
-    @Mock private KvsStreamPoolService kvsStreamPoolService;
-    @Mock private KvsAttendeeStreamResolver kvsAttendeeStreamResolver;
-    @Mock private KvsAttendeeStreamRegistry kvsAttendeeStreamRegistry;
-    @Mock private CallAttendeeService callAttendeeService;
-
-    @InjectMocks
-    private CallRecordingService service;
-
-    // ── Constants used across tests ───────────────────────────────────────────
-
-    private static final String CALL_ID          = "call-abc-123";
-    private static final String MEETING_ID        = "meeting-uuid-001";
-    private static final String PIPELINE_ID       = "pipeline-uuid-001";
-    private static final String BUCKET            = "careconnect-recordings-123456789012-us-east-1";
-    private static final String S3_PREFIX         = "recordings/" + CALL_ID + "/20260312-100000/";
-    private static final String ACCOUNT_ID        = "123456789012";
+    private static final String CALL_ID = "call-abc-123";
+    private static final String MEETING_ID = "meeting-uuid-001";
+    private static final String PIPELINE_ID = "pipeline-uuid-001";
+    private static final String BUCKET = "careconnect-recordings-123456789012-us-east-1";
+    private static final String S3_PREFIX = "recordings/" + CALL_ID + "/20260312-100000/";
+    private static final String ACCOUNT_ID = "123456789012";
     private static final String MEDIA_STREAM_PIPELINE_ID = "media-stream-pipeline-uuid-001";
     private static final String STREAM_POOL_ARN =
             "arn:aws:chime:us-east-1:123456789012:media-pipeline-kinesis-video-stream-pool/dev";
-    private static final long   USER_ID           = 42L;
+    private static final long USER_ID = 42L;
+    @Mock
+    private ChimeSdkMediaPipelinesClient pipelinesClient;
+    @Mock
+    private StsClient stsClient;
+    @Mock
+    private S3Presigner s3Presigner;
+    @Mock
+    private S3Client s3Client;
+    @Mock
+    private IamClient iamClient;
+
+    // ── Constants used across tests ───────────────────────────────────────────
+    @Mock
+    private ChimeService chimeService;
+    @Mock
+    private CallRecordingRepository recordingRepository;
+    @Mock
+    private CallAttendeeRepository callAttendeeRepository;
+    @Mock
+    private PostCallTranscriptionService postCallTranscriptionService;
+    @Mock
+    private KvsStreamPoolService kvsStreamPoolService;
+    @Mock
+    private KvsAttendeeStreamResolver kvsAttendeeStreamResolver;
+    @Mock
+    private KvsAttendeeStreamRegistry kvsAttendeeStreamRegistry;
+    @Mock
+    private CallAttendeeService callAttendeeService;
+    @InjectMocks
+    private CallRecordingService service;
+
+    private static CallAttendee buildCallAttendee(
+            final String chimeAttendeeId, final Long userId, final String role) {
+        final CallAttendee attendee = new CallAttendee();
+        attendee.setCallId(CALL_ID);
+        attendee.setChimeAttendeeId(chimeAttendeeId);
+        attendee.setUserId(userId);
+        attendee.setRole(role);
+        attendee.setJoinedAt(LocalDateTime.now());
+        return attendee;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  startRecording
+    // ══════════════════════════════════════════════════════════════════════════
 
     @BeforeEach
     void setUp() {
         // Inject @Value fields that Mockito cannot set automatically
-        ReflectionTestUtils.setField(service, "recordingEnabled",      true);
+        ReflectionTestUtils.setField(service, "recordingEnabled", true);
         ReflectionTestUtils.setField(service, "presignedUrlTtlMinutes", 15);
-        ReflectionTestUtils.setField(service, "rawCleanupEnabled",      true);
-        ReflectionTestUtils.setField(service, "corsAllowedOrigins",     "http://localhost:*");
+        ReflectionTestUtils.setField(service, "rawCleanupEnabled", true);
+        ReflectionTestUtils.setField(service, "corsAllowedOrigins", "http://localhost:*");
         ReflectionTestUtils.setField(service, "recordingCorsAllowWildcard", true);
 
         // Pre-wire STS so account-ID resolution succeeds in any test that
@@ -145,7 +171,25 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  startRecording
+    //  stopRecording
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Builds a minimal CallRecording for use in tests.
+     */
+    private CallRecording buildRecording(String status) {
+        CallRecording rec = new CallRecording();
+        rec.setId(1L);
+        rec.setCallId(CALL_ID);
+        rec.setPipelineId(PIPELINE_ID);
+        rec.setStatus(status);
+        rec.setInitiatedByUserId(USER_ID);
+        rec.setStartedAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10));
+        return rec;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  getRecordingStatus
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -297,15 +341,15 @@ class CallRecordingServiceTest {
                 MediaCapturePipeline pipeline =
                         MediaCapturePipeline.builder().mediaPipelineId(PIPELINE_ID).build();
                 when(pipelinesClient.createMediaCapturePipeline(
-                                any(CreateMediaCapturePipelineRequest.class)))
+                        any(CreateMediaCapturePipelineRequest.class)))
                         .thenReturn(
                                 CreateMediaCapturePipelineResponse.builder()
                                         .mediaCapturePipeline(pipeline)
                                         .build());
                 when(s3Client.putBucketPolicy(
-                                any(
-                                        software.amazon.awssdk.services.s3.model
-                                                .PutBucketPolicyRequest.class)))
+                        any(
+                                software.amazon.awssdk.services.s3.model
+                                        .PutBucketPolicyRequest.class)))
                         .thenReturn(
                                 software.amazon.awssdk.services.s3.model.PutBucketPolicyResponse
                                         .builder()
@@ -354,7 +398,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  stopRecording
+    //  generatePlaybackUrl
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -450,7 +494,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  getRecordingStatus
+    //  purgeRecordingsForCall
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -524,7 +568,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  generatePlaybackUrl
+    //  purgeAllRecordings
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -679,7 +723,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  purgeRecordingsForCall
+    //  cleanupRawArtifactsForCall
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -735,7 +779,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  purgeAllRecordings
+    //  getRecordingsByUser
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -790,7 +834,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  cleanupRawArtifactsForCall
+    //  getAllRecordings
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -835,7 +879,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  getRecordingsByUser
+    //  getRecordingsForCall
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -880,7 +924,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  getAllRecordings
+    //  recordingEnabled=false edge cases
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -926,10 +970,6 @@ class CallRecordingServiceTest {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  getRecordingsForCall
-    // ══════════════════════════════════════════════════════════════════════════
-
     @Nested
     @DisplayName("getRecordingsForCall")
     class GetRecordingsForCallTests {
@@ -958,10 +998,6 @@ class CallRecordingServiceTest {
             assertThat(results.get(0)).containsEntry("callId", CALL_ID);
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  recordingEnabled=false edge cases
-    // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("additional edge paths")
@@ -1261,6 +1297,10 @@ class CallRecordingServiceTest {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  initRecordingInfrastructure
+    // ══════════════════════════════════════════════════════════════════════════
+
     @Nested
     @DisplayName("recording bucket CORS (F1 / M7)")
     class RecordingBucketCorsTests {
@@ -1310,6 +1350,10 @@ class CallRecordingServiceTest {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  reconcileCompletedRecordingCleanup
+    // ══════════════════════════════════════════════════════════════════════════
+
     @Nested
     @DisplayName("recordingEnabled=false edge cases")
     class RecordingDisabledTests {
@@ -1335,7 +1379,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  initRecordingInfrastructure
+    //  stopRecording — additional edge cases
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -1375,7 +1419,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  reconcileCompletedRecordingCleanup
+    //  startRecording — additional edge cases
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -1484,7 +1528,7 @@ class CallRecordingServiceTest {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  stopRecording — additional edge cases
+    //  startKvsPipeline (pool ingest → assemble fragments post-call)
     // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -1554,7 +1598,7 @@ class CallRecordingServiceTest {
                                     .build())
                             .build());
             when(pipelinesClient.deleteMediaCapturePipeline(
-                            any(DeleteMediaCapturePipelineRequest.class)))
+                    any(DeleteMediaCapturePipelineRequest.class)))
                     .thenThrow(new RuntimeException("temporary delete failure"))
                     .thenReturn(DeleteMediaCapturePipelineResponse.builder().build());
             when(pipelinesClient.createMediaConcatenationPipeline(
@@ -1576,10 +1620,6 @@ class CallRecordingServiceTest {
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  startRecording — additional edge cases
-    // ══════════════════════════════════════════════════════════════════════════
-
     @Nested
     @DisplayName("startRecording — additional edge cases")
     class StartRecordingAdditionalTests {
@@ -1597,10 +1637,6 @@ class CallRecordingServiceTest {
             assertThat(result).containsEntry("status", "ERROR");
         }
     }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  startKvsPipeline (pool ingest → assemble fragments post-call)
-    // ══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("startKvsPipeline")
@@ -1630,10 +1666,10 @@ class CallRecordingServiceTest {
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
                     .thenReturn(List.of(caregiver, patient));
             when(kvsAttendeeStreamResolver.resolve(
-                            eq(CALL_ID),
-                            anyList(),
-                            eq(MEDIA_STREAM_PIPELINE_ID),
-                            eq(MEETING_ID)))
+                    eq(CALL_ID),
+                    anyList(),
+                    eq(MEDIA_STREAM_PIPELINE_ID),
+                    eq(MEETING_ID)))
                     .thenReturn(
                             Map.of(
                                     "att-caregiver", "arn:kvs:stream-1",
@@ -1677,10 +1713,10 @@ class CallRecordingServiceTest {
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
                     .thenReturn(List.of(caregiver, patient));
             when(kvsAttendeeStreamResolver.resolve(
-                            eq(CALL_ID),
-                            anyList(),
-                            eq(MEDIA_STREAM_PIPELINE_ID),
-                            eq(MEETING_ID)))
+                    eq(CALL_ID),
+                    anyList(),
+                    eq(MEDIA_STREAM_PIPELINE_ID),
+                    eq(MEETING_ID)))
                     .thenReturn(
                             Map.of(
                                     "att-caregiver", "arn:kvs:stream-1",
@@ -1741,7 +1777,7 @@ class CallRecordingServiceTest {
                                                     .build())
                                     .build());
             when(kvsAttendeeStreamResolver.resolve(
-                            eq(CALL_ID), anyList(), eq(MEDIA_STREAM_PIPELINE_ID), eq(MEETING_ID)))
+                    eq(CALL_ID), anyList(), eq(MEDIA_STREAM_PIPELINE_ID), eq(MEETING_ID)))
                     .thenReturn(
                             Map.of(
                                     "att-1", "arn:aws:kinesisvideo:us-east-1:1:stream/a/1",
@@ -1768,7 +1804,7 @@ class CallRecordingServiceTest {
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
                     .thenReturn(List.of(buildCallAttendee("att-1", 1L, "CAREGIVER")));
             when(kvsAttendeeStreamResolver.resolve(
-                            eq(CALL_ID), anyList(), eq(MEDIA_STREAM_PIPELINE_ID), eq(MEETING_ID)))
+                    eq(CALL_ID), anyList(), eq(MEDIA_STREAM_PIPELINE_ID), eq(MEETING_ID)))
                     .thenReturn(Map.of("att-1", "arn:kvs:stream-1"));
             when(pipelinesClient.createMediaStreamPipeline(any(CreateMediaStreamPipelineRequest.class)))
                     .thenReturn(
@@ -1801,10 +1837,10 @@ class CallRecordingServiceTest {
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
                     .thenReturn(List.of(caregiver, patient));
             when(kvsAttendeeStreamResolver.resolve(
-                            eq(CALL_ID),
-                            anyList(),
-                            eq(MEDIA_STREAM_PIPELINE_ID),
-                            eq(MEETING_ID)))
+                    eq(CALL_ID),
+                    anyList(),
+                    eq(MEDIA_STREAM_PIPELINE_ID),
+                    eq(MEETING_ID)))
                     .thenReturn(
                             Map.of(
                                     "att-caregiver",
@@ -1941,7 +1977,7 @@ class CallRecordingServiceTest {
             when(callAttendeeRepository.findByCallIdAndLeftAtIsNull(CALL_ID))
                     .thenReturn(List.of(caregiver));
             when(kvsAttendeeStreamResolver.resolve(
-                            CALL_ID, List.of(caregiver), MEDIA_STREAM_PIPELINE_ID, MEETING_ID))
+                    CALL_ID, List.of(caregiver), MEDIA_STREAM_PIPELINE_ID, MEETING_ID))
                     .thenReturn(Map.of("att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1"));
 
             final Map<String, String> streams =
@@ -1953,30 +1989,5 @@ class CallRecordingServiceTest {
                     .recordKvsStreamMapping(
                             CALL_ID, "att-caregiver", "arn:aws:kinesisvideo:us-east-1:1:stream/chime/1");
         }
-    }
-
-    private static CallAttendee buildCallAttendee(
-            final String chimeAttendeeId, final Long userId, final String role) {
-        final CallAttendee attendee = new CallAttendee();
-        attendee.setCallId(CALL_ID);
-        attendee.setChimeAttendeeId(chimeAttendeeId);
-        attendee.setUserId(userId);
-        attendee.setRole(role);
-        attendee.setJoinedAt(LocalDateTime.now());
-        return attendee;
-    }
-
-    /**
-     * Builds a minimal CallRecording for use in tests.
-     */
-    private CallRecording buildRecording(String status) {
-        CallRecording rec = new CallRecording();
-        rec.setId(1L);
-        rec.setCallId(CALL_ID);
-        rec.setPipelineId(PIPELINE_ID);
-        rec.setStatus(status);
-        rec.setInitiatedByUserId(USER_ID);
-        rec.setStartedAt(LocalDateTime.now(ZoneOffset.UTC).minusMinutes(10));
-        return rec;
     }
 }

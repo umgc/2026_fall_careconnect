@@ -32,12 +32,12 @@ import java.util.Map;
  */
 @Entity
 @Table(
-    name = "form_submissions",
-    indexes = {
-        @Index(name = "idx_form_submission_owner", columnList = "owner_id, owner_type"),
-        @Index(name = "idx_form_submission_definition", columnList = "form_definition_id"),
-        @Index(name = "idx_form_submission_user_file", columnList = "user_file_id")
-    }
+        name = "form_submissions",
+        indexes = {
+                @Index(name = "idx_form_submission_owner", columnList = "owner_id, owner_type"),
+                @Index(name = "idx_form_submission_definition", columnList = "form_definition_id"),
+                @Index(name = "idx_form_submission_user_file", columnList = "user_file_id")
+        }
 )
 @Data
 @Builder
@@ -49,24 +49,34 @@ public class FormSubmission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** The form definition version this submission was completed against. */
+    /**
+     * The form definition version this submission was completed against.
+     */
     @Column(name = "form_definition_id", nullable = false)
     private Long formDefinitionId;
 
-    /** Denormalized snapshot of the form type for convenient querying. */
+    /**
+     * Denormalized snapshot of the form type for convenient querying.
+     */
     @Column(name = "form_type", nullable = false)
     @Enumerated(EnumType.STRING)
     private FormType formType;
 
-    /** Denormalized snapshot of the definition version. */
+    /**
+     * Denormalized snapshot of the definition version.
+     */
     @Column(name = "form_version", nullable = false)
     private String formVersion;
 
-    /** Subject of the submission (mirrors UserFile.ownerId). */
+    /**
+     * Subject of the submission (mirrors UserFile.ownerId).
+     */
     @Column(name = "owner_id", nullable = false)
     private Long ownerId;
 
-    /** Subject type (mirrors UserFile.ownerType). */
+    /**
+     * Subject type (mirrors UserFile.ownerType).
+     */
     @Column(name = "owner_type", nullable = false)
     @Enumerated(EnumType.STRING)
     private UserFile.OwnerType ownerType;
@@ -79,16 +89,22 @@ public class FormSubmission {
     @Builder.Default
     private SubmissionStatus status = SubmissionStatus.DRAFT;
 
-    /** Captured values keyed by "sectionId.fieldId". */
+    /**
+     * Captured values keyed by "sectionId.fieldId".
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "field_values", columnDefinition = "jsonb")
     private Map<String, Object> fieldValues;
 
-    /** UserFile holding the generated signed PDF of this submission. */
+    /**
+     * UserFile holding the generated signed PDF of this submission.
+     */
     @Column(name = "user_file_id")
     private Long userFileId;
 
-    /** UserFile ids for supporting evidence uploaded with this submission. */
+    /**
+     * UserFile ids for supporting evidence uploaded with this submission.
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "supporting_user_file_ids", columnDefinition = "jsonb")
     private List<Long> supportingUserFileIds;
@@ -123,7 +139,9 @@ public class FormSubmission {
         this.updatedAt = LocalDateTime.now();
     }
 
-    /** Review lifecycle of a submitted form. */
+    /**
+     * Review lifecycle of a submitted form.
+     */
     public enum SubmissionStatus {
         DRAFT,
         SUBMITTED,

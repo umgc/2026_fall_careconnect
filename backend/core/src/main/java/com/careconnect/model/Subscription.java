@@ -4,12 +4,15 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
 import java.time.Instant;
 
 
 @Entity
 @Table(name = "subscriptions")
-@Getter @Setter @NoArgsConstructor
+@Getter
+@Setter
+@NoArgsConstructor
 public class Subscription {
 
     @Id
@@ -41,26 +44,78 @@ public class Subscription {
 
     private Instant lastValidatedAt;
     // Platform-agnostic fields (stored above)
-    
+
     // Explicit getter methods for compatibility
-    public Long getId() { return id; }
-    public String getPaymentSubscriptionId() { return paymentSubscriptionId; }
-    public String getPaymentCustomerId() { return paymentCustomerId; }
-    public String getPriceId() { return priceId; }
-    public User getUser() { return user; }
-    public Plan getPlan() { return plan; }
-    public String getStatus() { return status; }
-    public Instant getStartedAt() { return startedAt; }
-    public Instant getCurrentPeriodEnd() { return currentPeriodEnd; }
-    
+    public Long getId() {
+        return id;
+    }
+
     // Explicit setter methods for compatibility
-    public void setId(Long id) { this.id = id; }
-    public void setPaymentSubscriptionId(String paymentSubscriptionId) { this.paymentSubscriptionId = paymentSubscriptionId; }
-    public void setPaymentCustomerId(String paymentCustomerId) { this.paymentCustomerId = paymentCustomerId; }
-    public void setPriceId(String priceId) { this.priceId = priceId; }
-    public void setUser(User user) { this.user = user; }
-    public void setPlan(Plan plan) { this.plan = plan; }
-    public void setStatus(String status) { this.status = status; }
-    public void setStartedAt(Instant startedAt) { this.startedAt = startedAt; }
-    public void setCurrentPeriodEnd(Instant currentPeriodEnd) { this.currentPeriodEnd = currentPeriodEnd; }
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getPaymentSubscriptionId() {
+        return paymentSubscriptionId;
+    }
+
+    public void setPaymentSubscriptionId(String paymentSubscriptionId) {
+        this.paymentSubscriptionId = paymentSubscriptionId;
+    }
+
+    public String getPaymentCustomerId() {
+        return paymentCustomerId;
+    }
+
+    public void setPaymentCustomerId(String paymentCustomerId) {
+        this.paymentCustomerId = paymentCustomerId;
+    }
+
+    public String getPriceId() {
+        return priceId;
+    }
+
+    public void setPriceId(String priceId) {
+        this.priceId = priceId;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+    public Plan getPlan() {
+        return plan;
+    }
+
+    public void setPlan(Plan plan) {
+        this.plan = plan;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    public void setStartedAt(Instant startedAt) {
+        this.startedAt = startedAt;
+    }
+
+    public Instant getCurrentPeriodEnd() {
+        return currentPeriodEnd;
+    }
+
+    public void setCurrentPeriodEnd(Instant currentPeriodEnd) {
+        this.currentPeriodEnd = currentPeriodEnd;
+    }
 }

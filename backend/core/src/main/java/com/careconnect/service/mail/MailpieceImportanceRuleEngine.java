@@ -18,7 +18,9 @@ public class MailpieceImportanceRuleEngine {
 
     public static final String ENGINE_ID = "rules:v1";
 
-    /** Confidence at or above this value is accepted without AI assist. */
+    /**
+     * Confidence at or above this value is accepted without AI assist.
+     */
     static final double HIGH_CONFIDENCE_THRESHOLD = 0.85d;
 
     private static final List<KeywordRule> HIGH_RULES = List.of(
@@ -53,6 +55,40 @@ public class MailpieceImportanceRuleEngine {
                     "advertisement", "special offer", "% off", "buy one get",
                     "unsubscribe", "marketing"))
     );
+
+    private static MatchResult matchRules(final String haystack, final List<KeywordRule> rules) {
+        final Set<String> hits = new LinkedHashSet<>();
+        String primaryCategory = "OTHER";
+        for (final KeywordRule rule : rules) {
+            for (final String keyword : rule.keywords()) {
+                if (haystack.contains(keyword)) {
+                    hits.add(keyword.trim());
+                    if ("OTHER".equals(primaryCategory)) {
+                        primaryCategory = rule.category();
+                    }
+                }
+            }
+        }
+        return new MatchResult(new ArrayList<>(hits), primaryCategory);
+    }
+
+    private static String joinText(final String sender, final String summary, final String ocrText) {
+        final StringBuilder sb = new StringBuilder();
+        append(sb, sender);
+        append(sb, summary);
+        append(sb, ocrText);
+        return sb.toString().toLowerCase(Locale.ROOT).trim();
+    }
+
+    private static void append(final StringBuilder sb, final String value) {
+        if (value == null || value.isBlank()) {
+            return;
+        }
+        if (!sb.isEmpty()) {
+            sb.append(' ');
+        }
+        sb.append(value.trim());
+    }
 
     public RuleOutcome evaluate(final String sender, final String summary, final String ocrText) {
         final String haystack = joinText(sender, summary, ocrText);
@@ -144,40 +180,6 @@ public class MailpieceImportanceRuleEngine {
                         "No rule keywords matched sender/summary/OCR; escalate to AI assist.",
                         "OTHER"),
                 true);
-    }
-
-    private static MatchResult matchRules(final String haystack, final List<KeywordRule> rules) {
-        final Set<String> hits = new LinkedHashSet<>();
-        String primaryCategory = "OTHER";
-        for (final KeywordRule rule : rules) {
-            for (final String keyword : rule.keywords()) {
-                if (haystack.contains(keyword)) {
-                    hits.add(keyword.trim());
-                    if ("OTHER".equals(primaryCategory)) {
-                        primaryCategory = rule.category();
-                    }
-                }
-            }
-        }
-        return new MatchResult(new ArrayList<>(hits), primaryCategory);
-    }
-
-    private static String joinText(final String sender, final String summary, final String ocrText) {
-        final StringBuilder sb = new StringBuilder();
-        append(sb, sender);
-        append(sb, summary);
-        append(sb, ocrText);
-        return sb.toString().toLowerCase(Locale.ROOT).trim();
-    }
-
-    private static void append(final StringBuilder sb, final String value) {
-        if (value == null || value.isBlank()) {
-            return;
-        }
-        if (!sb.isEmpty()) {
-            sb.append(' ');
-        }
-        sb.append(value.trim());
     }
 
     public record RuleOutcome(MailpieceImportanceResult result, boolean escalateToAi) {

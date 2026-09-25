@@ -18,11 +18,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class GmailParserTest {
 
-    private final GmailParser parser = new GmailParser();
+    private static final OffsetDateTime NOW = OffsetDateTime.now(ZoneOffset.UTC);
 
     // ─── helpers ─────────────────────────────────────────────────────────────
-
-    private static final OffsetDateTime NOW = OffsetDateTime.now(ZoneOffset.UTC);
+    private final GmailParser parser = new GmailParser();
 
     private GmailDigestPayload p(String html) {
         return new GmailDigestPayload(html, Map.of(), NOW);

@@ -7,7 +7,9 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ai.RetrievalIndexingService;
 import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
+
 import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

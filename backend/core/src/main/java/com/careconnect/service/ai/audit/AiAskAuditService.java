@@ -35,8 +35,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class AiAskAuditService {
 
-    private static final Logger log = LoggerFactory.getLogger(AiAskAuditService.class);
-
     public static final String REQUEST_STARTED = "REQUEST_STARTED";
     public static final String SCOPE_GRANTED = "SCOPE_GRANTED";
     public static final String SCOPE_DENIED = "SCOPE_DENIED";
@@ -53,7 +51,7 @@ public class AiAskAuditService {
     public static final String HITL_EXPIRED = "HITL_EXPIRED";
     public static final String ERROR = "ERROR";
     public static final String GOVERNANCE_BLOCKED = "GOVERNANCE_BLOCKED";
-
+    private static final Logger log = LoggerFactory.getLogger(AiAskAuditService.class);
     private final AiAskAuditRecordRepository recordRepository;
     private final AiAskAuditEventRepository eventRepository;
     private final AiAskAuditDeliverySupplementRepository deliveryRepository;
@@ -68,6 +66,97 @@ public class AiAskAuditService {
         this.eventRepository = eventRepository;
         this.deliveryRepository = deliveryRepository;
         this.objectMapper = objectMapper;
+    }
+
+    static String terminalEventType(final FinalizeCommand command) {
+        if (command == null || command.deliveryStatus() == null) {
+            return ERROR;
+        }
+        return switch (command.deliveryStatus()) {
+            case "HELD" -> HELD;
+            case "NO_RECORDS" -> NO_RECORDS;
+            case "DELIVERED" -> DELIVERED;
+            default -> command.errorCode() != null ? ERROR : DELIVERED;
+        };
+    }
+
+    /**
+     * FR-AI-10 audit-safe citation shape: keep ids/types, hash excerpt, never store raw text.
+     */
+    static List<Map<String, Object>> auditSafeCitations(final Object citations, final Long patientId) {
+        if (!(citations instanceof List<?> list) || list.isEmpty()) {
+            return List.of();
+        }
+        final List<Map<String, Object>> safe = new ArrayList<>(list.size());
+        for (final Object item : list) {
+            if (item instanceof AiCitation citation) {
+                safe.add(redactCitation(citation, patientId));
+            } else if (item instanceof Map<?, ?> map) {
+                safe.add(redactCitationMap(map, patientId));
+            }
+        }
+        return List.copyOf(safe);
+    }
+
+    private static Map<String, Object> redactCitation(final AiCitation citation, final Long patientId) {
+        final Map<String, Object> map = new LinkedHashMap<>();
+        map.put("citationId", citation.citationId());
+        map.put("recordType", citation.recordType() == null ? null : citation.recordType().name());
+        map.put("sourceKind", citation.sourceKind());
+        map.put("sourceRecordId", citation.sourceRecordId());
+        map.put("chunkId", citation.chunkId() == null ? null : citation.chunkId().toString());
+        map.put("title", citation.title());
+        map.put("occurredAt", citation.occurredAt() == null ? null : citation.occurredAt().toString());
+        map.put("deepLink", citation.deepLink());
+        map.put("confidence", citation.confidence());
+        map.put("excerptHash", hashText(citation.excerpt(), patientId));
+        map.put("excerptLength", citation.excerpt() == null ? 0 : citation.excerpt().length());
+        return map;
+    }
+
+    private static Map<String, Object> redactCitationMap(final Map<?, ?> raw, final Long patientId) {
+        final Map<String, Object> map = new LinkedHashMap<>();
+        copyIfPresent(raw, map, "citationId");
+        copyIfPresent(raw, map, "recordType");
+        copyIfPresent(raw, map, "sourceKind");
+        copyIfPresent(raw, map, "sourceRecordId");
+        copyIfPresent(raw, map, "chunkId");
+        copyIfPresent(raw, map, "title");
+        copyIfPresent(raw, map, "occurredAt");
+        copyIfPresent(raw, map, "deepLink");
+        copyIfPresent(raw, map, "confidence");
+        final Object excerpt = raw.get("excerpt");
+        final String excerptText = excerpt == null ? null : String.valueOf(excerpt);
+        if (raw.get("excerptHash") != null && excerpt == null) {
+            map.put("excerptHash", raw.get("excerptHash"));
+            map.put("excerptLength", raw.get("excerptLength") == null ? 0 : raw.get("excerptLength"));
+        } else {
+            map.put("excerptHash", hashText(excerptText, patientId));
+            map.put("excerptLength", excerptText == null ? 0 : excerptText.length());
+        }
+        return map;
+    }
+
+    private static void copyIfPresent(
+            final Map<?, ?> raw, final Map<String, Object> target, final String key) {
+        if (raw.containsKey(key) && raw.get(key) != null) {
+            target.put(key, raw.get(key));
+        }
+    }
+
+    static String hashText(final String text, final Long patientId) {
+        final String material = (text == null ? "" : text) + "|" + (patientId == null ? "0" : patientId);
+        try {
+            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            final byte[] hashed = digest.digest(material.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hashed);
+        } catch (final NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
+        }
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value;
     }
 
     /**
@@ -208,18 +297,6 @@ public class AiAskAuditService {
         }
     }
 
-    static String terminalEventType(final FinalizeCommand command) {
-        if (command == null || command.deliveryStatus() == null) {
-            return ERROR;
-        }
-        return switch (command.deliveryStatus()) {
-            case "HELD" -> HELD;
-            case "NO_RECORDS" -> NO_RECORDS;
-            case "DELIVERED" -> DELIVERED;
-            default -> command.errorCode() != null ? ERROR : DELIVERED;
-        };
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordHitlDeliverySupplement(
             final UUID auditId,
@@ -248,70 +325,6 @@ public class AiAskAuditService {
         }
     }
 
-    /**
-     * FR-AI-10 audit-safe citation shape: keep ids/types, hash excerpt, never store raw text.
-     */
-    static List<Map<String, Object>> auditSafeCitations(final Object citations, final Long patientId) {
-        if (!(citations instanceof List<?> list) || list.isEmpty()) {
-            return List.of();
-        }
-        final List<Map<String, Object>> safe = new ArrayList<>(list.size());
-        for (final Object item : list) {
-            if (item instanceof AiCitation citation) {
-                safe.add(redactCitation(citation, patientId));
-            } else if (item instanceof Map<?, ?> map) {
-                safe.add(redactCitationMap(map, patientId));
-            }
-        }
-        return List.copyOf(safe);
-    }
-
-    private static Map<String, Object> redactCitation(final AiCitation citation, final Long patientId) {
-        final Map<String, Object> map = new LinkedHashMap<>();
-        map.put("citationId", citation.citationId());
-        map.put("recordType", citation.recordType() == null ? null : citation.recordType().name());
-        map.put("sourceKind", citation.sourceKind());
-        map.put("sourceRecordId", citation.sourceRecordId());
-        map.put("chunkId", citation.chunkId() == null ? null : citation.chunkId().toString());
-        map.put("title", citation.title());
-        map.put("occurredAt", citation.occurredAt() == null ? null : citation.occurredAt().toString());
-        map.put("deepLink", citation.deepLink());
-        map.put("confidence", citation.confidence());
-        map.put("excerptHash", hashText(citation.excerpt(), patientId));
-        map.put("excerptLength", citation.excerpt() == null ? 0 : citation.excerpt().length());
-        return map;
-    }
-
-    private static Map<String, Object> redactCitationMap(final Map<?, ?> raw, final Long patientId) {
-        final Map<String, Object> map = new LinkedHashMap<>();
-        copyIfPresent(raw, map, "citationId");
-        copyIfPresent(raw, map, "recordType");
-        copyIfPresent(raw, map, "sourceKind");
-        copyIfPresent(raw, map, "sourceRecordId");
-        copyIfPresent(raw, map, "chunkId");
-        copyIfPresent(raw, map, "title");
-        copyIfPresent(raw, map, "occurredAt");
-        copyIfPresent(raw, map, "deepLink");
-        copyIfPresent(raw, map, "confidence");
-        final Object excerpt = raw.get("excerpt");
-        final String excerptText = excerpt == null ? null : String.valueOf(excerpt);
-        if (raw.get("excerptHash") != null && excerpt == null) {
-            map.put("excerptHash", raw.get("excerptHash"));
-            map.put("excerptLength", raw.get("excerptLength") == null ? 0 : raw.get("excerptLength"));
-        } else {
-            map.put("excerptHash", hashText(excerptText, patientId));
-            map.put("excerptLength", excerptText == null ? 0 : excerptText.length());
-        }
-        return map;
-    }
-
-    private static void copyIfPresent(
-            final Map<?, ?> raw, final Map<String, Object> target, final String key) {
-        if (raw.containsKey(key) && raw.get(key) != null) {
-            target.put(key, raw.get(key));
-        }
-    }
-
     private void persistEvent(
             final UUID auditId,
             final int sequence,
@@ -329,27 +342,12 @@ public class AiAskAuditService {
                 .build());
     }
 
-    static String hashText(final String text, final Long patientId) {
-        final String material = (text == null ? "" : text) + "|" + (patientId == null ? "0" : patientId);
-        try {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            final byte[] hashed = digest.digest(material.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hashed);
-        } catch (final NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 unavailable", ex);
-        }
-    }
-
     private String writeJson(final Object value) {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (final JsonProcessingException ex) {
             return "{}";
         }
-    }
-
-    private static String nullToEmpty(final String value) {
-        return value == null ? "" : value;
     }
 
     public record AuditSession(

@@ -18,14 +18,14 @@ import java.util.List;
 
 /**
  * REST controller for managing Question entities.
- *
+ * <p>
  * Matches frontend routes:
- *   GET  /api/questions
- *   GET  /api/questions/{id}
- *   POST /api/questions
- *   PUT  /api/questions/{id}
- *   PATCH /api/questions/{id}/active
- *
+ * GET  /api/questions
+ * GET  /api/questions/{id}
+ * POST /api/questions
+ * PUT  /api/questions/{id}
+ * PATCH /api/questions/{id}/active
+ * <p>
  * Also supports /v1/api/... for backward compatibility.
  */
 @RestController
@@ -42,7 +42,9 @@ public class QuestionController {
         this.authorizationService = authorizationService;
     }
 
-    /** GET /api/questions?active=true|false&formKey=...&formVersion=... */
+    /**
+     * GET /api/questions?active=true|false&formKey=...&formVersion=...
+     */
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
 
     @GetMapping
@@ -52,7 +54,9 @@ public class QuestionController {
         return questions.listQuestions(active, formKey, formVersion);
     }
 
-    /** GET /api/questions/{id} */
+    /**
+     * GET /api/questions/{id}
+     */
     @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
 
     @GetMapping("/{id}")
@@ -62,7 +66,9 @@ public class QuestionController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /** POST /api/questions */
+    /**
+     * POST /api/questions
+     */
     @RequirePermission(Permission.CREATE_TASKS)
 
     @PostMapping
@@ -73,7 +79,9 @@ public class QuestionController {
         return ResponseEntity.ok(created);
     }
 
-    /** PUT /api/questions/{id} */
+    /**
+     * PUT /api/questions/{id}
+     */
     @RequirePermission(Permission.UPDATE_TASKS)
 
     @PutMapping("/{id}")
@@ -86,7 +94,9 @@ public class QuestionController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /** PATCH /api/questions/{id}/active?active=true|false */
+    /**
+     * PATCH /api/questions/{id}/active?active=true|false
+     */
     @RequirePermission(Permission.UPDATE_TASKS)
 
     @PatchMapping("/{id}/active")

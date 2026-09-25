@@ -30,12 +30,14 @@ import com.careconnect.service.ai.retrieval.RetrievalScope;
 import com.careconnect.service.ai.retrieval.RetrievalScopeService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,14 +48,59 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class AiAskShareServiceTest {
 
-    @Mock private RetrievalScopeService retrievalScopeService;
-    @Mock private PatientRepository patientRepository;
-    @Mock private CaregiverPatientLinkService caregiverPatientLinkService;
-    @Mock private AiAskConversationShareRepository shareRepository;
-    @Mock private AiAskShareRecipientRepository recipientRepository;
-    @Mock private ChatAuditService chatAuditService;
+    @Mock
+    private RetrievalScopeService retrievalScopeService;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @Mock
+    private AiAskConversationShareRepository shareRepository;
+    @Mock
+    private AiAskShareRecipientRepository recipientRepository;
+    @Mock
+    private ChatAuditService chatAuditService;
 
     private AiAskShareService service;
+
+    private static RetrievalScope scope(final long callerUserId) {
+        return new RetrievalScope(
+                callerUserId,
+                Role.PATIENT,
+                Set.of(7L),
+                EnumSet.noneOf(RetrievalRecordType.class),
+                EnumSet.noneOf(RetrievalRecordType.class),
+                new CaregiverVisibilityFilter(Role.PATIENT, true),
+                true);
+    }
+
+    private static User user(final long id, final Role role) {
+        final User user = new User();
+        user.setId(id);
+        user.setRole(role);
+        return user;
+    }
+
+    private static CaregiverPatientLinkResponse link(final long caregiverUserId) {
+        return new CaregiverPatientLinkResponse(
+                1L,
+                caregiverUserId,
+                "Caregiver",
+                "c@example.com",
+                42L,
+                "Patient",
+                "p@example.com",
+                "ACTIVE",
+                "PRIMARY",
+                true,
+                true,
+                LocalDateTime.now(),
+                null,
+                null,
+                "system",
+                true,
+                false);
+    }
 
     @BeforeEach
     void setUp() {
@@ -79,13 +126,13 @@ class AiAskShareServiceTest {
         final User caregiver = user(55L, Role.CAREGIVER);
 
         assertThatThrownBy(() -> service.share(
-                        caregiver,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage(
-                                        "user", "hi", null)))))
+                caregiver,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage(
+                                "user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("FORBIDDEN_ROLE");
@@ -99,13 +146,13 @@ class AiAskShareServiceTest {
         when(retrievalScopeService.resolveRetrievalScope(otherPatient, 7L)).thenReturn(scope(99L));
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
         assertThatThrownBy(() -> service.share(
-                        otherPatient,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage(
-                                        "user", "hi", null)))))
+                otherPatient,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage(
+                                "user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("FORBIDDEN_ROLE");
@@ -173,13 +220,13 @@ class AiAskShareServiceTest {
                 .thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                99L,
-                                List.of(new AiAskShareRequest.AiAskShareMessage(
-                                        "user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        99L,
+                        List.of(new AiAskShareRequest.AiAskShareMessage(
+                                "user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("CAREGIVER_NOT_LINKED");
@@ -220,12 +267,12 @@ class AiAskShareServiceTest {
     @Test
     void share_rejectsNullCallerAndMissingPatient() throws Exception {
         assertThatThrownBy(() -> service.share(
+                null,
+                new AiAskShareRequest(
+                        7L,
                         null,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
                 .isInstanceOf(com.careconnect.security.UnauthorizedException.class);
 
         final User caller = user(9L, Role.PATIENT);
@@ -233,12 +280,12 @@ class AiAskShareServiceTest {
         when(patientRepository.findById(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("PATIENT_NOT_FOUND");
@@ -257,12 +304,12 @@ class AiAskShareServiceTest {
         when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage("user", "  ", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "  ", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("INVALID_REQUEST");
@@ -273,12 +320,12 @@ class AiAskShareServiceTest {
         when(patientRepository.findById(7L)).thenReturn(Optional.of(missingUser));
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("PATIENT_NOT_FOUND");
@@ -297,13 +344,13 @@ class AiAskShareServiceTest {
         when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage(
-                                        "user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage(
+                                "user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("NO_CAREGIVER");
@@ -314,16 +361,16 @@ class AiAskShareServiceTest {
         final User caller = user(9L, Role.PATIENT);
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(null, null, null, List.of(
-                                new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(null, null, null, List.of(
+                        new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("INVALID_REQUEST");
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(7L, null, null, List.of())))
+                caller,
+                new AiAskShareRequest(7L, null, null, List.of())))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("INVALID_REQUEST");
@@ -343,12 +390,12 @@ class AiAskShareServiceTest {
 
         final String huge = "x".repeat(200_001);
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage("user", huge, null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", huge, null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("TRANSCRIPT_TOO_LARGE");
@@ -399,7 +446,8 @@ class AiAskShareServiceTest {
         when(failingMapper.writeValueAsString(any())).thenAnswer(inv -> {
             final Object arg = inv.getArgument(0);
             if (arg instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Long) {
-                throw new JsonProcessingException("boom") {};
+                throw new JsonProcessingException("boom") {
+                };
             }
             return new ObjectMapper().writeValueAsString(arg);
         });
@@ -424,13 +472,13 @@ class AiAskShareServiceTest {
         when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage(
-                                        "user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage(
+                                "user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("INTERNAL_ERROR");
@@ -439,7 +487,8 @@ class AiAskShareServiceTest {
     @Test
     void share_rejectsWhenTranscriptSerializationFails() throws Exception {
         final ObjectMapper failingMapper = mock(ObjectMapper.class);
-        when(failingMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("boom") {});
+        when(failingMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("boom") {
+        });
         service = new AiAskShareService(
                 retrievalScopeService,
                 patientRepository,
@@ -461,13 +510,13 @@ class AiAskShareServiceTest {
         when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage(
-                                        "user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage(
+                                "user", "hi", null)))))
                 .isInstanceOf(AskAiRejectedException.class)
                 .extracting(ex -> ((AskAiRejectedException) ex).getErrorCode())
                 .isEqualTo("INTERNAL_ERROR");
@@ -497,7 +546,7 @@ class AiAskShareServiceTest {
         when(patientRepository.findById(7L)).thenReturn(Optional.of(patient));
         when(caregiverPatientLinkService.getCaregiversByPatient(9L)).thenReturn(List.of(link(11L)));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
-                        any(), any(), anyString()))
+                any(), any(), anyString()))
                 .thenReturn(Optional.of(existing));
 
         final AiAskShareResponse response = service.share(
@@ -542,7 +591,7 @@ class AiAskShareServiceTest {
         when(caregiverPatientLinkService.getCaregiversByPatient(9L))
                 .thenReturn(List.of(link(11L), link(12L)));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
-                        any(), any(), anyString()))
+                any(), any(), anyString()))
                 .thenReturn(Optional.of(existing));
         when(shareRepository.save(any(AiAskConversationShare.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -586,7 +635,7 @@ class AiAskShareServiceTest {
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_ai_ask_share_dedupe"))
                 .thenAnswer(inv -> inv.getArgument(0));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
-                        any(), any(), anyString()))
+                any(), any(), anyString()))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(existing));
 
@@ -717,16 +766,16 @@ class AiAskShareServiceTest {
         when(shareRepository.save(any(AiAskConversationShare.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq"));
         when(shareRepository.findFirstByPatientIdAndSharedByUserIdAndTranscriptSha256OrderByCreatedAtDesc(
-                        any(), any(), anyString()))
+                any(), any(), anyString()))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.share(
-                        caller,
-                        new AiAskShareRequest(
-                                7L,
-                                null,
-                                null,
-                                List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
+                caller,
+                new AiAskShareRequest(
+                        7L,
+                        null,
+                        null,
+                        List.of(new AiAskShareRequest.AiAskShareMessage("user", "hi", null)))))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
     }
 
@@ -867,44 +916,5 @@ class AiAskShareServiceTest {
                 ArgumentCaptor.forClass(AiAskConversationShare.class);
         verify(shareRepository).save(captor.capture());
         assertThat(captor.getValue().getMessageCount()).isEqualTo(1);
-    }
-
-    private static RetrievalScope scope(final long callerUserId) {
-        return new RetrievalScope(
-                callerUserId,
-                Role.PATIENT,
-                Set.of(7L),
-                EnumSet.noneOf(RetrievalRecordType.class),
-                EnumSet.noneOf(RetrievalRecordType.class),
-                new CaregiverVisibilityFilter(Role.PATIENT, true),
-                true);
-    }
-
-    private static User user(final long id, final Role role) {
-        final User user = new User();
-        user.setId(id);
-        user.setRole(role);
-        return user;
-    }
-
-    private static CaregiverPatientLinkResponse link(final long caregiverUserId) {
-        return new CaregiverPatientLinkResponse(
-                1L,
-                caregiverUserId,
-                "Caregiver",
-                "c@example.com",
-                42L,
-                "Patient",
-                "p@example.com",
-                "ACTIVE",
-                "PRIMARY",
-                true,
-                true,
-                LocalDateTime.now(),
-                null,
-                null,
-                "system",
-                true,
-                false);
     }
 }

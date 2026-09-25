@@ -87,35 +87,48 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("CallController Tests")
 class CallControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean private ChimeService chimeService;
-    @MockitoBean private BedrockSentimentService sentimentService;
-    @MockitoBean private CallTelemetryService callTelemetryService;
-    @MockitoBean private CallTranscriptService callTranscriptService;
-    @MockitoBean private CallSummaryService callSummaryService;
-    @MockitoBean private CallSummaryItemConfirmService callSummaryItemConfirmService;
-    @MockitoBean private CallRecordingService callRecordingService;
-    @MockitoBean private CallAttendeeService callAttendeeService;
-    @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
-    @MockitoBean private com.careconnect.service.consent.CaregiverVisibilityService caregiverVisibilityService;
-    @MockitoBean private FamilyMemberService familyMemberService;
-    @MockitoBean private UserRepository userRepository;
-    @MockitoBean private CallNotificationHandler callNotificationHandler;
-    @MockitoBean private SnsService snsService;
-    @MockitoBean private CallSessionService callSessionService;
-    @MockitoBean private CallTerminationExecutor callTerminationExecutor;
-
-    private ObjectMapper objectMapper;
-    private User patientUser;
-    private User caregiverUser;
-    private User adminUser;
-
     private static final String CALL_ID = "call-123";
     private static final String BASE_URL = "/api/v3/calls";
     private static final UUID TERMINATION_CLAIM =
             UUID.fromString("8f08f1de-a4f4-4dc4-b56a-04f93451841a");
+    @Autowired
+    private MockMvc mockMvc;
+    @MockitoBean
+    private ChimeService chimeService;
+    @MockitoBean
+    private BedrockSentimentService sentimentService;
+    @MockitoBean
+    private CallTelemetryService callTelemetryService;
+    @MockitoBean
+    private CallTranscriptService callTranscriptService;
+    @MockitoBean
+    private CallSummaryService callSummaryService;
+    @MockitoBean
+    private CallSummaryItemConfirmService callSummaryItemConfirmService;
+    @MockitoBean
+    private CallRecordingService callRecordingService;
+    @MockitoBean
+    private CallAttendeeService callAttendeeService;
+    @MockitoBean
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @MockitoBean
+    private com.careconnect.service.consent.CaregiverVisibilityService caregiverVisibilityService;
+    @MockitoBean
+    private FamilyMemberService familyMemberService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private CallNotificationHandler callNotificationHandler;
+    @MockitoBean
+    private SnsService snsService;
+    @MockitoBean
+    private CallSessionService callSessionService;
+    @MockitoBean
+    private CallTerminationExecutor callTerminationExecutor;
+    private ObjectMapper objectMapper;
+    private User patientUser;
+    private User caregiverUser;
+    private User adminUser;
 
     @BeforeEach
     void setUp() {
@@ -143,7 +156,7 @@ class CallControllerTest {
         when(callSessionService.requireJoinAuthorized(anyString(), anyLong()))
                 .thenReturn(durableSession);
         when(callSessionService.ensureJoinAuthorized(
-                        anyString(), any(), any(), any(), any()))
+                anyString(), any(), any(), any(), any()))
                 .thenReturn(durableSession);
         when(callSessionService.requireActiveParticipant(anyString(), anyLong()))
                 .thenReturn(durableSession);
@@ -294,7 +307,7 @@ class CallControllerTest {
         void join_rejectsBeforeCallingChimeWhenNotAuthorized() throws Exception {
             mockCurrentCaregiver();
             when(callSessionService.ensureJoinAuthorized(
-                            eq(CALL_ID), eq(caregiverUser), isNull(), isNull(), isNull()))
+                    eq(CALL_ID), eq(caregiverUser), isNull(), isNull(), isNull()))
                     .thenThrow(new AppException(HttpStatus.FORBIDDEN, "not authorized"));
 
             mockMvc.perform(post(BASE_URL + "/" + CALL_ID + "/join")
@@ -633,6 +646,7 @@ class CallControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.meetingId").exists());
         }
+
         @Test
         @DisplayName("CHIME-010: conference eligible invitees exclude only active participants, not users who already left")
         @WithMockUser(username = "caregiver@test.com", roles = {"CAREGIVER"})

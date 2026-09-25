@@ -7,8 +7,18 @@ import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Task 1.5 / 1.6 — Flyway migration contract tests (no live PostgreSQL required). */
+/**
+ * Task 1.5 / 1.6 — Flyway migration contract tests (no live PostgreSQL required).
+ */
 class RetrievalIndexChunkMigrationSqlTest {
+
+    private static String readMigration(String filename) throws Exception {
+        try (var stream = RetrievalIndexChunkMigrationSqlTest.class.getClassLoader()
+                .getResourceAsStream("db/migration/" + filename)) {
+            assertThat(stream).as("migration file on classpath: %s", filename).isNotNull();
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
 
     @Test
     @DisplayName("pgvector extension migration enables vector type")
@@ -110,13 +120,5 @@ class RetrievalIndexChunkMigrationSqlTest {
         assertThat(sql).contains("FOREIGN KEY (patient_id) REFERENCES patient(id) NOT VALID");
         assertThat(sql).doesNotContain(
                 "SET source_kind = 'CALL_SUMMARY',\n    migration_status = 'ACTIVE'");
-    }
-
-    private static String readMigration(String filename) throws Exception {
-        try (var stream = RetrievalIndexChunkMigrationSqlTest.class.getClassLoader()
-                .getResourceAsStream("db/migration/" + filename)) {
-            assertThat(stream).as("migration file on classpath: %s", filename).isNotNull();
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
     }
 }

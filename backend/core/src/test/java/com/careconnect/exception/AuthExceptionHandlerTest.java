@@ -27,8 +27,7 @@ class AuthExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(response.getBody()).isInstanceOf(Map.class);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsEntry("error", "Invalid credentials");
     }
 
@@ -39,8 +38,7 @@ class AuthExceptionHandlerTest {
         final ResponseEntity<Object> response = handler.handleAuthenticationException(ex);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsEntry("error", "Token expired");
     }
 
@@ -54,8 +52,7 @@ class AuthExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).isInstanceOf(Map.class);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsEntry("error", "Email already in use");
     }
 
@@ -66,8 +63,7 @@ class AuthExceptionHandlerTest {
         final ResponseEntity<Object> response = handler.handleRegistrationException(ex);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).containsEntry("error", "Username taken");
     }
 }

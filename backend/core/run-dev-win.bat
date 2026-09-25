@@ -17,7 +17,7 @@ if errorlevel 1 (
 )
 
 for /f "tokens=2 delims=. " %%v in ('javac -version 2^>^&1') do set "JAVA_MAJOR=%%v"
-if not "%JAVA_MAJOR%"=="17" (
+if not "%JAVA_MAJOR%" GEQ "17" (
     echo Error: Detected JDK %JAVA_MAJOR%, but this project requires JDK 17.
     echo Current compiler:
     javac -version

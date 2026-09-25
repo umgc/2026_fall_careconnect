@@ -5,17 +5,39 @@
   "description": "Canonical schema for required hiring and onboarding document definitions. Each form definition declares form-specific sections, fields, required status, and validation rules; version/effective-date metadata; a mapping from the source paper document to structured fields; and how completed submissions attach to existing UserFile file-attachment records.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["formType", "title", "version", "effectiveDate", "sourceDocument", "fileAttachment", "sections"],
+  "required": [
+    "formType",
+    "title",
+    "version",
+    "effectiveDate",
+    "sourceDocument",
+    "fileAttachment",
+    "sections"
+  ],
   "properties": {
     "formType": {
       "description": "Stable machine key for the document. Mirrors com.careconnect.model.forms.FormType.",
       "type": "string",
-      "enum": ["W4", "I9", "DIRECT_DEPOSIT", "SWORN_DISCLOSURE", "HEALTH", "GENERAL_HIRING", "PRE_HIRE"]
+      "enum": [
+        "W4",
+        "I9",
+        "DIRECT_DEPOSIT",
+        "SWORN_DISCLOSURE",
+        "HEALTH",
+        "GENERAL_HIRING",
+        "PRE_HIRE"
+      ]
     },
-    "title": { "type": "string", "minLength": 1 },
-    "description": { "type": "string" },
-    "issuingAuthority": { "type": "string" },
-
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "issuingAuthority": {
+      "type": "string"
+    },
     "version": {
       "description": "Definition version. Use the official form edition where one exists (e.g., '2026' for W-4, '01/20/2025' for I-9), otherwise semantic version of the internal form.",
       "type": "string",
@@ -31,164 +53,332 @@
       "type": "string",
       "format": "date"
     },
-
     "sourceDocument": {
       "description": "Identifies the authoritative source document that this digital form digitizes.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "formNumber": { "type": "string" },
-        "edition": { "type": "string" },
-        "ombNumber": { "type": "string" },
-        "url": { "type": "string", "format": "uri" }
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "formNumber": {
+          "type": "string"
+        },
+        "edition": {
+          "type": "string"
+        },
+        "ombNumber": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
       }
     },
-
     "fileAttachment": {
       "description": "How a completed submission integrates with existing UserFile file-attachment records. category MUST match a UserFile.FileCategory enum value.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["category", "generatesPdf"],
+      "required": [
+        "category",
+        "generatesPdf"
+      ],
       "properties": {
         "category": {
           "type": "string",
-          "enum": ["ONBOARDING_FORM", "HIRING_DOCUMENT", "CONSENT_FORM", "INSURANCE_DOCUMENT", "OTHER_DOCUMENT"]
+          "enum": [
+            "ONBOARDING_FORM",
+            "HIRING_DOCUMENT",
+            "CONSENT_FORM",
+            "INSURANCE_DOCUMENT",
+            "OTHER_DOCUMENT"
+          ]
         },
-        "generatesPdf": { "type": "boolean" },
+        "generatesPdf": {
+          "type": "boolean"
+        },
         "supportingDocumentCategories": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
-
     "sections": {
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/section" }
+      "items": {
+        "$ref": "#/$defs/section"
+      }
     }
   },
-
   "$defs": {
     "section": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "order", "fields"],
+      "required": [
+        "id",
+        "title",
+        "order",
+        "fields"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-        "title": { "type": "string", "minLength": 1 },
-        "description": { "type": "string" },
-        "order": { "type": "integer", "minimum": 0 },
-        "required": { "type": "boolean", "default": true },
-        "repeatable": { "type": "boolean", "default": false },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required": {
+          "type": "boolean",
+          "default": true
+        },
+        "repeatable": {
+          "type": "boolean",
+          "default": false
+        },
         "completedBy": {
           "type": "string",
-          "enum": ["EMPLOYEE", "EMPLOYER", "PREPARER", "WITNESS", "HR"]
+          "enum": [
+            "EMPLOYEE",
+            "EMPLOYER",
+            "PREPARER",
+            "WITNESS",
+            "HR"
+          ]
         },
         "fields": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/field" }
+          "items": {
+            "$ref": "#/$defs/field"
+          }
         }
       }
     },
-
     "field": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "label", "fieldType", "required", "order"],
+      "required": [
+        "id",
+        "label",
+        "fieldType",
+        "required",
+        "order"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
-        "label": { "type": "string", "minLength": 1 },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
         "fieldType": {
           "description": "Mirrors com.careconnect.model.forms.FieldType.",
           "type": "string",
-          "enum": ["TEXT", "TEXTAREA", "NUMBER", "CURRENCY", "DATE", "EMAIL", "PHONE", "SSN", "EIN",
-                   "ZIP", "STATE", "ROUTING_NUMBER", "ACCOUNT_NUMBER", "CHECKBOX", "BOOLEAN",
-                   "RADIO", "SELECT", "MULTISELECT", "SIGNATURE", "FILE_REF"]
+          "enum": [
+            "TEXT",
+            "TEXTAREA",
+            "NUMBER",
+            "CURRENCY",
+            "DATE",
+            "EMAIL",
+            "PHONE",
+            "SSN",
+            "EIN",
+            "ZIP",
+            "STATE",
+            "ROUTING_NUMBER",
+            "ACCOUNT_NUMBER",
+            "CHECKBOX",
+            "BOOLEAN",
+            "RADIO",
+            "SELECT",
+            "MULTISELECT",
+            "SIGNATURE",
+            "FILE_REF"
+          ]
         },
-        "required": { "type": "boolean" },
-        "order": { "type": "integer", "minimum": 0 },
-        "helpText": { "type": "string" },
-        "placeholder": { "type": "string" },
+        "required": {
+          "type": "boolean"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "helpText": {
+          "type": "string"
+        },
+        "placeholder": {
+          "type": "string"
+        },
         "defaultValue": {},
-        "readOnly": { "type": "boolean", "default": false },
-        "sensitive": { "type": "boolean", "default": false },
+        "readOnly": {
+          "type": "boolean",
+          "default": false
+        },
+        "sensitive": {
+          "type": "boolean",
+          "default": false
+        },
         "options": {
           "description": "Allowed choices for RADIO/SELECT/MULTISELECT fields.",
           "type": "array",
-          "items": { "$ref": "#/$defs/option" }
+          "items": {
+            "$ref": "#/$defs/option"
+          }
         },
         "validations": {
           "type": "array",
-          "items": { "$ref": "#/$defs/validationRule" }
+          "items": {
+            "$ref": "#/$defs/validationRule"
+          }
         },
         "completedBy": {
           "description": "Optional role override when a single field is completed by a different party than its section (e.g., a notary block inside an employee section).",
           "type": "string",
-          "enum": ["EMPLOYEE", "EMPLOYER", "PREPARER", "WITNESS", "HR"]
+          "enum": [
+            "EMPLOYEE",
+            "EMPLOYER",
+            "PREPARER",
+            "WITNESS",
+            "HR"
+          ]
         },
-        "sourceMapping": { "$ref": "#/$defs/sourceMapping" },
-        "visibleWhen": { "$ref": "#/$defs/condition" }
+        "sourceMapping": {
+          "$ref": "#/$defs/sourceMapping"
+        },
+        "visibleWhen": {
+          "$ref": "#/$defs/condition"
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "fieldType": { "enum": ["RADIO", "SELECT", "MULTISELECT"] } } },
-          "then": { "required": ["options"] }
+          "if": {
+            "properties": {
+              "fieldType": {
+                "enum": [
+                  "RADIO",
+                  "SELECT",
+                  "MULTISELECT"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "options"
+            ]
+          }
         }
       ]
     },
-
     "option": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["value", "label"],
+      "required": [
+        "value",
+        "label"
+      ],
       "properties": {
-        "value": { "type": "string" },
-        "label": { "type": "string" }
+        "value": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
       }
     },
-
     "validationRule": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "description": "Mirrors com.careconnect.model.forms.ValidationRuleType.",
           "type": "string",
-          "enum": ["REQUIRED", "MIN_LENGTH", "MAX_LENGTH", "PATTERN", "MIN", "MAX",
-                   "EMAIL", "SSN", "EIN", "ROUTING_NUMBER", "DATE", "DATE_RANGE",
-                   "ENUM", "CHECKED", "AGE_MIN", "CUSTOM"]
+          "enum": [
+            "REQUIRED",
+            "MIN_LENGTH",
+            "MAX_LENGTH",
+            "PATTERN",
+            "MIN",
+            "MAX",
+            "EMAIL",
+            "SSN",
+            "EIN",
+            "ROUTING_NUMBER",
+            "DATE",
+            "DATE_RANGE",
+            "ENUM",
+            "CHECKED",
+            "AGE_MIN",
+            "CUSTOM"
+          ]
         },
         "value": {},
-        "pattern": { "type": "string" },
-        "message": { "type": "string" }
+        "pattern": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
       }
     },
-
     "sourceMapping": {
       "description": "Maps the structured field back to its location on the source paper document.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["documentField"],
+      "required": [
+        "documentField"
+      ],
       "properties": {
-        "documentField": { "type": "string" },
-        "section": { "type": "string" },
-        "line": { "type": "string" },
-        "page": { "type": "integer", "minimum": 1 }
+        "documentField": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string"
+        },
+        "line": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
-
     "condition": {
       "description": "Simple field-dependency: shown only when fieldId satisfies the comparison.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["fieldId", "equals"],
+      "required": [
+        "fieldId",
+        "equals"
+      ],
       "properties": {
-        "fieldId": { "type": "string" },
+        "fieldId": {
+          "type": "string"
+        },
         "equals": {}
       }
     }

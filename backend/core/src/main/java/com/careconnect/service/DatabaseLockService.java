@@ -1,10 +1,13 @@
 package com.careconnect.service;
 
 import javax.sql.DataSource;
+
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-/** Database-native coordination primitives with PostgreSQL-only advisory locks. */
+/**
+ * Database-native coordination primitives with PostgreSQL-only advisory locks.
+ */
 @Service
 public class DatabaseLockService {
 
@@ -23,7 +26,9 @@ public class DatabaseLockService {
         }
     }
 
-    /** Serializes archive capture/deletion for one call on PostgreSQL; no-op elsewhere. */
+    /**
+     * Serializes archive capture/deletion for one call on PostgreSQL; no-op elsewhere.
+     */
     public void acquireCallArchiveLock(final String callId) {
         if (!postgres || callId == null || callId.isBlank()) {
             return;

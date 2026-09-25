@@ -97,7 +97,9 @@ public class UspsMailpiece {
     @Column(name = "consent_scope", length = CONSENT_SCOPE_LENGTH)
     private String consentScope;
 
-    /** Importance tier: HIGH, MODERATE, LOW, UNKNOWN (Task 3.14.6). */
+    /**
+     * Importance tier: HIGH, MODERATE, LOW, UNKNOWN (Task 3.14.6).
+     */
     @Column(name = "importance_level", length = IMPORTANCE_LEVEL_LENGTH)
     private String importanceLevel;
 
@@ -106,7 +108,9 @@ public class UspsMailpiece {
             scale = IMPORTANCE_CONFIDENCE_SCALE)
     private BigDecimal importanceConfidence;
 
-    /** RULES, AI, or HYBRID. */
+    /**
+     * RULES, AI, or HYBRID.
+     */
     @Column(name = "classification_method", length = CLASSIFICATION_METHOD_LENGTH)
     private String classificationMethod;
 
@@ -116,7 +120,9 @@ public class UspsMailpiece {
     @Column(name = "importance_reasoning", columnDefinition = "TEXT")
     private String importanceReasoning;
 
-    /** MEDICAL, FINANCIAL, LEGAL, ADMINISTRATIVE, MARKETING, OTHER. */
+    /**
+     * MEDICAL, FINANCIAL, LEGAL, ADMINISTRATIVE, MARKETING, OTHER.
+     */
     @Column(name = "importance_category", length = IMPORTANCE_CATEGORY_LENGTH)
     private String importanceCategory;
 

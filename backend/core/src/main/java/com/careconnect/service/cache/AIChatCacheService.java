@@ -7,6 +7,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import lombok.extern.slf4j.Slf4j;
+
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.time.LocalDateTime;
@@ -15,36 +16,17 @@ import java.time.LocalDateTime;
 @Slf4j
 public class AIChatCacheService {
 
-    @Autowired
-    private PatientRepository patientRepository;
-
-    @Autowired
-    private UserAIConfigRepository userAIConfigRepository;
-
-    @Autowired
-    private ChatConversationRepository chatConversationRepository;
-
+    private static final int CACHE_TTL_MINUTES = 15;
     // Simple in-memory cache for demonstration - in production, use Redis or similar
     private final ConcurrentHashMap<String, CacheEntry<Patient>> patientCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CacheEntry<UserAIConfig>> configCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, CacheEntry<ChatConversation>> conversationCache = new ConcurrentHashMap<>();
-
-    private static final int CACHE_TTL_MINUTES = 15;
-
-    private static class CacheEntry<T> {
-        private final T value;
-        private final LocalDateTime timestamp;
-
-        public CacheEntry(T value) {
-            this.value = value;
-            this.timestamp = LocalDateTime.now();
-        }
-
-        public T getValue() { return value; }
-        public boolean isExpired() {
-            return LocalDateTime.now().isAfter(timestamp.plusMinutes(CACHE_TTL_MINUTES));
-        }
-    }
+    @Autowired
+    private PatientRepository patientRepository;
+    @Autowired
+    private UserAIConfigRepository userAIConfigRepository;
+    @Autowired
+    private ChatConversationRepository chatConversationRepository;
 
     public Optional<Patient> findPatient(Long patientId) {
         String key = "patient_" + patientId;
@@ -160,5 +142,23 @@ public class AIChatCacheService {
         configCache.clear();
         conversationCache.clear();
         log.info("All caches cleared");
+    }
+
+    private static class CacheEntry<T> {
+        private final T value;
+        private final LocalDateTime timestamp;
+
+        public CacheEntry(T value) {
+            this.value = value;
+            this.timestamp = LocalDateTime.now();
+        }
+
+        public T getValue() {
+            return value;
+        }
+
+        public boolean isExpired() {
+            return LocalDateTime.now().isAfter(timestamp.plusMinutes(CACHE_TTL_MINUTES));
+        }
     }
 }

@@ -5,11 +5,15 @@ import lombok.Data;
 
 import java.util.List;
 
-/** A subject's full required-document checklist with per-status counts. */
+/**
+ * A subject's full required-document checklist with per-status counts.
+ */
 @Data
 @Builder
 public class DocumentChecklistDTO {
-    /** EMPLOYEE | CARE_CIRCLE */
+    /**
+     * EMPLOYEE | CARE_CIRCLE
+     */
     private String subjectType;
     private Long subjectId;
     private String subjectName;
@@ -19,6 +23,8 @@ public class DocumentChecklistDTO {
     private int inProgressCount;
     private int completeCount;
     private int rejectedCount;
-    /** 0-100, share of required documents in COMPLETE state. */
+    /**
+     * 0-100, share of required documents in COMPLETE state.
+     */
     private int percentComplete;
 }

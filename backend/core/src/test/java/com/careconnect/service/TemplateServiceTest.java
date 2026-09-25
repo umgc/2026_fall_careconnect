@@ -34,7 +34,9 @@ class TemplateServiceTest {
     @InjectMocks
     private TemplateService templateService;
 
-    /** Shared template fixture reused across tests. */
+    /**
+     * Shared template fixture reused across tests.
+     */
     private Template template;
 
     @BeforeEach
@@ -136,7 +138,7 @@ class TemplateServiceTest {
         // Every DTO field must be transferred to the saved entity and the
         // persisted template returned.
         final List<Boolean> days = List.of(true, false, false, true, false, false, false);
-        final List<String>  notifs = List.of("08:00", "20:00");
+        final List<String> notifs = List.of("08:00", "20:00");
 
         final TemplateDto dto = TemplateDto.builder()
                 .name("Weekly Check")
@@ -159,16 +161,16 @@ class TemplateServiceTest {
         final Template result = templateService.createTemplate(dto);
 
         assertNotNull(result);
-        assertEquals(10L,              result.getId());
-        assertEquals("Weekly Check",   result.getName());
+        assertEquals(10L, result.getId());
+        assertEquals("Weekly Check", result.getName());
         assertEquals("Weekly health check-in", result.getDescription());
-        assertEquals("weekly",         result.getFrequency());
-        assertEquals(1,                result.getTaskInterval());
-        assertEquals(4,                result.getDoCount());
-        assertEquals(days,             result.getDaysOfWeek());
-        assertEquals("09:00",          result.getTimeOfDay());
-        assertEquals(3,                result.getIcon());
-        assertEquals(notifs,           result.getNotifications());
+        assertEquals("weekly", result.getFrequency());
+        assertEquals(1, result.getTaskInterval());
+        assertEquals(4, result.getDoCount());
+        assertEquals(days, result.getDaysOfWeek());
+        assertEquals("09:00", result.getTimeOfDay());
+        assertEquals(3, result.getIcon());
+        assertEquals(notifs, result.getNotifications());
         verify(templateRepository).save(any(Template.class));
     }
 
@@ -206,8 +208,8 @@ class TemplateServiceTest {
     @DisplayName("updateTemplate: overwrites all fields on the existing entity and saves")
     void testUpdateTemplate_updatesAllFields() throws Exception {
         // Every field in the DTO must replace the stored value on the entity.
-        final List<Boolean> newDays  = List.of(false, true, false, true, false, false, false);
-        final List<String>  newNotifs = List.of("07:00");
+        final List<Boolean> newDays = List.of(false, true, false, true, false, false, false);
+        final List<String> newNotifs = List.of("07:00");
 
         when(templateRepository.findById(1L)).thenReturn(Optional.of(template));
         when(templateRepository.save(any(Template.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -226,15 +228,15 @@ class TemplateServiceTest {
 
         final Template result = templateService.updateTemplate(1L, dto);
 
-        assertEquals("Updated Name",          result.getName());
-        assertEquals("Updated description",   result.getDescription());
-        assertEquals("monthly",               result.getFrequency());
-        assertEquals(2,                       result.getTaskInterval());
-        assertEquals(12,                      result.getDoCount());
-        assertEquals(newDays,                 result.getDaysOfWeek());
-        assertEquals("10:00",                 result.getTimeOfDay());
-        assertEquals(5,                       result.getIcon());
-        assertEquals(newNotifs,               result.getNotifications());
+        assertEquals("Updated Name", result.getName());
+        assertEquals("Updated description", result.getDescription());
+        assertEquals("monthly", result.getFrequency());
+        assertEquals(2, result.getTaskInterval());
+        assertEquals(12, result.getDoCount());
+        assertEquals(newDays, result.getDaysOfWeek());
+        assertEquals("10:00", result.getTimeOfDay());
+        assertEquals(5, result.getIcon());
+        assertEquals(newNotifs, result.getNotifications());
         verify(templateRepository).save(template);
     }
 

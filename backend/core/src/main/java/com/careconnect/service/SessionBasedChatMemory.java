@@ -17,81 +17,81 @@ import java.util.List;
 
 /**
  * Session-based ChatMemory implementation with database persistence
- * 
+ * <p>
  * This implementation provides:
  * - Database persistence for chat history
  * - Session timeout (15 minutes of inactivity)
  * - Automatic cleanup after timeout
  * - Limited context window (10-20 messages per session)
- * 
+ * <p>
  * Chat history persists within the same session but resets after 15 minutes of inactivity.
  */
 @Slf4j
 public class SessionBasedChatMemory implements ChatMemory {
-    
+
     private final ChatMessageRepository chatMessageRepository;
     private final ChatConversation conversation;
     private final String sessionId;
     private final int maxMessages;
     private final long sessionTimeoutMinutes;
-    
+
     private Instant lastActivity;
-    
-    public SessionBasedChatMemory(ChatMessageRepository chatMessageRepository, 
-                                 ChatConversation conversation, 
-                                 int maxMessages, 
-                                 long sessionTimeoutMinutes) {
+
+    public SessionBasedChatMemory(ChatMessageRepository chatMessageRepository,
+                                  ChatConversation conversation,
+                                  int maxMessages,
+                                  long sessionTimeoutMinutes) {
         this.chatMessageRepository = chatMessageRepository;
         this.conversation = conversation;
         this.sessionId = conversation.getConversationId();
         this.maxMessages = maxMessages;
         this.sessionTimeoutMinutes = sessionTimeoutMinutes;
         this.lastActivity = Instant.now();
-        
-        log.debug("Created session-based ChatMemory for conversation {} with {} max messages and {} minute timeout", 
-            sessionId, maxMessages, sessionTimeoutMinutes);
+
+        log.debug("Created session-based ChatMemory for conversation {} with {} max messages and {} minute timeout",
+                sessionId, maxMessages, sessionTimeoutMinutes);
     }
-    
+
     @Override
     public Object id() {
         return sessionId;
     }
-    
+
     @Override
     public void add(ChatMessage message) {
         updateActivity();
-        
+
         // Check if session has expired
         if (isSessionExpired()) {
             log.debug("Session {} expired, clearing old messages", sessionId);
             clearExpiredSession();
         }
-        
+
         // Convert LangChain4j ChatMessage to database ChatMessage and save
         com.careconnect.model.ChatMessage dbMessage = convertToDbMessage(message);
         chatMessageRepository.save(dbMessage);
-        
+
         // Clean up old messages if we exceed the limit
         cleanupOldMessages();
-        
+
         log.debug("Added message to session {}, total messages: {}", sessionId, getMessageCount());
     }
-    
+
     @Override
     public List<ChatMessage> messages() {
         updateActivity();
-        
+
         // Check if session has expired
         if (isSessionExpired()) {
             log.debug("Session {} expired during message retrieval, clearing old messages", sessionId);
             clearExpiredSession();
             return new ArrayList<>(); // Return empty list for expired session
         }
-        
+
         // Get recent messages from database
         List<com.careconnect.model.ChatMessage> dbMessages = chatMessageRepository
-            .findTopNByConversationOrderByCreatedAtAsc(conversation, maxMessages);
-        
+                .findTopNByConversationOrderByCreatedAtAsc(conversation, maxMessages);
+
         // Convert to LangChain4j ChatMessage objects
         List<ChatMessage> langchainMessages = new ArrayList<>();
         for (com.careconnect.model.ChatMessage dbMsg : dbMessages) {
@@ -100,10 +100,10 @@ public class SessionBasedChatMemory implements ChatMemory {
                 langchainMessages.add(langchainMsg);
             }
         }
-        
+
         return langchainMessages;
     }
-    
+
     @Override
     public void clear() {
         log.info("Clearing session {} memory", sessionId);
@@ -111,21 +111,21 @@ public class SessionBasedChatMemory implements ChatMemory {
         chatMessageRepository.deleteAll(messages);
         updateActivity();
     }
-    
+
     /**
      * Check if the current session has expired
      */
     private boolean isSessionExpired() {
         return ChronoUnit.MINUTES.between(lastActivity, Instant.now()) > sessionTimeoutMinutes;
     }
-    
+
     /**
      * Update the last activity timestamp
      */
     private void updateActivity() {
         this.lastActivity = Instant.now();
     }
-    
+
     /**
      * Clear expired session messages
      */
@@ -135,14 +135,14 @@ public class SessionBasedChatMemory implements ChatMemory {
         chatMessageRepository.deleteAll(messages);
         updateActivity();
     }
-    
+
     /**
      * Get current message count
      */
     private int getMessageCount() {
         return chatMessageRepository.countByConversation(conversation);
     }
-    
+
     /**
      * Convert LangChain4j ChatMessage to database ChatMessage
      */
@@ -165,10 +165,10 @@ public class SessionBasedChatMemory implements ChatMemory {
         }
 
         return com.careconnect.model.ChatMessage.builder()
-            .conversation(conversation)
-            .messageType(messageType)
-            .content(content)
-            .build();
+                .conversation(conversation)
+                .messageType(messageType)
+                .content(content)
+                .build();
     }
 
     /**
@@ -194,7 +194,7 @@ public class SessionBasedChatMemory implements ChatMemory {
     private void cleanupOldMessages() {
         try {
             List<com.careconnect.model.ChatMessage> allMessages = chatMessageRepository
-                .findByConversationOrderByCreatedAtAsc(conversation);
+                    .findByConversationOrderByCreatedAtAsc(conversation);
 
             if (allMessages.size() > maxMessages) {
                 int messagesToDeleteCount = allMessages.size() - maxMessages;
@@ -203,7 +203,7 @@ public class SessionBasedChatMemory implements ChatMemory {
                 chatMessageRepository.deleteAll(messagesToDelete);
 
                 log.debug("Cleaned up {} old messages from conversation {}",
-                    messagesToDelete.size(), conversation.getConversationId());
+                        messagesToDelete.size(), conversation.getConversationId());
             }
         } catch (Exception e) {
             log.error("Failed to cleanup old messages", e);
@@ -215,13 +215,13 @@ public class SessionBasedChatMemory implements ChatMemory {
      */
     public SessionStats getSessionStats() {
         return SessionStats.builder()
-            .sessionId(sessionId)
-            .messageCount(getMessageCount())
-            .lastActivity(lastActivity)
-            .isExpired(isSessionExpired())
-            .build();
+                .sessionId(sessionId)
+                .messageCount(getMessageCount())
+                .lastActivity(lastActivity)
+                .isExpired(isSessionExpired())
+                .build();
     }
-    
+
     /**
      * Session statistics for monitoring and debugging
      */

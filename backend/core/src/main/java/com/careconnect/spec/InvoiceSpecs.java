@@ -9,7 +9,8 @@ import java.time.OffsetDateTime;
 import java.util.Set;
 
 public final class InvoiceSpecs {
-    private InvoiceSpecs() {}
+    private InvoiceSpecs() {
+    }
 
     public static Specification<Invoice> search(String q) {
         if (q == null || q.trim().isEmpty()) return null;

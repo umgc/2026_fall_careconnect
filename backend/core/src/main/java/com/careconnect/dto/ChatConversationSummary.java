@@ -2,6 +2,7 @@ package com.careconnect.dto;
 
 import com.careconnect.model.ChatConversation;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 @Getter
@@ -10,7 +11,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class ChatConversationSummary {
-    
+
     private String conversationId;
     private String title;
     private ChatConversation.ChatType chatType;

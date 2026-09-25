@@ -13,8 +13,8 @@ class InvoiceDatesTest {
     @Test
     void builder_allFields_setsCorrectly() throws Exception {
         final LocalDate statement = LocalDate.of(2025, 1, 1);
-        final LocalDate due       = LocalDate.of(2025, 1, 31);
-        final LocalDate paid      = LocalDate.of(2025, 1, 20);
+        final LocalDate due = LocalDate.of(2025, 1, 31);
+        final LocalDate paid = LocalDate.of(2025, 1, 20);
 
         final InvoiceDates dates = InvoiceDates.builder()
                 .statementDate(statement)
@@ -43,7 +43,7 @@ class InvoiceDatesTest {
         final InvoiceDates dates = InvoiceDates.builder().build();
 
         final LocalDate statement = LocalDate.of(2025, 6, 1);
-        final LocalDate due       = LocalDate.of(2025, 6, 30);
+        final LocalDate due = LocalDate.of(2025, 6, 30);
 
         dates.setStatementDate(statement);
         dates.setDueDate(due);

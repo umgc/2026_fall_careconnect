@@ -22,21 +22,52 @@ public class MailpieceNormalizer {
     public static final String DEFAULT_CONSENT_SCOPE = "on_consent";
     private static final int MAX_IMAGE_REF_LENGTH = 1024;
 
-    /**
-     * Canonical fields produced from a parsed mailpiece + digest context.
-     */
-    public record NormalizedMailpiece(
-            String sourceKey,
-            String externalId,
-            String sender,
-            String summary,
-            String imageRef,
-            String imageFingerprint,
-            String contentHash,
-            OffsetDateTime receivedAt,
-            LocalDate digestDate,
-            String consentScope
-    ) {
+    private static String sanitizeText(final String value, final Integer maxLen) {
+        final String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            return null;
+        }
+        final String collapsed = trimmed.replaceAll("[\\r\\n\\t]+", " ").replaceAll(" +", " ").trim();
+        if (collapsed.isEmpty()) {
+            return null;
+        }
+        if (maxLen != null && collapsed.length() > maxLen) {
+            return collapsed.substring(0, maxLen);
+        }
+        return collapsed;
+    }
+
+    private static String trimToNull(final String value) {
+        if (value == null) {
+            return null;
+        }
+        final String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value;
+    }
+
+    private static String joinPipe(final String... parts) {
+        return String.join("|", parts);
+    }
+
+    static String sha256Hex(final String value) {
+        return sha256Hex(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    static String sha256Hex(final byte[] bytes) {
+        try {
+            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(bytes));
+        } catch (final NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 not available", ex);
+        }
     }
 
     public NormalizedMailpiece normalize(final MailPiece piece, final OffsetDateTime digestDateTime) {
@@ -129,51 +160,20 @@ public class MailpieceNormalizer {
         return null;
     }
 
-    private static String sanitizeText(final String value, final Integer maxLen) {
-        final String trimmed = trimToNull(value);
-        if (trimmed == null) {
-            return null;
-        }
-        final String collapsed = trimmed.replaceAll("[\\r\\n\\t]+", " ").replaceAll(" +", " ").trim();
-        if (collapsed.isEmpty()) {
-            return null;
-        }
-        if (maxLen != null && collapsed.length() > maxLen) {
-            return collapsed.substring(0, maxLen);
-        }
-        return collapsed;
-    }
-
-    private static String trimToNull(final String value) {
-        if (value == null) {
-            return null;
-        }
-        final String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static String firstNonBlank(final String a, final String b) {
-        return a != null && !a.isBlank() ? a : b;
-    }
-
-    private static String nullToEmpty(final String value) {
-        return value == null ? "" : value;
-    }
-
-    private static String joinPipe(final String... parts) {
-        return String.join("|", parts);
-    }
-
-    static String sha256Hex(final String value) {
-        return sha256Hex(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    static String sha256Hex(final byte[] bytes) {
-        try {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(bytes));
-        } catch (final NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 not available", ex);
-        }
+    /**
+     * Canonical fields produced from a parsed mailpiece + digest context.
+     */
+    public record NormalizedMailpiece(
+            String sourceKey,
+            String externalId,
+            String sender,
+            String summary,
+            String imageRef,
+            String imageFingerprint,
+            String contentHash,
+            OffsetDateTime receivedAt,
+            LocalDate digestDate,
+            String consentScope
+    ) {
     }
 }

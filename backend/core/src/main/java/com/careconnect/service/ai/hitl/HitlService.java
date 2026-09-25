@@ -59,7 +59,8 @@ public class HitlService {
             "A reviewer could not release this answer. Please contact your care provider.";
     public static final String EXPIRED_MESSAGE =
             "This review request expired without a decision. Please ask again or contact your care provider.";
-
+    private static final int QUERY_TEXT_MAX_CHARS = 2000;
+    private static final int QUERY_PREVIEW_MAX_CHARS = 120;
     private final AiHeldItemRepository heldItemRepository;
     private final AiSafetyAuditEventRepository auditEventRepository;
     private final AiAskAuditService askAuditService;
@@ -94,14 +95,70 @@ public class HitlService {
         this.ttlHours = ttlHours <= 0 ? 72 : ttlHours;
     }
 
+    public static String pollUrl(final UUID heldItemId) {
+        return "/v1/api/ai/hitl/" + heldItemId + "/status";
+    }
+
+    private static AiDisclaimer deliveredDisclaimer() {
+        return new AiDisclaimer(AskAiSafetyCopy.DISCLAIMER_EN, true, true, "en-US");
+    }
+
+    private static AiConfirmationHint deliveredConfirmation() {
+        return new AiConfirmationHint(true, AskAiSafetyCopy.CONFIRM_EN);
+    }
+
+    private static String truncateNotes(final String notes) {
+        if (notes == null) {
+            return null;
+        }
+        final String trimmed = notes.trim();
+        return trimmed.length() <= 500 ? trimmed : trimmed.substring(0, 500);
+    }
+
+    private static String truncateQueryText(final String query) {
+        if (query == null) {
+            return null;
+        }
+        final String trimmed = query.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() <= QUERY_TEXT_MAX_CHARS
+                ? trimmed
+                : trimmed.substring(0, QUERY_TEXT_MAX_CHARS);
+    }
+
+    private static String previewQueryText(final String queryText) {
+        if (queryText == null || queryText.isBlank()) {
+            return null;
+        }
+        final String trimmed = queryText.trim();
+        return trimmed.length() <= QUERY_PREVIEW_MAX_CHARS
+                ? trimmed
+                : trimmed.substring(0, QUERY_PREVIEW_MAX_CHARS);
+    }
+
+    private static String sha256(final String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(
+                    digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (final NoSuchAlgorithmException ex) {
+            throw new IllegalStateException(ex);
+        }
+    }
+
     /**
      * Returns an open ({@code PENDING_REVIEW}) hold for {@code patientId} +
      * {@code sourceSurface} whose {@code queryTextHash} matches {@code correlationKey},
      * if one exists. Used to dedupe summary-item HITL retries that would otherwise
      * create duplicate holds.
      *
-     * @param patientId patient entity id that owns the hold
-     * @param sourceSurface surface that created the hold (e.g. {@code CALL_SUMMARY})
+     * @param patientId      patient entity id that owns the hold
+     * @param sourceSurface  surface that created the hold (e.g. {@code CALL_SUMMARY})
      * @param correlationKey stable key hashed the same way as {@link #createHold} query text
      * @return the open hold, or empty when none exists
      */
@@ -388,10 +445,6 @@ public class HitlService {
         return toDetail(item);
     }
 
-    public static String pollUrl(final UUID heldItemId) {
-        return "/v1/api/ai/hitl/" + heldItemId + "/status";
-    }
-
     private AiHeldItem requireItem(final UUID heldItemId) {
         return heldItemRepository.findById(heldItemId)
                 .orElseThrow(() -> new HitlNotFoundException("Held item not found"));
@@ -600,14 +653,6 @@ public class HitlService {
         };
     }
 
-    private static AiDisclaimer deliveredDisclaimer() {
-        return new AiDisclaimer(AskAiSafetyCopy.DISCLAIMER_EN, true, true, "en-US");
-    }
-
-    private static AiConfirmationHint deliveredConfirmation() {
-        return new AiConfirmationHint(true, AskAiSafetyCopy.CONFIRM_EN);
-    }
-
     private HitlQueueItem toQueueItem(final AiHeldItem item) {
         return new HitlQueueItem(
                 item.getId(),
@@ -697,7 +742,8 @@ public class HitlService {
             return List.of();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<Object>>() { });
+            return objectMapper.readValue(json, new TypeReference<List<Object>>() {
+            });
         } catch (final JsonProcessingException ex) {
             return List.of();
         }
@@ -708,56 +754,10 @@ public class HitlService {
             return List.of();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<String>>() { });
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {
+            });
         } catch (final JsonProcessingException ex) {
             return List.of();
-        }
-    }
-
-    private static String truncateNotes(final String notes) {
-        if (notes == null) {
-            return null;
-        }
-        final String trimmed = notes.trim();
-        return trimmed.length() <= 500 ? trimmed : trimmed.substring(0, 500);
-    }
-
-    private static final int QUERY_TEXT_MAX_CHARS = 2000;
-    private static final int QUERY_PREVIEW_MAX_CHARS = 120;
-
-    private static String truncateQueryText(final String query) {
-        if (query == null) {
-            return null;
-        }
-        final String trimmed = query.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        return trimmed.length() <= QUERY_TEXT_MAX_CHARS
-                ? trimmed
-                : trimmed.substring(0, QUERY_TEXT_MAX_CHARS);
-    }
-
-    private static String previewQueryText(final String queryText) {
-        if (queryText == null || queryText.isBlank()) {
-            return null;
-        }
-        final String trimmed = queryText.trim();
-        return trimmed.length() <= QUERY_PREVIEW_MAX_CHARS
-                ? trimmed
-                : trimmed.substring(0, QUERY_PREVIEW_MAX_CHARS);
-    }
-
-    private static String sha256(final String value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(
-                    digest.digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (final NoSuchAlgorithmException ex) {
-            throw new IllegalStateException(ex);
         }
     }
 }

@@ -8,13 +8,15 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-/** WBS 3.15.6
+/**
+ * WBS 3.15.6
  * read-only queries for the audit ledger.
- *
+ * <p>
  * Each finder has an unbounded version (for callers that need the
  * full history, like the compliance export) and an overload that
  * creates a bound for the result. The paged overload is good for for UI / API reads,
- * where an actor or patient can create a lot of events. */
+ * where an actor or patient can create a lot of events.
+ */
 @Repository
 public interface AiAuditLedgerRepository extends JpaRepository<AiAuditLedger, Long> {
 

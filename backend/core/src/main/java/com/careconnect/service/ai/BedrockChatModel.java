@@ -31,34 +31,34 @@ public class BedrockChatModel implements ChatModel {
 
         // Convert all messages to a simple text prompt
         String prompt = messages.stream()
-            .map(Object::toString)
-            .reduce("", (a, b) -> a + "\n" + b);
+                .map(Object::toString)
+                .reduce("", (a, b) -> a + "\n" + b);
 
-            String body = """
-            {
-                "inputText": "%s",
-                "textGenerationConfig": {
-                "maxTokenCount": 2048,
-                "temperature": %f
+        String body = """
+                {
+                    "inputText": "%s",
+                    "textGenerationConfig": {
+                    "maxTokenCount": 2048,
+                    "temperature": %f
+                    }
                 }
-            }
-            """.formatted(
-            prompt.replace("\"", "\\\""),
-            temperature
-            );
+                """.formatted(
+                prompt.replace("\"", "\\\""),
+                temperature
+        );
 
-            InvokeModelRequest request = InvokeModelRequest.builder()
+        InvokeModelRequest request = InvokeModelRequest.builder()
                 .modelId(modelId)
                 .contentType("application/json")
                 .accept("application/json")
                 .body(software.amazon.awssdk.core.SdkBytes.fromUtf8String(body))
                 .build();
 
-            InvokeModelResponse response = client.invokeModel(request);
+        InvokeModelResponse response = client.invokeModel(request);
 
-            String responseBody = response.body().asUtf8String();
+        String responseBody = response.body().asUtf8String();
 
-            return ChatResponse.builder()
+        return ChatResponse.builder()
                 .aiMessage(AiMessage.from(responseBody))
                 .build();
     }

@@ -30,24 +30,27 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EvvControllerTest {
 
-    @Mock private EvvService evvService;
-    @Mock private EvvSubmissionService submitter;
-    @Mock private EvvOfflineSyncService offlineSyncService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-    @Mock private PatientRepository patientRepository;
-
-    @InjectMocks
-    private EvvController controller;
+    private static final Long DEFAULT_USER_ID = 1L;
+    private static final Long RECORD_ID = 42L;
+    private static final Long CORRECTION_ID = 10L;
+    private static final String DEVICE_ID = "device-abc-123";
+    private static final String COMMENT = "looks good";
+    @Mock
+    private EvvService evvService;
+    @Mock
+    private EvvSubmissionService submitter;
 
     // ── shared constants ──────────────────────────────────────────────────────
-
-    private static final Long   DEFAULT_USER_ID = 1L;
-    private static final Long   RECORD_ID       = 42L;
-    private static final Long   CORRECTION_ID   = 10L;
-    private static final String DEVICE_ID       = "device-abc-123";
-    private static final String COMMENT         = "looks good";
-
+    @Mock
+    private EvvOfflineSyncService offlineSyncService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
+    @Mock
+    private PatientRepository patientRepository;
+    @InjectMocks
+    private EvvController controller;
     private User currentUser;
 
     @BeforeEach
@@ -283,8 +286,7 @@ class EvvControllerTest {
         @Test
         void returns200() throws Exception {
             final EvvSearchRequestDto searchRequest = new EvvSearchRequestDto();
-            @SuppressWarnings("unchecked")
-            final Page<EvvRecord> page = mock(Page.class);
+            @SuppressWarnings("unchecked") final Page<EvvRecord> page = mock(Page.class);
             when(securityUtil.resolveCurrentUser()).thenReturn(mock(User.class));
             when(evvService.searchRecords(searchRequest)).thenReturn(page);
 
@@ -296,8 +298,7 @@ class EvvControllerTest {
         @Test
         void returnsPageFromService() throws Exception {
             final EvvSearchRequestDto searchRequest = new EvvSearchRequestDto();
-            @SuppressWarnings("unchecked")
-            final Page<EvvRecord> page = mock(Page.class);
+            @SuppressWarnings("unchecked") final Page<EvvRecord> page = mock(Page.class);
             when(securityUtil.resolveCurrentUser()).thenReturn(mock(User.class));
             when(evvService.searchRecords(searchRequest)).thenReturn(page);
 
@@ -309,8 +310,7 @@ class EvvControllerTest {
         @Test
         void callsServiceWithSearchRequest() throws Exception {
             final EvvSearchRequestDto searchRequest = new EvvSearchRequestDto();
-            @SuppressWarnings("unchecked")
-            final Page<EvvRecord> page = mock(Page.class);
+            @SuppressWarnings("unchecked") final Page<EvvRecord> page = mock(Page.class);
             when(securityUtil.resolveCurrentUser()).thenReturn(mock(User.class));
             when(evvService.searchRecords(searchRequest)).thenReturn(page);
 

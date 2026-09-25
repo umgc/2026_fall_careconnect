@@ -15,7 +15,7 @@ public interface CallTelemetryEventRepository
      *
      * @param callId call identifier
      * @return matching events in
-     *     descending occurrence order
+     * descending occurrence order
      */
     List<CallTelemetryEvent> findByCallIdOrderByOccurredAtDesc(String callId);
 
@@ -24,37 +24,37 @@ public interface CallTelemetryEventRepository
      *
      * @param callId call identifier
      * @return matching events in
-     *     ascending occurrence order
+     * ascending occurrence order
      */
     List<CallTelemetryEvent> findByCallIdOrderByOccurredAtAsc(String callId);
 
     /**
      * Returns up to 500 user-related telemetry events.
      *
-     * @param actorUserId actor user identifier
+     * @param actorUserId  actor user identifier
      * @param targetUserId target user identifier
      * @return matching events in
-     *     descending occurrence order
+     * descending occurrence order
      */
     List<CallTelemetryEvent>
-            findTop500ByActorUserIdOrTargetUserIdOrderByOccurredAtDesc(
-                    Long actorUserId,
-                    Long targetUserId
-            );
+    findTop500ByActorUserIdOrTargetUserIdOrderByOccurredAtDesc(
+            Long actorUserId,
+            Long targetUserId
+    );
 
     /**
      * Returns user-related telemetry events, oldest first.
      *
-     * @param actorUserId actor user identifier
+     * @param actorUserId  actor user identifier
      * @param targetUserId target user identifier
      * @return matching events in
-     *     ascending occurrence order
+     * ascending occurrence order
      */
     List<CallTelemetryEvent>
-            findByActorUserIdOrTargetUserIdOrderByOccurredAtAsc(
-                    Long actorUserId,
-                    Long targetUserId
-            );
+    findByActorUserIdOrTargetUserIdOrderByOccurredAtAsc(
+            Long actorUserId,
+            Long targetUserId
+    );
 
     /**
      * Deletes telemetry events for a call.

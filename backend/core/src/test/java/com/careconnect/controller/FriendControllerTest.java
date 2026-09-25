@@ -29,20 +29,23 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class FriendControllerTest {
 
-    @Mock private GamificationService gamificationService;
-    @Mock private FriendRequestRepository friendRequestRepo;
-    @Mock private UserRepository userRepo;
-    @Mock private FriendshipRepository friendshipRepository;
-
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
+    private static final Long FROM_USER_ID = 1L;
+    private static final Long TO_USER_ID = 2L;
+    private static final Long REQUEST_ID = 10L;
+    @Mock
+    private GamificationService gamificationService;
+    @Mock
+    private FriendRequestRepository friendRequestRepo;
+    @Mock
+    private UserRepository userRepo;
+    @Mock
+    private FriendshipRepository friendshipRepository;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
     @InjectMocks
     private FriendController controller;
-
-    private static final Long FROM_USER_ID = 1L;
-    private static final Long TO_USER_ID   = 2L;
-    private static final Long REQUEST_ID   = 10L;
 
     private FriendRequest makePendingRequest(Long id, Long from, Long to) {
         final FriendRequest r = new FriendRequest();
@@ -89,9 +92,9 @@ class FriendControllerTest {
         assertThat(response.getBody()).isEqualTo("Friend request sent.");
         verify(friendRequestRepo).save(argThat(r ->
                 FROM_USER_ID.equals(r.getFromUserId())
-                && TO_USER_ID.equals(r.getToUserId())
-                && "pending".equals(r.getStatus())
-                && r.getCreatedAt() != null
+                        && TO_USER_ID.equals(r.getToUserId())
+                        && "pending".equals(r.getStatus())
+                        && r.getCreatedAt() != null
         ));
     }
 
@@ -200,7 +203,7 @@ class FriendControllerTest {
         when(friendRequestRepo.save(any())).thenReturn(req);
 
         final User fromUser = makeUser(FROM_USER_ID, "Alice", "a@test.com");
-        final User toUser   = makeUser(TO_USER_ID, "Bob", "b@test.com");
+        final User toUser = makeUser(TO_USER_ID, "Bob", "b@test.com");
         when(userRepo.findById(FROM_USER_ID)).thenReturn(Optional.of(fromUser));
         when(userRepo.findById(TO_USER_ID)).thenReturn(Optional.of(toUser));
         when(friendshipRepository.save(any(Friendship.class))).thenReturn(
@@ -215,8 +218,8 @@ class FriendControllerTest {
         verify(gamificationService).unlockAchievement(FROM_USER_ID, "Added First Friend", 50);
         verify(friendshipRepository).save(argThat(f ->
                 "CONFIRMED".equals(f.getStatus())
-                && fromUser.equals(f.getUser1())
-                && toUser.equals(f.getUser2())
+                        && fromUser.equals(f.getUser1())
+                        && toUser.equals(f.getUser2())
         ));
     }
 
@@ -227,7 +230,7 @@ class FriendControllerTest {
         when(friendRequestRepo.save(any())).thenReturn(req);
 
         final User fromUser = makeUser(FROM_USER_ID, "Alice", "a@test.com");
-        final User toUser   = makeUser(TO_USER_ID, "Bob", "b@test.com");
+        final User toUser = makeUser(TO_USER_ID, "Bob", "b@test.com");
         when(userRepo.findById(FROM_USER_ID)).thenReturn(Optional.of(fromUser));
         when(userRepo.findById(TO_USER_ID)).thenReturn(Optional.of(toUser));
         when(friendshipRepository.save(any(Friendship.class))).thenReturn(

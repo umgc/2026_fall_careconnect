@@ -417,7 +417,7 @@ public class USPSDigestService {
         var now = OffsetDateTime.now(ZoneOffset.UTC);
         var pkg = new PackageItem("9400100000000000000000", "USPS Package", now.plusDays(1),
                 ActionLinks.defaults("https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1=9400100000000000000000"));
-        var mp  = new MailPiece("m-1","ACME Bank","Monthly statement",
+        var mp = new MailPiece("m-1", "ACME Bank", "Monthly statement",
                 "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0nNDAnIGhlaWdodD0nMjAnIHhtbG5zPSdodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2Zyc+PHJlY3Qgd2lkdGg9JzQwJyBoZWlnaHQ9JzIwJyBmaWxsPSIjZGRkIi8+PC9zdmc+",
                 now, ActionLinks.defaults(null));
         return new USPSDigest(now, List.of(mp), List.of(pkg));

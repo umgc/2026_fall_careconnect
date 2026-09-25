@@ -21,6 +21,37 @@ class CitationAssemblerTest {
                     new CitationDeepLinkBuilder(new ObjectMapper()),
                     new CitationMetadataMapper(new ObjectMapper()));
 
+    private static RankedChunk chunk(final String ref, final String sourceId) {
+        return chunk(
+                ref,
+                sourceId,
+                RetrievalRecordType.CALL_SUMMARY,
+                "text for " + ref,
+                "{\"callId\":\"call-1\"}",
+                0.05d);
+    }
+
+    private static RankedChunk chunk(
+            final String ref,
+            final String sourceId,
+            final RetrievalRecordType recordType,
+            final String text,
+            final String metadata,
+            final double rrfScore) {
+        return new RankedChunk(
+                UUID.randomUUID(),
+                1L,
+                recordType,
+                sourceId,
+                text,
+                metadata,
+                "auto",
+                rrfScore,
+                1,
+                null,
+                ref);
+    }
+
     @Test
     @DisplayName("assemble validates metadata and keeps retrieval relevance order")
     void assemble_validatesMetadataAndOrdersByRetrievalRank() {
@@ -206,36 +237,5 @@ class CitationAssemblerTest {
         assertThat(citation.excerpt()).endsWith("…");
         assertThat(citation.excerpt().codePointCount(0, citation.excerpt().length()))
                 .isEqualTo(240);
-    }
-
-    private static RankedChunk chunk(final String ref, final String sourceId) {
-        return chunk(
-                ref,
-                sourceId,
-                RetrievalRecordType.CALL_SUMMARY,
-                "text for " + ref,
-                "{\"callId\":\"call-1\"}",
-                0.05d);
-    }
-
-    private static RankedChunk chunk(
-            final String ref,
-            final String sourceId,
-            final RetrievalRecordType recordType,
-            final String text,
-            final String metadata,
-            final double rrfScore) {
-        return new RankedChunk(
-                UUID.randomUUID(),
-                1L,
-                recordType,
-                sourceId,
-                text,
-                metadata,
-                "auto",
-                rrfScore,
-                1,
-                null,
-                ref);
     }
 }

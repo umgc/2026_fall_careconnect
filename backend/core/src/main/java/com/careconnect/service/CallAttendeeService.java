@@ -6,18 +6,22 @@ import com.careconnect.model.User;
 import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.UserRepository;
+
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Persists Chime attendee roster rows for speaker identification. */
+/**
+ * Persists Chime attendee roster rows for speaker identification.
+ */
 @Service
 public class CallAttendeeService {
 
@@ -38,8 +42,6 @@ public class CallAttendeeService {
         this.userRepository = userRepository;
         this.chimeService = chimeService;
     }
-
-    private record ResolvedExternalUser(Long userId, String role) {}
 
     /**
      * Maps a Chime {@code externalUserId} to app user id + role. Prefers durable opaque id lookup
@@ -190,14 +192,18 @@ public class CallAttendeeService {
         }
     }
 
-    /** Active roster Chime attendee ids for a call ({@code left_at} null). */
+    /**
+     * Active roster Chime attendee ids for a call ({@code left_at} null).
+     */
     public List<String> findActiveChimeAttendeeIds(final String callId) {
         return callAttendeeRepository.findByCallIdAndLeftAtIsNull(callId).stream()
                 .map(CallAttendee::getChimeAttendeeId)
                 .toList();
     }
 
-    /** Persists the KVS stream ARN assigned to an attendee so post-call F7 can export it. */
+    /**
+     * Persists the KVS stream ARN assigned to an attendee so post-call F7 can export it.
+     */
     @Transactional
     public void recordKvsStreamMapping(
             final String callId, final String chimeAttendeeId, final String streamArn) {
@@ -218,7 +224,9 @@ public class CallAttendeeService {
                         });
     }
 
-    /** Marks active attendee rows for the user as left on call end/leave. */
+    /**
+     * Marks active attendee rows for the user as left on call end/leave.
+     */
     @Transactional
     public void recordLeave(final String callId, final Long userId) {
         final LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
@@ -232,7 +240,9 @@ public class CallAttendeeService {
         }
     }
 
-    /** Marks every active attendee row for a call as left when the meeting is ended. */
+    /**
+     * Marks every active attendee row for a call as left when the meeting is ended.
+     */
     @Transactional
     public void recordCallEnded(final String callId) {
         if (callId == null || callId.isBlank()) {
@@ -272,5 +282,8 @@ public class CallAttendeeService {
         if (changed) {
             callAttendeeRepository.saveAll(activeRows);
         }
+    }
+
+    private record ResolvedExternalUser(Long userId, String role) {
     }
 }

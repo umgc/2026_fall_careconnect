@@ -126,9 +126,11 @@ class AIChat extends StatefulWidget {
   final int? patientId;
   final int? userId;
   final AiChatMode mode;
+
   /// Max status polls while waiting for clinician release (default ~5 minutes).
   final int hitlMaxPollAttempts;
   final Duration hitlPollInterval;
+
   /// Overrides the text-to-speech engine used to read answers aloud.
   /// Exists so widget tests can inject a fake instead of a real platform
   /// channel; production callers should never set this.
@@ -1484,10 +1486,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     required AiAskResult askResult,
   }) async {
     _clearRetryState();
-    final reviewingText =
-        askResult.message?.trim().isNotEmpty == true
-            ? askResult.message!.trim()
-            : _hitlReviewingFallback;
+    final reviewingText = askResult.message?.trim().isNotEmpty == true
+        ? askResult.message!.trim()
+        : _hitlReviewingFallback;
 
     if (!_safeSetState(epoch, () {
       _messages.add(
@@ -1561,9 +1562,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     HitlPollResult? terminal;
     HitlPollHttpException? permanentFailure;
     var parseFailed = false;
-    final maxAttempts = widget.hitlMaxPollAttempts < 1
-        ? 1
-        : widget.hitlMaxPollAttempts;
+    final maxAttempts =
+        widget.hitlMaxPollAttempts < 1 ? 1 : widget.hitlMaxPollAttempts;
 
     for (var attempt = 0; attempt < maxAttempts; attempt++) {
       if (!_isCurrentEpoch(epoch)) return;
@@ -1921,20 +1921,15 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                             ),
                             const SizedBox(height: 4),
                             ...msg.medicationTimeline!.events.map((event) {
-                              final hasDose = (event.doseFrom
-                                          ?.trim()
-                                          .isNotEmpty ==
-                                      true) ||
-                                  (event.doseTo?.trim().isNotEmpty == true);
+                              final hasDose =
+                                  (event.doseFrom?.trim().isNotEmpty == true) ||
+                                      (event.doseTo?.trim().isNotEmpty == true);
                               final parts = <String>[
-                                if (event.effectiveDate
-                                        ?.trim()
-                                        .isNotEmpty ==
+                                if (event.effectiveDate?.trim().isNotEmpty ==
                                     true)
                                   event.effectiveDate!.trim(),
                                 event.medicationName,
-                                if (event.eventType?.trim().isNotEmpty ==
-                                    true)
+                                if (event.eventType?.trim().isNotEmpty == true)
                                   event.eventType!.trim(),
                                 if (hasDose)
                                   '${event.doseFrom ?? '—'} \u2192 '
@@ -1943,8 +1938,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 4),
                                 child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: Text(
@@ -1952,9 +1946,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                         style: theme.textTheme.bodySmall,
                                       ),
                                     ),
-                                    if (event.citationRef
-                                            ?.trim()
-                                            .isNotEmpty ==
+                                    if (event.citationRef?.trim().isNotEmpty ==
                                         true) ...[
                                       const SizedBox(width: 6),
                                       Container(

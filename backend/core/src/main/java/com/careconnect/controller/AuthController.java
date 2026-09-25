@@ -61,6 +61,18 @@ public class AuthController {
 
     @Value("${frontend.base-url}")
     private String frontendBaseUrl; // --- Register new user ---
+    @Value("${alexa.oauth.client-id}")
+    private String alexaClientId;
+    @Value("${alexa.oauth.client-secret}")
+    private String alexaClientSecret;
+    @Autowired
+    private UserRepository userRepository; // ✅ inject user repo to find patient by email
+    @Autowired
+    private PatientRepository patientRepository; // ✅ inject patient repo to find patient by email
+    @Autowired
+    private TokenHashService tokenHashService;
+    @Autowired
+    private AlexaCodeStoreService alexaCodeStore;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user", description = "Register a new patient or caregiver account.\n\n"
@@ -82,7 +94,7 @@ public class AuthController {
             + "    \"name\": \"Test User\",\n"
             + "    \"role\": \"PATIENT\"\n"
             + "}\n"
-            + "```\n", tags = { "Authentication" }, security = {} // No authentication required for registration
+            + "```\n", tags = {"Authentication"}, security = {} // No authentication required for registration
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Registration successful, verification email sent", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\n    \"message\": \"Registration successful. Please check your email to verify your account.\",\n    \"userId\": 123\n}"))),
@@ -107,7 +119,7 @@ public class AuthController {
             + "- `user`: User profile information\n"
             + "- `patientId`/`caregiverId`: Role-specific ID (if applicable)\n\n"
             + "**Test Credentials:**\n"
-            + "If you need test credentials, use the registration endpoint first.\n", tags = { "Authentication" }, security = {} // No authentication required for login
+            + "If you need test credentials, use the registration endpoint first.\n", tags = {"Authentication"}, security = {} // No authentication required for login
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Login successful", content = @Content(mediaType = "application/json", schema = @Schema(implementation = LoginResponse.class), examples = @ExampleObject(value = "{\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n        \"id\": 123,\n        \"name\": \"John Doe\",\n        \"email\": \"john@example.com\",\n        \"role\": \"PATIENT\"\n    },\n    \"patientId\": 456,\n    \"caregiverId\": null\n}"))),
@@ -141,7 +153,7 @@ public class AuthController {
     // --- Email verification ---
     @GetMapping("/verify/{token}")
     @Operation(summary = "✉️ Verify email address", description = "Verify user email address using verification token", tags = {
-            "🔑 Authentication" }, security = {} // No authentication required for email verification
+            "🔑 Authentication"}, security = {} // No authentication required for email verification
     )
     public ResponseEntity<?> verify(@PathVariable String token) {
         return authService.verifyToken(token);
@@ -149,7 +161,7 @@ public class AuthController {
 
     @PostMapping("/resend-verification")
     @Operation(summary = "🔄 Resend verification email", description = "Resend verification email to an unverified user", tags = {
-            "🔑 Authentication" }, security = {} // No authentication required for resending verification
+            "🔑 Authentication"}, security = {} // No authentication required for resending verification
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Verification email sent successfully", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\n    \"message\": \"Verification email sent successfully! Please check your inbox.\"\n}"))),
@@ -166,7 +178,7 @@ public class AuthController {
 
     @GetMapping("/check-verification")
     @Operation(summary = "🔍 Check email verification status", description = "Check if an email address is verified without sending any emails", tags = {
-            "🔑 Authentication" }, security = {} // No authentication required for checking verification status
+            "🔑 Authentication"}, security = {} // No authentication required for checking verification status
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Verification status retrieved", content = @Content(mediaType = "application/json", examples = @ExampleObject(value = "{\n    \"verified\": true\n}")))
@@ -181,10 +193,10 @@ public class AuthController {
 
     @PostMapping("/password/forgot")
     @Operation(summary = "🔐 Request password reset", description = "Request a password reset link to be sent via email", tags = {
-            "🔑 Authentication" }, security = {} // No authentication required for password reset request
+            "🔑 Authentication"}, security = {} // No authentication required for password reset request
     )
     public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> request,
-            HttpServletRequest req) {
+                                            HttpServletRequest req) {
         String email = request.get("email");
         if (email == null || email.isEmpty()) {
             return ResponseEntity.badRequest().body(Collections.singletonMap("error", "Email is required"));
@@ -211,7 +223,7 @@ public class AuthController {
 
     @PostMapping("/password/change")
     public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequest request,
-            HttpServletRequest httpRequest) {
+                                            HttpServletRequest httpRequest) {
         try {
             String token = extractTokenFromRequest(httpRequest);
             if (token == null) {
@@ -379,24 +391,6 @@ public class AuthController {
             response.sendRedirect(frontendBaseUrl + "/oauth/callback?error=" + errorType);
         }
     }
-
-    @Value("${alexa.oauth.client-id}")
-    private String alexaClientId;
-
-    @Value("${alexa.oauth.client-secret}")
-    private String alexaClientSecret;
-
-    @Autowired
-    private UserRepository userRepository; // ✅ inject user repo to find patient by email
-
-    @Autowired
-    private PatientRepository patientRepository; // ✅ inject patient repo to find patient by email
-
-    @Autowired
-    private TokenHashService tokenHashService;
-
-    @Autowired
-    private AlexaCodeStoreService alexaCodeStore;
 
     @PostMapping("/sso/alexa/code")
     public ResponseEntity<?> generateAlexaCode(HttpServletRequest request) {
@@ -620,84 +614,84 @@ public class AuthController {
                 .body(Map.of("error", "unsupported_grant_type"));
     }
 
-@PostMapping("/sso/alexa/unlink")
-public ResponseEntity<?> unlinkAlexaAccount(HttpServletRequest request) {
-    try {
-        String token = extractTokenFromRequest(request);
-        if (token == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "missing_token"));
+    @PostMapping("/sso/alexa/unlink")
+    public ResponseEntity<?> unlinkAlexaAccount(HttpServletRequest request) {
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "missing_token"));
+            }
+
+            String email = jwt.getEmailFromToken(token);
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error", "user_not_found"));
+            }
+
+            User user = userOpt.get();
+            Optional<Patient> patientOpt = patientRepository.findByUser(user);
+            if (patientOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(Map.of("error", "patient_not_found"));
+            }
+
+            Patient patient = patientOpt.get();
+            patient.setAlexaLinked(false);
+            patient.setAlexaRefreshToken(null);
+            patient.setAlexaRefreshTokenExpiresAt(null);
+            patient.setAlexaRefreshTokenCreatedAt(null);
+            patientRepository.save(patient);
+
+            System.out.println("❌ Alexa unlinked for patient " + patient.getId());
+            return ResponseEntity.ok(Map.of("message", "Alexa account unlinked successfully."));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
         }
-
-        String email = jwt.getEmailFromToken(token);
-        Optional<User> userOpt = userRepository.findByEmail(email);
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "user_not_found"));
-        }
-
-        User user = userOpt.get();
-        Optional<Patient> patientOpt = patientRepository.findByUser(user);
-        if (patientOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(Map.of("error", "patient_not_found"));
-        }
-
-        Patient patient = patientOpt.get();
-        patient.setAlexaLinked(false);
-        patient.setAlexaRefreshToken(null);
-        patient.setAlexaRefreshTokenExpiresAt(null);
-        patient.setAlexaRefreshTokenCreatedAt(null);
-        patientRepository.save(patient);
-
-        System.out.println("❌ Alexa unlinked for patient " + patient.getId());
-        return ResponseEntity.ok(Map.of("message", "Alexa account unlinked successfully."));
-    } catch (Exception e) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", e.getMessage()));
     }
-}
 
-@GetMapping("/me")
-@Operation(
-    summary = "Get current authenticated user",
-    description = "Returns the currently logged-in user's profile information",
-    security = @SecurityRequirement(name = "bearerAuth")
-)
-public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
+    @GetMapping("/me")
+    @Operation(
+            summary = "Get current authenticated user",
+            description = "Returns the currently logged-in user's profile information",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
 
-    try {
+        try {
 
-        String token = extractTokenFromRequest(request);
+            String token = extractTokenFromRequest(request);
 
-        if (token == null) {
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("error", "Authentication required"));
+            }
+
+            String email = jwt.getEmailFromToken(token);
+
+            Optional<User> userOpt = userRepository.findByEmail(email);
+
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "User not found"));
+            }
+
+            User user = userOpt.get();
+
+            return ResponseEntity.ok(Map.of(
+                    "id", user.getId(),
+                    "name", user.getName(),
+                    "email", user.getEmail(),
+                    "role", user.getRole()
+            ));
+
+        } catch (Exception e) {
+
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("error", "Authentication required"));
+                    .body(Map.of("error", "Invalid token"));
+
         }
-
-        String email = jwt.getEmailFromToken(token);
-
-        Optional<User> userOpt = userRepository.findByEmail(email);
-
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("error", "User not found"));
-        }
-
-        User user = userOpt.get();
-
-        return ResponseEntity.ok(Map.of(
-                "id", user.getId(),
-                "name", user.getName(),
-                "email", user.getEmail(),
-                "role", user.getRole()
-        ));
-
-    } catch (Exception e) {
-
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("error", "Invalid token"));
-
     }
-}
 }
