@@ -13,14 +13,18 @@ void main() {
   // =========================================================================
 
   group('MedicationType enum', () {
-    test('has 3 values', () {
-      expect(MedicationType.values.length, 3);
+    test('has 5 values', () {
+      // KI-05: expanded from 3 to 5 to match backend Medication.MedicationType
+      // (PRESCRIPTION/OVER_THE_COUNTER/SUPPLEMENT/HERBAL/EMERGENCY).
+      expect(MedicationType.values.length, 5);
     });
 
-    test('contains PRESCRIPTION, OTC, SUPPLEMENT', () {
+    test('contains PRESCRIPTION, OTC, SUPPLEMENT, HERBAL, EMERGENCY', () {
       expect(MedicationType.values, contains(MedicationType.PRESCRIPTION));
       expect(MedicationType.values, contains(MedicationType.OTC));
       expect(MedicationType.values, contains(MedicationType.SUPPLEMENT));
+      expect(MedicationType.values, contains(MedicationType.HERBAL));
+      expect(MedicationType.values, contains(MedicationType.EMERGENCY));
     });
   });
 

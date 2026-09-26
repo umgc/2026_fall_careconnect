@@ -1,5 +1,8 @@
 /// Medication type enum
-enum MedicationType { PRESCRIPTION, OTC, SUPPLEMENT }
+/// Mirrors backend Medication.MedicationType (Medication.java) — PRESCRIPTION,
+/// SUPPLEMENT, HERBAL, and EMERGENCY match the backend enum's constant names.
+/// OTC remains distinct from the backend's OVER_THE_COUNTER; see KI-05.
+enum MedicationType { PRESCRIPTION, OTC, SUPPLEMENT, HERBAL, EMERGENCY }
 
 /// Medication status enum (for UI display purposes)
 enum MedicationStatus { upcoming, taken, missed }
