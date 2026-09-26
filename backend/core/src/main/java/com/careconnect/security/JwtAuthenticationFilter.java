@@ -36,7 +36,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/api/v1/auth",
             "/v1/api/test",
             "/v1/api/email-test",
-            "/v1/api/emergency"
+            "/v1/api/emergency",
+            "/oauth2",
+            "/results",
+            "/favicon.ico",
+            "/error"
     );
     private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final JwtTokenProvider jwt;

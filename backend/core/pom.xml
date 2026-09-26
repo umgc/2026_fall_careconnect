@@ -81,6 +81,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-web</artifactId>
+        </dependency>
 
         <!--Spring AOP for RBAC annotation-->
         <dependency>
@@ -197,14 +201,6 @@
              (e.g. AWS_PROFILE pointing at an `aws sso login` profile) -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
-            <artifactId>sso</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>ssooidc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
             <artifactId>iam</artifactId>
         </dependency>
         <!-- Required for DefaultCredentialsProvider to resolve IAM Identity Center (SSO) profiles -->
@@ -221,14 +217,6 @@
             <artifactId>bedrockruntime</artifactId>
         </dependency>
         <!-- Required for IAM Identity Center (AWS SSO) profiles used in local development. -->
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>sso</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>ssooidc</artifactId>
-        </dependency>
 
         <!-- SES and SNS for notifications -->
         <dependency>

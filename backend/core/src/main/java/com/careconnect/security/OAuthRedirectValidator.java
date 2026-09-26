@@ -20,7 +20,8 @@ public class OAuthRedirectValidator {
     public OAuthRedirectValidator(
             @Value("${google.oauth.frontend-url:http://localhost}") String googleFrontendUrl,
             @Value("${frontend.base-url:http://localhost:3000}") String appFrontendUrl,
-            @Value("${google.oauth.allowed-return-hosts:}") String extraHosts) {
+            @Value("${google.oauth.allowed-return-hosts:}") String extraHosts,
+            @Value("${spring.security.oauth2.client.registration.bluebutton.redirect-uri:http://localhost:8080/login/oauth2/code/bluebutton}") String bluebuttonUrl) {
         this.allowedHosts = new LinkedHashSet<>();
         addHostFromUrl(googleFrontendUrl, allowedHosts);
         addHostFromUrl(appFrontendUrl, allowedHosts);

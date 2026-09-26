@@ -1,17 +1,35 @@
 package com.careconnect.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import com.careconnect.service.BluebuttonService;
+import lombok.extern.slf4j.Slf4j;
+import org.hl7.fhir.r4.model.Coverage;
+import org.hl7.fhir.r4.model.ExplanationOfBenefit;
+import org.hl7.fhir.r4.model.Patient;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.InMemoryReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
+import org.springframework.security.oauth2.client.web.server.DefaultServerOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizationRequestResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -23,8 +41,9 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableMethodSecurity
+@Slf4j
 public class SecurityConfig {
-
+    private final BluebuttonService BBService = new BluebuttonService();
     private static final String ROLE_ADMIN = "ADMIN";
     @Bean
     @Order(0)
@@ -32,9 +51,20 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtTokenProvider jwt,
             UserDetailsService uds,
-            CorsConfigurationSource corsConfigurationSource) throws Exception {
-
+            CorsConfigurationSource corsConfigurationSource,
+            ClientRegistrationRepository clientRegistrationRepository) throws Exception {
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwt, uds);
+
+        DefaultOAuth2AuthorizationRequestResolver resolver =
+                new DefaultOAuth2AuthorizationRequestResolver(
+                        clientRegistrationRepository,
+                        "/oauth2/authorization"
+                );
+
+        resolver.setAuthorizationRequestCustomizer(
+                OAuth2AuthorizationRequestCustomizers.withPkce()
+        );
+
 
         return http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -98,6 +128,9 @@ public class SecurityConfig {
                                 "/v1/api/billing/pay/**",
                                 "/v1/api/address/**",
                                 "/oauth/**",
+                                "/oauth2/**",
+                                "/results",
+                                "/login/oauth2/code/**",
                                 "/ws/**",
                                 "/api/notifications/demo/**",
                                 "/api/internal/chime/**"
@@ -107,7 +140,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
 
                         /* ---------- Public static assets ---------------------- */
-                        .requestMatchers("/", "/index.html", "/favicon.ico", "/static/**").permitAll()
+                        .requestMatchers("/", "/index.html", "/static/favicon.ico", "/static/**").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         /* ---------- Admin-only endpoints ---------------------- */
@@ -207,7 +240,20 @@ public class SecurityConfig {
                         .anyRequest().denyAll()
                 )
                 .oauth2Login(
-                        oauth -> oauth.defaultSuccessUrl("/results")
+                        oauth -> oauth
+                                .authorizationEndpoint(
+                                        endpoint -> endpoint.authorizationRequestResolver(resolver)
+                                )
+                                .successHandler(
+                                        (request, response, authentication) -> {
+                                            log.info("authentication = {} {} {}", authentication, authentication.getName(), authentication.getPrincipal());
+                                            OAuth2AuthenticationToken oauthication = (OAuth2AuthenticationToken) authentication;
+                                            //Patient patientout = BBService.requestMedicarePatientInfo();
+                                            //List<Coverage> coverages = BBService.requestMedicareCoverageInfo(accessToken);
+                                            //List<ExplanationOfBenefit> eobs = BBService.requestMedicareEOBInfo(accessToken);
+                                        }
+                                )
+                                .defaultSuccessUrl("/results", true)
                 )
 
                 .build();
