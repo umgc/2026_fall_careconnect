@@ -367,6 +367,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
+        applyEhrCanonicalSchemaPatches();
         seedDemoScheduledVisits();
     }
 
@@ -375,6 +376,90 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyTranscriptArchiveStoragePatch() {
         applyCatalogPatch("2607191300-transcript-archive-purge");
+    }
+
+    /**
+     * Phase 1 of the EHR canonical schema (WBS 1.4.3) — source registry, patient crosswalk and
+     * raw payload store. Mirrors db/migration V2609261500__create_ehr_canonical_schema.sql.
+     * <p>
+     * Hibernate {@code ddl-auto=update} creates the three tables from their entities; this
+     * supplies what it will not. The foreign keys are applied here because the entities store
+     * bare {@code Long} ids rather than {@code @ManyToOne}, the same reason usps_mailpiece
+     * applies its own. The unique indexes are a safety net for databases where the tables were
+     * created before those constraints were declared.
+     * <p>
+     * Deliberately adds no organization/tenant column: FR-EHR-10 instructs reuse of an existing
+     * organization-identifier isolation pattern, and none exists in this schema. The gap is
+     * filed for the Requirements Owner and DE-02 rather than hidden behind a placeholder column
+     * that no query could filter on.
+     */
+    private void applyEhrCanonicalSchemaPatches() {
+        // Seed rows use only plain types and portable predicates, so they apply on H2 too.
+        for (final String[] source : new String[][]{
+                {"ATHENAHEALTH", "athenahealth"},
+                {"MEDICARE", "Medicare"},
+                {"EPIC", "Epic"},
+                {"ORACLE_HEALTH", "Oracle Health"}}) {
+            applyPatch(
+                    "V2609261500a - seed ehr_source " + source[0],
+                    "INSERT INTO ehr_source (code, display_name, enabled, created_at) "
+                            + "SELECT '" + source[0] + "', '" + source[1] + "', TRUE, now() "
+                            + "WHERE NOT EXISTS (SELECT 1 FROM ehr_source WHERE code = '"
+                            + source[0] + "')"
+            );
+        }
+
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL EHR canonical schema patches for non-PostgreSQL datasource");
+            return;
+        }
+
+        applyPatch(
+                "V2609261500b - unique ehr_patient_crosswalk(source_id, external_patient_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_crosswalk_source_external "
+                        + "ON ehr_patient_crosswalk (source_id, external_patient_id)"
+        );
+        applyPatch(
+                "V2609261500c - unique ehr_patient_crosswalk(patient_id, source_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_crosswalk_patient_source "
+                        + "ON ehr_patient_crosswalk (patient_id, source_id)"
+        );
+        applyPatch(
+                "V2609261500d - index ehr_patient_crosswalk(patient_id)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_crosswalk_patient "
+                        + "ON ehr_patient_crosswalk (patient_id)"
+        );
+        applyPatch(
+                "V2609261500e - index ehr_raw_payload(patient_id, source_id, resource_type)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_raw_payload_patient_resource "
+                        + "ON ehr_raw_payload (patient_id, source_id, resource_type)"
+        );
+        applyPatch(
+                "V2609261500f - index ehr_raw_payload(retrieved_at)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_raw_payload_retrieved_at "
+                        + "ON ehr_raw_payload (retrieved_at)"
+        );
+
+        applyPatch(
+                "V2609261500g - FK ehr_patient_crosswalk.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_crosswalk_patient", "ehr_patient_crosswalk",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyPatch(
+                "V2609261500h - FK ehr_patient_crosswalk.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_crosswalk_source", "ehr_patient_crosswalk",
+                        "source_id", "ehr_source", "id", "")
+        );
+        applyPatch(
+                "V2609261500i - FK ehr_raw_payload.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_raw_payload_patient", "ehr_raw_payload",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyPatch(
+                "V2609261500j - FK ehr_raw_payload.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_raw_payload_source", "ehr_raw_payload",
+                        "source_id", "ehr_source", "id", "")
+        );
     }
 
     /**

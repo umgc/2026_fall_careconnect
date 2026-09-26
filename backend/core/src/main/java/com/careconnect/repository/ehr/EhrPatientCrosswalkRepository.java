@@ -1,0 +1,24 @@
+package com.careconnect.repository.ehr;
+
+import com.careconnect.model.ehr.EhrPatientCrosswalk;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface EhrPatientCrosswalkRepository extends JpaRepository<EhrPatientCrosswalk, Long> {
+
+    /** The patient's identifier in one source, if they have been linked to it. */
+    Optional<EhrPatientCrosswalk> findByPatientIdAndSourceId(Long patientId, Long sourceId);
+
+    /**
+     * Reverse lookup used when a source reports an identifier and the owning patient must be
+     * found. Returning the crosswalk row does not by itself authorize access to that patient
+     * (FR-CERN-06, BR-11); callers still apply their own authorization check.
+     */
+    Optional<EhrPatientCrosswalk> findBySourceIdAndExternalPatientId(
+            Long sourceId, String externalPatientId);
+
+    /** Every source this patient is linked to. */
+    List<EhrPatientCrosswalk> findByPatientId(Long patientId);
+}
