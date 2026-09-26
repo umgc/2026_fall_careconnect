@@ -10,7 +10,7 @@
 
 This document tells the implementation and testing teams which automated and manual tests are expected for the complete M3 Cerner integration, who creates them, and when work is considered test-complete. It supplements the M3 test plan, scenario catalog, traceability matrix, and fixture guide.
 
-AllergyIntolerance is the first reference workflow. It must pass through every testing level so the team can establish reusable fixture loading, expected-output comparison, controller testing, contract validation, WireMock configuration, E2E setup, and evidence collection. The same pattern then applies to Patient and every other resource approved for the final M3 scope, such as Condition, Encounter, and Appointment.
+AllergyIntolerance is the first reference workflow. It must pass through every testing level so the team can establish reusable fixture loading, expected-output comparison, controller testing, contract validation, WireMock configuration, frontend unit/widget testing, E2E setup, and evidence collection. The same pattern then applies to Patient and every other resource approved for the final M3 scope, such as Condition, Encounter, and Appointment.
 
 The AllergyIntolerance example does not limit the overall test scope to allergies.
 
@@ -23,12 +23,13 @@ The AllergyIntolerance example does not limit the overall test scope to allergie
 | Controller-slice tests | Developer who implements the controller | Review statuses, serialization, authorization, and error-envelope coverage | Controller pull request includes passing slice tests. |
 | OpenAPI contract tests | Backend and frontend developers maintain their producers; QA coordinates | Ensure both sides validate against the same approved contract/version | Every implemented endpoint and frontend mock validates in CI. |
 | WireMock integration tests | QA, with implementation support from developers | Create failure stubs, integration scenarios, and expected results | Real Spring wiring passes success and Cerner-failure scenarios offline. |
+| Frontend unit and widget tests | Frontend developer who implements the model, service, state, or widget | Review user-visible states, accessibility, source attribution, and contract-fixture coverage | Frontend pull request includes passing tests for each implemented state and regression. |
 | Frontend-to-backend E2E tests | QA with frontend/backend contributors | Select and automate only critical user workflows | Two or three stable tests prove the user-visible boundaries. |
 | Live sandbox smoke | QA coordinates; an authorized team member may execute | Maintain checklist, schedule, sanitized evidence, and follow-up | One pass per workflow weekly and within the week before sign-off. |
 | Defect regression tests | Developer who fixes the defect | Confirm the test reproduces the defect before the fix and passes afterward | A defect fix is incomplete without a regression test at the lowest useful level. |
 | Traceability and final sign-off | QA | Maintain results/evidence and issue the disposition | Every approved requirement has evidence and all release gates pass. |
 
-Developers are responsible for testing the production code they create. QA does not replace developer unit or controller testing. QA establishes the overall strategy, supplies/reviews test data and expected results, tests higher-level boundaries and failure behavior, and independently evaluates whether the evidence is sufficient for sign-off.
+Developers are responsible for testing the production code they create. Backend developers own backend unit and controller tests; frontend developers own model, service, state-management, unit, and widget tests. QA does not replace developer testing. QA establishes the overall strategy, supplies/reviews test data and expected results, tests higher-level boundaries and failure behavior, and independently evaluates whether the evidence is sufficient for sign-off.
 
 For the first AllergyIntolerance mapper, QA and the assigned developer should pair to implement the first few tests and agree on the reusable pattern.
 
@@ -42,6 +43,7 @@ Examples:
 - Controller slice: the response uses the approved JSON field name and status code.
 - Contract test: the response conforms to the authoritative OpenAPI schema.
 - WireMock integration: the application survives a slow or malformed Cerner response.
+- Frontend unit/widget test: a normalized response produces the correct records, source label, loading state, empty state, or error state.
 - E2E: the user sees a reconnect or partial-results state.
 - Live smoke: the current Cerner sandbox still behaves like the stubs.
 
@@ -141,7 +143,44 @@ Required shared scenarios:
 
 Planning range: approximately 6–10 core WireMock tests per workflow. Put behavior shared by every resource in the common Cerner client/service suite rather than copying it into every resource suite. Add resource-specific integration cases only when the resource behaves differently.
 
-### 4.5 Frontend-to-backend E2E tests
+### 4.5 Frontend unit and widget tests
+
+Frontend tests protect the user-interface logic without requiring a live backend, Cerner sandbox, or full application launch. Frontend developers own these tests for the code they implement; QA reviews coverage and supplies approved contract fixtures and user-visible scenarios.
+
+Create unit tests for frontend models, parsing, services, repositories, and state management as applicable:
+
+- Approved success fixtures deserialize every required normalized field.
+- Optional and nullable fields deserialize without crashes or invented clinical values.
+- Unknown future enum/code values follow the approved safe fallback rather than breaking the screen.
+- `source: CERNER` and `sourceRecordId` are preserved in frontend models where required.
+- UTC date-time values and partial dates are displayed according to approved presentation rules.
+- An empty successful response becomes an empty-data state, not an error.
+- Source authorization expiry becomes the reconnect-required state.
+- CareConnect HTTP 401/403 remains distinguishable from Cerner source reauthorization.
+- Retryable source unavailability becomes the approved retry/partial-results state.
+- Partial responses preserve available records and per-source status.
+- Duplicate records are not introduced by frontend merging, refresh, or pagination handling.
+- Services send only the approved path/query values and never expose tokens or raw Cerner payloads to widgets or logs.
+- Frontend mock fixtures validate against the same OpenAPI version/checksum used by backend contract tests.
+
+Create widget tests for each implemented health-data workflow as applicable:
+
+- Loading indicator appears while retrieval is pending and clears when the request finishes.
+- A populated allergy list displays substance, approved clinical details, and an accessible Cerner source label.
+- Empty results display the approved empty state rather than a blank or broken screen.
+- Expired Cerner authorization displays the reconnect message and approved recovery action.
+- CareConnect access denial displays the correct access-denied state rather than reconnect guidance.
+- Cerner unavailability with other source data displays available records plus the partial-results notice.
+- Total source failure displays the approved error and retry action.
+- Refresh/retry transitions do not duplicate records or leave stale loading/error indicators.
+- Long, missing, or unusual source text wraps safely and does not overflow cards, lists, dialogs, or accessibility bounds.
+- Source information is communicated with text or semantics, not color alone.
+- Relevant controls and status messages have accessible labels and remain usable at supported text scaling.
+- Existing local allergy and health-data workflows continue to pass regression tests.
+
+Planning range: approximately 8–15 frontend unit/widget tests for the first AllergyIntolerance workflow, then resource-specific additions only where another resource introduces distinct fields or presentation behavior.
+
+### 4.6 Frontend-to-backend E2E tests
 
 Keep E2E coverage limited to critical user-visible workflows:
 
@@ -153,7 +192,7 @@ For the first workflow, use AllergyIntolerance. Repeat for another resource only
 
 Planning range: two or three E2E tests per workflow. If this count grows, move scenarios to unit, slice, contract, or integration coverage.
 
-### 4.6 Live Cerner sandbox smoke tests
+### 4.7 Live Cerner sandbox smoke tests
 
 For each approved workflow:
 
@@ -182,6 +221,19 @@ Complete this table when the final M3 resource scope is approved. A resource is 
 
 “Shared + resource-specific” means common OAuth, timeout, retry, pagination, and error behavior is proven once in the shared client/service suite; the resource adds only tests needed for a distinct request, parsing, or mapping behavior.
 
+### Frontend coverage matrix
+
+Complete this matrix as frontend implementation lands. “Required when displayed” means the test applies only when the approved UI exposes that resource or state.
+
+| Frontend area | Model/service unit | State-management unit | Widget | Contract fixture | E2E if critical | Status |
+|---|---|---|---|---|---|---|
+| AllergyIntolerance list | Required; first reference workflow | Required | Required | Required | Three critical workflows | Planned |
+| Cerner source attribution | Required | As applicable | Required | Required | Covered by happy path | Planned |
+| Empty results | Required | Required | Required | Required | Lower-level coverage normally sufficient | Planned |
+| Source reconnect state | Required | Required | Required | Required | Covered by reconnect E2E | Planned |
+| Partial results | Required | Required | Required | Required | Covered by partial-results E2E | Planned |
+| Patient/Condition/Encounter/Appointment | Required when displayed | Required when displayed | Required when displayed | Required when displayed | Only if behavior is distinct | Scope confirmation pending |
+
 ## 6. Test and fixture conventions
 
 - Tag or name every automated test with at least one `M3-REQ-*` identifier.
@@ -189,6 +241,7 @@ Complete this table when the final M3 resource scope is approved. A resource is 
 - Use one fixture for one primary purpose.
 - Pair source and expected files by base name, such as `bundle-three-allergies.json` and `bundle-three-allergies.expected.json`.
 - Compare expected JSON or objects structurally; assert every approved output field.
+- Keep frontend contract fixtures separate from widget-only presentation fixtures, while deriving both from the approved contract.
 - Use deterministic clocks and stable synthetic identifiers.
 - Keep unit, slice, contract, integration, and E2E automation independent of the live sandbox.
 - Follow `fixtures-README.md` for directory layout, sanitization, metadata, and review.
@@ -198,7 +251,7 @@ Complete this table when the final M3 resource scope is approved. A resource is 
 A Cerner implementation pull request is test-complete only when:
 
 - Applicable requirement and scenario IDs are identified.
-- Developer-owned unit and controller-slice tests are included and passing.
+- Developer-owned backend unit/controller-slice tests and frontend unit/widget tests are included and passing when their code is changed.
 - New or changed fixtures and expected outputs are reviewed and sanitized.
 - Every implemented mapping field has an assertion, preferably through recursive expected-output comparison.
 - Failure behavior and security/privacy boundaries are covered at the lowest useful level.
@@ -215,6 +268,7 @@ A Cerner implementation pull request is test-complete only when:
 - JaCoCo reaches at least 80% line and 70% branch coverage for the mapping package and at least 70% line coverage across Cerner integration code overall.
 - Every implemented endpoint passes contract validation.
 - Frontend mocks and backend responses validate against the same OpenAPI contract/checksum.
+- Relevant frontend unit, state-management, widget, accessibility, and regression tests pass.
 - No Critical or High defects remain open.
 - Three consecutive relevant CI runs pass on the sign-off candidate.
 - A live Cerner sandbox smoke test passed within the prior week.
