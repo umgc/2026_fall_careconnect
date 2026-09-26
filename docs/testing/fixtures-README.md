@@ -2,14 +2,31 @@
 
 ## Fixture root
 
-Place backend Cerner fixtures under:
+Place backend M3 fixtures under the repository's Spring Boot test-resource root:
 
 ```text
-backend/core/src/test/resources/cerner/
-  fhir/
-  oauth/
+backend/core/src/test/resources/
+  cerner/
+    fhir/
+      allergyintolerance/
+        bundle-three-allergies.json
+        bundle-empty.json
+        bundle-missing-reaction.json
+        bundle-entered-in-error.json
+        bundle-malformed.json
+        bundle-page-1-with-next-link.json
+      patient/
+        ...
+    oauth/
+      token-success.json
+      token-error-invalid-grant.json
   expected/
+    allergyintolerance/
+      bundle-three-allergies.expected.json
+      ...
   wiremock/
+    mappings/
+    __files/
 ```
 
 Create files only when a test consumes them. Avoid empty placeholder directories. Java test helpers should follow `TESTING_NORMS.md` and live under `backend/core/src/test/java/com/careconnect/testsupport/fixtures` when shared.
@@ -18,28 +35,31 @@ Create files only when a test consumes them. Avoid empty placeholder directories
 
 | Directory | Contents |
 |---|---|
-| `fhir/` | Synthetic FHIR R4 resources and searchset Bundles as received from a Cerner-compatible boundary |
-| `oauth/` | Synthetic OAuth token success/error bodies with unmistakably fake tokens and identifiers |
-| `expected/` | Canonical mapper or API expected outputs; API outputs are not final until OpenAPI 1.0 approval |
-| `wiremock/` | WireMock mappings/body files for success, auth, timeout, rate-limit, pagination, malformed, and partial-result flows |
+| `cerner/fhir/` | Synthetic or sanitized FHIR R4 resources and searchset Bundles received from the Cerner boundary |
+| `cerner/oauth/` | Synthetic OAuth token success/error bodies with unmistakably fake tokens and identifiers |
+| `expected/` | Paired canonical mapper outputs; API outputs are not final until OpenAPI 1.0 approval |
+| `wiremock/mappings/` | WireMock stub definitions for success and failure flows |
+| `wiremock/__files/` | Response bodies returned by WireMock stubs |
 
 ## Naming convention
 
 Use lowercase kebab-case and encode resource, condition, and sequence:
 
 ```text
-fhir/allergy-intolerance-valid-minimal.json
-fhir/allergy-intolerance-valid-multiple-reactions.json
-fhir/allergy-intolerance-missing-optional-fields.json
-fhir/allergy-intolerance-malformed-patient-reference.json
-fhir/allergy-search-page-01.json
-fhir/allergy-search-page-02.json
-oauth/token-success.json
-oauth/token-error-invalid-grant.json
-expected/allergy-intolerance-valid-minimal.canonical.json
-wiremock/allergy-search-success.json
-wiremock/allergy-search-page-02-timeout.json
+cerner/fhir/allergyintolerance/bundle-three-allergies.json
+cerner/fhir/allergyintolerance/bundle-empty.json
+cerner/fhir/allergyintolerance/bundle-missing-reaction.json
+cerner/fhir/allergyintolerance/bundle-entered-in-error.json
+cerner/fhir/allergyintolerance/bundle-malformed.json
+cerner/fhir/allergyintolerance/bundle-page-1-with-next-link.json
+cerner/oauth/token-success.json
+cerner/oauth/token-error-invalid-grant.json
+expected/allergyintolerance/bundle-three-allergies.expected.json
+wiremock/mappings/allergy-search-success.json
+wiremock/__files/allergy-search-page-2-timeout.json
 ```
+
+Pair each FHIR input and canonical expected output using the same base name, with `.expected` added only to the output. One fixture should have one primary purpose, and filenames must describe the case rather than a patient.
 
 If sequence matters, use zero-padded page/attempt numbers. Do not put a real patient ID, environment hostname, username, date of birth, medical record number, token fragment, or person name in a filename.
 
@@ -50,16 +70,22 @@ Each fixture must be associated with:
 - one or more `M3-REQ-*` requirements;
 - one or more `M3-SC-*` scenarios;
 - synthetic vs. sanitized-capture origin;
-- capture/sanitization date when applicable;
+- capture/sanitization date and sandbox name when applicable;
+- source capture/fixture from which a hand-edited case was derived;
+- a short list of fields or behavior changed during sanitization/hand editing;
 - reviewer; and
 - the test(s) that consume it.
 
 Prefer a sidecar `<fixture>.meta.yaml` when metadata would make the JSON invalid. Example:
 
 ```yaml
-requirements: [M3-REQ-01, M3-REQ-06]
+requirements: [M3-REQ-01, M3-REQ-04]
 scenarios: [M3-SC-MAP-001, M3-SC-MAP-004]
 origin: synthetic
+capturedAt: null
+derivedFrom: null
+changes:
+  - authored as a minimal synthetic missing-reaction case
 reviewedBy: TBD
 consumers:
   - TBD test method
@@ -83,8 +109,10 @@ Suggested review checks:
 
 ```bash
 rg -n -i 'authorization|bearer|refresh_token|client_secret|code_verifier|set-cookie' \
-  backend/core/src/test/resources/cerner
-git diff --cached -- backend/core/src/test/resources/cerner
+  backend/core/src/test/resources/cerner \
+  backend/core/src/test/resources/expected \
+  backend/core/src/test/resources/wiremock
+git diff --cached -- backend/core/src/test/resources
 ```
 
 Matches in intentional synthetic OAuth field names still require a human value review.

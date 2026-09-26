@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-This plan defines how Team C will verify Cerner FHIR R4 retrieval, mapping, API behavior, and the critical frontend-to-backend workflow for Milestone 3. It applies the professor's six testing levels and assigns each scenario to the lowest level that proves the behavior. A scenario is repeated at a higher level only when that level proves a new boundary, such as HTTP serialization, the approved API contract, or actual sandbox interoperability.
+This plan defines how Team C will verify Cerner FHIR R4 retrieval, mapping, API behavior, and the critical frontend-to-backend workflow for Milestone 3. It applies the approved six-level testing strategy and assigns each scenario to the lowest level that proves the behavior. A scenario is repeated at a higher level only when that level proves a new boundary, such as HTTP serialization, the approved API contract, or actual sandbox interoperability.
 
 The initial repeatable example is AllergyIntolerance. The repository does not yet contain an AllergyIntolerance mapper or approved normalized allergy response, so allergy expected-output assertions remain provisional until the canonical model and OpenAPI 1.0 are approved.
 
@@ -17,7 +17,7 @@ Snapshot inspected on 2026-09-26:
 
 | Artifact | Observed status | QA consequence |
 |---|---|---|
-| `origin/main` | Current worktree baseline (`df78312c`) | These QA documents are drafted without changing application behavior. |
+| `docs/team-c-m3-qa` | QA documentation branch created from `team-c-develop` (`87f42ff1`) | These documents change no application behavior. |
 | `integration/unified-health-data` | Not present in available local or remote refs | Contract and cross-team tests cannot be finalized. |
 | `contracts/unified-health-data.openapi.yaml` | Not present in available refs | Paths, parameters, response shapes, error codes, and `sourceStatus` assertions are TBD. |
 | Team C Cerner mapping | Implemented on `origin/feature/team-c-cerner-resource-mapping` (`29b94dd2`), not on this baseline | Pure Patient/Appointment projection exists with 57 reported focused tests; AllergyIntolerance and HTTP integration remain unimplemented. |
@@ -56,21 +56,23 @@ The repository's `TESTING_NORMS.md` requires shared fixtures, no live network or
 |---|---|---|
 | M3-REQ-01 | Map each approved Cerner FHIR R4 resource to the approved canonical CareConnect model while preserving source identity and provenance. | Critical |
 | M3-REQ-02 | Normalize approved codes, cardinalities, dates, and date-times without inventing absent values; emit UTC where the API contract requires it. | Critical |
-| M3-REQ-03 | Retrieve authorized synthetic patient data from Cerner and return only records belonging to the authorized patient context. | Critical |
-| M3-REQ-04 | Distinguish missing/invalid CareConnect authorization, missing Cerner authorization, insufficient scope, expired token, and upstream authorization failure according to OpenAPI 1.0. | Critical |
+| M3-REQ-03 | Bind every Cerner request to the server-controlled, authorized synthetic patient context and prevent cross-patient or cross-source access. | Critical |
+| M3-REQ-04 | Retrieve AllergyIntolerance records from Cerner, map every approved allergy field, and return successful empty results without fabricating records. | Critical |
 | M3-REQ-05 | On token expiry, perform only the approved refresh flow, bound refresh attempts, and never expose or log tokens. | Critical |
 | M3-REQ-06 | Handle missing optional fields and reject or isolate malformed required/core data deterministically without fabricating clinical meaning. | High |
 | M3-REQ-07 | Bound timeouts and retries; honor the approved retry policy for transient errors and rate limits without retry storms. | High |
 | M3-REQ-08 | Follow valid pagination links, prevent loops/duplicates, and return or report partial results according to OpenAPI 1.0. | Critical |
-| M3-REQ-09 | Serialize controller responses exactly to the approved OpenAPI 1.0 contract, including the common error envelope. | Critical |
-| M3-REQ-10 | Validate frontend mock fixtures and backend endpoint responses against the same authoritative OpenAPI file in CI. | Critical |
+| M3-REQ-09 | Distinguish and handle CareConnect denial, missing Cerner authorization, insufficient scope, expired source authorization, refresh failure, and upstream authorization rejection according to OpenAPI 1.0. | Critical |
+| M3-REQ-10 | Serialize and validate frontend mocks and backend success, error, and partial responses against the same authoritative OpenAPI file in CI. | Critical |
 | M3-REQ-11 | Complete critical frontend-to-backend retrieval workflows without EHR write-back. | Critical |
 | M3-REQ-12 | Retain original source payload/provenance under approved access controls and keep uncertain matches separate. | Critical |
 | M3-REQ-13 | Preserve existing health-data behavior through focused regression tests. | High |
 | M3-REQ-14 | Demonstrate current interoperability with a documented synthetic live-sandbox smoke test weekly and before sign-off. | Critical |
 | M3-REQ-15 | Meet coverage, CI stability, contract coverage, defect, and evidence requirements for sign-off. | Critical |
 
-Requirements must be referenced in test names or tags, for example `M3_REQ_01_maps_allergy_code_and_provenance`. Scenario IDs from the catalog may also be included.
+Requirements must be referenced in JUnit tags or display names, for example `@Tag("M3-REQ-04")` and `@DisplayName("M3-REQ-04: complete AllergyIntolerance maps every field")`. Scenario IDs from the catalog may also be included.
+
+The M3 AllergyIntolerance reference workflow uses `M3-REQ-04` for allergy retrieval and `M3-REQ-09` for source authorization failures. Do not renumber them without updating the catalog, fixtures, test tags, and traceability matrix together.
 
 ## 5. Test levels and ownership
 
@@ -85,7 +87,22 @@ Requirements must be referenced in test names or tags, for example `M3_REQ_01_ma
 
 Developers own mapper/service unit tests and controller slice tests. QA owns this plan, the scenario catalog, traceability, fixture governance and expected outputs, WireMock failure stubs/integration tests, critical E2E tests, live smoke coordination, defect triage, and final sign-off. QA and the assigned developer pair on the first AllergyIntolerance mapper to establish the pattern.
 
-## 6. Environments and test data
+As a planning guide for each resource workflow, target approximately 10–20 unit tests, 6–10 controller-slice tests, 6–10 WireMock integration tests, and 2–3 E2E tests. These are guidance rather than quotas. If E2E coverage grows beyond the critical user journeys, move scenarios to the lowest level that can prove them.
+
+## 6. Delivery phases
+
+| Phase | Timing | QA activity |
+|---|---|---|
+| 0. Preparation | First 2–3 days, before mapping code | Establish requirement IDs; capture and sanitize FHIR fixtures; define paired expected outputs; complete the scenario catalog. |
+| 1. WBS 4.7 | Alongside mapper development | Developers write mapper/unit tests using the fixtures; QA verifies that every approved expected-output field is asserted. |
+| 2. Start of WBS 4.8 | While mapping finishes | Add controller-slice and OpenAPI contract tests using mocked services. |
+| 3. Middle of WBS 4.8 | First endpoint reaches a stubbed Cerner call | Add WireMock happy-path, authorization, timeout, retry, malformed-body, rate-limit, and pagination integration tests. |
+| 4. End of WBS 4.8 | Integrated frontend/backend available | Run only the critical frontend-to-backend workflows with the backend pointed at WireMock. |
+| 5. Sign-off | Release candidate | Run regression, the recent sandbox smoke test, coverage/CI checks, and produce the test summary report. |
+
+WBS 4.7 and 4.8 intentionally overlap. Carry AllergyIntolerance through all phases first, then reuse the established pattern for each remaining approved resource.
+
+## 7. Environments and test data
 
 - Unit, slice, contract, integration, and E2E tests must be deterministic, offline, and use synthetic fixtures.
 - WireMock represents Cerner FHIR and OAuth boundaries. Tests must never depend on live sandbox availability.
@@ -93,7 +110,7 @@ Developers own mapper/service unit tests and controller slice tests. QA owns thi
 - Secrets, authorization codes, code verifiers, access/refresh tokens, cookies, and identifying headers must never enter fixtures, logs, screenshots, or commits.
 - Sanitized captures must follow [fixtures-README.md](fixtures-README.md).
 
-## 7. Entry criteria
+## 8. Entry criteria
 
 Work that can start now:
 
@@ -109,17 +126,18 @@ Contract-dependent testing starts only after:
 3. The canonical model/ERD, shared adapter interface, reconciliation rules, and final M3 resource scope are approved.
 4. The contract defines paths/parameters, camelCase response fields, normalized records, `source` values, `sourceRecordId`, UTC dates, authorization states/errors, common error envelope, pagination, and partial-result `sourceStatus` behavior.
 
-## 8. Execution and evidence
+## 9. Execution and evidence
 
 - Pull-request checks: unit, controller slice, contract validation, and relevant regression tests.
 - Integration checks: WireMock suites for success and failure paths, including deterministic virtual delays and sequential responses.
 - E2E: only critical user journeys that add UI/backend evidence.
 - Live smoke: weekly while integration is active and again within the sign-off window defined by the team; record date/time, sandbox, synthetic patient alias, resource, result, executor, related commit/build, and sanitized evidence link.
 - Store CI links, coverage reports, test reports, contract validator output, smoke records, and defects in the traceability matrix or linked evidence location.
+- Assemble the sign-off evidence package: a one- or two-page test summary, completed traceability matrix, JaCoCo report, CI links, E2E screenshots/video, live-smoke record, and defect list.
 
 No live token value, PHI, raw credential, or unsanitized request/response header is acceptable evidence.
 
-## 9. Defect handling
+## 10. Defect handling
 
 - **Critical:** authorization bypass, cross-patient data, token/PHI exposure, write-back, broad data corruption, or total critical-flow failure. Blocks merge and sign-off.
 - **High:** incorrect clinical mapping, silent record loss, broken pagination/partial-result semantics, contract incompatibility, or unrecoverable authorized retrieval. Blocks sign-off.
@@ -127,7 +145,7 @@ No live token value, PHI, raw credential, or unsanitized request/response header
 
 QA records requirement/scenario IDs, environment, fixture, expected/actual result, logs with secrets removed, reproducibility, severity, and retest evidence. Critical security/privacy findings are escalated immediately.
 
-## 10. Exit and sign-off criteria
+## 11. Exit and sign-off criteria
 
 Milestone 3 is eligible for QA sign-off only when all are true:
 
@@ -142,7 +160,7 @@ Milestone 3 is eligible for QA sign-off only when all are true:
 
 QA may issue **Pass**, **Pass with accepted conditions** (no Critical/High defects and explicit approver acceptance), or **Fail**. The final report must name the commit, contract version/checksum, test results, coverage, CI runs, smoke evidence, open defects, deviations, and approvers.
 
-## 11. Dependencies and open decisions
+## 12. Dependencies and open decisions
 
 | Dependency | Status at draft time | Blocks |
 |---|---|---|

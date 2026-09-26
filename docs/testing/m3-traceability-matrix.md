@@ -4,25 +4,25 @@
 **Source of requirement definitions:** [m3-test-plan.md](m3-test-plan.md)
 **Scenario details:** [m3-scenario-catalog.md](m3-scenario-catalog.md)
 
-Use one row per requirement. Add test class/method names and immutable CI/evidence links as implementation lands. Do not mark a row complete based only on planned scenarios.
+Use one row per requirement. Replace planned scenario IDs with exact test class/method names as implementation lands and attach immutable CI/evidence links. Do not mark a row passing based only on planned scenarios.
 
-| Requirement | Planned scenario coverage | Primary level(s) | Owner | Implementation/evidence | Status |
+| Requirement ID | Description | Test identifiers | Level(s) | Latest result | Evidence link |
 |---|---|---|---|---|---|
-| M3-REQ-01 Mapping | MAP-001, 002, 008 | Unit | Developer + QA pairing/review | Existing Team C feature branch covers Patient/Appointment projection only; allergy evidence pending | Partial |
-| M3-REQ-02 Normalization | MAP-001, 002, 003, 004 | Unit | Developer + QA | Expected normalized allergy JSON awaits canonical model/OpenAPI | Blocked by approval |
-| M3-REQ-03 Authorized retrieval/patient context | SVC-001, 012; INT-001; E2E-001; SMK-001, 003 | Unit, integration, E2E, smoke | Developer + QA | M2 sandbox evidence is historical input; M3 candidate evidence pending | Planned |
-| M3-REQ-04 Authorization states | SVC-002; CTL-002; INT-002; E2E-002; SMK-002 | Unit through smoke | Developer + QA | Exact API codes await OpenAPI 1.0 | Blocked by approval |
-| M3-REQ-05 Token refresh | SVC-003, 004, 005; INT-003, 004 | Unit, integration | Developer + QA | Refresh support/policy not observed in baseline | Blocked by policy |
-| M3-REQ-06 Missing/malformed data | MAP-004, 005, 009, 010; SVC-011; INT-005 | Unit, integration | Developer + QA | General cases can begin; final behavior awaits approved policies | Partial |
-| M3-REQ-07 Timeout/rate limit/retries | SVC-006, 007; CTL-003; INT-006, 007 | Unit, slice, integration | Developer + QA | Retry/timeout policy pending | Blocked by policy |
-| M3-REQ-08 Pagination/partial results | SVC-008–011; CTL-004; INT-008, 009; E2E-003 | Unit through E2E | Developer + QA | Exact `sourceStatus` and partial semantics await OpenAPI | Blocked by approval |
-| M3-REQ-09 Controller/API serialization | CTL-001–005; CON-001, 002, 004; INT-001, 010 | Slice, contract, integration | Developer + QA | Endpoint/controller not observed; OpenAPI absent | Blocked by implementation/approval |
-| M3-REQ-10 Shared contract validation | CON-001–003; INT-010 | Contract, integration | QA coordinates | Authoritative contract absent | Blocked by approval |
-| M3-REQ-11 Frontend/backend workflow | E2E-001–003 | E2E | QA + frontend/backend | Frontend feature exists on separate branch; unified path pending | Blocked by integration |
-| M3-REQ-12 Provenance/reconciliation | MAP-001, 006–008; SVC-005 | Unit/integration as needed | Developer + QA | Draft feature-branch models exist; approval pending | Blocked by approval |
-| M3-REQ-13 Regression | REG-001 plus impacted existing suites | Unit/widget/API | Developers + QA | Select impacted suites when merge candidate exists | Planned |
-| M3-REQ-14 Live smoke | SMK-001–003 | Live smoke | QA coordinates | Weekly and recent pre-sign-off record pending | Planned |
-| M3-REQ-15 Quality gates/sign-off | All P0/P1 scenarios plus coverage/CI/defect evidence | All | QA | Coverage report, three CI links, contract report, defect list, smoke record pending | Planned |
+| M3-REQ-01 | Map approved Cerner resources to the canonical model. | MAP-001, 002, 008 | Unit | Partial: Patient/Appointment feature-branch tests exist; allergy tests pending. | TBD |
+| M3-REQ-02 | Normalize codes, cardinalities, and dates without inventing values. | MAP-001–004, 011, 014 | Unit | Blocked by canonical model approval. | TBD |
+| M3-REQ-03 | Enforce server-controlled patient/source context. | MAP-006; SVC-001; CTL-003; SMK-003 | Unit, slice, smoke | Planned. | TBD |
+| M3-REQ-04 | Retrieve and map AllergyIntolerance records, including empty results. | MAP-001, 004, 006, 011–015; SVC-001, 012; CTL-001, 004; INT-001; E2E-001; SMK-001 | Unit, slice, integration, E2E, smoke | Planned; exact output awaits canonical model/OpenAPI. | TBD |
+| M3-REQ-05 | Bound token refresh and protect token material. | SVC-003–005; INT-003, 004 | Unit, integration | Blocked by refresh policy. | TBD |
+| M3-REQ-06 | Handle missing and malformed source data safely. | MAP-004, 005, 009, 010; SVC-011; INT-005 | Unit, integration | Partial: general cases can begin. | TBD |
+| M3-REQ-07 | Bound timeouts, retries, and rate-limit behavior. | SVC-006, 007; CTL-006; INT-006, 007 | Unit, slice, integration | Blocked by retry/timeout policy. | TBD |
+| M3-REQ-08 | Handle pagination, duplicates, and partial results. | SVC-008–011; CTL-007; INT-008, 009; E2E-003 | Unit, slice, integration, E2E | Blocked by OpenAPI partial-result semantics. | TBD |
+| M3-REQ-09 | Handle distinct source authorization failures. | SVC-002; CTL-002, 003, 005; CON-002; INT-002–004; E2E-002; SMK-002 | Unit through smoke | Blocked by OpenAPI authorization codes/states. | TBD |
+| M3-REQ-10 | Serialize and validate all API responses against one OpenAPI contract. | CTL-001–008; CON-001–004; INT-001, 010 | Slice, contract, integration | Blocked: authoritative OpenAPI 1.0 not observed. | TBD |
+| M3-REQ-11 | Complete critical frontend/backend retrieval workflows without write-back. | E2E-001–003 | E2E | Blocked by integrated UI/API. | TBD |
+| M3-REQ-12 | Retain provenance and keep uncertain matches separate. | MAP-001, 006–008; SVC-005 | Unit, integration as needed | Blocked by canonical/reconciliation approval. | TBD |
+| M3-REQ-13 | Preserve existing health-data behavior. | REG-001 plus impacted existing suites | Unit, widget, API | Planned. | TBD |
+| M3-REQ-14 | Verify current live-sandbox interoperability weekly and before sign-off. | SMK-001–003 | Manual smoke | Planned. | TBD |
+| M3-REQ-15 | Meet coverage, CI, contract, defect, and evidence gates. | All P0/P1 scenarios and evidence register | All | Planned. | TBD |
 
 ## Sign-off evidence register
 
