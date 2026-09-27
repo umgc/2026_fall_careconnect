@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-class EHRVisitRecord{
+public class EhrVisitRecord{
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -25,5 +25,49 @@ class EHRVisitRecord{
 
     @Column(name = "last_updated", nullable = false)
     private LocalDateTime lastUpdated;
+
+    @Column(name="source_id", nullable=false)
+    private String sourceId; // Which EHR source produced this.
+
+    @Column(name="identifier")
+    private String identifier;
+
+    @Column(name="care_team")
+    private String careTeam;
+
+    @Column(name="accident")
+    private String accident;
+
+
+    @Column(name="created")
+    private LocalDateTime created;
+
+    @Column(name="diagnosis")
+    private String diagnosis;
+
+    @Column(name="disposition")
+    private String disposition;
+
+    @Column(name="facility")
+    private String facility;
+
+    @Column(name="prescription")
+    private String prescription;
+
+    @Column(name="procedure")
+    private String procedure;
+
+    @Column(name="notes")
+    private String notes;
+
+    @Column(name="referral")
+    private String referral;
+
+    @Column(name="status")
+    private String status;
+
+    @Column(name="type")
+    private String type;
+
 
 }

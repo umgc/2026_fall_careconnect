@@ -20,7 +20,7 @@ public class EhrAuditLogger {
     private final EhrAuditEventRepository repo;
 
     /**
-     * @param details attempt metadata only. Never pass access tokens (NFR-SEC-03) or
+     *  attempt metadata only. Never pass access tokens (NFR-SEC-03) or
      *                retrieved clinical content.
      */
     public void log(final Long patientId,
