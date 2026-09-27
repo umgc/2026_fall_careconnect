@@ -28,8 +28,7 @@ public class EhrAuditLogger {
                     final String resourceType,
                     final EhrRetrievalOutcome outcome,
                     final Long actorUserId,
-                    final Integer recordCount,
-                    final Map<String, Object> details) {
+                    final Integer recordCount) {
         repo.save(EhrAuditEvent.builder()
                 .patientId(patientId)
                 .source(source)
@@ -37,7 +36,6 @@ public class EhrAuditLogger {
                 .outcome(outcome)
                 .actorUserId(actorUserId)
                 .recordCount(recordCount)
-                .details(details)
                 .build());
     }
 }

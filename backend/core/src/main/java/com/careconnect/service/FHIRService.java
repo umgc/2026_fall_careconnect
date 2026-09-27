@@ -39,9 +39,9 @@ public class FHIRService {
             throw new RuntimeException("No Patient Response!");
         }
         if (results.getTotal() == 1) {
-            String bundleType = results.getEntry().getFirst().getResource().getResourceType().toString();
+            String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
             if (bundleType.equals("Patient")) {
-                return (Patient) results.getEntry().getFirst().getResource();
+                return (Patient) results.getEntry().get(0).getResource();
             }
 
             throw new RuntimeException("Invalid Patient response type: " + bundleType);
@@ -73,7 +73,7 @@ public class FHIRService {
         if (results.getTotal() == 0) {
             return new ArrayList<>();
         }
-        String bundleType = results.getEntry().getFirst().getResource().getResourceType().toString();
+        String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
         if (bundleType.equals("Coverage")) {
             List<IBaseResource> totalResults = new ArrayList<>(BundleUtil.toListOfResources(ctxR4, results));
             while (results.getLink(IBaseBundle.LINK_NEXT) != null) {
@@ -115,7 +115,7 @@ public class FHIRService {
         if (results.getTotal() == 0) {
             return new ArrayList<>();
         }
-        String bundleType = results.getEntry().getFirst().getResource().getResourceType().toString();
+        String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
         if (bundleType.equals("ExplanationOfBenefit")) {
             List<IBaseResource> totalResults = new ArrayList<>(BundleUtil.toListOfResources(ctxR4, results));
             while (results.getLink(IBaseBundle.LINK_NEXT) != null) {

@@ -111,10 +111,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         /* ---------- Admin-only endpoints ---------------------- */
-                        .requestMatchers("/v1/api/debug/**").hasRole(ROLE_ADMIN)
-                        .requestMatchers("/v1/api/email-test/**").hasRole(ROLE_ADMIN)
-                        .requestMatchers("/v1/api/admin/analytics/**").hasRole(ROLE_ADMIN)
-                        .requestMatchers("/v1/api/admin/users/**").hasRole(ROLE_ADMIN)
+                        .requestMatchers("/v1/api/debug/**",
+                                "/v1/api/email-test/**",
+                                "/v1/api/admin/analytics/**",
+                                "/v1/api/admin/users/**").hasRole(ROLE_ADMIN)
                         /* ---------- Telemetry Admin Endpoints ------------------ */
                         .requestMatchers(HttpMethod.PUT, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
                         .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/recent").hasRole(ROLE_ADMIN)
@@ -124,46 +124,47 @@ public class SecurityConfig {
                         .requestMatchers("/v1/api/care-circle/**").authenticated()
 
                         /* ---------- Authenticated endpoints ------------------- */
-                        .requestMatchers("/v1/api/subscriptions/**").authenticated()
-                        .requestMatchers("/v3/api/subscriptions/**").authenticated()
+                        .requestMatchers("/v1/api/subscriptions/**",
+                                "/v3/api/subscriptions/**",
+                                "/v1/api/invoices/**",
+                                "/v1/api/homecare-documents/**",
+                                "/v1/api/notification-settings/**",
+                                "/v1/api/patients/**",
+                                "/v1/api/caregivers/**",
+                                "/v1/api/allergies/**",
+                                "/v1/api/symptoms/**",
+                                "/v1/api/ai/**",
+                                "/api/ai/**",
+                                "/v1/api/ai/deepseek/**",
+                                "/v1/api/family-members/**",
+                                "/v1/api/ai-chat/**",
+                                "/v1/api/users/**",
+                                "/v1/api/tasks/**",
+                                "/v2/api/tasks/**",
+                                "/v1/api/messages/**",
+                                "/v1/api/evv/**",
+                                "/v1/api/notifications/**",
+                                "/v1/api/friends/**",
+                                "/v1/api/connection-requests/**",
+                                "/v1/api/feed/**",
+                                "/v1/api/comments/**",
+                                "/v1/api/files/**",
+                                "/v1/api/templates/**",
+                                "/v1/api/analytics/**",
+                                "/v1/api/scheduled-visits/**",
+                                "/v1/api/patient-notetaker/**",
+                                "/v1/api/link-management/**",
+                                "/v1/api/caregiver-patient-links/**",
+                                "/v1/api/symptoms-entry/**",
+                                "/v1/api/alexa/**",
+                                "/v1/api/usps/**", "/api/usps/**",
+                                "/v1/api/questions/**", "/api/questions/**",
+                                "/v1/checkins/**", "/api/checkins/**",
+                                "/v1/api/patient/**",
+                                "/api/patient/**",
+                                "/api/gamification/**",
+                                "/api/websocket/**").authenticated()
                         .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
-                        .requestMatchers("/v1/api/invoices/**").authenticated()
-                        .requestMatchers("/v1/api/homecare-documents/**").authenticated()
-                        .requestMatchers("/v1/api/notification-settings/**").authenticated()
-                        .requestMatchers("/v1/api/patients/**").authenticated()
-                        .requestMatchers("/v1/api/caregivers/**").authenticated()
-                        .requestMatchers("/v1/api/allergies/**").authenticated()
-                        .requestMatchers("/v1/api/symptoms/**").authenticated()
-                        .requestMatchers("/v1/api/ai/**", "/api/ai/**").authenticated()
-                        .requestMatchers("/v1/api/ai/deepseek/**").authenticated()
-                        .requestMatchers("/v1/api/family-members/**").authenticated()
-                        .requestMatchers("/v1/api/ai-chat/**").authenticated()
-                        .requestMatchers("/v1/api/users/**").authenticated()
-                        .requestMatchers("/v1/api/tasks/**").authenticated()
-                        .requestMatchers("/v2/api/tasks/**").authenticated()
-                        .requestMatchers("/v1/api/messages/**").authenticated()
-                        .requestMatchers("/v1/api/evv/**").authenticated()
-                        .requestMatchers("/v1/api/notifications/**").authenticated()
-                        .requestMatchers("/v1/api/friends/**").authenticated()
-                        .requestMatchers("/v1/api/connection-requests/**").authenticated()
-                        .requestMatchers("/v1/api/feed/**").authenticated()
-                        .requestMatchers("/v1/api/comments/**").authenticated()
-                        .requestMatchers("/v1/api/files/**").authenticated()
-                        .requestMatchers("/v1/api/templates/**").authenticated()
-                        .requestMatchers("/v1/api/analytics/**").authenticated()
-                        .requestMatchers("/v1/api/scheduled-visits/**").authenticated()
-                        .requestMatchers("/v1/api/patient-notetaker/**").authenticated()
-                        .requestMatchers("/v1/api/link-management/**").authenticated()
-                        .requestMatchers("/v1/api/caregiver-patient-links/**").authenticated()
-                        .requestMatchers("/v1/api/symptoms-entry/**").authenticated()
-                        .requestMatchers("/v1/api/alexa/**").authenticated()
-                        .requestMatchers("/v1/api/usps/**", "/api/usps/**").authenticated()
-                        .requestMatchers("/v1/api/questions/**", "/api/questions/**").authenticated()
-                        .requestMatchers("/v1/checkins/**", "/api/checkins/**").authenticated()
-                        .requestMatchers("/v1/api/patient/**").authenticated()
-                        .requestMatchers("/api/patient/**").authenticated()
-                        .requestMatchers("/api/gamification/**").authenticated()
-                        .requestMatchers("/api/websocket/**").authenticated()
 
                         /* ---------- Telemetry: intentionally unauthenticated ----
                          * These two matchers are public in EVERY profile, prod
@@ -198,11 +199,14 @@ public class SecurityConfig {
 
                         // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
                         // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.
-                        .requestMatchers("/v1/api/email-credentials/**", "/api/email-credentials/**").authenticated()
-                        .requestMatchers("/api/v3/calls/**").authenticated()
-                        .requestMatchers("/v1/api/**", "/v2/api/**", "/v3/api/**").authenticated()
-                        .requestMatchers("/api/**").authenticated()
-
+                        .requestMatchers(
+                                "/v1/api/email-credentials/**",
+                                "/api/email-credentials/**",
+                                "/api/v3/calls/**",
+                                "/v1/api/**",
+                                "/v2/api/**",
+                                "/v3/api/**",
+                                "/api/**").authenticated()
                         /* ---------- Everything else: deny --------------------- */
                         .anyRequest().denyAll()
                 )
