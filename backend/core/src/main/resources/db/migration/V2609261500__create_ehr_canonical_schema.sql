@@ -2,7 +2,12 @@
 -- raw payload store.
 --
 -- Flyway is disabled in every profile; this file is the canonical reference and
--- SchemaPatchRunner.applyEhrCanonicalSchemaPatches() mirrors it for dev and prod.
+-- SchemaPatchRunner.applyEhrCanonicalSchemaPatches() mirrors it for dev and prod, the same
+-- way the usps_mailpiece and ai_audit_ledger patch methods mirror theirs.
+--
+-- created_at/updated_at come from the shared Auditable @MappedSuperclass, which maps them as
+-- nullable LocalDateTime (so TIMESTAMP, not TIMESTAMPTZ) and populates them in @PrePersist.
+-- This mirrors what Hibernate ddl-auto actually creates rather than tightening past it.
 --
 -- Deliberately carries no organization/tenant column. FR-EHR-10 instructs reuse of an
 -- existing organization-identifier isolation pattern, and no such column exists anywhere in
@@ -13,15 +18,17 @@ CREATE TABLE IF NOT EXISTS ehr_source (
     id           BIGSERIAL    PRIMARY KEY,
     code         VARCHAR(64)  NOT NULL UNIQUE,
     display_name VARCHAR(128) NOT NULL,
-    enabled      BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_at   TIMESTAMPTZ  NOT NULL DEFAULT now()
+    fhir_version VARCHAR(16)  NOT NULL,
+    enabled      BOOLEAN      NOT NULL,
+    created_at   TIMESTAMP,
+    updated_at   TIMESTAMP
 );
 
-INSERT INTO ehr_source (code, display_name)
-VALUES ('ATHENAHEALTH',  'athenahealth'),
-       ('MEDICARE',      'Medicare'),
-       ('EPIC',          'Epic'),
-       ('ORACLE_HEALTH', 'Oracle Health')
+INSERT INTO ehr_source (code, display_name, fhir_version, enabled, created_at, updated_at)
+VALUES ('ATHENAHEALTH',  'athenahealth',  'R4', TRUE, now(), now()),
+       ('MEDICARE',      'Medicare',      'R4', TRUE, now(), now()),
+       ('EPIC',          'Epic',          'R4', TRUE, now(), now()),
+       ('ORACLE_HEALTH', 'Oracle Health', 'R4', TRUE, now(), now())
 ON CONFLICT (code) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS ehr_patient_crosswalk (
@@ -29,8 +36,8 @@ CREATE TABLE IF NOT EXISTS ehr_patient_crosswalk (
     patient_id          BIGINT       NOT NULL REFERENCES patient (id) ON DELETE CASCADE,
     source_id           BIGINT       NOT NULL REFERENCES ehr_source (id),
     external_patient_id VARCHAR(255) NOT NULL,
-    created_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    updated_at          TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    created_at          TIMESTAMP,
+    updated_at          TIMESTAMP,
     CONSTRAINT uq_ehr_crosswalk_source_external UNIQUE (source_id, external_patient_id),
     CONSTRAINT uq_ehr_crosswalk_patient_source  UNIQUE (patient_id, source_id)
 );
@@ -40,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_ehr_crosswalk_patient
 
 -- payload holds retrieved clinical content and is PHI-bearing. Inline binary
 -- (Patient.photo) is stripped by the caller before insert, never stored then trimmed.
+-- retrieved_at is when the source answered; created_at is when this row was written.
 CREATE TABLE IF NOT EXISTS ehr_raw_payload (
     id                   BIGSERIAL    PRIMARY KEY,
     patient_id           BIGINT       NOT NULL REFERENCES patient (id) ON DELETE CASCADE,
@@ -48,8 +56,10 @@ CREATE TABLE IF NOT EXISTS ehr_raw_payload (
     external_resource_id VARCHAR(255),
     payload              JSONB        NOT NULL,
     payload_size_bytes   INTEGER      NOT NULL,
-    photo_stripped       BOOLEAN      NOT NULL DEFAULT FALSE,
-    retrieved_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
+    photo_stripped       BOOLEAN      NOT NULL,
+    retrieved_at         TIMESTAMPTZ  NOT NULL,
+    created_at           TIMESTAMP,
+    updated_at           TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_ehr_raw_payload_patient_resource

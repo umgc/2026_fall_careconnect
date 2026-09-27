@@ -402,8 +402,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 {"ORACLE_HEALTH", "Oracle Health"}}) {
             applyPatch(
                     "V2609261500a - seed ehr_source " + source[0],
-                    "INSERT INTO ehr_source (code, display_name, enabled, created_at) "
-                            + "SELECT '" + source[0] + "', '" + source[1] + "', TRUE, now() "
+                    "INSERT INTO ehr_source (code, display_name, fhir_version, enabled, "
+                            + "created_at, updated_at) "
+                            + "SELECT '" + source[0] + "', '" + source[1] + "', 'R4', TRUE, "
+                            + "now(), now() "
                             + "WHERE NOT EXISTS (SELECT 1 FROM ehr_source WHERE code = '"
                             + source[0] + "')"
             );

@@ -1,5 +1,6 @@
 package com.careconnect.model.ehr;
 
+import com.careconnect.model.Auditable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -51,7 +52,7 @@ import java.time.OffsetDateTime;
                         name = "idx_ehr_raw_payload_retrieved_at",
                         columnList = "retrieved_at")
         })
-public class EhrRawPayload {
+public class EhrRawPayload extends Auditable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -95,11 +96,20 @@ public class EhrRawPayload {
     @Builder.Default
     private Boolean photoStripped = Boolean.FALSE;
 
+    /**
+     * When the source actually answered. Distinct from {@link Auditable}'s {@code created_at},
+     * which records when this row was written: a caller may store a response it fetched
+     * earlier, so these are not interchangeable.
+     */
     @Column(name = "retrieved_at", nullable = false)
     private OffsetDateTime retrievedAt;
 
+    /**
+     * Named to avoid colliding with {@link Auditable}'s own {@code onCreate} callback, which
+     * JPA invokes first.
+     */
     @PrePersist
-    void onCreate() {
+    void applyDefaults() {
         if (retrievedAt == null) {
             retrievedAt = OffsetDateTime.now();
         }
