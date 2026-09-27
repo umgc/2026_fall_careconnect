@@ -12,6 +12,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -32,10 +36,19 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtTokenProvider jwt,
             UserDetailsService uds,
-            CorsConfigurationSource corsConfigurationSource) throws Exception {
+            CorsConfigurationSource corsConfigurationSource,
+            ClientRegistrationRepository clientRegistrationRepository) throws Exception {
 
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwt, uds);
+        DefaultOAuth2AuthorizationRequestResolver resolver =
+                new DefaultOAuth2AuthorizationRequestResolver(
+                        clientRegistrationRepository,
+                        "/oauth2/authorization"
+                );
 
+        resolver.setAuthorizationRequestCustomizer(
+                OAuth2AuthorizationRequestCustomizers.withPkce()
+        );
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
@@ -163,7 +176,8 @@ public class SecurityConfig {
                                 "/v1/api/patient/**",
                                 "/api/patient/**",
                                 "/api/gamification/**",
-                                "/api/websocket/**").authenticated()
+                                "/api/websocket/**",
+                                "/results").authenticated()
                         .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
 
                         /* ---------- Telemetry: intentionally unauthenticated ----
@@ -210,8 +224,21 @@ public class SecurityConfig {
                         /* ---------- Everything else: deny --------------------- */
                         .anyRequest().denyAll()
                 )
+
                 .oauth2Login(
-                        oauth -> oauth.defaultSuccessUrl("/results")
+                        oauth -> oauth  .authorizationEndpoint(
+                                        endpoint -> endpoint.authorizationRequestResolver(resolver)
+                                )
+                                .successHandler(
+                                        (request, response, authentication) -> {
+                                            //log.info("authentication = {} {} {}", authentication, authentication.getName(), authentication.getPrincipal());
+                                            //OAuth2AuthenticationToken oauthication = (OAuth2AuthenticationToken) authentication;
+                                            //Patient patientout = BBService.requestMedicarePatientInfo();
+                                            //List<Coverage> coverages = BBService.requestMedicareCoverageInfo(accessToken);
+                                            //List<ExplanationOfBenefit> eobs = BBService.requestMedicareEOBInfo(accessToken);
+                                        }
+                                )
+                                .defaultSuccessUrl("/results", true)
                 )
 
                 .build();
