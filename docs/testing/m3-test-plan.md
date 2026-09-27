@@ -1,7 +1,7 @@
 # Milestone 3 Cerner Integration Test Plan
 
 **Owner:** Team C QA Lead (Tiffany Obi)
-**Status:** Draft pending unified OpenAPI 1.0 approval and final M3 resource scope
+**Status:** Working QA baseline for the Cerner AllergyIntolerance workflow; contract-dependent details remain provisional
 **Work packages:** WBS 4.7 (Cerner mapping/normalization), WBS 4.8 (Cerner API endpoint development)
 **Data boundary:** Synthetic data only; retrieval only; no write-back
 
@@ -10,6 +10,8 @@
 This plan defines how Team C will verify Cerner FHIR R4 retrieval, mapping, API behavior, and the critical frontend-to-backend workflow for Milestone 3. It applies the approved six-level testing strategy and assigns each scenario to the lowest level that proves the behavior. A scenario is repeated at a higher level only when that level proves a new boundary, such as HTTP serialization, the approved API contract, or actual sandbox interoperability.
 
 The initial repeatable example is AllergyIntolerance. The repository does not yet contain an AllergyIntolerance mapper or approved normalized allergy response, so allergy expected-output assertions remain provisional until the canonical model and OpenAPI 1.0 are approved.
+
+This plan is intended for active use during implementation. QA artifacts, fixtures, tests, and traceability will evolve alongside WBS 4.7 and WBS 4.8 rather than being completed after development. An unresolved dependency does not prevent semantic or lower-level testing when the temporary assumption is recorded in Section 12; affected assertions must be updated after the authoritative decision is approved.
 
 ## 2. Repository baseline and artifact status
 
@@ -165,16 +167,31 @@ QA may issue **Pass**, **Pass with accepted conditions** (no Critical/High defec
 
 ## 12. Dependencies and open decisions
 
-| Dependency | Status at draft time | Blocks |
-|---|---|---|
-| Protected integration branch and verified frontend baseline | Not observed | Cross-team integration execution |
-| Unified OpenAPI 1.0 | Not observed | Endpoint paths, DTOs, exact errors, `sourceStatus`, contract tests, final expected JSON |
-| Approved canonical model/ERD | Draft implementations exist on feature branches | Final mapping/persistence expectations |
-| Approved shared adapter interface | Competing/proposed feature-branch forms exist | Client/service integration pattern |
-| Approved reconciliation rules | Proposed | Duplicate/uncertain-match assertions |
-| Final M3 resource scope | Pending | Complete requirement and endpoint coverage |
-| Refresh-token policy for Cerner | Pending | Exact refresh assertions and retry limits |
-| Pagination and partial-result contract | Pending OpenAPI | Exact client-facing assertions |
-| Approved frontend presentation rules | Pending | Exact empty, loading, reconnect, access-denied, source-label, error, retry, partial-result, and accessibility assertions |
+| Dependency | Current status | Temporary testing assumption | Affected scenarios/tests | Approval owner/source | Required update after approval |
+|---|---|---|---|---|---|
+| Protected integration branch and verified frontend baseline | Not observed | Develop deterministic tests on the Team C branch; defer cross-team execution. | Contract, E2E, cross-team CI | Cross-team technical leads | Record branch and baseline commit; enable cross-team checks. |
+| Unified OpenAPI 1.0 | Not observed | Use semantic outcomes only; illustrated paths, fields, errors, and `sourceStatus` are provisional. | CTL-001–008, CON-001–004, INT-001–010, E2E-002–003 | Frontend/backend/integration contributors | Pin path, version, and checksum; replace provisional assertions and validate fixtures/responses. |
+| Approved canonical model/ERD | Draft implementations exist on feature branches | Preserve source facts and provenance without finalizing normalized JSON. | MAP-001–015 and expected outputs | Cross-team architecture/model owners | Create or revise paired expected outputs and field-level assertions. |
+| Approved shared adapter interface | Competing/proposed feature-branch forms exist | Test behavior at service boundaries without assuming a package or concrete interface. | Service/client and integration tests | Cross-team technical leads | Align test wiring and shared client/service cases to the approved interface. |
+| Approved reconciliation rules | Proposed | Keep uncertain matches separate and do not infer identity. | MAP-007–008, SVC-009–011, partial-result tests | Architecture/reconciliation owners | Finalize duplicate, crosswalk, uncertain-match, and partial-result assertions. |
+| Final M3 resource scope | Pending | AllergyIntolerance is the first reference workflow; other resources remain conditional. | Resource matrix, SMK-003 | Team C lead/product owner | Add final resource requirements, scenarios, fixtures, and evidence rows. |
+| Refresh-token policy for Cerner | Pending | Test bounded behavior semantically; do not fix call counts except where implementation policy approves them. | SVC-003–004, INT-003–004 | Cerner/backend auth owners | Set exact refresh, retry, and reauthorization assertions. |
+| Pagination and partial-result contract | Pending OpenAPI | Preserve successful records internally and describe client behavior semantically. | SVC-008–011, CTL-007, INT-008–009, E2E-003 | Contract and backend owners | Finalize pagination limits, client response, and `sourceStatus` assertions. |
+| Approved frontend presentation rules | Pending | Test distinct loading, empty, denial, reconnect, error, retry, and partial states using provisional labels. | Frontend unit/widget and E2E | Frontend/product contributors | Replace provisional copy and presentation assertions with approved behavior. |
 
-These items are gates, not assumptions. Update this plan, the catalog, fixtures, and matrix when each decision is approved.
+Update this register whenever an assumption is adopted or an authoritative decision is approved. Link the approving artifact, decision, or pull request; do not silently replace one competing approach with another.
+
+## 13. Implementation coordination record
+
+Complete this record with Team C as implementation begins:
+
+| Coordination item | Assigned person/reference | Date/status |
+|---|---|---|
+| AllergyIntolerance mapper developer | TBD | TBD |
+| Cerner allergy endpoint developer | TBD | TBD |
+| QA/developer first-mapper pairing session | Tiffany Obi + TBD | TBD |
+| Implementation branch/pull request | TBD | TBD |
+| Source fixture and sanitization reviewer | TBD | TBD |
+| Expected-output/mapping reviewer | TBD | TBD |
+| OpenAPI 1.0 approval reference and checksum | TBD | Pending approval |
+| Canonical model approval reference | TBD | Pending approval |

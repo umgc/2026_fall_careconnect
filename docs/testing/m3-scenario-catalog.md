@@ -1,6 +1,6 @@
 # Milestone 3 Cerner Scenario Catalog
 
-**Status:** Draft
+**Status:** Working QA baseline; contract-dependent assertions remain provisional
 **Example workflow:** AllergyIntolerance
 **Rule:** Test at the lowest useful level; repeat higher only to prove a new boundary.
 
@@ -10,10 +10,13 @@
 - Automation: **Now** can be authored without the approved API contract; **After contract** requires OpenAPI 1.0; **Manual** is sandbox-only.
 - Expected results intentionally use semantic language where the endpoint shape or error code is unresolved.
 - Every automated test name/tag must include at least one `M3-REQ-*` ID. Use the scenario ID as a second identifier when practical.
+- When an unresolved decision affects a scenario, the test or fixture metadata must cite the dependency and temporary assumption from the test plan; update the assertion when the decision is approved.
 
 ## Provisional walkthrough interfaces
 
 The M3 AllergyIntolerance reference workflow illustrates frontend/backend `GET /api/patients/{patientId}/allergies` and Cerner FHIR `GET /AllergyIntolerance?patient={cernerPatientId}`. The catalog uses those interactions to define scenarios, but the paths, parameters, normalized JSON fields, exception classes, error-code names, and `sourceStatus` values are examples—not final contracts. Replace them only with values approved in `contracts/unified-health-data.openapi.yaml` 1.0 and the approved Cerner client design.
+
+The dependency and temporary-assumption register in Section 12 of [m3-test-plan.md](m3-test-plan.md) governs provisional scenarios. Semantic tests may proceed now where practical; exact contract and normalization assertions remain pending their authoritative approvals.
 
 ## A. Mapping and normalization
 

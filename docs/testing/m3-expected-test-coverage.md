@@ -2,7 +2,7 @@
 
 **Audience:** Team C developers, QA, frontend contributors, and integration reviewers
 **Owner:** Team C QA Lead
-**Status:** Draft execution guide; exact API assertions remain pending OpenAPI 1.0 approval
+**Status:** Working execution guide for the AllergyIntolerance QA baseline; exact API assertions remain pending OpenAPI 1.0 approval
 **Applies to:** WBS 4.7 Cerner mapping and WBS 4.8 Cerner endpoint development
 **Boundary:** Synthetic data only, retrieval only, no EHR write-back
 
@@ -13,6 +13,8 @@ This document tells the implementation and testing teams which automated and man
 AllergyIntolerance is the first reference workflow. It must pass through every testing level so the team can establish reusable fixture loading, expected-output comparison, controller testing, contract validation, WireMock configuration, frontend unit/widget testing, E2E setup, and evidence collection. The same pattern then applies to Patient and every other resource approved for the final M3 scope, such as Condition, Encounter, and Appointment.
 
 The AllergyIntolerance example does not limit the overall test scope to allergies.
+
+Use this guide during implementation, not only at final verification. Where an authoritative contract or model decision is unresolved, record the temporary assumption and dependency in the test plan, proceed with semantic or lower-level coverage when possible, and revise affected fixtures and assertions after approval.
 
 ## 2. Responsibility model
 

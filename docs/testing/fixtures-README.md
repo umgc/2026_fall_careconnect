@@ -61,6 +61,8 @@ wiremock/__files/allergy-search-page-2-timeout.json
 
 Pair each FHIR input and canonical expected output using the same base name, with `.expected` added only to the output. One fixture should have one primary purpose, and filenames must describe the case rather than a patient.
 
+Every important input that exercises normalization must have a paired expected canonical output once the canonical model is approved. Not every boundary fixture produces normalized JSON: malformed bodies, OAuth failures, timeouts, rate limits, and transport failures instead require a named behavioral or error assertion in the consuming test and traceability matrix. Pagination may use multiple page fixtures with one combined expected output when the scenario validates the assembled result. Document any pairing exception in fixture metadata; do not leave an input's expected behavior implicit.
+
 If sequence matters, use zero-padded page/attempt numbers. Do not put a real patient ID, environment hostname, username, date of birth, medical record number, token fragment, or person name in a filename.
 
 ## Fixture metadata
@@ -144,6 +146,7 @@ Matches in intentional synthetic OAuth field names still require a human value r
 - [ ] No secrets, token fragments, real identifiers, or unnecessary free text exist.
 - [ ] Resource type and FHIR Bundle structure match the intended case.
 - [ ] Expected output is approved, deterministic, and structurally compared.
+- [ ] Input has a paired expected output, or metadata names the behavioral/error assertion and explains why normalized output does not apply.
 - [ ] Contract-dependent fields cite the approved OpenAPI commit/checksum.
 - [ ] At least one named automated test consumes the fixture.
 - [ ] No live network call is required outside the documented manual smoke test.
