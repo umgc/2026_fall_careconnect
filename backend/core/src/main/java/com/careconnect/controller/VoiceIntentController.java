@@ -6,6 +6,7 @@ import com.careconnect.service.VoiceIntentService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/voice")
 @ConditionalOnProperty(name = "careconnect.ai.enabled", havingValue = "true")
 public class VoiceIntentController {
+
+    private static final String GENERIC_ERROR_MESSAGE = "Voice intent service is temporarily unavailable.";
 
     private final VoiceIntentService voiceIntentService;
 
@@ -24,8 +27,7 @@ public class VoiceIntentController {
     @PostMapping("/intent")
     public ResponseEntity<VoiceIntentResponse> extractIntent(@Valid @RequestBody VoiceIntentRequest request) {
         try {
-            log.info("Voice intent request: utterance='{}', locale='{}'",
-                    request.getUtterance(), request.getLocale());
+            log.info("Voice intent request received: locale='{}'", request.getLocale());
 
             VoiceIntentResponse response = voiceIntentService.extractIntent(request);
 
@@ -34,8 +36,9 @@ public class VoiceIntentController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("Voice intent endpoint error: {}", e.getMessage(), e);
-            return ResponseEntity.ok(VoiceIntentResponse.error(e.getMessage()));
+            log.error("Voice intent endpoint failed: {}", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(VoiceIntentResponse.error(GENERIC_ERROR_MESSAGE));
         }
     }
 }
