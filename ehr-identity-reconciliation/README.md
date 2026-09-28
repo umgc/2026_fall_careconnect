@@ -145,11 +145,24 @@ comparison once against your own store with the lock deliberately stubbed out, t
 `date_of_birth` pending-conflict race — if neither can be made to fail against a broken store, your test
 isn't exercising the lock either.
 
-## Files in this package
+## Where the code lives
 
-- `pom.xml`, `src/main/java/...` — the library.
-- `src/test/java/...` — `AbstractIdentityReconciliationContractTest` (extend this), the in-memory
-  reference implementation (`InMemoryContractTest` and `support/`) proving the contract is satisfiable.
+**Updated 2026-09-28.** This started as a standalone Maven module with its own `pom.xml`. Nothing built
+it: there was no root aggregator pom, `backend/core` had no dependency on it, and no CI workflow
+referenced it — so the contract suite below never ran in the pipeline, and no application code could
+import the interfaces. The sources now live inside `backend/core` instead, where the existing build
+compiles and tests them automatically. The standalone `pom.xml` is gone; this is a single-module
+repository, so a separately-versioned artifact was buying nothing.
+
+- `backend/core/src/main/java/com/careconnect/ehr/reconciliation/` — the library. Import it directly;
+  there is no dependency to add.
+- `backend/core/src/test/java/com/careconnect/ehr/reconciliation/` —
+  `AbstractIdentityReconciliationContractTest` (extend this), plus the in-memory reference
+  implementation (`InMemoryContractTest` and `support/`) proving the contract is satisfiable. All 16
+  scenarios run as part of `backend/core`'s normal test run.
+
+## Files still in this directory
+
 - `ehr_identity_field_provenance.sql` — DDL for the one new table this library needs, with the
   org-scoping column still marked TODO pending confirmation of the real column name/type on
   `patient`/`users` (see the implementation plan's Decisions log).
