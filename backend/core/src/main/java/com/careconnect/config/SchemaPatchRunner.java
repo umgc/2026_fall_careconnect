@@ -415,11 +415,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyRequiredPatch(
                 "H2 – drop legacy ai_held_item open unique",
                 "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
+        // H2 has no partial indexes: emulate Postgres' WHERE clause with a generated flag that
+        // is NULL for closed holds (NULLs never collide in a unique index).
+        applyRequiredPatch(
+                "H2 – ai_held_item open hold flag",
+                "ALTER TABLE ai_held_item ADD COLUMN IF NOT EXISTS open_hold_flag BOOLEAN "
+                        + "GENERATED ALWAYS AS (CASE WHEN status = 'PENDING_REVIEW' "
+                        + "AND query_text_hash IS NOT NULL THEN TRUE END)");
         applyRequiredPatch(
                 "H2 – ai_held_item open unique",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
-                        + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
-                        + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+                        + "ON ai_held_item (patient_id, source_surface, query_text_hash, open_hold_flag)");
         applyRequiredPatch(
                 "H2 – user_files.extracted_text",
                 "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
@@ -572,11 +578,15 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "H2 – consent_grants lookup index",
                 "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
                         + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
+        // H2 has no partial indexes: emulate WHERE status = 'ACTIVE' with a generated flag.
+        applyRequiredPatch(
+                "H2 – consent_grants active flag",
+                "ALTER TABLE consent_grants ADD COLUMN IF NOT EXISTS active_flag BOOLEAN "
+                        + "GENERATED ALWAYS AS (CASE WHEN status = 'ACTIVE' THEN TRUE END)");
         applyRequiredPatch(
                 "H2 – consent_grants active unique",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
-                        + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
-                        + "WHERE status = 'ACTIVE'");
+                        + "ON consent_grants (patient_user_id, grantee_user_id, scope, active_flag)");
     }
 
     /**
