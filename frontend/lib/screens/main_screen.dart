@@ -15,6 +15,7 @@ import '../services/local_db/offline_sync_service.dart';
 import '../features/telemetry/telemetry.dart';
 import '../services/call_notification_service.dart';
 import '../widgets/hybrid_video_call_widget.dart';
+import '../widgets/menu/menu_page.dart';
 
 /// Main screen of the application. This is where the user is navigated to
 /// after logging in. This contains the bottom nav bar and main screens
@@ -862,9 +863,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             if (overlayNavigator.canPop()) {
               overlayNavigator.pop();
             }
-            if (mounted) {
-              context.go(destination);
+
+            if (!mounted) return;
+
+            if (destination == '/dashboard') {
+              _onItemTapped(0);
+              return;
             }
+
+            if (destination == '/dashboard?tab=menu') {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => const MenuPage(),
+              );
+              return;
+            }
+
+            context.go(destination);
           },
         );
       },

@@ -70,6 +70,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   static const _commandTable = [
     // Core navigation
     _CommandMatch(phrase: 'take me home', intent: 'navigate', entity: 'home'),
+    _CommandMatch(phrase: 'home', intent: 'navigate', entity: 'home'),
     _CommandMatch(
         phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
     _CommandMatch(
@@ -86,9 +87,15 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
     _CommandMatch(
         phrase: 'open profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(phrase: 'profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(
+        phrase: 'open my profile', intent: 'navigate', entity: 'profile'),
     _CommandMatch(
         phrase: 'open settings', intent: 'navigate', entity: 'settings'),
+    _CommandMatch(
+        phrase: 'settings', intent: 'navigate', entity: 'settings'),
     _CommandMatch(phrase: 'open menu', intent: 'navigate', entity: 'menu'),
+    _CommandMatch(phrase: 'menu', intent: 'navigate', entity: 'menu'),
     // Health
     _CommandMatch(
         phrase: 'open medication tracker',
@@ -785,7 +792,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       // Fall through to keyword matching
       final exactMatches = _commandTable
           .where(
-              (c) => cmd.contains(_commandPhraseToTranslatedString(c.phrase)))
+              (c) => cmd == _commandPhraseToTranslatedString(c.phrase))
           .toList();
 
       if (exactMatches.length == 1) {
@@ -1590,7 +1597,9 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
               final destination =
                   VoiceIntentRegistry().resolveDestination(match.entity);
               return ActionChip(
-                key: Key('voice_clarify_${destination?.route ?? match.entity}'),
+                key: Key(
+                  'voice_clarify_${destination?.route ?? match.entity}_${match.phrase}',
+                ),
                 avatar: const Icon(Icons.arrow_forward, size: 18),
                 label: Text(_commandLabelToDisplayText(
                     destination?.displayLabel ?? match.entity)),
