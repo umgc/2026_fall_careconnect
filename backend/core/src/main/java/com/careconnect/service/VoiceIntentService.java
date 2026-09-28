@@ -24,7 +24,9 @@ public class VoiceIntentService {
             "dashboard", "/dashboard",
             "calendar", "/calendar",
             "symptoms", "/symptoms",
-            "symptom tracker", "/symptoms"
+            "symptom tracker", "/symptoms",
+            "medication", "/medication",
+            "medications", "/medication"
     );
 
     private static final String PROMPT_TEMPLATE = """
@@ -33,7 +35,7 @@ public class VoiceIntentService {
             Respond ONLY with valid JSON, no other text.
 
             Supported intents:
-            - "navigate": user wants to go to a screen. Entities: {"destination": "home|calendar|symptoms|dashboard"}
+            - "navigate": user wants to go to a screen. Entities: {"destination": "home|calendar|symptoms|medication|medications|dashboard"}
             - "call": user wants to call someone. Entities: {"target": "<person name or role>"}
             - "schedule": user wants to schedule an appointment. Entities: {"target": "<person>", "date": "<date if mentioned>"}
             - "unknown": cannot determine intent

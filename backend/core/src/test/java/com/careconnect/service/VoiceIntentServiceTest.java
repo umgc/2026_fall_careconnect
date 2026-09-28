@@ -10,10 +10,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class VoiceIntentServiceTest {
@@ -50,6 +52,45 @@ class VoiceIntentServiceTest {
         assertThat(response.getConfidence()).isEqualTo(0.95);
         assertThat(response.isSuccess()).isTrue();
         assertThat(response.isRequiresConfirmation()).isTrue();
+    }
+
+    @Test
+    @DisplayName("medication destinations are included in the prompt and route to the medication screen")
+    void extractIntent_medicationDestination_routesCorrectly() {
+        String aiJson = "{\"intent\":\"navigate\",\"entities\":{\"destination\":\"medications\"},\"confidence\":0.95}";
+        ChatResponse chatResponse = new ChatResponse();
+        chatResponse.setAiResponse(aiJson);
+        when(mockAIService.processChat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+        VoiceIntentResponse response = service.extractIntent(VoiceIntentRequest.builder()
+                .utterance("open my medications")
+                .locale("en")
+                .build());
+
+        ArgumentCaptor<ChatRequest> requestCaptor = ArgumentCaptor.forClass(ChatRequest.class);
+        verify(mockAIService).processChat(requestCaptor.capture());
+
+        assertThat(response.getDestination()).isEqualTo("/medication");
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(requestCaptor.getValue().getMessage())
+                .contains("home|calendar|symptoms|medication|medications|dashboard");
+    }
+
+    @Test
+    @DisplayName("singular medication destination routes to the medication screen")
+    void extractIntent_singularMedicationDestination_routesCorrectly() {
+        String aiJson = "{\"intent\":\"navigate\",\"entities\":{\"destination\":\"medication\"},\"confidence\":0.95}";
+        ChatResponse chatResponse = new ChatResponse();
+        chatResponse.setAiResponse(aiJson);
+        when(mockAIService.processChat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+        VoiceIntentResponse response = service.extractIntent(VoiceIntentRequest.builder()
+                .utterance("open medication tracker")
+                .locale("en")
+                .build());
+
+        assertThat(response.getDestination()).isEqualTo("/medication");
+        assertThat(response.isSuccess()).isTrue();
     }
 
     @Test
