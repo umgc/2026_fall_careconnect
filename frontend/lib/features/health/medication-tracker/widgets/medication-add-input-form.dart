@@ -122,11 +122,12 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Text(
-                  _isPhotoReview ? 'Review Medication' : 'Add New Medication',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                Expanded(
+                  child: Text(
+                    _isPhotoReview ? 'Review Medication' : 'Add New Medication',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
                 ),
-                const Spacer(),
                 IconButton(
                   key: const Key('medication-cancel-button'),
                   tooltip: 'Cancel',
