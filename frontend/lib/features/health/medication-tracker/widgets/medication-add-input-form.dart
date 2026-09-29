@@ -77,6 +77,10 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
 
   bool _isReadingPhoto = false;
   MedicationPhotoExtractionResult? _photoResult;
+
+  /// Set when a rescan fails after a successful scan; the earlier review
+  /// values and flags stay in place.
+  String? _rescanFailureMessage;
   final Set<String> _machineGenerated = {};
   final Set<String> _editedByUser = {};
 
@@ -667,35 +671,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
     if (result == null) return const SizedBox.shrink();
 
     if (result.manualEntryRequired) {
-      return Container(
-        key: const Key('medication-photo-fallback-message'),
-        margin: const EdgeInsets.only(top: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Semantics(
-          liveRegion: true,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.info_outline,
-                  color: theme.colorScheme.onErrorContainer),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  result.message ??
-                      'The photo could not be read. Please enter the medication manually.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onErrorContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _buildPhotoFailureMessage(result.message ?? _unreadablePhotoMessage);
     }
 
     return Padding(
@@ -703,6 +679,10 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_rescanFailureMessage != null) ...[
+            _buildPhotoFailureMessage(_rescanFailureMessage!),
+            const SizedBox(height: 12),
+          ],
           const DisclaimerBanner.medication(),
           const SizedBox(height: 12),
           Semantics(
@@ -725,6 +705,37 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoFailureMessage(String message) {
+    final theme = Theme.of(context);
+    return Container(
+      key: const Key('medication-photo-fallback-message'),
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Semantics(
+        liveRegion: true,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.info_outline, color: theme.colorScheme.onErrorContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                message,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -755,9 +766,10 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
     );
   }
 
+  static const _unreadablePhotoMessage =
+      'The photo could not be read. Please enter the medication manually.';
+
   Future<void> _captureLabelPhoto() async {
-    const unreadableMessage =
-        'The photo could not be read. Please enter the medication manually.';
     final patientId =
         Provider.of<UserProvider>(context, listen: false).user?.patientId;
     if (patientId == null) {
@@ -794,7 +806,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
       result = await extract(patientId, await photo.readAsBytes(), photo.name);
     } catch (_) {
       result = MedicationPhotoExtractionResult.manualFallback(
-        message: unreadableMessage,
+        message: _unreadablePhotoMessage,
       );
     }
     if (!mounted) return;
@@ -813,6 +825,11 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
   void _applyPhotoResult(MedicationPhotoExtractionResult result) {
     setState(() {
       _isReadingPhoto = false;
+      if (result.manualEntryRequired && _isPhotoReview) {
+        _rescanFailureMessage = result.message ?? _unreadablePhotoMessage;
+        return;
+      }
+      _rescanFailureMessage = null;
       _photoResult = result;
       _machineGenerated.clear();
       _editedByUser.clear();
