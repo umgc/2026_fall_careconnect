@@ -23,10 +23,13 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
 
     @Override
     public void recordDecision(Object patientId, Object sourceId, String fieldName,
-                                String canonicalValueBefore, String incomingValue, Outcome outcome,
-                                ResolvedBy resolvedBy, Instant detectedAndResolvedAt) {
-        rows.add(new Row(patientId, sourceId, fieldName, canonicalValueBefore, incomingValue, null,
-                toStatus(outcome), resolvedBy, detectedAndResolvedAt, detectedAndResolvedAt));
+                                String canonicalValueBefore, String incomingValue, Instant sourceUpdatedAt,
+                                Outcome outcome, ResolvedBy resolvedBy, Instant detectedAndResolvedAt) {
+        // Stored, not null. This fake used to write null here, which cost nothing in memory and could
+        // never have been written to ehr_identity_conflict.source_updated_at (NOT NULL) -- the gap that
+        // building the JPA writer exposed on 2026-09-29.
+        rows.add(new Row(patientId, sourceId, fieldName, canonicalValueBefore, incomingValue,
+                sourceUpdatedAt, toStatus(outcome), resolvedBy, detectedAndResolvedAt, detectedAndResolvedAt));
     }
 
     @Override

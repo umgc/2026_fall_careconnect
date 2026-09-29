@@ -199,12 +199,14 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
         if (incomingIsNewerThanConfirmedBaseline) {
             patientAccessor.applyValue(patientId, fieldName, incomingValue);
             auditWriter.recordDecision(patientId, sourceId, fieldName, currentValue.get(), incomingValue,
-                    IdentityConflictAuditWriter.Outcome.ACCEPTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
+                    incomingTimestamp, IdentityConflictAuditWriter.Outcome.ACCEPTED,
+                    IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
             refreshProvenanceIfNewer(patientId, fieldName, sourceId, incomingTimestamp, provenance);
             return new ReconciliationOutcome(fieldName, ReconciliationOutcome.Decision.ACCEPTED_NEWER, incomingValue);
         } else {
             auditWriter.recordDecision(patientId, sourceId, fieldName, currentValue.get(), incomingValue,
-                    IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
+                    incomingTimestamp, IdentityConflictAuditWriter.Outcome.REJECTED,
+                    IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
             // Deliberately do NOT refresh provenance here: the losing source's timestamp is, by
             // definition, not newer than what's already recorded (or the baseline), so recording it
             // could only ever move the provenance backwards or leave it unchanged.
@@ -236,7 +238,8 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
         if (!incomingIsNewerThanConfirmedBaseline) {
             auditWriter.recordDecision(patientId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
-                    IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
+                    incomingTimestamp, IdentityConflictAuditWriter.Outcome.REJECTED,
+                    IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
             return new ReconciliationOutcome(DATE_OF_BIRTH, ReconciliationOutcome.Decision.REJECTED_STALE, currentValue);
         }
 
@@ -250,7 +253,8 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
                 // already being asked about -- discard quietly rather than replacing one unconfirmed
                 // guess with an older one (Assumption A3).
                 auditWriter.recordDecision(patientId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
-                        IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
+                        incomingTimestamp, IdentityConflictAuditWriter.Outcome.REJECTED,
+                        IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
                 return new ReconciliationOutcome(DATE_OF_BIRTH, ReconciliationOutcome.Decision.REJECTED_STALE, currentValue);
             }
             // Genuinely newer than the open candidate too -- supersede it (Assumption A3).

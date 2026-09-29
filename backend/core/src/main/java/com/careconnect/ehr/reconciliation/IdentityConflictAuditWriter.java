@@ -51,6 +51,17 @@ public interface IdentityConflictAuditWriter {
      *                             {@link RecencyWinsIdentityReconciler}, which only invokes this when
      *                             there was an actual disagreement to record).
      * @param incomingValue        the value this source offered.
+     * @param sourceUpdatedAt      that value's source timestamp — the number the decision was made on.
+     *                             Added 2026-09-29: this parameter did not exist, on the reasoning
+     *                             that a finalized row never needs comparing against again. True, but
+     *                             it conflated needing a value with storing one. {@code
+     *                             ehr_identity_conflict.source_updated_at} is NOT NULL for every row,
+     *                             pending or not, so no real implementation could satisfy this
+     *                             interface — a gap the in-memory fake hid by storing null, which only
+     *                             a database could reject. It also left the audit trail unable to do
+     *                             its job: a {@code REJECTED} row recorded that a value lost without
+     *                             recording the timestamp it lost with, which is the one fact needed
+     *                             to tell a correct rejection from a bug.
      * @param outcome               whether the incoming value was applied to {@code patient} or discarded
      *                              as stale.
      */
@@ -60,6 +71,7 @@ public interface IdentityConflictAuditWriter {
             String fieldName,
             String canonicalValueBefore,
             String incomingValue,
+            Instant sourceUpdatedAt,
             Outcome outcome,
             ResolvedBy resolvedBy,
             Instant detectedAndResolvedAt);
@@ -74,11 +86,12 @@ public interface IdentityConflictAuditWriter {
      * one first (see {@link RecencyWinsIdentityReconciler}'s supersede logic, which does exactly that
      * before ever calling this method a second time for the same field).
      *
-     * <p>Unlike {@link #recordDecision}, this takes {@code sourceUpdatedAt} explicitly: a final
-     * ACCEPTED/REJECTED row never needs to be compared against again, but an open PENDING one does —
-     * against a possibly-newer candidate arriving before the patient responds (see
-     * {@link #currentPendingConflict}), and to give {@code ehr_identity_field_provenance} a real
-     * source timestamp to record if and when the patient accepts it.
+     * <p>An open PENDING row's {@code sourceUpdatedAt} carries more weight than a finalized row's: it
+     * is read back and compared against a possibly-newer candidate arriving before the patient
+     * responds (see {@link #currentPendingConflict}), and it is what
+     * {@code ehr_identity_field_provenance} records if and when the patient accepts. On a finalized
+     * row the same value is history rather than a comparand — still stored, still required, but never
+     * read by the algorithm.
      */
     void openPendingConflict(
             Object patientId,
