@@ -197,7 +197,10 @@ public class MedicationPhotoExtractionService {
         if (medicationTypeNames().contains(candidate)) {
             return candidate;
         }
-        String loggedValue = value.length() > REJECTED_TYPE_LOG_LIMIT ? value.substring(0, REJECTED_TYPE_LOG_LIMIT) + "..." : value;
+        String singleLine = value.replaceAll("[\\r\\n]+", " ");
+        String loggedValue = singleLine.length() > REJECTED_TYPE_LOG_LIMIT
+                ? singleLine.substring(0, REJECTED_TYPE_LOG_LIMIT) + "..."
+                : singleLine;
         log.warn("Medication photo extraction rejected medicationType '{}': not a MedicationType value", loggedValue);
         return "";
     }
