@@ -22,11 +22,15 @@ import com.careconnect.util.SecurityUtil;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/v3/api/patients")
 @Tag(name = "Medication Management", description = "Endpoints for managing patient medications")
 public class MedicationController {
+
+    private static final Set<String> MEDICATION_PHOTO_TYPES = Set.of(MediaType.IMAGE_JPEG_VALUE, MediaType.IMAGE_PNG_VALUE);
+    private static final long MEDICATION_PHOTO_MAX_BYTES = 10L * 1024 * 1024;
 
     @Autowired
     private MedicationService medicationService;
@@ -98,7 +102,7 @@ public class MedicationController {
     @PostMapping(value = "/{patientId}/medications/extract-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> extractMedicationPhoto(
             @PathVariable Long patientId,
-            @RequestParam("image") MultipartFile image) throws UnauthorizedException, IOException {
+            @RequestParam("image") MultipartFile image) throws UnauthorizedException {
 
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requirePatientAccess(currentUser, patientId);
@@ -107,7 +111,26 @@ public class MedicationController {
                     "message", "Please provide a photo of the medication label."
             ));
         }
-        MedicationPhotoExtractionResponse extraction = medicationPhotoExtractionService.extract(image.getBytes());
+        if (image.getSize() > MEDICATION_PHOTO_MAX_BYTES) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "The photo is too large. Please use a photo under 10 MB."
+            ));
+        }
+        String contentType = image.getContentType();
+        if (contentType == null || !MEDICATION_PHOTO_TYPES.contains(contentType)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Please use a JPEG or PNG photo."
+            ));
+        }
+        byte[] imageBytes;
+        try {
+            imageBytes = image.getBytes();
+        } catch (IOException e) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "The photo could not be read. Please enter the medication manually."
+            ));
+        }
+        MedicationPhotoExtractionResponse extraction = medicationPhotoExtractionService.extract(imageBytes);
         return ResponseEntity.ok(extraction);
     }
 

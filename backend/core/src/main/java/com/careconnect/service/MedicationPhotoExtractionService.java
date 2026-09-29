@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MedicationPhotoExtractionService {
 
-    static final String FIELD_NAME = "name";
+    static final String FIELD_NAME = "medicationName";
     static final String FIELD_DOSAGE = "dosage";
     static final String FIELD_FREQUENCY = "frequency";
     static final String FIELD_MEDICATION_TYPE = "medicationType";
@@ -77,7 +77,8 @@ public class MedicationPhotoExtractionService {
         try {
             labelText = detectText(imageBytes);
         } catch (Exception e) {
-            log.warn("Medication photo OCR failed, falling back to manual entry: {}", e.getClass().getSimpleName());
+            log.warn("Medication photo OCR failed, falling back to manual entry: {}: {}",
+                    e.getClass().getSimpleName(), e.getMessage());
             return manualEntry("The photo could not be read. Please enter the medication manually.");
         }
         if (labelText.isBlank()) {
@@ -89,7 +90,9 @@ public class MedicationPhotoExtractionService {
         try {
             extracted = structureWithLlm(labelText);
         } catch (Exception e) {
-            log.warn("Medication photo LLM structuring failed, falling back to manual entry: {}", e.getClass().getSimpleName());
+            // Parse errors can quote the LLM output, which repeats label text, so only the cause type is logged.
+            log.warn("Medication photo LLM structuring failed, falling back to manual entry: {}",
+                    e.getClass().getSimpleName());
             return manualEntry("The photo could not be read. Please enter the medication manually.");
         }
 
@@ -125,7 +128,7 @@ public class MedicationPhotoExtractionService {
 
                 Return EXACTLY this format:
 
-                {"name": "", "dosage": "", "frequency": "", "medicationType": ""}
+                {"medicationName": "", "dosage": "", "frequency": "", "medicationType": ""}
 
                 medicationType must be one of: %s.
                 Use an empty string "" for any value that is not present on the label.
