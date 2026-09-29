@@ -10,7 +10,7 @@ import 'package:care_connect_app/features/health/medication-tracker/models/medic
 
 Medication _med({
   bool isActive = true,
-  MedicationType? medicationType = MedicationType.OTC,
+  MedicationType? medicationType = MedicationType.OVER_THE_COUNTER,
   String? prescribedBy,
   String? notes,
   String? nextDose,
@@ -83,7 +83,7 @@ void main() {
 
     testWidgets('shows delete icon for active OTC medication', (tester) async {
       await tester.pumpWidget(_wrap(MedicationCard(
-        medication: _med(isActive: true, medicationType: MedicationType.OTC),
+        medication: _med(isActive: true, medicationType: MedicationType.OVER_THE_COUNTER),
         onStatusChanged: (_) {},
       )));
       expect(find.byIcon(Icons.delete_outline), findsOneWidget);

@@ -99,7 +99,7 @@ void main() {
         'medicationType': 'OTC',
         'isActive': true,
       });
-      expect(m.medicationType, MedicationType.OTC);
+      expect(m.medicationType, MedicationType.OVER_THE_COUNTER);
     });
 
     test('medicationType is SUPPLEMENT when specified', () {

@@ -17,7 +17,7 @@ void main() {
     test('has PRESCRIPTION, OTC, SUPPLEMENT', () {
       expect(MedicationType.values, containsAll([
         MedicationType.PRESCRIPTION,
-        MedicationType.OTC,
+        MedicationType.OVER_THE_COUNTER,
         MedicationType.SUPPLEMENT,
       ]));
     });
@@ -104,7 +104,7 @@ void main() {
         'medicationType': 'OTC',
         'isActive': true,
       });
-      expect(med.medicationType, MedicationType.OTC);
+      expect(med.medicationType, MedicationType.OVER_THE_COUNTER);
     });
 
     test('isActive defaults to true when missing', () {

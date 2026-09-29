@@ -21,7 +21,7 @@ void main() {
 
     test('contains PRESCRIPTION, OTC, SUPPLEMENT, HERBAL, EMERGENCY', () {
       expect(MedicationType.values, contains(MedicationType.PRESCRIPTION));
-      expect(MedicationType.values, contains(MedicationType.OTC));
+      expect(MedicationType.values, contains(MedicationType.OVER_THE_COUNTER));
       expect(MedicationType.values, contains(MedicationType.SUPPLEMENT));
       expect(MedicationType.values, contains(MedicationType.HERBAL));
       expect(MedicationType.values, contains(MedicationType.EMERGENCY));
@@ -134,7 +134,7 @@ void main() {
       expect(med.patientId, 10);
       expect(med.medicationName, 'Aspirin');
       expect(med.dosage, '81mg');
-      expect(med.medicationType, MedicationType.OTC);
+      expect(med.medicationType, MedicationType.OVER_THE_COUNTER);
       expect(med.prescribedBy, 'Dr. Jones');
       expect(med.isActive, true);
     });

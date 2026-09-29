@@ -55,17 +55,51 @@ void main() {
     final backendPresent = File(_backendEnumPath).existsSync();
 
     test(
-        'TC-MED-TYPE-007: every frontend MedicationType except OTC is a '
-        'backend Medication.MedicationType constant, and the only backend '
-        'constant with no frontend twin is OVER_THE_COUNTER', () {
+        'TC-MED-TYPE-007: the frontend MedicationType names and the backend '
+        'Medication.MedicationType constants are the same set', () {
       final backend = _backendConstants();
       final frontend = MedicationType.values.map((e) => e.name).toSet();
-      // OTC vs OVER_THE_COUNTER is the known, out-of-scope mismatch. When
-      // the follow-up fix lands, both sets below become empty and this case
-      // must be updated in the same PR.
-      expect(frontend.difference(backend), {'OTC'});
-      expect(backend.difference(frontend), {'OVER_THE_COUNTER'});
+      // Updated by the KI-05 follow-up (OTC renamed to OVER_THE_COUNTER):
+      // both differences are now empty, as this case required.
+      expect(frontend.difference(backend), isEmpty);
+      expect(backend.difference(frontend), isEmpty);
     }, skip: backendPresent ? false : 'backend tree not present');
+  });
+
+  group('KI-05 follow-up: OVER_THE_COUNTER wire name', () {
+    test(
+        'TC-MED-TYPE-014: a backend OVER_THE_COUNTER row parses as '
+        'OVER_THE_COUNTER, not PRESCRIPTION', () {
+      final m = Medication.fromJson(_wire('OVER_THE_COUNTER'));
+      expect(m.medicationType, MedicationType.OVER_THE_COUNTER);
+    });
+
+    test(
+        'TC-MED-TYPE-015: OVER_THE_COUNTER survives fromJson -> toJson '
+        'unchanged, so saving an OTC medication sends a name the backend accepts',
+        () {
+      final m = Medication.fromJson(_wire('OVER_THE_COUNTER'));
+      expect(m.toJson()['medicationType'], 'OVER_THE_COUNTER');
+    });
+
+    test(
+        'TC-MED-TYPE-016: a legacy OTC value still reads as OVER_THE_COUNTER '
+        'and is written back with the backend name', () {
+      final m = Medication.fromJson(_wire('OTC'));
+      expect(m.medicationType, MedicationType.OVER_THE_COUNTER);
+      expect(m.toJson()['medicationType'], 'OVER_THE_COUNTER');
+    });
+
+    testWidgets(
+        'TC-MED-TYPE-017: an active OVER_THE_COUNTER row from the backend '
+        'shows the remove button (it no longer falls back to PRESCRIPTION)',
+        (tester) async {
+      await tester.pumpWidget(_wrap(MedicationCard(
+        medication: Medication.fromJson(_wire('OVER_THE_COUNTER')),
+        onStatusChanged: (_) {},
+      )));
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
   });
 
   group('KI-05 add-medication dropdown', () {
