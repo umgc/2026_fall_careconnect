@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -44,9 +45,13 @@ class VoiceIntentResult {
 class VoiceIntentService {
   static String get _baseUrl => '${getBackendBaseUrl()}/api/voice';
 
-  /// Synchronous override for testing; resolves without microtask delay.
+  /// Test-only replacement for the intent request.
+  ///
+  /// The production request normalizes unavailable, timed-out, and failed
+  /// responses to `null` so the caller can use deterministic matching. Keep
+  /// this seam consistent with that contract, including asynchronous failures.
   @visibleForTesting
-  static VoiceIntentResult? Function({
+  static FutureOr<VoiceIntentResult?> Function({
     required String utterance,
     String locale,
     String? screenId,
@@ -56,12 +61,21 @@ class VoiceIntentService {
     required String utterance,
     String locale = 'en',
     String? screenId,
-  }) {
+  }) async {
     if (testOverride != null) {
-      final result = testOverride!(utterance: utterance, locale: locale, screenId: screenId);
-      return SynchronousFuture(result);
+      try {
+        return await testOverride!(
+          utterance: utterance,
+          locale: locale,
+          screenId: screenId,
+        );
+      } catch (error) {
+        debugPrint('Voice intent test override error: $error');
+        return null;
+      }
     }
-    return _extractIntentImpl(utterance: utterance, locale: locale, screenId: screenId);
+    return _extractIntentImpl(
+        utterance: utterance, locale: locale, screenId: screenId);
   }
 
   static Future<VoiceIntentResult?> _extractIntentImpl({
@@ -79,11 +93,13 @@ class VoiceIntentService {
         if (screenId != null) 'screenId': screenId,
       });
 
-      final response = await http.post(
-        Uri.parse('$_baseUrl/intent'),
-        headers: authHeaders,
-        body: body,
-      ).timeout(const Duration(seconds: 3));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/intent'),
+            headers: authHeaders,
+            body: body,
+          )
+          .timeout(const Duration(seconds: 3));
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;

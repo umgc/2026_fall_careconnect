@@ -2832,11 +2832,13 @@ void main() {
 
   group('VoiceCommandAI final flow tests', () {
     setUp(() {
+      setupDefaultMocks();
       VoiceIntentService.testOverride = null;
     });
 
     tearDown(() {
       VoiceIntentService.testOverride = null;
+      clearMocks();
     });
 
     testWidgets('happy path: AI intent through registry to navigation',
@@ -2913,6 +2915,78 @@ void main() {
       expect(find.text('Symptoms Page'), findsOneWidget);
 
       VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
+
+    testWidgets('known command falls back when the intent service returns unknown',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => VoiceIntentResult(intent: 'unknown', success: true);
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'open calendar');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Calendar'), findsWidgets);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(find.text('Calendar Page'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('known command falls back when the intent service is unsuccessful',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => VoiceIntentResult(intent: 'unknown', success: false);
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'open symptoms');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Symptom Tracker'), findsWidgets);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(find.text('Symptoms Page'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('known command falls back when the intent service times out',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => Future<VoiceIntentResult?>.error(TimeoutException('intent request timed out'));
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'open medications');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Medication'), findsWidgets);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(find.text('Medication Page'), findsOneWidget);
+
       await _tearDown(tester);
     });
 
