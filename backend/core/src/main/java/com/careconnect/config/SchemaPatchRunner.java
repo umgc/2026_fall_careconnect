@@ -368,6 +368,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
         applyEhrCanonicalSchemaPatches();
+        applyEhrIdentityReconciliationPatches();
         seedDemoScheduledVisits();
     }
 
@@ -376,6 +377,114 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyTranscriptArchiveStoragePatch() {
         applyCatalogPatch("2607191300-transcript-archive-purge");
+    }
+
+    /**
+     * Phase 2 of the EHR canonical schema — the identity-reconciliation tables. Mirrors
+     * db/migration V2609291200__create_ehr_identity_reconciliation.sql.
+     * <p>
+     * Hibernate creates the three tables from their entities. Everything here is what it will
+     * not create and what the design actually depends on: the CHECK constraints that keep the
+     * date_of_birth carve-out honest, the partial unique index that stops two open conflicts on
+     * one field, and the foreign keys (the entities store bare Long ids, not @ManyToOne).
+     * <p>
+     * No organization column on any of the three — see the 2026-09-26 org-scoping reversal.
+     */
+    private void applyEhrIdentityReconciliationPatches() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL EHR identity-reconciliation patches for non-PostgreSQL datasource");
+            return;
+        }
+
+        applyPatch(
+                "V2609291200a - unique ehr_source_identity(patient_id, source_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_source_identity_patient_source "
+                        + "ON ehr_source_identity (patient_id, source_id)"
+        );
+        applyPatch(
+                "V2609291200b - unique ehr_identity_field_provenance(patient_id, field_name)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_identity_field_provenance_patient_field "
+                        + "ON ehr_identity_field_provenance (patient_id, field_name)"
+        );
+
+        // At most one open conflict per field. Partial, so resolved rows accumulate freely --
+        // the audit trail is the point of the table.
+        applyPatch(
+                "V2609291200c - one open conflict per (patient, field)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_identity_conflict_open "
+                        + "ON ehr_identity_conflict (patient_id, field_name) WHERE status = 'PENDING'"
+        );
+
+        applyPatch(
+                "V2609291200d - ehr_identity_conflict.status vocabulary",
+                checkIfMissing("ck_ehr_identity_conflict_status", "ehr_identity_conflict",
+                        "status IN ('PENDING', 'ACCEPTED', 'REJECTED')")
+        );
+        applyPatch(
+                "V2609291200e - ehr_identity_conflict.resolved_by vocabulary (no STAFF)",
+                checkIfMissing("ck_ehr_identity_conflict_resolver", "ehr_identity_conflict",
+                        "resolved_by IS NULL OR resolved_by IN ('SYSTEM', 'PATIENT')")
+        );
+
+        // The carve-out that application code must not be trusted to remember: every field
+        // except date_of_birth resolves in the same transaction that detects it, so a PENDING
+        // row for anything else would silently reintroduce the risk the 2026-09-26 reversal
+        // accepted only for non-DOB fields.
+        applyPatch(
+                "V2609291200f - PENDING is reachable only for date_of_birth",
+                checkIfMissing("ck_ehr_identity_conflict_pending_dob", "ehr_identity_conflict",
+                        "status <> 'PENDING' OR field_name = 'date_of_birth'")
+        );
+
+        // Open means unresolved, closed means resolved -- no half-states.
+        applyPatch(
+                "V2609291200g - resolution fields agree with status",
+                checkIfMissing("ck_ehr_identity_conflict_resolution", "ehr_identity_conflict",
+                        "(status = 'PENDING' AND resolved_at IS NULL AND resolved_by IS NULL) "
+                                + "OR (status <> 'PENDING' AND resolved_at IS NOT NULL AND resolved_by IS NOT NULL)")
+        );
+
+        applyPatch(
+                "V2609291200h - FK ehr_source_identity.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_source_identity_patient", "ehr_source_identity",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyPatch(
+                "V2609291200i - FK ehr_source_identity.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_source_identity_source", "ehr_source_identity",
+                        "source_id", "ehr_source", "id", "")
+        );
+        applyPatch(
+                "V2609291200j - FK ehr_identity_conflict.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_identity_conflict_patient", "ehr_identity_conflict",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyPatch(
+                "V2609291200k - FK ehr_identity_conflict.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_identity_conflict_source", "ehr_identity_conflict",
+                        "source_id", "ehr_source", "id", "")
+        );
+        applyPatch(
+                "V2609291200l - FK ehr_identity_field_provenance.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_identity_field_provenance_patient", "ehr_identity_field_provenance",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyPatch(
+                "V2609291200m - FK ehr_identity_field_provenance.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_identity_field_provenance_source", "ehr_identity_field_provenance",
+                        "source_id", "ehr_source", "id", "")
+        );
+    }
+
+    /**
+     * Idempotent CHECK constraint. {@code ALTER TABLE ... ADD CONSTRAINT} has no IF NOT EXISTS,
+     * and this runner executes on every start.
+     */
+    private static String checkIfMissing(final String constraint, final String table, final String predicate) {
+        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '"
+                + constraint + "' AND conrelid = '" + table + "'::regclass) THEN "
+                + "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint
+                + " CHECK (" + predicate + "); END IF; END $$;";
     }
 
     /**
