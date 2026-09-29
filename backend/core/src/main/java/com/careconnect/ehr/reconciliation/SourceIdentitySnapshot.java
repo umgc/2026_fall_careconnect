@@ -2,6 +2,7 @@ package com.careconnect.ehr.reconciliation;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * One adapter's demographic snapshot for one patient, as it would be upserted into
@@ -30,4 +31,16 @@ public record SourceIdentitySnapshot(
         Long sourceId,
         Instant sourceUpdatedAt,
         Map<String, String> fields) {
+
+    /**
+     * Every component is required. An undated snapshot in particular must be refused here: accepted,
+     * it would fill an empty field and leave a provenance row with no timestamp, and the next
+     * agreeing or newer sync for that field would throw (DEF-EHR-REC-01).
+     */
+    public SourceIdentitySnapshot {
+        Objects.requireNonNull(patientId, "patientId");
+        Objects.requireNonNull(sourceId, "sourceId");
+        Objects.requireNonNull(sourceUpdatedAt, "sourceUpdatedAt");
+        Objects.requireNonNull(fields, "fields");
+    }
 }

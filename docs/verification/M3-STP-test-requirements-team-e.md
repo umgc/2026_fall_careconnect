@@ -70,7 +70,7 @@ the UI, A = accessibility review, P = performance/reliability, S = security/nega
 
 | ID | Test requirement | Level | Pass criterion | Status |
 |---|---|---|---|---|
-| STP-M3-E-17 | Identity fields: newest source wins, ties keep the existing value, DOB waits for patient confirmation | U/C | Contract suite + VER-REC-01..12 pass | **Passed 9/28 (28/28)** — see `3.2.4-reconciliation-verification.md` |
+| STP-M3-E-17 | Identity fields: newest source wins, ties keep the existing value, DOB waits for patient confirmation | U/C | Contract suite + TC-EHR-REC-001..012 pass | **Passed 9/28 (28/28)** — see `3.2.4-reconciliation-verification.md` |
 | STP-M3-E-18 | Two adapters racing on one field converge on the newest value against the real database | C/I | Contract suite passes against PostgreSQL; fails with the row lock stubbed out | Blocked: needs a DB-backed subclass |
 | STP-M3-E-19 | Duplicate visit/claim records across sources are detected and merged per the agreed rules | U/I | Merged record matches the rule; audit trail kept | Blocked on 3.2.2 |
 | STP-M3-E-20 | Medication conflicts are flagged for caregiver review and never auto-resolved (FR-EHR-07) | U/E2E | Conflict appears for review; medication list unchanged until a caregiver acts | Blocked on 3.2.2/3.2.3 |

@@ -30,12 +30,11 @@ import static org.junit.jupiter.api.Assertions.*;
  * (case and whitespace handling). They pass today; each one is listed as an open question in
  * docs/verification/3.2.4-reconciliation-verification.md so the team can confirm or change it.
  *
- * <p>Test IDs (VER-REC-xx) match the verification report.
+ * <p>Test IDs (TC-EHR-REC-xxx) match the verification report.
  */
 class ReconciliationVerificationTest {
 
     private static final String DOB = "date_of_birth";
-    private static final String ORG = "ORG-1";
     private static final Instant T1 = Instant.parse("2026-01-01T00:00:00Z");
 
     private InMemoryPatientAccessor patients;
@@ -56,7 +55,7 @@ class ReconciliationVerificationTest {
     }
 
     private List<ReconciliationOutcome> sync(Object patientId, String source, Instant at, Map<String, String> fields) {
-        return reconciler.reconcile(new SourceIdentitySnapshot(patientId, source, ORG, at, fields));
+        return reconciler.reconcile(new SourceIdentitySnapshot(patientId, source, at, fields));
     }
 
     private List<ReconciliationOutcome> sync(Object patientId, String source, Instant at, String field, String value) {
@@ -73,7 +72,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-01 One snapshot with several fields decides each field independently")
+    @DisplayName("TC-EHR-REC-001 One snapshot with several fields decides each field independently")
     void multiFieldSnapshotDecidesEachFieldIndependently() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, Map.of("family_name", "Smith", "email", "a@example.com"));
@@ -99,7 +98,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-02 A pending date_of_birth does not hold back other fields in the same snapshot")
+    @DisplayName("TC-EHR-REC-002 A pending date_of_birth does not hold back other fields in the same snapshot")
     void pendingDateOfBirthDoesNotBlockOtherFieldsInTheSameSnapshot() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, Map.of(DOB, "1950-05-04", "family_name", "Smith"));
@@ -114,7 +113,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-03 Receiving the same newer snapshot twice changes the patient once and audits once")
+    @DisplayName("TC-EHR-REC-003 Receiving the same newer snapshot twice changes the patient once and audits once")
     void repeatedIdenticalSnapshotIsIdempotent() {
         Object p = newPatient();
         Instant t2 = T1.plus(1, ChronoUnit.DAYS);
@@ -130,7 +129,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-04 Three sources arriving out of timestamp order converge on the newest")
+    @DisplayName("TC-EHR-REC-004 Three sources arriving out of timestamp order converge on the newest")
     void threeSourcesArrivingOutOfOrderConvergeOnTheNewest() {
         Object p = newPatient();
         Instant t2 = T1.plus(2, ChronoUnit.DAYS);
@@ -153,7 +152,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-05 Reconciling one patient never changes another patient's values or baseline")
+    @DisplayName("TC-EHR-REC-005 Reconciling one patient never changes another patient's values or baseline")
     void patientsAreIsolatedFromEachOther() {
         Object alice = newPatient();
         Object bob = newPatient();
@@ -174,7 +173,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-06 A null field value is skipped the same way a blank one is")
+    @DisplayName("TC-EHR-REC-006 A null field value is skipped the same way a blank one is")
     void nullIncomingValueIsSkipped() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, "phone", "555-0100");
@@ -188,7 +187,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-07 A date_of_birth candidate with exactly the baseline timestamp is rejected, not pending")
+    @DisplayName("TC-EHR-REC-007 A date_of_birth candidate with exactly the baseline timestamp is rejected, not pending")
     void dateOfBirthTieWithBaselineIsRejectedNotPending() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
@@ -201,26 +200,26 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-08 Confirming a date_of_birth twice fails the second time")
+    @DisplayName("TC-EHR-REC-008 Confirming a date_of_birth twice fails the second time")
     void finalizingTheSameDateOfBirthTwiceThrows() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
 
-        reconciler.finalizePendingDateOfBirth(p, ORG, true);
+        reconciler.finalizePendingDateOfBirth(p, true);
 
-        assertThrows(IllegalStateException.class, () -> reconciler.finalizePendingDateOfBirth(p, ORG, true),
+        assertThrows(IllegalStateException.class, () -> reconciler.finalizePendingDateOfBirth(p, true),
                 "a double-submitted confirmation must not apply or audit anything a second time");
         assertEquals(1, audit.decisionsFor(p, DOB).size());
     }
 
     @Test
-    @DisplayName("VER-REC-09 After an accepted date_of_birth, a sync with the same value does not reopen it")
+    @DisplayName("TC-EHR-REC-009 After an accepted date_of_birth, a sync with the same value does not reopen it")
     void acceptedDateOfBirthIsNotReopenedByAnAgreeingSync() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
-        reconciler.finalizePendingDateOfBirth(p, ORG, true);
+        reconciler.finalizePendingDateOfBirth(p, true);
 
         var again = sync(p, "EPIC", T1.plus(2, ChronoUnit.DAYS), DOB, "1950-05-06");
 
@@ -229,12 +228,12 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-10 After a patient declines, a newer different candidate prompts them again")
+    @DisplayName("TC-EHR-REC-010 After a patient declines, a newer different candidate prompts them again")
     void declinedDateOfBirthCanBeReopenedByANewerCandidate() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
-        reconciler.finalizePendingDateOfBirth(p, ORG, false);
+        reconciler.finalizePendingDateOfBirth(p, false);
 
         var newer = sync(p, "EPIC", T1.plus(2, ChronoUnit.DAYS), DOB, "1950-05-06");
 
@@ -246,7 +245,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-11 Finding: values differing only in letter case are treated as a disagreement")
+    @DisplayName("TC-EHR-REC-011 Finding: values differing only in letter case are treated as a disagreement")
     void finding_caseOnlyDifferenceIsADisagreement() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, "family_name", "Smith");
@@ -260,7 +259,7 @@ class ReconciliationVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-REC-12 Finding: surrounding whitespace is kept and counts as a disagreement")
+    @DisplayName("TC-EHR-REC-012 Finding: surrounding whitespace is kept and counts as a disagreement")
     void finding_surroundingWhitespaceIsKept() {
         Object p = newPatient();
         sync(p, "ATHENAHEALTH", T1, "family_name", "Smith");
@@ -271,5 +270,67 @@ class ReconciliationVerificationTest {
         // value wins and is stored as-is.
         assertEquals(ReconciliationOutcome.Decision.ACCEPTED_NEWER, outcome.get(0).decision());
         assertEquals(Optional.of(" Smith "), value(p, "family_name"));
+    }
+
+    // ---- Testing Lead additions (Kristopher Bickmore, 2026-09-29) ----
+
+    @Test
+    @DisplayName("TC-EHR-REC-029 A snapshot with no sourceUpdatedAt is rejected before anything is written")
+    void snapshotWithoutSourceTimestampIsRejectedBeforeAnyWrite() {
+        Object p = newPatient();
+
+        // The timestamp is what every recency decision hangs on (SourceIdentitySnapshot javadoc). An
+        // undated snapshot must not fill a field and leave a provenance row with no timestamp behind.
+        assertThrows(NullPointerException.class, () -> sync(p, "EPIC", null, "family_name", "Smith"),
+                "an undated snapshot must be refused, not reconciled");
+        assertTrue(value(p, "family_name").isEmpty(), "nothing may be written from an undated snapshot");
+    }
+
+    @Test
+    @DisplayName("TC-EHR-REC-030 A snapshot missing its patient, source or field map is rejected before anything is written")
+    void snapshotMissingPatientSourceOrFieldsIsRejectedBeforeAnyWrite() {
+        assertThrows(NullPointerException.class, () -> sync(null, "EPIC", T1, "family_name", "Smith"),
+                "a snapshot for no patient must be refused");
+        assertTrue(value(null, "family_name").isEmpty(), "nothing may be written against a null patient");
+
+        Object p = newPatient();
+        assertThrows(NullPointerException.class, () -> sync(p, null, T1, "family_name", "Smith"),
+                "a snapshot from no source must be refused: provenance and audit rows need a source");
+        assertTrue(value(p, "family_name").isEmpty(), "nothing may be written from an unknown source");
+
+        assertThrows(NullPointerException.class,
+                () -> reconciler.reconcile(new SourceIdentitySnapshot(p, "EPIC", T1, null)),
+                "a snapshot with no field map must be refused");
+    }
+
+    @Test
+    @DisplayName("TC-EHR-REC-031 Accepting a date_of_birth after a supersede applies the newest candidate and advances provenance to it")
+    void acceptingAfterSupersedeAppliesTheNewestCandidate() {
+        Object p = newPatient();
+        sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
+        sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
+        sync(p, "ORACLE_HEALTH", T1.plus(3, ChronoUnit.DAYS), DOB, "1950-05-09");
+
+        ReconciliationOutcome finalized = reconciler.finalizePendingDateOfBirth(p, true);
+
+        assertEquals(ReconciliationOutcome.Decision.ACCEPTED_BY_PATIENT, finalized.decision());
+        assertEquals("1950-05-09", finalized.appliedValue(),
+                "the patient confirms the candidate open now, not the superseded Epic one");
+        assertEquals(Optional.of("1950-05-09"), value(p, DOB));
+
+        List<RecordedDecision> decisions = audit.decisionsFor(p, DOB);
+        assertEquals(2, decisions.size(), "one row for the superseded candidate, one for the accepted one");
+        assertEquals(IdentityConflictAuditWriter.Outcome.REJECTED, decisions.get(0).outcome());
+        assertEquals(IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decisions.get(0).resolvedBy());
+        assertEquals("1950-05-06", decisions.get(0).incomingValue());
+        assertEquals(IdentityConflictAuditWriter.Outcome.ACCEPTED, decisions.get(1).outcome());
+        assertEquals(IdentityConflictAuditWriter.ResolvedBy.PATIENT, decisions.get(1).resolvedBy());
+        assertEquals("1950-05-09", decisions.get(1).incomingValue());
+
+        // Provenance must now sit at the accepted candidate's timestamp (T1 + 3 days), so a candidate
+        // dated between the superseded and the accepted one is stale and does not prompt again.
+        var between = sync(p, "EPIC", T1.plus(2, ChronoUnit.DAYS), DOB, "1950-05-06");
+        assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, between.get(0).decision());
+        assertTrue(audit.currentPendingConflict(p, DOB).isEmpty());
     }
 }
