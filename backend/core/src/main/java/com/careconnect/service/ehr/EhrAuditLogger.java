@@ -20,7 +20,7 @@ public class EhrAuditLogger {
     private final EhrAuditEventRepository repo;
 
     /**
-     *  attempt metadata only. Never pass access tokens (NFR-SEC-03) or
+     * @param details attempt metadata only. Never pass access tokens (NFR-SEC-03) or
      *                retrieved clinical content.
      */
     public void log(final Long patientId,
@@ -28,7 +28,8 @@ public class EhrAuditLogger {
                     final String resourceType,
                     final EhrRetrievalOutcome outcome,
                     final Long actorUserId,
-                    final Integer recordCount) {
+                    final Integer recordCount,
+                    final Map<String, Object> details) {
         repo.save(EhrAuditEvent.builder()
                 .patientId(patientId)
                 .source(source)
@@ -36,6 +37,7 @@ public class EhrAuditLogger {
                 .outcome(outcome)
                 .actorUserId(actorUserId)
                 .recordCount(recordCount)
+                .details(details)
                 .build());
     }
 }

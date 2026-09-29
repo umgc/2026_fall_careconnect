@@ -39,7 +39,7 @@ class EhrAuditLoggerTest {
     void log_savesSuccessfulAttemptWithAllFields() {
         final Map<String, Object> details = Map.of("latencyMs", 412);
 
-        auditLogger.log(7L, "MEDICARE", "Coverage", EhrRetrievalOutcome.SUCCESS, 42L, 3);
+        auditLogger.log(7L, "MEDICARE", "Coverage", EhrRetrievalOutcome.SUCCESS, 42L, 3, details);
 
         final EhrAuditEvent saved = captureSaved();
         assertThat(saved.getPatientId()).isEqualTo(7L);
@@ -48,18 +48,20 @@ class EhrAuditLoggerTest {
         assertThat(saved.getOutcome()).isEqualTo(EhrRetrievalOutcome.SUCCESS);
         assertThat(saved.getActorUserId()).isEqualTo(42L);
         assertThat(saved.getRecordCount()).isEqualTo(3);
+        assertThat(saved.getDetails()).isEqualTo(details);
     }
 
     @Test
     @DisplayName("TC-EHR-AUD-009: log system-initiated empty attempt has no actor and zero records")
     void log_systemInitiatedEmptyAttempt_hasNoActorAndZeroRecords() {
         auditLogger.log(7L, "MEDICARE", "ExplanationOfBenefit",
-                EhrRetrievalOutcome.EMPTY, null, 0);
+                EhrRetrievalOutcome.EMPTY, null, 0, null);
 
         final EhrAuditEvent saved = captureSaved();
         assertThat(saved.getOutcome()).isEqualTo(EhrRetrievalOutcome.EMPTY);
         assertThat(saved.getActorUserId()).isNull();
         assertThat(saved.getRecordCount()).isZero();
+        assertThat(saved.getDetails()).isNull();
     }
 
     @Test
@@ -68,10 +70,11 @@ class EhrAuditLoggerTest {
         final Map<String, Object> details = Map.of("errorCode", "ERR-MCR-05");
 
         auditLogger.log(7L, "MEDICARE", "Patient",
-                EhrRetrievalOutcome.FAILURE, 42L, null);
+                EhrRetrievalOutcome.FAILURE, 42L, null, details);
 
         final EhrAuditEvent saved = captureSaved();
         assertThat(saved.getOutcome()).isEqualTo(EhrRetrievalOutcome.FAILURE);
         assertThat(saved.getRecordCount()).isNull();
+        assertThat(saved.getDetails()).isEqualTo(details);
     }
 }
