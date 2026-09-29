@@ -47,6 +47,7 @@ class EhrAuditEventRepositoryIntegrationTest {
         EhrAuditEvent saved = repository.save(attempt()
                 .actorUserId(42L)
                 .recordCount(3)
+                .details(Map.of("latencyMs", 412))
                 .build());
 
         EhrAuditEvent found = repository.findById(saved.getId()).orElseThrow();
@@ -57,6 +58,7 @@ class EhrAuditEventRepositoryIntegrationTest {
         assertThat(found.getOutcome()).isEqualTo(EhrRetrievalOutcome.SUCCESS);
         assertThat(found.getActorUserId()).isEqualTo(42L);
         assertThat(found.getRecordCount()).isEqualTo(3);
+        assertThat(found.getDetails()).containsEntry("latencyMs", 412);
     }
 
     @Test
@@ -65,6 +67,7 @@ class EhrAuditEventRepositoryIntegrationTest {
         EhrAuditEvent saved = repository.save(attempt()
                 .resourceType("Patient")
                 .outcome(EhrRetrievalOutcome.FAILURE)
+                .details(Map.of("errorCode", "ERR-MCR-05"))
                 .build());
 
         EhrAuditEvent found = repository.findById(saved.getId()).orElseThrow();
@@ -72,6 +75,7 @@ class EhrAuditEventRepositoryIntegrationTest {
         assertThat(found.getOutcome()).isEqualTo(EhrRetrievalOutcome.FAILURE);
         assertThat(found.getActorUserId()).isNull();
         assertThat(found.getRecordCount()).isNull();
+        assertThat(found.getDetails()).containsEntry("errorCode", "ERR-MCR-05");
     }
 
     @Test
@@ -91,6 +95,7 @@ class EhrAuditEventRepositoryIntegrationTest {
     void persistsAndReadsBackRetryOutcome() {
         EhrAuditEvent saved = repository.save(attempt()
                 .outcome(EhrRetrievalOutcome.RETRY)
+                .details(Map.of("attempt", 1))
                 .build());
 
         EhrAuditEvent found = repository.findById(saved.getId()).orElseThrow();
