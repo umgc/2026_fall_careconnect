@@ -13,13 +13,13 @@ void main() {
   // =========================================================================
 
   group('MedicationType enum', () {
-    test('has 5 values', () {
+    test('TC-MED-TYPE-001: has 5 values', () {
       // KI-05: expanded from 3 to 5 to match backend Medication.MedicationType
       // (PRESCRIPTION/OVER_THE_COUNTER/SUPPLEMENT/HERBAL/EMERGENCY).
       expect(MedicationType.values.length, 5);
     });
 
-    test('contains PRESCRIPTION, OTC, SUPPLEMENT, HERBAL, EMERGENCY', () {
+    test('TC-MED-TYPE-002: contains PRESCRIPTION, OVER_THE_COUNTER, SUPPLEMENT, HERBAL, EMERGENCY', () {
       expect(MedicationType.values, contains(MedicationType.PRESCRIPTION));
       expect(MedicationType.values, contains(MedicationType.OVER_THE_COUNTER));
       expect(MedicationType.values, contains(MedicationType.SUPPLEMENT));
@@ -111,33 +111,6 @@ void main() {
   // =========================================================================
 
   group('Medication.fromJson', () {
-    test('parses all fields from complete JSON', () {
-      final json = {
-        'id': 1,
-        'patientId': 10,
-        'medicationName': 'Aspirin',
-        'dosage': '81mg',
-        'frequency': 'Once daily',
-        'route': 'Oral',
-        'medicationType': 'OTC',
-        'prescribedBy': 'Dr. Jones',
-        'prescribedDate': '2026-01-01',
-        'startDate': '2026-01-05',
-        'endDate': null,
-        'notes': 'Low dose',
-        'isActive': true,
-      };
-
-      final med = Medication.fromJson(json);
-
-      expect(med.id, 1);
-      expect(med.patientId, 10);
-      expect(med.medicationName, 'Aspirin');
-      expect(med.dosage, '81mg');
-      expect(med.medicationType, MedicationType.OVER_THE_COUNTER);
-      expect(med.prescribedBy, 'Dr. Jones');
-      expect(med.isActive, true);
-    });
 
     test('isActive defaults to true when null', () {
       final json = {

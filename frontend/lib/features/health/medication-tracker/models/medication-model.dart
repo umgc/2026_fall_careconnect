@@ -2,7 +2,7 @@
 /// Mirrors backend Medication.MedicationType (Medication.java): every constant
 /// name here is the backend's wire name, so `.name` can be sent and parsed as-is.
 /// OVER_THE_COUNTER was OTC until the KI-05 follow-up; [Medication.fromJson]
-/// still reads a legacy 'OTC' value.
+/// still reads the old name defensively (the backend never stored it).
 enum MedicationType { PRESCRIPTION, OVER_THE_COUNTER, SUPPLEMENT, HERBAL, EMERGENCY }
 
 /// Medication status enum (for UI display purposes)
@@ -92,7 +92,9 @@ class Medication {
   }
 
   /// Parses the backend wire name. 'OTC' is the pre-KI-05-follow-up frontend
-  /// name, accepted so values saved before the rename still read correctly.
+  /// name. The backend rejected it, so no stored row carries it; it is
+  /// accepted defensively, and any other unknown value falls back to
+  /// PRESCRIPTION as before.
   static MedicationType _parseMedicationType(String wire) {
     if (wire == 'OTC') return MedicationType.OVER_THE_COUNTER;
     return MedicationType.values.firstWhere(

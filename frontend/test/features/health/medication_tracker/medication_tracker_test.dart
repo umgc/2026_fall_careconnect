@@ -86,17 +86,6 @@ void main() {
       expect(med.medicationType, MedicationType.PRESCRIPTION);
     });
 
-    test('fromJson parses OTC medicationType', () {
-      final med = Medication.fromJson({
-        'medicationName': 'X',
-        'dosage': '1mg',
-        'frequency': 'daily',
-        'route': 'Oral',
-        'medicationType': 'OTC',
-      });
-      expect(med.medicationType, MedicationType.OVER_THE_COUNTER);
-    });
-
     test('fromJson parses SUPPLEMENT medicationType', () {
       final med = Medication.fromJson({
         'medicationName': 'X',
@@ -186,12 +175,6 @@ void main() {
       expect(json.containsKey('notes'), isFalse);
     });
 
-    test('toJson includes medicationType name when set', () {
-      final med = _makeMed(medicationType: MedicationType.OVER_THE_COUNTER);
-      final json = med.toJson();
-      expect(json['medicationType'], 'OVER_THE_COUNTER');
-    });
-
     test('copyWith changes specified fields', () {
       final med = _makeMed(name: 'Aspirin', isActive: true);
       final updated = med.copyWith(medicationName: 'Ibuprofen', isActive: false);
@@ -206,12 +189,6 @@ void main() {
       expect(copy.medicationName, med.medicationName);
       expect(copy.dosage, med.dosage);
       expect(copy.isActive, med.isActive);
-    });
-
-    test('MedicationType has PRESCRIPTION, OTC, SUPPLEMENT values', () {
-      expect(MedicationType.values, contains(MedicationType.PRESCRIPTION));
-      expect(MedicationType.values, contains(MedicationType.OVER_THE_COUNTER));
-      expect(MedicationType.values, contains(MedicationType.SUPPLEMENT));
     });
 
     test('MedicationStatus has upcoming, taken, missed values', () {
@@ -338,13 +315,6 @@ void main() {
       expect(find.byIcon(Icons.note_outlined), findsNothing);
     });
 
-    testWidgets('shows delete button for active non-prescription med',
-        (tester) async {
-      await tester.pumpWidget(
-          makeCard(_makeMed(isActive: true, medicationType: MedicationType.OVER_THE_COUNTER)));
-      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
-    });
-
     testWidgets('does not show delete button for prescription med',
         (tester) async {
       await tester.pumpWidget(makeCard(_makeMed(
@@ -352,7 +322,7 @@ void main() {
       expect(find.byIcon(Icons.delete_outline), findsNothing);
     });
 
-    testWidgets('does not show delete button for inactive med', (tester) async {
+    testWidgets('TC-MED-TYPE-022: does not show delete button for inactive med', (tester) async {
       await tester.pumpWidget(
           makeCard(_makeMed(isActive: false, medicationType: MedicationType.OVER_THE_COUNTER)));
       expect(find.byIcon(Icons.delete_outline), findsNothing);

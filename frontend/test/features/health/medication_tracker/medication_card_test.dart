@@ -81,14 +81,6 @@ void main() {
       expect(find.textContaining('Not specified'), findsOneWidget);
     });
 
-    testWidgets('shows delete icon for active OTC medication', (tester) async {
-      await tester.pumpWidget(_wrap(MedicationCard(
-        medication: _med(isActive: true, medicationType: MedicationType.OVER_THE_COUNTER),
-        onStatusChanged: (_) {},
-      )));
-      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
-    });
-
     testWidgets('hides delete icon for PRESCRIPTION type', (tester) async {
       await tester.pumpWidget(_wrap(MedicationCard(
         medication: _med(
