@@ -3,7 +3,7 @@
 Prepared: September 27, 2026 (America/New_York).  
 Architecture owner: Technical Architect.  
 Technical Lead and QA/Test Lead: Tiffany.  
-Team Lead: Johnathan Baretto.  
+Team Lead: Jonathan Barreto.  
 Owner update: September 27, 2026 (America/New_York).  
 Status: **Task 1 planning record prepared. Final release commit and readiness remain Not verified.**
 
@@ -48,7 +48,7 @@ Owner roles come from the WBS. Names come from [roles.xlsx](</Volumes/TerenceB/S
 
 | Role | Named owner | Basis |
 | --- | --- | --- |
-| Team Lead | Johnathan Baretto | Confirmed role assignment |
+| Team Lead | Jonathan Barreto | Confirmed role assignment |
 | Technical Architect | Technical Architect | Confirmed role assignment |
 | Technical Lead and QA/Test Lead | Tiffany | Confirmed role assignment |
 | UI/UX Developer | Rashid | Confirmed name and role assignment |
@@ -88,7 +88,7 @@ Tiffany holds the Technical Lead and Test Lead roles. The Technical Architect pr
 | C3.5.3 | Update developer and operations guides for build, setup, deploy, diagnosis, and recovery. | Zack (Documentation) + Donald (AWS/DevOps) | Not verified: M3 guide walkthrough needed. |
 | C3.5.4 | Align the User Guide, Test Report, and VPAT with the working build and known limits. | Zack (Documentation) + Tiffany (QA/Test Lead) | Not verified: release-linked records needed. |
 | C3.5.5 | Refresh marketing and usage videos using the complete core flows and synthetic data. | Zack (Documentation) | Not verified: M3 cuts not checked here. |
-| C3.5.6 | Check the package, versions, evidence, contributions, signoff, and submission completeness. | Johnathan Baretto (Team Lead) | Not verified: final package check needed. |
+| C3.5.6 | Check the package, versions, evidence, contributions, signoff, and submission completeness. | Jonathan Barreto (Team Lead) | Not verified: final package check needed. |
 
 Source locators: C3.1 is table 69; C3.2 table 70; C3.3 table 71; C3.4 table 72; C3.5 table 73 in the WBS. Each table starts with a header row. The estimates in that source are not a new schedule or commitment.
 
@@ -133,12 +133,12 @@ This document supplies the scope list, intended branch, exact local input commit
 To finish the release-baseline decision:
 
 1. Confirm the current team-c-develop tip and any newer team work through a fresh repository review. Preserve the local snapshots above.
-2. Confirm the resource set, locales, deferred items, and delivery date. Johnathan leads the team review, with Tiffany covering technical and test decisions and the Technical Architect covering architecture.
+2. Confirm the resource set, locales, deferred items, and delivery date. Jonathan leads the team review, with Tiffany covering technical and test decisions and the Technical Architect covering architecture.
 3. Have the required changes reviewed and combined into the intended branch. That is a separate code/integration task.
 4. Record the exact combined commit, build ID, schema version, and test configuration. Use that same baseline in the TDD and test plan.
 5. Freeze that candidate for tests. If code changes, record the new commit and rerun affected checks.
 
-M3 is ready for release assessment only when C3.4.5 is supported: the cumulative suite passes or exceptions are approved, and no Severity 1 defects remain open. Final package signoff stays with Johnathan Baretto as Team Lead. Tiffany holds the separate Technical Lead and QA/Test Lead roles.
+M3 is ready for release assessment only when C3.4.5 is supported: the cumulative suite passes or exceptions are approved, and no Severity 1 defects remain open. Final package signoff stays with Jonathan Barreto as Team Lead. Tiffany holds the separate Technical Lead and QA/Test Lead roles.
 
 ## 7. Guides and checks for this record
 
