@@ -4,17 +4,22 @@ import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 
 import com.careconnect.dto.MedicationDTO;
+import com.careconnect.dto.MedicationPhotoExtractionResponse;
+import com.careconnect.service.MedicationPhotoExtractionService;
 import com.careconnect.service.MedicationService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.util.SecurityUtil;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +30,9 @@ public class MedicationController {
 
     @Autowired
     private MedicationService medicationService;
+
+    @Autowired
+    private MedicationPhotoExtractionService medicationPhotoExtractionService;
 
     @Autowired
     private SecurityUtil securityUtil;
@@ -79,6 +87,28 @@ public class MedicationController {
         authorizationService.requirePatientAccess(currentUser, patientId);
         MedicationDTO createdMedication = medicationService.addMedication(patientId, newMedication);
         return ResponseEntity.ok(createdMedication);
+    }
+
+    // ================================================================
+    // 2.1 Extract draft medication fields from a label photo (F-01).
+    //     The image is processed in memory only and never stored.
+    // ================================================================
+    @RequirePermission(Permission.CREATE_TASKS)
+
+    @PostMapping(value = "/{patientId}/medications/extract-photo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> extractMedicationPhoto(
+            @PathVariable Long patientId,
+            @RequestParam("image") MultipartFile image) throws UnauthorizedException, IOException {
+
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requirePatientAccess(currentUser, patientId);
+        if (image == null || image.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Please provide a photo of the medication label."
+            ));
+        }
+        MedicationPhotoExtractionResponse extraction = medicationPhotoExtractionService.extract(image.getBytes());
+        return ResponseEntity.ok(extraction);
     }
 
     // ================================================================
