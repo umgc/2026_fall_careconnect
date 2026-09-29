@@ -90,7 +90,7 @@ public class JpaIdentityFieldProvenanceStore implements IdentityFieldProvenanceS
     @Override
     public Optional<FieldProvenance> lockOrCreate(Object patientId, String fieldName) {
         requireTransaction("lockOrCreate");
-        Long resolvedPatientId = asLong(patientId, "patientId");
+        Long resolvedPatientId = JpaIds.asLong(patientId, "patientId");
         String resolvedFieldName = requireFieldName(fieldName);
 
         Optional<EhrIdentityFieldProvenance> locked =
@@ -117,9 +117,9 @@ public class JpaIdentityFieldProvenanceStore implements IdentityFieldProvenanceS
     public void recordAsFreshest(
             Object patientId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
         requireTransaction("recordAsFreshest");
-        Long resolvedPatientId = asLong(patientId, "patientId");
+        Long resolvedPatientId = JpaIds.asLong(patientId, "patientId");
         String resolvedFieldName = requireFieldName(fieldName);
-        Long resolvedSourceId = asLong(sourceId, "sourceId");
+        Long resolvedSourceId = JpaIds.asLong(sourceId, "sourceId");
         Objects.requireNonNull(sourceUpdatedAt, "sourceUpdatedAt");
 
         // Re-taking the lock is re-entrant within this transaction — PostgreSQL row locks are held
@@ -171,30 +171,6 @@ public class JpaIdentityFieldProvenanceStore implements IdentityFieldProvenanceS
                             + "without one the row lock is released before it can protect anything. "
                             + "Call it through TransactionRunner, as RecencyWinsIdentityReconciler does.");
         }
-    }
-
-    /**
-     * The library's interfaces type ids as {@code Object} so adapters are not forced onto this
-     * codebase's {@code Long} keys. This is the one place that assumption gets checked.
-     */
-    private static Long asLong(Object id, String name) {
-        Objects.requireNonNull(id, name);
-        if (id instanceof Long value) {
-            return value;
-        }
-        if (id instanceof Number value) {
-            return value.longValue();
-        }
-        if (id instanceof CharSequence value) {
-            try {
-                return Long.valueOf(value.toString().trim());
-            } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(
-                        name + " must be a numeric id for the JPA store, got: " + value, e);
-            }
-        }
-        throw new IllegalArgumentException(
-                name + " must be a numeric id for the JPA store, got " + id.getClass().getName());
     }
 
     private static String requireFieldName(String fieldName) {

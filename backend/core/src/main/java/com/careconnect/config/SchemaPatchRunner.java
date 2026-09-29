@@ -474,6 +474,48 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 foreignKeyIfMissing("fk_ehr_identity_field_provenance_source", "ehr_identity_field_provenance",
                         "source_id", "ehr_source", "id", "")
         );
+        applyPatientAuditTimestampBackfill();
+    }
+
+    /**
+     * Gives every pre-existing {@code patient} row the timestamps {@code Patient} gained when it
+     * started extending {@code Auditable} on 2026-09-29. New rows get theirs from {@code @PrePersist};
+     * rows written before the column existed have NULL, and NULL is not a usable baseline.
+     *
+     * <h3>What backfilling now() decides</h3>
+     * {@code updated_at} is the reconciliation algorithm's baseline of last resort: for a field with
+     * no provenance row yet, an incoming EHR value must be <em>newer</em> than it to be applied
+     * (Assumption A1). Backfilling the migration timestamp therefore says: <b>an EHR record's history
+     * does not retroactively overwrite what is already on file, but any EHR update made after this
+     * migration does.</b> Decided 2026-09-29 by the tech leads, consistent with the recency rule the
+     * rest of the algorithm runs on.
+     *
+     * <p>Two things keep that from being as restrictive as it first sounds. A field that is
+     * <em>empty</em> on {@code patient} is filled directly with no timestamp comparison at all, so a
+     * first sync still populates everything blank. And the baseline is only ever consulted until a
+     * source establishes provenance for that field, after which the comparison is against real
+     * source timestamps rather than this one.
+     *
+     * <p>The alternative considered and rejected was backfilling an early sentinel date, which would
+     * have let historical EHR values silently overwrite values patients entered at signup.
+     *
+     * <p>Required rather than best-effort: a NULL baseline does not fail, it produces a comparison
+     * with nothing to compare against, which changes who wins a reconciliation silently. That is
+     * exactly the class of absence that has to stop the boot instead of being logged.
+     *
+     * <p>Idempotent by predicate rather than by ledger: {@code WHERE updated_at IS NULL} means a
+     * later row that somehow arrives without timestamps is also repaired, at its own now(), rather
+     * than being left as a permanent null baseline.
+     */
+    private void applyPatientAuditTimestampBackfill() {
+        applyRequiredPatch(
+                "V2609291230a - backfill patient.created_at for rows predating Auditable",
+                "UPDATE patient SET created_at = now() WHERE created_at IS NULL"
+        );
+        applyRequiredPatch(
+                "V2609291230b - backfill patient.updated_at for rows predating Auditable",
+                "UPDATE patient SET updated_at = now() WHERE updated_at IS NULL"
+        );
     }
 
     /**
