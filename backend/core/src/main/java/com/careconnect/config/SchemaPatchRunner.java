@@ -396,12 +396,12 @@ public class SchemaPatchRunner implements CommandLineRunner {
             return;
         }
 
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200a - unique ehr_source_identity(patient_id, source_id)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_source_identity_patient_source "
                         + "ON ehr_source_identity (patient_id, source_id)"
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200b - unique ehr_identity_field_provenance(patient_id, field_name)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_identity_field_provenance_patient_field "
                         + "ON ehr_identity_field_provenance (patient_id, field_name)"
@@ -409,18 +409,18 @@ public class SchemaPatchRunner implements CommandLineRunner {
 
         // At most one open conflict per field. Partial, so resolved rows accumulate freely --
         // the audit trail is the point of the table.
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200c - one open conflict per (patient, field)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_identity_conflict_open "
                         + "ON ehr_identity_conflict (patient_id, field_name) WHERE status = 'PENDING'"
         );
 
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200d - ehr_identity_conflict.status vocabulary",
                 checkIfMissing("ck_ehr_identity_conflict_status", "ehr_identity_conflict",
                         "status IN ('PENDING', 'ACCEPTED', 'REJECTED')")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200e - ehr_identity_conflict.resolved_by vocabulary (no STAFF)",
                 checkIfMissing("ck_ehr_identity_conflict_resolver", "ehr_identity_conflict",
                         "resolved_by IS NULL OR resolved_by IN ('SYSTEM', 'PATIENT')")
@@ -430,46 +430,46 @@ public class SchemaPatchRunner implements CommandLineRunner {
         // except date_of_birth resolves in the same transaction that detects it, so a PENDING
         // row for anything else would silently reintroduce the risk the 2026-09-26 reversal
         // accepted only for non-DOB fields.
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200f - PENDING is reachable only for date_of_birth",
                 checkIfMissing("ck_ehr_identity_conflict_pending_dob", "ehr_identity_conflict",
                         "status <> 'PENDING' OR field_name = 'date_of_birth'")
         );
 
         // Open means unresolved, closed means resolved -- no half-states.
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200g - resolution fields agree with status",
                 checkIfMissing("ck_ehr_identity_conflict_resolution", "ehr_identity_conflict",
                         "(status = 'PENDING' AND resolved_at IS NULL AND resolved_by IS NULL) "
                                 + "OR (status <> 'PENDING' AND resolved_at IS NOT NULL AND resolved_by IS NOT NULL)")
         );
 
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200h - FK ehr_source_identity.patient_id -> patient.id",
                 foreignKeyIfMissing("fk_ehr_source_identity_patient", "ehr_source_identity",
                         "patient_id", "patient", "id", " ON DELETE CASCADE")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200i - FK ehr_source_identity.source_id -> ehr_source.id",
                 foreignKeyIfMissing("fk_ehr_source_identity_source", "ehr_source_identity",
                         "source_id", "ehr_source", "id", "")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200j - FK ehr_identity_conflict.patient_id -> patient.id",
                 foreignKeyIfMissing("fk_ehr_identity_conflict_patient", "ehr_identity_conflict",
                         "patient_id", "patient", "id", " ON DELETE CASCADE")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200k - FK ehr_identity_conflict.source_id -> ehr_source.id",
                 foreignKeyIfMissing("fk_ehr_identity_conflict_source", "ehr_identity_conflict",
                         "source_id", "ehr_source", "id", "")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200l - FK ehr_identity_field_provenance.patient_id -> patient.id",
                 foreignKeyIfMissing("fk_ehr_identity_field_provenance_patient", "ehr_identity_field_provenance",
                         "patient_id", "patient", "id", " ON DELETE CASCADE")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609291200m - FK ehr_identity_field_provenance.source_id -> ehr_source.id",
                 foreignKeyIfMissing("fk_ehr_identity_field_provenance_source", "ehr_identity_field_provenance",
                         "source_id", "ehr_source", "id", "")
@@ -525,12 +525,12 @@ public class SchemaPatchRunner implements CommandLineRunner {
             return;
         }
 
-        applyPatch(
+        applyRequiredPatch(
                 "V2609261500b - unique ehr_patient_crosswalk(source_id, external_patient_id)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_crosswalk_source_external "
                         + "ON ehr_patient_crosswalk (source_id, external_patient_id)"
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609261500c - unique ehr_patient_crosswalk(patient_id, source_id)",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_crosswalk_patient_source "
                         + "ON ehr_patient_crosswalk (patient_id, source_id)"
@@ -551,22 +551,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         + "ON ehr_raw_payload (retrieved_at)"
         );
 
-        applyPatch(
+        applyRequiredPatch(
                 "V2609261500g - FK ehr_patient_crosswalk.patient_id -> patient.id",
                 foreignKeyIfMissing("fk_ehr_crosswalk_patient", "ehr_patient_crosswalk",
                         "patient_id", "patient", "id", " ON DELETE CASCADE")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609261500h - FK ehr_patient_crosswalk.source_id -> ehr_source.id",
                 foreignKeyIfMissing("fk_ehr_crosswalk_source", "ehr_patient_crosswalk",
                         "source_id", "ehr_source", "id", "")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609261500i - FK ehr_raw_payload.patient_id -> patient.id",
                 foreignKeyIfMissing("fk_ehr_raw_payload_patient", "ehr_raw_payload",
                         "patient_id", "patient", "id", " ON DELETE CASCADE")
         );
-        applyPatch(
+        applyRequiredPatch(
                 "V2609261500j - FK ehr_raw_payload.source_id -> ehr_source.id",
                 foreignKeyIfMissing("fk_ehr_raw_payload_source", "ehr_raw_payload",
                         "source_id", "ehr_source", "id", "")
