@@ -60,7 +60,16 @@ public class SecurityConfig {
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(TimeUnit.DAYS.toSeconds(365)))
                 )
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // STATELESS is correct for the JWT API, but it is incompatible with
+                // oauth2Login: Blue Button sign-in completes, Spring tries to store the
+                // authenticated principal in the session, STATELESS discards it, and the
+                // redirect to /results then arrives anonymous and 401s. IF_REQUIRED creates
+                // a session only when something actually needs one, so JWT requests still
+                // carry no session while the OAuth redirect survives.
+                // Durable fix: have the oauth2Login successHandler persist the Blue Button
+                // token and issue this application's own JWT, so the OAuth path stops
+                // depending on a session at all.
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .httpBasic(basic -> basic.authenticationEntryPoint(
                         (req, res, e) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Basic Authentication Required")))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -121,6 +130,9 @@ public class SecurityConfig {
 
                         /* ---------- Public static assets ---------------------- */
                         .requestMatchers("/", "/index.html", "/favicon.ico", "/static/**").permitAll()
+                        // OAuth2 failure lands on /login?error; without this it 401s and the
+                        // browser shows a blank page instead of the reason.
+                        .requestMatchers("/login").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         /* ---------- Admin-only endpoints ---------------------- */
