@@ -186,10 +186,10 @@ void main() {
       expect(json.containsKey('notes'), isFalse);
     });
 
-    test('toJson includes medicationType name when set', () {
+    test('toJson includes medicationType wire name when set (OTC is sent as OVER_THE_COUNTER, KI-05)', () {
       final med = _makeMed(medicationType: MedicationType.OTC);
       final json = med.toJson();
-      expect(json['medicationType'], 'OTC');
+      expect(json['medicationType'], 'OVER_THE_COUNTER');
     });
 
     test('copyWith changes specified fields', () {

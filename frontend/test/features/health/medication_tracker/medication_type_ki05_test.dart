@@ -55,16 +55,15 @@ void main() {
     final backendPresent = File(_backendEnumPath).existsSync();
 
     test(
-        'TC-MED-TYPE-007: every frontend MedicationType except OTC is a '
-        'backend Medication.MedicationType constant, and the only backend '
-        'constant with no frontend twin is OVER_THE_COUNTER', () {
+        'TC-MED-TYPE-007: every frontend MedicationType wire name is a '
+        'backend Medication.MedicationType constant and the two sets are '
+        'equal (OTC is sent as OVER_THE_COUNTER)', () {
       final backend = _backendConstants();
-      final frontend = MedicationType.values.map((e) => e.name).toSet();
-      // OTC vs OVER_THE_COUNTER is the known, out-of-scope mismatch. When
-      // the follow-up fix lands, both sets below become empty and this case
-      // must be updated in the same PR.
-      expect(frontend.difference(backend), {'OTC'});
-      expect(backend.difference(frontend), {'OVER_THE_COUNTER'});
+      final frontendWire = MedicationType.values.map((e) => e.wireName).toSet();
+      // Updated for the OTC fix (option A): the Dart constant is still OTC, but
+      // its wire name matches the backend, so the sets are now identical.
+      expect(frontendWire.difference(backend), isEmpty);
+      expect(backend.difference(frontendWire), isEmpty);
     }, skip: backendPresent ? false : 'backend tree not present');
   });
 

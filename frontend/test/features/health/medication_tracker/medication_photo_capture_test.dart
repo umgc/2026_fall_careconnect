@@ -22,6 +22,7 @@ import 'package:care_connect_app/features/health/medication-tracker/data/medicat
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
 import 'package:care_connect_app/features/health/medication-tracker/models/medication_photo_extraction.dart';
 import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
+import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-card.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
@@ -636,6 +637,53 @@ void main() {
     });
   });
 
+  // ── OTC wire mapping (KI-05 option A, commit 2a96dc51) ───────────────────
+  group('OTC wire mapping', () {
+    test('TC-MED-PHOTO-072: wireName is OVER_THE_COUNTER for OTC and the constant name for every other type', () {
+      expect(MedicationType.OTC.wireName, 'OVER_THE_COUNTER');
+      for (final t in MedicationType.values.where((t) => t != MedicationType.OTC)) {
+        expect(t.wireName, t.name);
+      }
+      expect(MedicationType.values.map((t) => t.wireName).toSet(),
+          {'PRESCRIPTION', 'OVER_THE_COUNTER', 'SUPPLEMENT', 'HERBAL', 'EMERGENCY'});
+    });
+
+    Map<String, dynamic> wire(String type) => {
+          'id': 3, 'medicationName': 'Ibuprofen', 'dosage': '200 mg',
+          'frequency': 'As needed', 'route': 'Oral', 'medicationType': type,
+          'isActive': true,
+        };
+
+    test('TC-MED-PHOTO-073: fromJson accepts OVER_THE_COUNTER and legacy OTC as OTC; toJson round-trips to OVER_THE_COUNTER; unknown still falls back to PRESCRIPTION', () {
+      expect(Medication.fromJson(wire('OVER_THE_COUNTER')).medicationType, MedicationType.OTC);
+      expect(Medication.fromJson(wire('OTC')).medicationType, MedicationType.OTC);
+      expect(Medication.fromJson(wire('OVER_THE_COUNTER')).toJson()['medicationType'], 'OVER_THE_COUNTER');
+      expect(Medication.fromJson(wire('BOGUS')).medicationType, MedicationType.PRESCRIPTION);
+    });
+
+    testWidgets('TC-MED-PHOTO-074: a stored OVER_THE_COUNTER medication parses to OTC and shows the Remove button', (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: MedicationCard(
+              medication: Medication.fromJson(wire('OVER_THE_COUNTER')),
+              onStatusChanged: (_) {},
+            ),
+          ),
+        ),
+      ));
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
+
+    test('TC-MED-PHOTO-075: medicationTypeFromExtracted maps OVER_THE_COUNTER and OTC to OTC and leaves blank or unknown null (Table 25 row 3)', () {
+      expect(medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
+      expect(medicationTypeFromExtracted('OTC'), MedicationType.OTC);
+      expect(medicationTypeFromExtracted('BOGUS'), isNull);
+      expect(medicationTypeFromExtracted(''), isNull);
+      expect(medicationTypeFromExtracted(null), isNull);
+    });
+  });
+
   // ── Read aloud ───────────────────────────────────────────────────────────
   group('read aloud', () {
     testWidgets('TC-MED-PHOTO-058: Read Aloud speaks the CURRENT form values (after an edit)', (tester) async {
@@ -753,7 +801,7 @@ void main() {
       expect(find.text('Add New Medication'), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-063: save posts edited values via the existing create endpoint, with no image or tracking data', (tester) async {
+    testWidgets('TC-MED-PHOTO-063: save posts edited values via the existing create endpoint, an OTC scan is sent as OVER_THE_COUNTER, and no image or tracking data', (tester) async {
       Map<String, dynamic>? body;
       String? path;
       ApiService.debugSetHttpClient(MockClient((r) async {
@@ -789,7 +837,8 @@ void main() {
       expect(body!['medicationName'], 'Lisinopril');
       expect(body!['dosage'], '20 mg');
       expect(body!['frequency'], 'Once daily');
-      expect(body!['medicationType'], 'OTC');
+      expect(body!['medicationType'], 'OVER_THE_COUNTER',
+          reason: 'KI-05 fix: scanned OTC label is saved with the backend constant name');
       final all = jsonEncode(body);
       expect(all, isNot(contains('machineGenerated')));
       expect(all, isNot(contains('editedByUser')));
