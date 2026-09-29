@@ -1,4 +1,4 @@
-// F-01 Medication Photo Capture, frontend (TC-MED-PHOTO-033..).
+// F-01 Medication Photo Capture, frontend (TC-MED-PHOTO-033..071).
 //
 // Covers the extraction model, the extract-photo API call, the read-aloud
 // wrapper and the AddMedicationModal review flow (prefill, machine-generated
@@ -579,6 +579,60 @@ void main() {
       // filename is asserted in TC-MED-PHOTO-037.
       expect(gotName, isNotNull);
       expect(gotId, 5);
+    });
+  });
+
+  // ── Rescan regression (found by review, fixed in c7114c8e) ───────────────
+  group('rescan after a successful scan', () {
+    testWidgets('TC-MED-PHOTO-070: failed rescan keeps prior values, flags, banner, read-aloud and title', (tester) async {
+      var call = 0;
+      final h = _Harness(extractor: (_, __, ___) async {
+        call++;
+        return call == 1
+            ? _prefilled()
+            : MedicationPhotoExtractionResult.manualFallback(message: 'Failed again.');
+      });
+      await _pump(tester, h);
+      await _scan(tester);
+      // The user edits one field between scans, so both flag kinds are live.
+      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.pumpAndSettle();
+
+      await _scan(tester);
+
+      expect(call, 2);
+      expect(find.text('Failed again.'), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-fallback-message')), findsOneWidget);
+      expect(_fieldText(tester, 'medication-name-field'), 'Lisinopril');
+      expect(_fieldText(tester, 'medication-dosage-field'), '20 mg');
+      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-edited-note-dosage')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-read-aloud-button')), findsOneWidget);
+      expect(find.text('Review Medication'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == 'DisclaimerBanner'), findsOneWidget);
+    });
+
+    testWidgets('TC-MED-PHOTO-071: a later successful rescan clears the failure message and replaces the flags', (tester) async {
+      var call = 0;
+      final h = _Harness(extractor: (_, __, ___) async {
+        call++;
+        if (call == 2) {
+          return MedicationPhotoExtractionResult.manualFallback(message: 'Failed again.');
+        }
+        return _prefilled(name: call == 1 ? 'Lisinopril' : 'Metformin');
+      });
+      await _pump(tester, h);
+      await _scan(tester);
+      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.pumpAndSettle();
+      await _scan(tester); // fails
+      await _scan(tester); // succeeds
+
+      expect(find.text('Failed again.'), findsNothing);
+      expect(find.byKey(const Key('medication-photo-fallback-message')), findsNothing);
+      expect(_fieldText(tester, 'medication-name-field'), 'Metformin');
+      expect(find.byKey(const Key('medication-photo-ai-note-dosage')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-edited-note-dosage')), findsNothing);
     });
   });
 
