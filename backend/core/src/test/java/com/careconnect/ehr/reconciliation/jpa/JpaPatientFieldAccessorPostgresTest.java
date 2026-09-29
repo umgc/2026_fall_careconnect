@@ -234,24 +234,24 @@ class JpaPatientFieldAccessorPostgresTest {
      * Records a consequence of Assumption A1 rather than endorsing it.
      * <p>
      * A1 says that a field with no provenance row falls back to {@code patient.updated_at} as its
-     * baseline. But {@code updated_at} is per <em>row</em>, not per field, and applying any field
-     * advances it. So within a single snapshot — all of whose fields share one
-     * {@code source_updated_at} — the first disagreeing field to be applied raises the baseline above
-     * that shared timestamp, and every later field still lacking provenance loses to a bar that the
-     * snapshot itself just raised.
+     * baseline. But {@code updated_at} is a property of the row, not of the field, and applying any
+     * field advances it. Read per field, that meant the first disagreeing field in a snapshot raised
+     * the baseline above the snapshot's own shared {@code source_updated_at}, and every later field
+     * still lacking provenance lost to a bar the snapshot itself had just raised -- indefinitely,
+     * since each sync left {@code updated_at} newer still.
      * <p>
-     * This is not reachable before 2026-09-29: {@code patient} had no {@code updated_at} at all, so
-     * A1 had nothing to read and the question never arose. It surfaces now, and it is a library-level
-     * decision, not something this accessor can fix on its own. The two candidate fixes are to
-     * capture the baseline once per snapshot rather than per field, or to record provenance even for
-     * rejected fields so the fallback is consulted at most once per field ever.
+     * Unreachable before 2026-09-29, when {@code patient} gained the column that made A1 readable at
+     * all. Fixed the same day by hoisting the fallback read to once per snapshot; this test is the
+     * scenario that drove the fix and the guard against it regressing.
      * <p>
-     * The test asserts the behaviour that exists so that whichever fix is chosen has to come here and
-     * change it deliberately.
+     * Both fields here disagree, neither has provenance, and both share one incoming timestamp that
+     * beats the baseline. Both must therefore land. If this test ever reports one
+     * {@code ACCEPTED_NEWER} and one {@code REJECTED_STALE} again, the fallback has gone back to
+     * being read per field.
      */
     @Test
-    @DisplayName("TC-EHR-PACC-006: applying one field raises the A1 baseline for the rest of the same snapshot")
-    void applyingOneFieldRaisesTheBaselineForEveryFieldWithoutProvenance() {
+    @DisplayName("TC-EHR-PACC-006: every field of one snapshot is judged against the same A1 baseline")
+    void everyFieldOfOneSnapshotIsJudgedAgainstTheSameBaseline() {
         Instant backfilled = Instant.now().minus(30, ChronoUnit.DAYS);
         seedUpdatedAt(backfilled);
 
@@ -280,20 +280,19 @@ class JpaPatientFieldAccessorPostgresTest {
                 new SourceIdentitySnapshot(patientId, sourceId, sourceUpdatedAt, fields));
 
         assertThat(outcomes).hasSize(2);
-        assertThat(outcomes.get(0).decision())
-                .as("the first field beats the backfilled baseline and lands")
-                .isEqualTo(ReconciliationOutcome.Decision.ACCEPTED_NEWER);
-        assertThat(outcomes.get(1).decision())
-                .as("the second field has no provenance either, so it falls back to patient.updated_at "
-                        + "-- which the first field's write has just advanced past the snapshot's own "
-                        + "timestamp. Change this assertion only alongside a decided fix to A1.")
-                .isEqualTo(ReconciliationOutcome.Decision.REJECTED_STALE);
+        assertThat(outcomes)
+                .as("both fields beat the one baseline captured before the snapshot began; applying "
+                        + "the first must not raise the bar for the second")
+                .extracting(ReconciliationOutcome::decision)
+                .containsExactly(
+                        ReconciliationOutcome.Decision.ACCEPTED_NEWER,
+                        ReconciliationOutcome.Decision.ACCEPTED_NEWER);
 
-        assertThat(currentValue("given_name"))
-                .contains("Gamma");
+        assertThat(currentValue("given_name")).contains("Gamma");
         assertThat(currentValue("family_name"))
-                .as("the rejected field keeps its original value")
-                .contains("Beta");
+                .as("the second field must land too -- this is the one that was lost when the "
+                        + "fallback baseline was re-read per field")
+                .contains("Delta");
     }
 
     /**

@@ -34,8 +34,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *       {@code date_of_birth} included. Provenance is still refreshed if this source is now the
  *       freshest known one for the field.</li>
  *   <li><b>Otherwise</b> (a real disagreement): compare {@code snapshot.sourceUpdatedAt()} against the
- *       locked provenance's timestamp — or, if no provenance row existed yet, against
- *       {@code patient.updated_at} as the baseline (Assumption A1, see README.md; this is a product
+ *       locked provenance's timestamp — or, if no provenance row existed yet, against the snapshot's
+ *       single {@code patient.updated_at} baseline (Assumption A1, see README.md; this is a product
  *       decision recorded as an assumption, not a settled requirement, and should be confirmed).
  *       <ul>
  *         <li><i>Every field except {@code date_of_birth}:</i>
@@ -66,6 +66,29 @@ import java.util.concurrent.atomic.AtomicReference;
  * A blank/null incoming value for a field is never considered — that field is skipped entirely for
  * this snapshot, on the reasoning that "this adapter has no value for this field" should never be
  * treated as "this adapter asserts this field should be blank."
+ *
+ * <h2>One baseline per snapshot (fixed 2026-09-29)</h2>
+ * The Assumption A1 fallback — {@code patient.updated_at}, used when a field has no provenance row —
+ * is read <b>once per snapshot</b>, before any field is processed, and that one value serves every
+ * field.
+ *
+ * <p>It has to be, because {@code updated_at} is a property of the row, not of the field, and
+ * applying <i>any</i> field advances it. Reading it per field meant that within a single snapshot —
+ * every field of which shares one {@code source_updated_at} — the first disagreeing field to be
+ * applied raised the baseline above the snapshot's own timestamp, and every later field still
+ * lacking provenance then lost to a bar the snapshot itself had just raised. Two fields that both
+ * legitimately beat the baseline would see only the first one land, and on the next sync the loser
+ * faced an even newer {@code updated_at}: a field could be locked out indefinitely, silently, with
+ * a {@code REJECTED_STALE} audit row that looked entirely reasonable on its own.
+ *
+ * <p>This was unreachable before 2026-09-29 — {@code patient} carried no {@code updated_at} at all,
+ * so A1 had nothing to read — and surfaced the moment the column existed. See
+ * {@code JpaPatientFieldAccessorPostgresTest} TC-EHR-PACC-006, which drives this exact scenario.
+ *
+ * <p>Note what is <i>not</i> hoisted: a field that <b>does</b> have a provenance row still compares
+ * against that row's timestamp, read fresh inside the field's own transaction while its lock is
+ * held. That read must stay per field — it is how a concurrent adapter's just-committed write is
+ * observed, and hoisting it would undo the concurrency guarantee the lock exists to provide.
  */
 public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
@@ -90,6 +113,18 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
     @Override
     public List<ReconciliationOutcome> reconcile(SourceIdentitySnapshot snapshot) {
+        // Read the Assumption A1 fallback baseline ONCE, before any field is processed, and use that
+        // one value for every field in this snapshot (fixed 2026-09-29; see the class javadoc's
+        // "One baseline per snapshot" section for what reading it per field did instead).
+        //
+        // Eagerly, not lazily-memoized, even though a snapshot whose fields all have provenance will
+        // never consult it. The fill-empty path applies a value without ever computing a baseline, so
+        // a lazy read could be triggered for the first time by a *later* field, after an earlier
+        // field had already advanced patient.updated_at -- reintroducing exactly the bug this fixes,
+        // in a form that only shows up when the first field happens to be empty. One extra read per
+        // snapshot is worth not having that edge.
+        Instant fallbackBaseline = patientAccessor.getPatientUpdatedAt(snapshot.patientId());
+
         List<ReconciliationOutcome> outcomes = new ArrayList<>();
         for (var entry : snapshot.fields().entrySet()) {
             String fieldName = entry.getKey();
@@ -98,8 +133,8 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
                 continue; // never treat "no value supplied" as "value should be blank"
             }
             AtomicReference<ReconciliationOutcome> outcomeRef = new AtomicReference<>();
-            transactionRunner.runInTransaction(() ->
-                    outcomeRef.set(reconcileOneFieldLocked(snapshot, fieldName, incomingValue)));
+            transactionRunner.runInTransaction(() -> outcomeRef.set(
+                    reconcileOneFieldLocked(snapshot, fieldName, incomingValue, fallbackBaseline)));
             outcomes.add(outcomeRef.get());
         }
         return outcomes;
@@ -115,11 +150,17 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
     /**
      * Runs entirely inside the caller's transaction, with the provenance row already locked by the
-     * time this returns from {@code lockOrCreate}. Package-private (not private) so the contract
-     * test suite can exercise it directly under simulated concurrency without going through the
-     * public per-snapshot API.
+     * time this returns from {@code lockOrCreate}. Package-private (not private) so a test can
+     * exercise one field directly under simulated concurrency without going through the public
+     * per-snapshot API.
+     *
+     * @param fallbackBaseline the Assumption A1 baseline, captured once for the whole snapshot by
+     *                         {@link #reconcile}. Used only when this field has no provenance row;
+     *                         a field that has one compares against that instead, read fresh under
+     *                         the lock so a concurrent adapter's write is always seen.
      */
-    ReconciliationOutcome reconcileOneFieldLocked(SourceIdentitySnapshot snapshot, String fieldName, String incomingValue) {
+    ReconciliationOutcome reconcileOneFieldLocked(
+            SourceIdentitySnapshot snapshot, String fieldName, String incomingValue, Instant fallbackBaseline) {
         Object patientId = snapshot.patientId();
         Object sourceId = snapshot.sourceId();
         Instant incomingTimestamp = snapshot.sourceUpdatedAt();
@@ -145,7 +186,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
         // Real disagreement: baseline is the locked provenance's timestamp if one exists; otherwise
         // patient.updated_at (Assumption A1 -- see README.md).
         Instant baseline = provenance.map(FieldProvenance::sourceUpdatedAt)
-                .orElseGet(() -> patientAccessor.getPatientUpdatedAt(patientId));
+                .orElse(fallbackBaseline);
 
         boolean incomingIsNewerThanConfirmedBaseline = incomingTimestamp.isAfter(baseline); // ties go to the existing value (Assumption A2)
         Instant decidedAt = Instant.now();
