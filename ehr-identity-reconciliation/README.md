@@ -14,7 +14,7 @@ to four times instead of once. This package exists so it's implemented *correctl
 ## What you're integrating
 
 Each of your adapters, after upserting its own row into `ehr_source_identity`, builds a
-`SourceIdentitySnapshot` (patient id, org id, source id, the FHIR resource's `meta.lastUpdated`, and a
+`SourceIdentitySnapshot` (patient id, source id, the FHIR resource's `meta.lastUpdated`, and a
 map of field name → mapped value) and calls `IdentityReconciler.reconcile(snapshot)`. For every field
 except `date_of_birth`, that's the entire integration surface — everything about *which value wins* is
 decided inside the library, identically, regardless of which of you calls it. For `date_of_birth`
@@ -54,7 +54,7 @@ behavior above, unchanged.
   `PENDING` (via `IdentityConflictAuditWriter.openPendingConflict`) and `patient.date_of_birth` is left
   untouched. `resolved_at`/`resolved_by` stay `NULL` while `PENDING` — the same invariant
   `ck_ehr_identity_conflict_resolution` enforces at the schema layer for this one field.
-- The patient resolves it via `IdentityReconciler.finalizePendingDateOfBirth(patientId, orgId,
+- The patient resolves it via `IdentityReconciler.finalizePendingDateOfBirth(patientId,
   acceptIncoming)` — the second integration surface for this field. `resolved_by` is always
   `PATIENT` once they choose. **There is no staff/admin resolution path** — confirmed in the Decisions
   log: patient self-service only.
@@ -163,8 +163,10 @@ repository, so a separately-versioned artifact was buying nothing.
 
 ## Files still in this directory
 
-- `ehr_identity_field_provenance.sql` — DDL for the one new table this library needs, with the
-  org-scoping column still marked TODO pending confirmation of the real column name/type on
-  `patient`/`users` (see the implementation plan's Decisions log).
+- `ehr_identity_field_provenance.sql` — DDL for the one new table this library needs. It carries
+  no organization-scoping column: `org_id`/`organization_id`/`tenant_id` appear nowhere in this
+  codebase, so an earlier TODO to "match patient's real tenant column" had nothing to match and
+  nothing that could have populated a NOT NULL column. See the plan's 2026-09-26 org-scoping
+  reversal; `orgId` left this library's interfaces for the same reason.
 - `manual-verify/` — sandbox-only verification harness (no JUnit/Maven Central access here); not part
   of what you integrate, kept only so the "verified, not just written" claim above is checkable.

@@ -4,16 +4,17 @@
 -- concurrency guarantee depends on (IdentityFieldProvenanceStore.lockOrCreate takes SELECT ... FOR
 -- UPDATE against this table's row).
 --
--- TODO before this ships: replace `org_id BIGINT` below with whatever the ACTUAL organization-scoping
--- column on `patient`/`users` is really named and typed (see the Decisions log in
--- EHR_Canonical_Schema_Validation_and_Implementation_Plan.md, Phase 0 item 1 -- still not confirmed in
--- this environment). Do not ship this literally as `org_id BIGINT` without checking.
+-- Carries no organization-scoping column. An earlier draft had `org_id BIGINT NOT NULL` with a TODO to
+-- match whatever `patient`/`users` really use; that premise turned out to be false. `org_id`,
+-- `organization_id` and `tenant_id` appear nowhere in this codebase -- not on `patient`, `users` or
+-- `caregiver` -- so there was nothing to match and nothing that could have populated a NOT NULL column.
+-- See the plan's 2026-09-26 org-scoping reversal. `orgId` was removed from the library's interfaces at
+-- the same time, for the same reason.
 
 CREATE TABLE ehr_identity_field_provenance
 (
     id                BIGSERIAL PRIMARY KEY,
     patient_id        BIGINT       NOT NULL REFERENCES patient (id),
-    org_id            BIGINT       NOT NULL, -- TODO: match patient's real tenant column, see above
     field_name        VARCHAR(64)  NOT NULL, -- same field_name vocabulary as ehr_identity_conflict
     -- Nullable: a row is created empty (both NULL) purely to have something to lock the first time a
     -- field is touched. NULL here means "no source has established provenance for this field yet" and
@@ -28,11 +29,10 @@ CREATE TABLE ehr_identity_field_provenance
 );
 
 CREATE INDEX idx_ehr_identity_field_provenance_patient ON ehr_identity_field_provenance (patient_id);
-CREATE INDEX idx_ehr_identity_field_provenance_org ON ehr_identity_field_provenance (org_id);
 
--- Usage note for IdentityFieldProvenanceStore.lockOrCreate(patientId, orgId, fieldName):
---   INSERT INTO ehr_identity_field_provenance (patient_id, org_id, field_name)
---     VALUES (:patientId, :orgId, :fieldName)
+-- Usage note for IdentityFieldProvenanceStore.lockOrCreate(patientId, fieldName):
+--   INSERT INTO ehr_identity_field_provenance (patient_id, field_name)
+--     VALUES (:patientId, :fieldName)
 --     ON CONFLICT (patient_id, field_name) DO NOTHING;
 --   SELECT source_id, source_updated_at
 --     FROM ehr_identity_field_provenance

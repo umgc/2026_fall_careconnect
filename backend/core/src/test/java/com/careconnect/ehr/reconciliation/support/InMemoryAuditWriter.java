@@ -13,7 +13,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     private enum Status { PENDING, ACCEPTED, REJECTED }
 
     private record Row(
-            Object patientId, Object orgId, Object sourceId, String fieldName,
+            Object patientId, Object sourceId, String fieldName,
             String canonicalValueBefore, String incomingValue, Instant sourceUpdatedAt,
             Status status, ResolvedBy resolvedBy, Instant detectedAt, Instant resolvedAt) {
     }
@@ -22,15 +22,15 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     private final List<Row> rows = new CopyOnWriteArrayList<>();
 
     @Override
-    public void recordDecision(Object patientId, Object orgId, Object sourceId, String fieldName,
+    public void recordDecision(Object patientId, Object sourceId, String fieldName,
                                 String canonicalValueBefore, String incomingValue, Outcome outcome,
                                 ResolvedBy resolvedBy, Instant detectedAndResolvedAt) {
-        rows.add(new Row(patientId, orgId, sourceId, fieldName, canonicalValueBefore, incomingValue, null,
+        rows.add(new Row(patientId, sourceId, fieldName, canonicalValueBefore, incomingValue, null,
                 toStatus(outcome), resolvedBy, detectedAndResolvedAt, detectedAndResolvedAt));
     }
 
     @Override
-    public void openPendingConflict(Object patientId, Object orgId, Object sourceId, String fieldName,
+    public void openPendingConflict(Object patientId, Object sourceId, String fieldName,
                                      String canonicalValueBefore, String incomingValue, Instant sourceUpdatedAt,
                                      Instant detectedAt) {
         boolean alreadyOpen = rows.stream().anyMatch(r -> r.status() == Status.PENDING
@@ -41,7 +41,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
             throw new IllegalStateException("A PENDING conflict is already open for " + patientId + "/" + fieldName
                     + " -- resolve it before opening another.");
         }
-        rows.add(new Row(patientId, orgId, sourceId, fieldName, canonicalValueBefore, incomingValue,
+        rows.add(new Row(patientId, sourceId, fieldName, canonicalValueBefore, incomingValue,
                 sourceUpdatedAt, Status.PENDING, null, detectedAt, null));
     }
 
@@ -60,7 +60,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
         for (int i = 0; i < rows.size(); i++) {
             Row r = rows.get(i);
             if (r.status() == Status.PENDING && r.patientId().equals(patientId) && r.fieldName().equals(fieldName)) {
-                rows.set(i, new Row(r.patientId(), r.orgId(), r.sourceId(), r.fieldName(), r.canonicalValueBefore(),
+                rows.set(i, new Row(r.patientId(), r.sourceId(), r.fieldName(), r.canonicalValueBefore(),
                         r.incomingValue(), r.sourceUpdatedAt(), toStatus(outcome), resolvedBy, r.detectedAt(), resolvedAt));
                 return;
             }

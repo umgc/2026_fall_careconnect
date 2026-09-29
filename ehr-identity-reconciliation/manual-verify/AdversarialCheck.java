@@ -46,12 +46,11 @@ public class AdversarialCheck {
                     unsafeStore, patientAccessor, auditWriter, new InMemoryTransactionRunner());
 
             Object patientId = "fn" + i;
-            Object orgId = "ORG-1";
             Instant baseline = Instant.parse("2026-01-01T00:00:00Z");
             Instant middle = baseline.plus(1, ChronoUnit.DAYS);
             Instant latest = baseline.plus(2, ChronoUnit.DAYS);
 
-            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", orgId, baseline,
+            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", baseline,
                     Map.of("family_name", "Alpha")));
 
             ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -61,13 +60,13 @@ public class AdversarialCheck {
             pool.submit(() -> {
                 bothReady.countDown();
                 await(go);
-                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", orgId, middle,
+                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", middle,
                         Map.of("family_name", "Middle")));
             });
             pool.submit(() -> {
                 bothReady.countDown();
                 await(go);
-                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", orgId, latest,
+                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", latest,
                         Map.of("family_name", "Latest")));
             });
 
@@ -96,12 +95,11 @@ public class AdversarialCheck {
                     realStore, patientAccessor, auditWriter, new InMemoryTransactionRunner());
 
             Object patientId = "fnreal" + i;
-            Object orgId = "ORG-1";
             Instant baseline = Instant.parse("2026-01-01T00:00:00Z");
             Instant middle = baseline.plus(1, ChronoUnit.DAYS);
             Instant latest = baseline.plus(2, ChronoUnit.DAYS);
 
-            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", orgId, baseline,
+            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", baseline,
                     Map.of("family_name", "Alpha")));
 
             ExecutorService pool = Executors.newFixedThreadPool(2);
@@ -110,13 +108,13 @@ public class AdversarialCheck {
             pool.submit(() -> {
                 bothReady.countDown();
                 await(go);
-                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", orgId, middle,
+                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", middle,
                         Map.of("family_name", "Middle")));
             });
             pool.submit(() -> {
                 bothReady.countDown();
                 await(go);
-                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", orgId, latest,
+                reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", latest,
                         Map.of("family_name", "Latest")));
             });
             bothReady.await(5, TimeUnit.SECONDS);
@@ -152,12 +150,11 @@ public class AdversarialCheck {
                     unsafeStore, patientAccessor, auditWriter, new InMemoryTransactionRunner());
 
             Object patientId = "dobUnsafe" + i;
-            Object orgId = "ORG-1";
             Instant baseline = Instant.parse("2026-01-01T00:00:00Z");
             Instant middle = baseline.plus(1, ChronoUnit.DAYS);
             Instant latest = baseline.plus(2, ChronoUnit.DAYS);
 
-            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", orgId, baseline,
+            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", baseline,
                     Map.of("date_of_birth", "1950-05-04")));
 
             AtomicBoolean sawUnexpectedException = new AtomicBoolean(false);
@@ -169,7 +166,7 @@ public class AdversarialCheck {
                 bothReady.countDown();
                 await(go);
                 try {
-                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", orgId, middle,
+                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", middle,
                             Map.of("date_of_birth", "1950-05-09")));
                 } catch (RuntimeException e) {
                     sawUnexpectedException.set(true);
@@ -179,7 +176,7 @@ public class AdversarialCheck {
                 bothReady.countDown();
                 await(go);
                 try {
-                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", orgId, latest,
+                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", latest,
                             Map.of("date_of_birth", "1950-05-06")));
                 } catch (RuntimeException e) {
                     sawUnexpectedException.set(true);
@@ -212,12 +209,11 @@ public class AdversarialCheck {
                     realStore, patientAccessor, auditWriter, new InMemoryTransactionRunner());
 
             Object patientId = "dobReal" + i;
-            Object orgId = "ORG-1";
             Instant baseline = Instant.parse("2026-01-01T00:00:00Z");
             Instant middle = baseline.plus(1, ChronoUnit.DAYS);
             Instant latest = baseline.plus(2, ChronoUnit.DAYS);
 
-            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", orgId, baseline,
+            reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ATHENAHEALTH", baseline,
                     Map.of("date_of_birth", "1950-05-04")));
 
             AtomicBoolean threw = new AtomicBoolean(false);
@@ -228,7 +224,7 @@ public class AdversarialCheck {
                 bothReady.countDown();
                 await(go);
                 try {
-                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", orgId, middle,
+                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "ORACLE_HEALTH", middle,
                             Map.of("date_of_birth", "1950-05-09")));
                 } catch (RuntimeException e) {
                     threw.set(true);
@@ -238,7 +234,7 @@ public class AdversarialCheck {
                 bothReady.countDown();
                 await(go);
                 try {
-                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", orgId, latest,
+                    reconciler.reconcile(new SourceIdentitySnapshot(patientId, "EPIC", latest,
                             Map.of("date_of_birth", "1950-05-06")));
                 } catch (RuntimeException e) {
                     threw.set(true);

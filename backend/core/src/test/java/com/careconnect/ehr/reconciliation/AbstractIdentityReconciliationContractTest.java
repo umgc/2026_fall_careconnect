@@ -62,13 +62,12 @@ public abstract class AbstractIdentityReconciliationContractTest {
     /** A fresh, distinct patient id for each test, so tests never share state. Implement with a counter/UUID. */
     protected abstract Object freshPatientId();
 
-    protected abstract Object orgId();
 
     protected abstract Object sourceId(String sourceCode);
 
-    private static SourceIdentitySnapshot snapshot(Object patientId, Object orgId, Object sourceId,
+    private static SourceIdentitySnapshot snapshot(Object patientId, Object sourceId,
                                                      Instant sourceUpdatedAt, String fieldName, String value) {
-        return new SourceIdentitySnapshot(patientId, sourceId, orgId, sourceUpdatedAt,
+        return new SourceIdentitySnapshot(patientId, sourceId, sourceUpdatedAt,
                 java.util.Map.of(fieldName, value));
     }
 
@@ -80,7 +79,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
         // date_of_birth deliberately, to also prove the fill-empty rule is unaffected by the DOB
         // carve-out below (there's no disagreement to hold PENDING when nothing was there to disagree with).
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), athena, t1, DATE_OF_BIRTH, "1950-05-04"));
+        var outcomes = reconciler().reconcile(snapshot(patientId, athena, t1, DATE_OF_BIRTH, "1950-05-04"));
 
         assertEquals(ReconciliationOutcome.Decision.FILLED_EMPTY, outcomes.get(0).decision());
         assertEquals(Optional.of("1950-05-04"), patientAccessor().getCurrentValue(patientId, DATE_OF_BIRTH));
@@ -93,7 +92,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Object patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
 
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t1, "phone", "   "));
+        var outcomes = reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t1, "phone", "   "));
 
         assertTrue(outcomes.isEmpty(), "a blank incoming value must be skipped, not applied as blank");
         assertTrue(patientAccessor().getCurrentValue(patientId, "phone").isEmpty());
@@ -109,17 +108,17 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t3BetweenT1AndT2 = t1.plus(5, ChronoUnit.DAYS);
 
         // Athenahealth fills the field first.
-        reconciler().reconcile(snapshot(patientId, orgId(), athena, t1, "address_line1", "123 Main St"));
+        reconciler().reconcile(snapshot(patientId, athena, t1, "address_line1", "123 Main St"));
         // Epic syncs later with the SAME value -> "agree" branch; must still push the provenance
         // baseline forward to t2, not leave it at t1.
-        var agreeOutcomes = reconciler().reconcile(snapshot(patientId, orgId(), epic, t2, "address_line1", "123 Main St"));
+        var agreeOutcomes = reconciler().reconcile(snapshot(patientId, epic, t2, "address_line1", "123 Main St"));
         assertEquals(ReconciliationOutcome.Decision.ALREADY_AGREED, agreeOutcomes.get(0).decision());
         assertTrue(decisionsFor(patientId, "address_line1").isEmpty());
 
         // A third source disagrees, timestamped BETWEEN t1 and t2. If the baseline correctly advanced
         // to t2 on the agreement above, this must be rejected as stale even though it's newer than t1.
         var staleOutcomes = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("ORACLE_HEALTH"), t3BetweenT1AndT2, "address_line1", "456 Oak Ave"));
+                snapshot(patientId, sourceId("ORACLE_HEALTH"), t3BetweenT1AndT2, "address_line1", "456 Oak Ave"));
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, staleOutcomes.get(0).decision());
         assertEquals(Optional.of("123 Main St"), patientAccessor().getCurrentValue(patientId, "address_line1"));
@@ -131,8 +130,8 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t2, "family_name", "Smyth"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
+        var outcomes = reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t2, "family_name", "Smyth"));
 
         assertEquals(ReconciliationOutcome.Decision.ACCEPTED_NEWER, outcomes.get(0).decision());
         assertEquals(Optional.of("Smyth"), patientAccessor().getCurrentValue(patientId, "family_name"));
@@ -151,8 +150,8 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant tOlder = t1.minus(1, ChronoUnit.DAYS);
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), tOlder, "family_name", "Smyth"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
+        var outcomes = reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), tOlder, "family_name", "Smyth"));
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, outcomes.get(0).decision());
         assertEquals(Optional.of("Smith"), patientAccessor().getCurrentValue(patientId, "family_name"),
@@ -168,8 +167,8 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Object patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t1, "family_name", "Smyth"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
+        var outcomes = reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t1, "family_name", "Smyth"));
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, outcomes.get(0).decision(),
                 "a tie must not flip the existing value (Assumption A2)");
@@ -197,12 +196,12 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant newerThanEdit = patientEditedAt.plus(1, ChronoUnit.DAYS);
 
         var staleAttempt = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), olderThanEdit, "email", "stale@example.com"));
+                snapshot(patientId, sourceId("ATHENAHEALTH"), olderThanEdit, "email", "stale@example.com"));
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, staleAttempt.get(0).decision(),
                 "an incoming timestamp older than patient.updated_at must lose (Assumption A1)");
 
         var freshAttempt = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("EPIC"), newerThanEdit, "email", "fresh@example.com"));
+                snapshot(patientId, sourceId("EPIC"), newerThanEdit, "email", "fresh@example.com"));
         assertEquals(ReconciliationOutcome.Decision.ACCEPTED_NEWER, freshAttempt.get(0).decision(),
                 "an incoming timestamp newer than patient.updated_at must win (Assumption A1)");
         assertEquals(Optional.of("fresh@example.com"), patientAccessor().getCurrentValue(patientId, "email"));
@@ -238,7 +237,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant middle = baseline.plus(1, ChronoUnit.DAYS);   // beats baseline, loses to `latest`
         Instant latest = baseline.plus(2, ChronoUnit.DAYS);   // beats both
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), baseline, "family_name", "Alpha"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), baseline, "family_name", "Alpha"));
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch bothReady = new CountDownLatch(2);
@@ -247,12 +246,12 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Runnable middleRewrite = () -> {
             bothReady.countDown();
             awaitQuietly(go);
-            reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ORACLE_HEALTH"), middle, "family_name", "Middle"));
+            reconciler().reconcile(snapshot(patientId, sourceId("ORACLE_HEALTH"), middle, "family_name", "Middle"));
         };
         Runnable latestRewrite = () -> {
             bothReady.countDown();
             awaitQuietly(go);
-            reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), latest, "family_name", "Latest"));
+            reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), latest, "family_name", "Latest"));
         };
 
         pool.submit(toRunnableTask(middleRewrite));
@@ -277,7 +276,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
         Instant olderThanEdit = patientEditedAt.minus(30, ChronoUnit.DAYS);
         var staleAttempt = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), olderThanEdit, DATE_OF_BIRTH, "1950-05-05"));
+                snapshot(patientId, sourceId("ATHENAHEALTH"), olderThanEdit, DATE_OF_BIRTH, "1950-05-05"));
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, staleAttempt.get(0).decision(),
                 "older than patient.updated_at must still lose outright, same as any other field (Assumption A1)");
         assertTrue(auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).isEmpty(),
@@ -285,7 +284,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
         Instant newerThanEdit = patientEditedAt.plus(1, ChronoUnit.DAYS);
         var freshAttempt = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("EPIC"), newerThanEdit, DATE_OF_BIRTH, "1950-05-06"));
+                snapshot(patientId, sourceId("EPIC"), newerThanEdit, DATE_OF_BIRTH, "1950-05-06"));
         assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, freshAttempt.get(0).decision(),
                 "newer than patient.updated_at makes it a genuine candidate, but DOB never auto-applies");
         assertEquals(Optional.of("1950-05-04"), patientAccessor().getCurrentValue(patientId, DATE_OF_BIRTH),
@@ -299,8 +298,8 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
         Object epic = sourceId("EPIC");
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), epic, t2, DATE_OF_BIRTH, "1950-05-06"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        var outcomes = reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
 
         assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, outcomes.get(0).decision());
         assertEquals("1950-05-06", outcomes.get(0).appliedValue(),
@@ -324,8 +323,8 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant tOlder = t1.minus(1, ChronoUnit.DAYS);
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
-        var outcomes = reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), tOlder, DATE_OF_BIRTH, "1950-05-09"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        var outcomes = reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), tOlder, DATE_OF_BIRTH, "1950-05-09"));
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, outcomes.get(0).decision(),
                 "a candidate that couldn't have won under the ordinary recency rule must not prompt the patient");
@@ -346,9 +345,9 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t3 = t1.plus(2, ChronoUnit.DAYS);
         Object oracle = sourceId("ORACLE_HEALTH");
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
-        var supersede = reconciler().reconcile(snapshot(patientId, orgId(), oracle, t3, DATE_OF_BIRTH, "1950-05-09"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
+        var supersede = reconciler().reconcile(snapshot(patientId, oracle, t3, DATE_OF_BIRTH, "1950-05-09"));
 
         assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, supersede.get(0).decision());
         var pending = auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH);
@@ -373,11 +372,11 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t3 = t1.plus(3, ChronoUnit.DAYS);
         Instant t2BetweenT1AndT3 = t1.plus(1, ChronoUnit.DAYS);
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t3, DATE_OF_BIRTH, "1950-05-09"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t3, DATE_OF_BIRTH, "1950-05-09"));
         // Newer than the confirmed baseline (t1), but not newer than the already-pending candidate (t3).
         var ignored = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("ORACLE_HEALTH"), t2BetweenT1AndT3, DATE_OF_BIRTH, "1950-05-06"));
+                snapshot(patientId, sourceId("ORACLE_HEALTH"), t2BetweenT1AndT3, DATE_OF_BIRTH, "1950-05-06"));
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, ignored.get(0).decision());
         var pending = auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH);
@@ -392,10 +391,10 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
 
-        var finalized = reconciler().finalizePendingDateOfBirth(patientId, orgId(), true);
+        var finalized = reconciler().finalizePendingDateOfBirth(patientId, true);
 
         assertEquals(ReconciliationOutcome.Decision.ACCEPTED_BY_PATIENT, finalized.decision());
         assertEquals("1950-05-06", finalized.appliedValue());
@@ -410,7 +409,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
         // A subsequent, older disagreement must now lose against the newly-accepted (t2) baseline.
         var staleAfterAccept = reconciler().reconcile(
-                snapshot(patientId, orgId(), sourceId("ORACLE_HEALTH"), t1.plus(12, ChronoUnit.HOURS), DATE_OF_BIRTH, "1950-05-11"));
+                snapshot(patientId, sourceId("ORACLE_HEALTH"), t1.plus(12, ChronoUnit.HOURS), DATE_OF_BIRTH, "1950-05-11"));
         assertEquals(ReconciliationOutcome.Decision.REJECTED_STALE, staleAfterAccept.get(0).decision(),
                 "provenance must have advanced to t2 on acceptance, not stayed at t1");
     }
@@ -421,10 +420,10 @@ public abstract class AbstractIdentityReconciliationContractTest {
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
 
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
-        reconciler().reconcile(snapshot(patientId, orgId(), sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
 
-        var finalized = reconciler().finalizePendingDateOfBirth(patientId, orgId(), false);
+        var finalized = reconciler().finalizePendingDateOfBirth(patientId, false);
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_BY_PATIENT, finalized.decision());
         assertEquals("1950-05-04", finalized.appliedValue(), "reports what patient.date_of_birth still holds");
@@ -443,7 +442,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     void finalizingWithNoPendingConflictThrows() {
         Object patientId = freshPatientId();
         assertThrows(IllegalStateException.class,
-                () -> reconciler().finalizePendingDateOfBirth(patientId, orgId(), true),
+                () -> reconciler().finalizePendingDateOfBirth(patientId, true),
                 "there is nothing to finalize when no date_of_birth conflict is open");
     }
 

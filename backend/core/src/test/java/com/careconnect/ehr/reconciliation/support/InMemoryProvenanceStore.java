@@ -23,7 +23,7 @@ public final class InMemoryProvenanceStore implements IdentityFieldProvenanceSto
     public final List<Key> acquireOrder = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     @Override
-    public Optional<FieldProvenance> lockOrCreate(Object patientId, Object orgId, String fieldName) {
+    public Optional<FieldProvenance> lockOrCreate(Object patientId, String fieldName) {
         Key key = new Key(patientId, fieldName);
         Lock lock = locks.computeIfAbsent(key, k -> new ReentrantLock());
         FakeTransactionSupport.acquireForTransaction(lock);
@@ -32,7 +32,7 @@ public final class InMemoryProvenanceStore implements IdentityFieldProvenanceSto
     }
 
     @Override
-    public void recordAsFreshest(Object patientId, Object orgId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
+    public void recordAsFreshest(Object patientId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
         rows.put(new Key(patientId, fieldName), new FieldProvenance(sourceId, sourceUpdatedAt));
     }
 

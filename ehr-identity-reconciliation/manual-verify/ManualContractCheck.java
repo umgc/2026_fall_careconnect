@@ -81,8 +81,7 @@ public class ManualContractCheck {
         final InMemoryAuditWriter auditWriter = new InMemoryAuditWriter();
         final IdentityReconciler reconciler = new RecencyWinsIdentityReconciler(
                 provenanceStore, patientAccessor, auditWriter, new InMemoryTransactionRunner());
-        final Object orgId = "ORG-1";
-
+        final
         Object freshPatientId() {
             return patientIdSeq.getAndIncrement();
         }
@@ -92,7 +91,7 @@ public class ManualContractCheck {
         }
 
         SourceIdentitySnapshot snapshot(Object patientId, Object sourceId, Instant t, String field, String value) {
-            return new SourceIdentitySnapshot(patientId, sourceId, orgId, t, Map.of(field, value));
+            return new SourceIdentitySnapshot(patientId, sourceId, t, Map.of(field, value));
         }
     }
 
@@ -371,7 +370,7 @@ public class ManualContractCheck {
         f.reconciler.reconcile(f.snapshot(patientId, f.source("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
         f.reconciler.reconcile(f.snapshot(patientId, f.source("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
 
-        var finalized = f.reconciler.finalizePendingDateOfBirth(patientId, f.orgId, true);
+        var finalized = f.reconciler.finalizePendingDateOfBirth(patientId, true);
 
         assertEquals(ReconciliationOutcome.Decision.ACCEPTED_BY_PATIENT, finalized.decision(), "decision");
         assertEquals("1950-05-06", finalized.appliedValue(), "applied value");
@@ -398,7 +397,7 @@ public class ManualContractCheck {
         f.reconciler.reconcile(f.snapshot(patientId, f.source("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
         f.reconciler.reconcile(f.snapshot(patientId, f.source("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
 
-        var finalized = f.reconciler.finalizePendingDateOfBirth(patientId, f.orgId, false);
+        var finalized = f.reconciler.finalizePendingDateOfBirth(patientId, false);
 
         assertEquals(ReconciliationOutcome.Decision.REJECTED_BY_PATIENT, finalized.decision(), "decision");
         assertEquals("1950-05-04", finalized.appliedValue(), "reports what patient still holds");
@@ -415,7 +414,7 @@ public class ManualContractCheck {
         Fixture f = new Fixture();
         Object patientId = f.freshPatientId();
         assertThrows(IllegalStateException.class,
-                () -> f.reconciler.finalizePendingDateOfBirth(patientId, f.orgId, true),
+                () -> f.reconciler.finalizePendingDateOfBirth(patientId, true),
                 "nothing to finalize when no conflict is open");
     }
 

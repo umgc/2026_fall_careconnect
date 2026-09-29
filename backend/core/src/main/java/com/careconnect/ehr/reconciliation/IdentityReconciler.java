@@ -34,7 +34,7 @@ public interface IdentityReconciler {
 
     /**
      * The confirmation entry point the 2026-09-26 partial reversal added: finalizes the open
-     * {@code PENDING date_of_birth} conflict for {@code (patientId, orgId)} once the patient has
+     * {@code PENDING date_of_birth} conflict for {@code patientId} once the patient has
      * chosen whether to accept the incoming value or keep what {@code patient.date_of_birth} already
      * holds. {@code resolved_by} is always recorded as {@code PATIENT} — there is no staff/admin
      * resolution path for this field (confirmed in the Decisions log: patient self-service only).
@@ -53,5 +53,5 @@ public interface IdentityReconciler {
      * @throws IllegalStateException if no {@code date_of_birth} conflict is currently {@code PENDING}
      *                                for this patient.
      */
-    ReconciliationOutcome finalizePendingDateOfBirth(Object patientId, Object orgId, boolean acceptIncoming);
+    ReconciliationOutcome finalizePendingDateOfBirth(Object patientId, boolean acceptIncoming);
 }

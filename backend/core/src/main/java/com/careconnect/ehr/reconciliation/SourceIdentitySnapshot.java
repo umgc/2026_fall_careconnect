@@ -12,15 +12,7 @@ import java.util.Map;
  *
  * @param patientId       the internal CareConnect {@code patient.id} this snapshot is for.
  * @param sourceId        the {@code ehr_source.id} this snapshot came from.
- * @param orgId           the organization/tenant identifier this patient belongs to. Threaded through
- *                        so every write this library makes (patient update, provenance row, audit row)
- *                        can be scoped the same way {@code medicare_records.org_id} already is
- *                        (FR-MCR-18 / FR-EHR-10). The literal column name/type on the real
- *                        {@code patient}/{@code users} table is still being confirmed — see README.md
- *                        "Open item" — so this is typed as {@code Object} deliberately; swap it for
- *                        the real type (likely {@code Long} if BIGSERIAL, {@code UUID} if not) once
- *                        confirmed, in this class and in {@link PatientFieldAccessor}/
- *                        {@link IdentityFieldProvenanceStore}/{@link IdentityConflictAuditWriter}.
+
  * @param sourceUpdatedAt this snapshot's provenance timestamp — FHIR {@code meta.lastUpdated} for the
  *                        resource the fields below were mapped from. This is the one timestamp the
  *                        entire recency-wins decision hangs on; if an adapter can't populate it
@@ -36,7 +28,6 @@ import java.util.Map;
 public record SourceIdentitySnapshot(
         Object patientId,
         Object sourceId,
-        Object orgId,
         Instant sourceUpdatedAt,
         Map<String, String> fields) {
 }

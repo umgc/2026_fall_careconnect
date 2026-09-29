@@ -16,13 +16,13 @@ public class UnsafeProvenanceStore implements IdentityFieldProvenanceStore {
     private final Map<Key, FieldProvenance> rows = new ConcurrentHashMap<>();
 
     @Override
-    public Optional<FieldProvenance> lockOrCreate(Object patientId, Object orgId, String fieldName) {
+    public Optional<FieldProvenance> lockOrCreate(Object patientId, String fieldName) {
         // No lock taken at all -- this is the bug.
         return Optional.ofNullable(rows.get(new Key(patientId, fieldName)));
     }
 
     @Override
-    public void recordAsFreshest(Object patientId, Object orgId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
+    public void recordAsFreshest(Object patientId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
         rows.put(new Key(patientId, fieldName), new FieldProvenance(sourceId, sourceUpdatedAt));
     }
 }

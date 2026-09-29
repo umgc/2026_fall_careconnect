@@ -64,11 +64,6 @@ class InMemoryContractTest extends AbstractIdentityReconciliationContractTest {
     }
 
     @Override
-    protected Object orgId() {
-        return "ORG-1";
-    }
-
-    @Override
     protected Object sourceId(String sourceCode) {
         return sourceCode; // in-memory fakes treat the source code itself as the id
     }

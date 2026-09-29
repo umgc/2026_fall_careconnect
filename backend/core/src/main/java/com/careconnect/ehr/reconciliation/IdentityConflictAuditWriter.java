@@ -56,7 +56,6 @@ public interface IdentityConflictAuditWriter {
      */
     void recordDecision(
             Object patientId,
-            Object orgId,
             Object sourceId,
             String fieldName,
             String canonicalValueBefore,
@@ -83,7 +82,6 @@ public interface IdentityConflictAuditWriter {
      */
     void openPendingConflict(
             Object patientId,
-            Object orgId,
             Object sourceId,
             String fieldName,
             String canonicalValueBefore,

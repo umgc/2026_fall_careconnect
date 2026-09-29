@@ -106,10 +106,10 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
     }
 
     @Override
-    public ReconciliationOutcome finalizePendingDateOfBirth(Object patientId, Object orgId, boolean acceptIncoming) {
+    public ReconciliationOutcome finalizePendingDateOfBirth(Object patientId, boolean acceptIncoming) {
         AtomicReference<ReconciliationOutcome> outcomeRef = new AtomicReference<>();
         transactionRunner.runInTransaction(() ->
-                outcomeRef.set(finalizePendingDateOfBirthLocked(patientId, orgId, acceptIncoming)));
+                outcomeRef.set(finalizePendingDateOfBirthLocked(patientId, acceptIncoming)));
         return outcomeRef.get();
     }
 
@@ -121,25 +121,24 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
      */
     ReconciliationOutcome reconcileOneFieldLocked(SourceIdentitySnapshot snapshot, String fieldName, String incomingValue) {
         Object patientId = snapshot.patientId();
-        Object orgId = snapshot.orgId();
         Object sourceId = snapshot.sourceId();
         Instant incomingTimestamp = snapshot.sourceUpdatedAt();
 
-        Optional<FieldProvenance> provenance = provenanceStore.lockOrCreate(patientId, orgId, fieldName);
+        Optional<FieldProvenance> provenance = provenanceStore.lockOrCreate(patientId, fieldName);
         Optional<String> currentValue = patientAccessor.getCurrentValue(patientId, fieldName);
 
         // Rule: patient's field is empty -> fill directly, no comparison, no audit row. Applies to
         // date_of_birth exactly the same as any other field -- there's no disagreement to hold open.
         if (currentValue.isEmpty()) {
             patientAccessor.applyValue(patientId, fieldName, incomingValue);
-            refreshProvenanceIfNewer(patientId, orgId, fieldName, sourceId, incomingTimestamp, provenance);
+            refreshProvenanceIfNewer(patientId, fieldName, sourceId, incomingTimestamp, provenance);
             return new ReconciliationOutcome(fieldName, ReconciliationOutcome.Decision.FILLED_EMPTY, incomingValue);
         }
 
         // Rule: values already agree -> nothing to write to patient, but keep provenance current.
         // Applies to date_of_birth exactly the same as any other field, for the same reason.
         if (currentValue.get().equals(incomingValue)) {
-            refreshProvenanceIfNewer(patientId, orgId, fieldName, sourceId, incomingTimestamp, provenance);
+            refreshProvenanceIfNewer(patientId, fieldName, sourceId, incomingTimestamp, provenance);
             return new ReconciliationOutcome(fieldName, ReconciliationOutcome.Decision.ALREADY_AGREED, currentValue.get());
         }
 
@@ -152,18 +151,18 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
         Instant decidedAt = Instant.now();
 
         if (DATE_OF_BIRTH.equals(fieldName)) {
-            return reconcileDateOfBirthDisagreement(patientId, orgId, sourceId, currentValue.get(), incomingValue,
+            return reconcileDateOfBirthDisagreement(patientId, sourceId, currentValue.get(), incomingValue,
                     incomingTimestamp, incomingIsNewerThanConfirmedBaseline, decidedAt);
         }
 
         if (incomingIsNewerThanConfirmedBaseline) {
             patientAccessor.applyValue(patientId, fieldName, incomingValue);
-            auditWriter.recordDecision(patientId, orgId, sourceId, fieldName, currentValue.get(), incomingValue,
+            auditWriter.recordDecision(patientId, sourceId, fieldName, currentValue.get(), incomingValue,
                     IdentityConflictAuditWriter.Outcome.ACCEPTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
-            refreshProvenanceIfNewer(patientId, orgId, fieldName, sourceId, incomingTimestamp, provenance);
+            refreshProvenanceIfNewer(patientId, fieldName, sourceId, incomingTimestamp, provenance);
             return new ReconciliationOutcome(fieldName, ReconciliationOutcome.Decision.ACCEPTED_NEWER, incomingValue);
         } else {
-            auditWriter.recordDecision(patientId, orgId, sourceId, fieldName, currentValue.get(), incomingValue,
+            auditWriter.recordDecision(patientId, sourceId, fieldName, currentValue.get(), incomingValue,
                     IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
             // Deliberately do NOT refresh provenance here: the losing source's timestamp is, by
             // definition, not newer than what's already recorded (or the baseline), so recording it
@@ -191,11 +190,11 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
      * for anything patient-visible beyond "which value ends up in the confirmation prompt."
      */
     private ReconciliationOutcome reconcileDateOfBirthDisagreement(
-            Object patientId, Object orgId, Object sourceId, String currentValue, String incomingValue,
+            Object patientId, Object sourceId, String currentValue, String incomingValue,
             Instant incomingTimestamp, boolean incomingIsNewerThanConfirmedBaseline, Instant decidedAt) {
 
         if (!incomingIsNewerThanConfirmedBaseline) {
-            auditWriter.recordDecision(patientId, orgId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
+            auditWriter.recordDecision(patientId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
                     IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
             return new ReconciliationOutcome(DATE_OF_BIRTH, ReconciliationOutcome.Decision.REJECTED_STALE, currentValue);
         }
@@ -209,7 +208,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
                 // Newer than the confirmed baseline, but not newer than the candidate the patient is
                 // already being asked about -- discard quietly rather than replacing one unconfirmed
                 // guess with an older one (Assumption A3).
-                auditWriter.recordDecision(patientId, orgId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
+                auditWriter.recordDecision(patientId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
                         IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
                 return new ReconciliationOutcome(DATE_OF_BIRTH, ReconciliationOutcome.Decision.REJECTED_STALE, currentValue);
             }
@@ -218,7 +217,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
                     IdentityConflictAuditWriter.Outcome.REJECTED, IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
         }
 
-        auditWriter.openPendingConflict(patientId, orgId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
+        auditWriter.openPendingConflict(patientId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
                 incomingTimestamp, decidedAt);
         // Provenance is deliberately left untouched here: it must keep reflecting the last value
         // patient.date_of_birth actually holds until the patient accepts this candidate via
@@ -230,11 +229,11 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
      * Package-private, same reason {@link #reconcileOneFieldLocked} is: lets the contract test suite
      * exercise this directly under simulated concurrency.
      */
-    ReconciliationOutcome finalizePendingDateOfBirthLocked(Object patientId, Object orgId, boolean acceptIncoming) {
+    ReconciliationOutcome finalizePendingDateOfBirthLocked(Object patientId, boolean acceptIncoming) {
         // Take the same per-(patientId, date_of_birth) lock every reconcile() call takes for this
         // field, so a finalize racing a concurrent reconcile() supersede attempt serializes correctly
         // instead of both reading the same pending conflict and stepping on each other.
-        provenanceStore.lockOrCreate(patientId, orgId, DATE_OF_BIRTH);
+        provenanceStore.lockOrCreate(patientId, DATE_OF_BIRTH);
 
         IdentityConflictAuditWriter.PendingConflict pending =
                 auditWriter.currentPendingConflict(patientId, DATE_OF_BIRTH)
@@ -246,7 +245,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
             patientAccessor.applyValue(patientId, DATE_OF_BIRTH, pending.incomingValue());
             auditWriter.resolvePendingConflict(patientId, DATE_OF_BIRTH,
                     IdentityConflictAuditWriter.Outcome.ACCEPTED, IdentityConflictAuditWriter.ResolvedBy.PATIENT, resolvedAt);
-            provenanceStore.recordAsFreshest(patientId, orgId, DATE_OF_BIRTH, pending.sourceId(), pending.sourceUpdatedAt());
+            provenanceStore.recordAsFreshest(patientId, DATE_OF_BIRTH, pending.sourceId(), pending.sourceUpdatedAt());
             return new ReconciliationOutcome(DATE_OF_BIRTH, ReconciliationOutcome.Decision.ACCEPTED_BY_PATIENT, pending.incomingValue());
         } else {
             auditWriter.resolvePendingConflict(patientId, DATE_OF_BIRTH,
@@ -256,12 +255,12 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
     }
 
     private void refreshProvenanceIfNewer(
-            Object patientId, Object orgId, String fieldName, Object sourceId, Instant incomingTimestamp,
+            Object patientId, String fieldName, Object sourceId, Instant incomingTimestamp,
             Optional<FieldProvenance> existing) {
         boolean shouldRefresh = existing.isEmpty()
                 || !incomingTimestamp.isBefore(existing.get().sourceUpdatedAt());
         if (shouldRefresh) {
-            provenanceStore.recordAsFreshest(patientId, orgId, fieldName, sourceId, incomingTimestamp);
+            provenanceStore.recordAsFreshest(patientId, fieldName, sourceId, incomingTimestamp);
         }
     }
 }
