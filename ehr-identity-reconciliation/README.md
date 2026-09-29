@@ -104,11 +104,29 @@ schema addition that makes decentralized reconciliation actually safe.
 
 - **A1 — no-provenance baseline:** the first time a field is ever contested (no provenance row yet,
   but `patient` already has a non-empty value — e.g. from signup), the incoming snapshot is compared
-  against `patient.updated_at`, not against some other notion of "how fresh is user-entered data." In
-  practice this means a first EHR sync will usually beat original signup data, since signup typically
-  happens well before any sync completes. Confirm this matches product intent before shipping. Applies
-  to `date_of_birth` the same as any other field — A1 governs whether a DOB disagreement is even a
-  candidate, not what happens to it once it is (that's A3).
+  against `patient.updated_at`, not against some other notion of "how fresh is user-entered data."
+  Applies to `date_of_birth` the same as any other field — A1 governs whether a DOB disagreement is
+  even a candidate, not what happens to it once it is (that's A3).
+
+  **Changed 2026-09-29 — re-read this if you read it before.** Two things moved, and the second
+  reverses what this section used to promise.
+
+  1. *The baseline is read once per snapshot,* before any field is processed, not per field.
+     `patient.updated_at` is a property of the row, not the field, and applying any field advances
+     it — so read per field, the first disagreeing field in a snapshot raised the bar above the
+     snapshot's own `source_updated_at` and every later field without provenance lost to a bar the
+     snapshot had just raised. Silently, and compounding on each sync.
+  2. *`patient.updated_at` did not exist until 2026-09-29.* `Patient` carried no timestamps at all,
+     so A1 had nothing to read. It now extends `Auditable`, and pre-existing rows were backfilled to
+     the migration timestamp — a tech-lead decision, not a default.
+
+  This README previously said "a first EHR sync will usually beat original signup data." **For any
+  patient who existed before that migration, that is no longer true.** Their baseline is the
+  migration time, so an EHR value wins only if its `source_updated_at` is *after* it. The policy is
+  deliberate: an EHR record's history does not retroactively overwrite what is already on file, but
+  any EHR update made since the migration does. Note this only concerns fields that are *non-empty*
+  and *disagree* — an empty field is still filled directly, with no comparison at all, so a first
+  sync populates everything blank regardless.
 - **A2 — exact ties:** if two timestamps are bit-for-bit equal, the existing value wins (nothing
   flips). This is deterministic and prevents flip-flopping on repeated syncs at identical timestamps,
   but it is a made-up tie-break, not something either original draft specified.
@@ -145,6 +163,13 @@ comparison once against your own store with the lock deliberately stubbed out, t
 `date_of_birth` pending-conflict race — if neither can be made to fail against a broken store, your test
 isn't exercising the lock either.
 
+**There is now a committed example of exactly that.**
+`JpaIdentityFieldProvenanceStorePostgresTest` TC-EHR-PROV-003 drives two real transactions on two
+threads against PostgreSQL. It was verified by swapping the locking read for a plain one: it failed,
+and it was the *only* one of the five that failed — so it is specifically sensitive to the lock rather
+than passing for some unrelated reason. That second check is the part worth copying. A concurrency
+test you have never seen fail is not evidence of anything.
+
 ## Where the code lives
 
 **Updated 2026-09-28.** This started as a standalone Maven module with its own `pom.xml`. Nothing built
@@ -160,6 +185,31 @@ repository, so a separately-versioned artifact was buying nothing.
   `AbstractIdentityReconciliationContractTest` (extend this), plus the in-memory reference
   implementation (`InMemoryContractTest` and `support/`) proving the contract is satisfiable. All 16
   scenarios run as part of `backend/core`'s normal test run.
+- `backend/core/src/main/java/com/careconnect/ehr/reconciliation/jpa/` — **added 2026-09-29.** A
+  complete working implementation of all four interfaces against PostgreSQL:
+  `JpaIdentityFieldProvenanceStore`, `JpaPatientFieldAccessor`, `JpaIdentityConflictAuditWriter` and
+  `SpringTransactionRunner`. If your adapter uses the same `patient` table and the same canonical
+  schema, you may not need your own — read these before writing a fourth copy.
+- `backend/core/src/test/java/com/careconnect/ehr/reconciliation/jpa/JpaContractPostgresTest` — the
+  same 16 scenarios wired to that implementation and run against a real database. This is the shape
+  to copy for your own subclass.
+
+### Breaking change, 2026-09-29 — `IdentityConflictAuditWriter.recordDecision`
+
+It gained an `Instant sourceUpdatedAt` parameter, inserted after `incomingValue`. Only affects you if
+you wrote your own audit writer; callers of `reconcile(...)` are unaffected.
+
+`ehr_identity_conflict.source_updated_at` is `NOT NULL` on every row and the interface had no way to
+supply it, so no implementation could satisfy both — the interface was unimplementable, and nothing
+said so because its only implementation was an in-memory fake storing `null`. Free in a `HashMap`,
+rejected outright by the database. It also left a `REJECTED` row recording that a value lost without
+recording the timestamp it lost *with*, which is the one fact separating a correct rejection from a
+bug.
+
+The general lesson, which has now cost this workstream three separate bugs: **a test double more
+permissive than the schema turns a design error into a passing test.** The H2 profile aliases `jsonb`
+to `TEXT`; the fake accepted nulls the database forbids. If a behaviour is enforced by a constraint,
+the test that proves it has to run on PostgreSQL.
 
 ## Files still in this directory
 

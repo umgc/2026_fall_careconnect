@@ -106,4 +106,67 @@ public class EhrSourceIdentity extends Auditable {
 
     @Column(name = "postal_code", length = 20)
     private String postalCode;
+
+    // ---- Carried but not reconciled (added 2026-09-29) ----
+    //
+    // These four were identified early as fields real sources supply, then deferred so Phase 2 could
+    // ship. Deferring them twice is how a field quietly stops existing, so they are captured here
+    // now: a connector that has the value can store it, and nothing has to be re-derived from
+    // ehr_raw_payload later.
+    //
+    // None of them is in the reconciliation vocabulary, and adding a column here does not put it
+    // there -- that list lives in JpaPatientFieldAccessor and is bounded by what `patient` can
+    // actually hold. Three of these have no counterpart on `patient` at all. The fourth, gender,
+    // does, and is deliberately still excluded; see its note below.
+
+    /**
+     * The subscriber or member identifier this source knows the patient by — FHIR
+     * {@code Coverage.subscriberId}, or the equivalent member number on an insurer's own API.
+     * <p>
+     * Not {@code patient.ma_number}: that is a Medical Assistance number for EVV compliance, issued
+     * by the state, and it is not the same identifier even when a source happens to return one that
+     * looks similar. Kept distinct so nobody reconciles one onto the other.
+     */
+    @Column(name = "member_id", length = 128)
+    private String memberId;
+
+    /**
+     * The source's administrative gender, stored verbatim as the source stated it — FHIR
+     * {@code Patient.gender}, whose value set is {@code male | female | other | unknown}.
+     * <p>
+     * <b>Deliberately not reconciled onto {@code patient.gender}.</b> Our {@code Gender} enum is
+     * {@code MALE, FEMALE, OTHER, PREFER_NOT_TO_SAY}, and the mismatch is not cosmetic: FHIR's
+     * {@code unknown} means <em>this system does not know</em>, while {@code PREFER_NOT_TO_SAY}
+     * means <em>the patient was asked and declined</em>. Mapping one to the other would record a
+     * statement the patient never made, on a field people are entitled to have recorded correctly.
+     * <p>
+     * So the source's answer is kept here, unmapped, until someone decides what the two vocabularies
+     * should mean to each other. Storing it costs nothing and keeps the option open; guessing the
+     * mapping would close it silently.
+     */
+    @Column(name = "gender", length = 16)
+    private String gender;
+
+    /**
+     * The organization the source says is responsible for this patient's record — FHIR
+     * {@code Patient.managingOrganization}, stored as its display name rather than a reference,
+     * since we hold no organization table to point at.
+     * <p>
+     * Worth noting for FR-EHR-10: this is the closest thing to an org affiliation anywhere in the
+     * schema. It is a <em>source's claim about itself</em>, not a tenancy boundary, and must not be
+     * pressed into service as one — but if a tenancy model is ever built, this is real data about
+     * what the sources were already telling us.
+     */
+    @Column(name = "managing_org", length = 255)
+    private String managingOrg;
+
+    /**
+     * The patient's preferred language as the source reports it — FHIR
+     * {@code Patient.communication[].language}, a BCP-47 tag such as {@code en-US}.
+     * <p>
+     * Only the first/preferred entry is carried. A patient may have several, and if that turns out
+     * to matter it wants its own table rather than a delimited column here.
+     */
+    @Column(name = "language", length = 35)
+    private String language;
 }
