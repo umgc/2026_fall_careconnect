@@ -3,6 +3,13 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js_interop';
+// This file is only ever compiled for the web target (reached via the
+// `if (dart.library.js_interop)` conditional export in
+// voice_command_web_speech.dart), where dart:js_util exists — the web build
+// compiles cleanly. `flutter analyze` also inspects it for the native target,
+// where dart:js_util is unavailable, producing a false-positive
+// uri_does_not_exist. Suppress just that diagnostic.
+// ignore: uri_does_not_exist
 import 'dart:js_util' as js_util;
 
 class VoiceCommandWebSpeechController {

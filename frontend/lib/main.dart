@@ -35,12 +35,15 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
 
-      // Load env from committed .env.example so clean checkouts can build
-      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      // Load env from the committed .env.example so clean checkouts (and CI)
+      // can build without a gitignored .env. It is the only .env* file bundled
+      // as an asset (see pubspec.yaml). Runtime config is supplied via
+      // --dart-define (see lib/config/env_constant.dart); dotenv only backs a
+      // few optional keys in app_config.dart, which tolerate empty placeholders.
       try {
-        await dotenv.load(fileName: ".env");
+        await dotenv.load(fileName: ".env.example");
       } catch (_) {
-        await dotenv.load(fileName: ".env.local");
+        // env file is optional; app_config keys fall back to empty strings.
       }
 
       // Performance optimization: Set preferred orientations
