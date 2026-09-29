@@ -44,6 +44,8 @@ public class MedicationPhotoExtractionService {
     static final String FIELD_FREQUENCY = "frequency";
     static final String FIELD_MEDICATION_TYPE = "medicationType";
 
+    private static final int REJECTED_TYPE_LOG_LIMIT = 40;
+
     private static final Map<String, String> FIELD_LABELS = new LinkedHashMap<>();
 
     static {
@@ -195,7 +197,8 @@ public class MedicationPhotoExtractionService {
         if (medicationTypeNames().contains(candidate)) {
             return candidate;
         }
-        log.warn("Medication photo extraction rejected medicationType '{}': not a MedicationType value", value);
+        String loggedValue = value.length() > REJECTED_TYPE_LOG_LIMIT ? value.substring(0, REJECTED_TYPE_LOG_LIMIT) + "..." : value;
+        log.warn("Medication photo extraction rejected medicationType '{}': not a MedicationType value", loggedValue);
         return "";
     }
 
