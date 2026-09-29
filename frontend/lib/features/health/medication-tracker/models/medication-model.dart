@@ -1,8 +1,24 @@
 /// Medication type enum
 /// Mirrors backend Medication.MedicationType (Medication.java) — PRESCRIPTION,
 /// SUPPLEMENT, HERBAL, and EMERGENCY match the backend enum's constant names.
-/// OTC remains distinct from the backend's OVER_THE_COUNTER; see KI-05.
+/// OTC is sent to the backend as OVER_THE_COUNTER; see [wireName] (KI-05).
 enum MedicationType { PRESCRIPTION, OTC, SUPPLEMENT, HERBAL, EMERGENCY }
+
+extension MedicationTypeWire on MedicationType {
+  /// The backend Medication.MedicationType constant name for this type.
+  String get wireName =>
+      this == MedicationType.OTC ? 'OVER_THE_COUNTER' : name;
+}
+
+/// Parses a backend medication type, accepting both OVER_THE_COUNTER and the
+/// legacy OTC spelling. Returns null for unknown values.
+MedicationType? medicationTypeFromWire(String? value) {
+  if (value == 'OVER_THE_COUNTER') return MedicationType.OTC;
+  for (final type in MedicationType.values) {
+    if (type.name == value) return type;
+  }
+  return null;
+}
 
 /// Medication status enum (for UI display purposes)
 enum MedicationStatus { upcoming, taken, missed }
@@ -55,10 +71,8 @@ class Medication {
       frequency: json['frequency'] as String,
       route: json['route'] as String,
       medicationType: json['medicationType'] != null
-          ? MedicationType.values.firstWhere(
-              (e) => e.name == json['medicationType'],
-              orElse: () => MedicationType.PRESCRIPTION,
-            )
+          ? medicationTypeFromWire(json['medicationType'] as String?) ??
+              MedicationType.PRESCRIPTION
           : null,
       prescribedBy: json['prescribedBy'] as String?,
       prescribedDate: json['prescribedDate'] as String?,
@@ -83,7 +97,7 @@ class Medication {
       'dosage': dosage,
       'frequency': frequency,
       'route': route,
-      if (medicationType != null) 'medicationType': medicationType!.name,
+      if (medicationType != null) 'medicationType': medicationType!.wireName,
       if (prescribedBy != null) 'prescribedBy': prescribedBy,
       if (prescribedDate != null) 'prescribedDate': prescribedDate,
       if (startDate != null) 'startDate': startDate,

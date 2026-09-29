@@ -937,7 +937,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
           'dosage': _dosageController.text,
           'frequency': frequency,
           'route': _selectedRoute,
-          'medicationType': _selectedMedicationType!.name,
+          'medicationType': _selectedMedicationType!.wireName,
           if (_prescribedByController.text.isNotEmpty)
             'prescribedBy': _prescribedByController.text,
           if (_prescribedDate != null)
