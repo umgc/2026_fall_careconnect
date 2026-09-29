@@ -75,9 +75,14 @@ class EhrRawPayloadPostgresJsonbTest {
                 .createNativeQuery("select id from patient order by id limit 1")
                 .getSingleResult()).longValue();
 
+        // Resolved by code rather than assumed to be id 1: fk_ehr_raw_payload_source needs a real row.
+        final Long sourceId = ((Number) entityManager
+                .createNativeQuery("select id from ehr_source where code = 'ATHENAHEALTH'")
+                .getSingleResult()).longValue();
+
         EhrRawPayload saved = repository.save(EhrRawPayload.builder()
                 .patientId(patientId)
-                .sourceId(1L)
+                .sourceId(sourceId)
                 .resourceType("Patient")
                 .externalResourceId("-10000000006435")
                 .payload(PAYLOAD)

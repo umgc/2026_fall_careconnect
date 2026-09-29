@@ -1,5 +1,6 @@
 package com.careconnect.ehr.reconciliation.jpa;
 
+import com.careconnect.ehr.reconciliation.IdentityConflictAuditWriter;
 import com.careconnect.ehr.reconciliation.IdentityReconciler;
 import com.careconnect.ehr.reconciliation.RecencyWinsIdentityReconciler;
 import com.careconnect.ehr.reconciliation.ReconciliationOutcome;
@@ -55,7 +56,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *   ./mvnw -Dtest=JpaPatientFieldAccessorPostgresTest test
  * </pre>
  *
- * Test IDs TC-EHR-PACC-001..006 are permanent. Never renumber, never reuse.
+ * Test IDs TC-EHR-PACC-001..010 are permanent. Never renumber, never reuse. 001..006 are the
+ * author's; 007..010 were added by the Testing Lead on the PR #209 review (2026-09-29).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -293,6 +295,127 @@ class JpaPatientFieldAccessorPostgresTest {
                 .as("the second field must land too -- this is the one that was lost when the "
                         + "fallback baseline was re-read per field")
                 .contains("Delta");
+    }
+
+    // ---- TC-EHR-PACC-007 ----
+
+    /**
+     * {@code patient.dob} is a free-text varchar, and the app writes it in two shapes: the onboarding
+     * registration screen stores {@code MM/DD/YYYY}, the sign-up screen stores ISO. A FHIR
+     * {@code birthDate} is always ISO. The same calendar date must therefore agree, not open a
+     * patient confirmation asking them to "confirm" the date they already gave. DEF-EHR-REC-03.
+     */
+    @Test
+    @DisplayName("TC-EHR-PACC-007: a newer ISO date_of_birth agrees with the same date stored as MM/DD/YYYY")
+    void newerIsoDateOfBirthAgreesWithTheSameDateStoredUsFormat() {
+        Instant backfilled = Instant.now().truncatedTo(ChronoUnit.MICROS).minus(30, ChronoUnit.DAYS);
+        seedDob("05/09/1950");
+        seedUpdatedAt(backfilled);
+        InMemoryAuditWriter audit = new InMemoryAuditWriter();
+
+        List<ReconciliationOutcome> outcomes = reconcilerWith(audit).reconcile(new SourceIdentitySnapshot(
+                patientId, sourceId, backfilled.plus(1, ChronoUnit.DAYS), Map.of("date_of_birth", "1950-05-09")));
+
+        assertThat(outcomes)
+                .extracting(ReconciliationOutcome::decision)
+                .as("05/09/1950 and 1950-05-09 are the same date; there is nothing for the patient to confirm")
+                .containsExactly(ReconciliationOutcome.Decision.ALREADY_AGREED);
+        assertThat(audit.currentPendingConflict(patientId, "date_of_birth"))
+                .as("no PENDING confirmation may be opened for an unchanged date of birth")
+                .isEmpty();
+    }
+
+    // ---- TC-EHR-PACC-008 ----
+
+    @Test
+    @DisplayName("TC-EHR-PACC-008: an older ISO date_of_birth equal to the stored MM/DD/YYYY date writes no REJECTED row")
+    void olderIsoDateOfBirthEqualToTheStoredDateWritesNoAuditRow() {
+        Instant backfilled = Instant.now().truncatedTo(ChronoUnit.MICROS).minus(30, ChronoUnit.DAYS);
+        seedDob("05/09/1950");
+        seedUpdatedAt(backfilled);
+        InMemoryAuditWriter audit = new InMemoryAuditWriter();
+
+        List<ReconciliationOutcome> outcomes = reconcilerWith(audit).reconcile(new SourceIdentitySnapshot(
+                patientId, sourceId, backfilled.minus(1, ChronoUnit.DAYS), Map.of("date_of_birth", "1950-05-09")));
+
+        assertThat(outcomes)
+                .extracting(ReconciliationOutcome::decision)
+                .containsExactly(ReconciliationOutcome.Decision.ALREADY_AGREED);
+        assertThat(audit.decisionsFor(patientId, "date_of_birth"))
+                .as("a REJECTED row records a disagreement; the same date in another format is not one")
+                .isEmpty();
+    }
+
+    // ---- TC-EHR-PACC-009 ----
+
+    @Test
+    @DisplayName("TC-EHR-PACC-009: applyValue without a transaction fails loudly and writes nothing")
+    void applyValueOutsideATransactionIsRejected() {
+        assertThatThrownBy(() -> accessor.applyValue(patientId, "phone", "555-0142"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("requires an active transaction");
+
+        assertThat(currentValue("phone"))
+                .as("the guard must fire before the write, not after it")
+                .isEmpty();
+    }
+
+    // ---- TC-EHR-PACC-010 ----
+
+    /**
+     * Characterization, not a requirement: plan question D9 (Q2) asks whether values are trimmed
+     * before comparison. The in-memory fake keeps surrounding spaces (TC-EHR-REC-012); this accessor
+     * trims on write but not on read, so the two harnesses disagree. Against the real store a padded
+     * value is "accepted" without changing anything, and every re-sync of the same snapshot then
+     * writes a REJECTED row. If D9 is answered, this expected result changes with it.
+     */
+    @Test
+    @DisplayName("TC-EHR-PACC-010: a whitespace-padded equal value is accepted unchanged, then rejected on every re-sync (D9)")
+    void whitespacePaddedEqualValueIsAcceptedThenRejectedOnResync() {
+        Instant backfilled = Instant.now().truncatedTo(ChronoUnit.MICROS).minus(30, ChronoUnit.DAYS);
+        tx.executeWithoutResult(status -> {
+            Patient patient = patientRepository.findById(patientId).orElseThrow();
+            patient.setLastName("Smith");
+            patientRepository.save(patient);
+        });
+        seedUpdatedAt(backfilled);
+        InMemoryAuditWriter audit = new InMemoryAuditWriter();
+        IdentityReconciler reconciler = reconcilerWith(audit);
+        // Microseconds, as PostgreSQL stores them: a sub-microsecond incoming timestamp would read
+        // as newer than its own stored provenance on the re-sync and hide what is characterized here.
+        SourceIdentitySnapshot padded = new SourceIdentitySnapshot(
+                patientId, sourceId, backfilled.plus(1, ChronoUnit.DAYS), Map.of("family_name", " Smith "));
+
+        List<ReconciliationOutcome> first = reconciler.reconcile(padded);
+        List<ReconciliationOutcome> second = reconciler.reconcile(padded);
+
+        assertThat(first).extracting(ReconciliationOutcome::decision)
+                .containsExactly(ReconciliationOutcome.Decision.ACCEPTED_NEWER);
+        assertThat(second).extracting(ReconciliationOutcome::decision)
+                .containsExactly(ReconciliationOutcome.Decision.REJECTED_STALE);
+        assertThat(currentValue("family_name"))
+                .as("the accessor trims on write, so the stored value never changed")
+                .contains("Smith");
+        assertThat(audit.decisionsFor(patientId, "family_name"))
+                .extracting(d -> d.outcome())
+                .containsExactly(IdentityConflictAuditWriter.Outcome.ACCEPTED, IdentityConflictAuditWriter.Outcome.REJECTED);
+    }
+
+    private IdentityReconciler reconcilerWith(InMemoryAuditWriter audit) {
+        return new RecencyWinsIdentityReconciler(
+                new JpaIdentityFieldProvenanceStore(provenanceRepository, entityManager),
+                accessor,
+                audit,
+                new SpringTransactionRunner(transactionManager));
+    }
+
+    /** Native SQL, as the onboarding screen's value arrives through the API: no ISO check on this path. */
+    private void seedDob(String dob) {
+        tx.executeWithoutResult(status -> entityManager
+                .createNativeQuery("update patient set dob = :dob where id = :id")
+                .setParameter("dob", dob)
+                .setParameter("id", patientId)
+                .executeUpdate());
     }
 
     /**

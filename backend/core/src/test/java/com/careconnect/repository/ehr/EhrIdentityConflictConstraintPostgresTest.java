@@ -37,7 +37,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </pre>
  * Skipped when {@code EHR_IT_JDBC_URI} is unset, so CI stays green.
  * <p>
- * Test IDs TC-EHR-CONF-001..005 are permanent. Never renumber, never reuse.
+ * Test IDs TC-EHR-CONF-001..006 are permanent. Never renumber, never reuse. 001..005 are the
+ * author's; 006 was added by the Testing Lead on the PR #209 review (2026-09-29).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -143,5 +144,14 @@ class EhrIdentityConflictConstraintPostgresTest {
 
         assertThatThrownBy(() -> insert("email", "ACCEPTED", "STAFF"))
                 .hasMessageContaining("ck_ehr_identity_conflict_resolver");
+    }
+
+    @Test
+    @DisplayName("TC-EHR-CONF-006: a status outside PENDING, ACCEPTED and REJECTED is rejected")
+    void statusOutsideTheVocabularyIsRejected() {
+        // RESOLVED is the status the original design had and the 2026-09-26 reversal removed.
+        // Resolution columns are filled so that only the status vocabulary can be what refuses it.
+        assertThatThrownBy(() -> insert("phone", "RESOLVED", "SYSTEM"))
+                .hasMessageContaining("ck_ehr_identity_conflict_status");
     }
 }

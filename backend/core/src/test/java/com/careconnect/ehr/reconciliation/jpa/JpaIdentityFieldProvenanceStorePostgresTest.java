@@ -287,9 +287,12 @@ class JpaIdentityFieldProvenanceStorePostgresTest {
     // ---- helpers ----
 
     private long firstIdOf(String table) {
-        Number id = (Number) tx.execute(status -> entityManager
+        // getResultList rather than getSingleResult: the latter throws NoResultException on an empty
+        // table, so the explanatory message below could never be reached.
+        List<?> ids = tx.execute(status -> entityManager
                 .createNativeQuery("select id from " + table + " order by id limit 1")
-                .getSingleResult());
+                .getResultList());
+        Number id = ids == null || ids.isEmpty() ? null : (Number) ids.get(0);
         if (id == null) {
             throw new IllegalStateException(
                     "No rows in " + table + "; this test needs a database the application has booted "
