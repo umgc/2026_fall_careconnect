@@ -92,14 +92,7 @@ class MedicationPhotoExtractionResult {
   }
 }
 
-/// Maps a backend MedicationType constant to the frontend enum. The backend
-/// OVER_THE_COUNTER maps to the frontend OTC (KI-05). Unknown values return
-/// null so the review form leaves the type blank.
-MedicationType? medicationTypeFromExtracted(String? value) {
-  if (value == null || value.isEmpty) return null;
-  if (value == 'OVER_THE_COUNTER') return MedicationType.OTC;
-  for (final type in MedicationType.values) {
-    if (type.name == value) return type;
-  }
-  return null;
-}
+/// Maps an extracted backend MedicationType constant to the frontend enum.
+/// Unknown values return null so the review form leaves the type blank.
+MedicationType? medicationTypeFromExtracted(String? value) =>
+    medicationTypeFromWire(value);
