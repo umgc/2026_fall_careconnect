@@ -99,7 +99,7 @@ class CheckInSnapshotServiceTest {
         assertThatThrownBy(() -> service.createCheckInWithSnapshot(
                 new CheckInCreateRequestDTO(99L, List.of(1L))
         )).isInstanceOf(AppException.class)
-          .hasMessageContaining("Patient not found");
+                .hasMessageContaining("Patient not found");
     }
 
     @Test
@@ -112,7 +112,7 @@ class CheckInSnapshotServiceTest {
         assertThatThrownBy(() -> service.createCheckInWithSnapshot(
                 new CheckInCreateRequestDTO(8L, List.of(1L, 2L))
         )).isInstanceOf(AppException.class)
-          .hasMessageContaining("Unknown question ids");
+                .hasMessageContaining("Unknown question ids");
     }
 
     @Test

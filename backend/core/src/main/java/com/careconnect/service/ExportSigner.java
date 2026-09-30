@@ -2,6 +2,7 @@ package com.careconnect.service;
 
 import java.time.Instant;
 import java.time.Duration;
+
 import org.springframework.stereotype.Service;
 
 import com.careconnect.dto.ExportLinkDTO;
@@ -14,7 +15,8 @@ public class ExportSigner {
 
     /**
      * Generates a signed URL for file exports
-     * @param fileName the name of the file to export
+     *
+     * @param fileName  the name of the file to export
      * @param patientId the patient ID
      * @return signed URL string
      */
@@ -23,11 +25,11 @@ public class ExportSigner {
         String baseUrl = "https://api.careconnect.com/exports";
         long timestamp = System.currentTimeMillis();
         String signature = generateSignature(fileName, patientId, timestamp);
-        
-        return String.format("%s/%s?patientId=%d&timestamp=%d&signature=%s", 
+
+        return String.format("%s/%s?patientId=%d&timestamp=%d&signature=%s",
                 baseUrl, fileName, patientId, timestamp, signature);
     }
-    
+
     private String generateSignature(String fileName, Long patientId, long timestamp) {
         // Simple signature generation - in production, use proper cryptographic signing
         return Integer.toHexString((fileName + patientId + timestamp).hashCode());

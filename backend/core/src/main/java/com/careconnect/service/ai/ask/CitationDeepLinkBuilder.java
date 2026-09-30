@@ -22,6 +22,38 @@ final class CitationDeepLinkBuilder {
         this.objectMapper = objectMapper;
     }
 
+    private static String textOrNull(final JsonNode node, final String field) {
+        if (node == null) {
+            return null;
+        }
+        final JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        final String text = value.isTextual() || value.isNumber() ? value.asText() : null;
+        return text == null || text.isBlank() ? null : text.trim();
+    }
+
+    /**
+     * Rejects empty, traversal, and path-separator values so deep links stay single-segment.
+     */
+    static String pathSegment(final String raw) {
+        if (raw == null) {
+            return null;
+        }
+        final String trimmed = raw.trim();
+        if (trimmed.isEmpty()
+                || trimmed.contains("/")
+                || trimmed.contains("\\")
+                || trimmed.contains("..")
+                || trimmed.contains("#")
+                || trimmed.contains("?")
+                || trimmed.contains(":")) {
+            return null;
+        }
+        return trimmed;
+    }
+
     String build(final RankedChunk chunk) {
         if (chunk == null || chunk.recordType() == null) {
             return null;
@@ -30,8 +62,8 @@ final class CitationDeepLinkBuilder {
         return switch (chunk.recordType()) {
             case CALL_SUMMARY -> callSummaryLink(metadata, null);
             case SUMMARY_ACTION_ITEM, SUMMARY_APPOINTMENT, SUMMARY_CARE_INSTRUCTION,
-                    SUMMARY_CONDITION, SUMMARY_SOAP, SUMMARY_CLINICAL_OBSERVATION,
-                    MEDICATION_TIMELINE_EVENT -> summaryChildLink(chunk, metadata);
+                 SUMMARY_CONDITION, SUMMARY_SOAP, SUMMARY_CLINICAL_OBSERVATION,
+                 MEDICATION_TIMELINE_EVENT -> summaryChildLink(chunk, metadata);
             case TRANSCRIPT_SEGMENT -> transcriptLink(metadata);
             case VISIT_SUMMARY -> visitSummaryLink(metadata, chunk.sourceRecordId());
             case CLINICAL_NOTE -> clinicalNoteLink(chunk.patientId(), chunk.sourceRecordId());
@@ -128,37 +160,5 @@ final class CitationDeepLinkBuilder {
         } catch (final Exception ignored) {
             return objectMapper.createObjectNode();
         }
-    }
-
-    private static String textOrNull(final JsonNode node, final String field) {
-        if (node == null) {
-            return null;
-        }
-        final JsonNode value = node.get(field);
-        if (value == null || value.isNull()) {
-            return null;
-        }
-        final String text = value.isTextual() || value.isNumber() ? value.asText() : null;
-        return text == null || text.isBlank() ? null : text.trim();
-    }
-
-    /**
-     * Rejects empty, traversal, and path-separator values so deep links stay single-segment.
-     */
-    static String pathSegment(final String raw) {
-        if (raw == null) {
-            return null;
-        }
-        final String trimmed = raw.trim();
-        if (trimmed.isEmpty()
-                || trimmed.contains("/")
-                || trimmed.contains("\\")
-                || trimmed.contains("..")
-                || trimmed.contains("#")
-                || trimmed.contains("?")
-                || trimmed.contains(":")) {
-            return null;
-        }
-        return trimmed;
     }
 }

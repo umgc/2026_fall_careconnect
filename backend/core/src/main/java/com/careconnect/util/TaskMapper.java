@@ -28,11 +28,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>
  * Example JSON representation of {@code daysOfWeek}:
  * </p>
- * 
+ *
  * <pre>
  * "[true, false, true, false, false, true, false]"
  * </pre>
- * 
+ * <p>
  * → Monday, Wednesday, Saturday
  *
  * <p>
@@ -41,7 +41,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * </p>
  */
 public class TaskMapper {
-    /** Shared Jackson object mapper for JSON serialization/deserialization. */
+    /**
+     * Shared Jackson object mapper for JSON serialization/deserialization.
+     */
     private static final ObjectMapper mapper = new ObjectMapper();
 
     /**
@@ -56,7 +58,7 @@ public class TaskMapper {
      * <p>
      * Example input:
      * </p>
-     * 
+     *
      * <pre>
      * "[true, false, true, false, false, true, false]"
      * </pre>
@@ -136,13 +138,13 @@ public class TaskMapper {
      * <p>
      * Example input:
      * </p>
-     * 
+     *
      * <pre>
      *   [true, false, true, false, false, true, false]
      * </pre>
-     * 
+     * <p>
      * → Output:
-     * 
+     *
      * <pre>
      * "[true,false,true,false,false,true,false]"
      * </pre>

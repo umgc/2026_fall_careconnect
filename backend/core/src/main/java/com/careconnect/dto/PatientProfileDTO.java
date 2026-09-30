@@ -2,6 +2,7 @@ package com.careconnect.dto;
 
 import com.careconnect.model.Gender;
 import lombok.Builder;
+
 import java.util.List;
 
 /**
@@ -28,4 +29,5 @@ public record PatientProfileDTO(
         String habits,
         String phobias,
         String preferredCommunicationMethod
-) {}
+) {
+}

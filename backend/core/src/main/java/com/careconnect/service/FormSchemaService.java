@@ -53,7 +53,9 @@ public class FormSchemaService {
         this.objectMapper = objectMapper;
     }
 
-    /** Read every bundled form definition from the classpath. */
+    /**
+     * Read every bundled form definition from the classpath.
+     */
     public List<FormSchema> loadBundledSchemas() {
         List<FormSchema> schemas = new ArrayList<>();
         try {
@@ -81,18 +83,18 @@ public class FormSchemaService {
         for (FormType type : FormType.values()) {
             List<FormDefinition> defs = repository.findByFormType(type);
             defs.stream()
-                .max((a, b) -> a.getEffectiveDate().compareTo(b.getEffectiveDate()))
-                .ifPresent(active -> {
-                    for (FormDefinition d : defs) {
-                        FormDefinition.FormStatus desired = d.getId().equals(active.getId())
-                                ? FormDefinition.FormStatus.ACTIVE
-                                : FormDefinition.FormStatus.RETIRED;
-                        if (d.getStatus() != desired) {
-                            d.setStatus(desired);
-                            repository.save(d);
+                    .max((a, b) -> a.getEffectiveDate().compareTo(b.getEffectiveDate()))
+                    .ifPresent(active -> {
+                        for (FormDefinition d : defs) {
+                            FormDefinition.FormStatus desired = d.getId().equals(active.getId())
+                                    ? FormDefinition.FormStatus.ACTIVE
+                                    : FormDefinition.FormStatus.RETIRED;
+                            if (d.getStatus() != desired) {
+                                d.setStatus(desired);
+                                repository.save(d);
+                            }
                         }
-                    }
-                });
+                    });
         }
         log.info("Synced {} form definitions", repository.count());
     }
@@ -188,18 +190,45 @@ public class FormSchemaService {
             String msg = rule.getMessage() != null ? rule.getMessage() : defaultMessage(field, rule);
             switch (rule.getType()) {
                 case REQUIRED -> { /* handled by presence check above */ }
-                case MIN_LENGTH -> { if (str.length() < asInt(rule.getValue())) errors.add(msg); }
-                case MAX_LENGTH -> { if (str.length() > asInt(rule.getValue())) errors.add(msg); }
-                case MIN -> { Double n = asNumber(raw); if (n == null || n < asDouble(rule.getValue())) errors.add(msg); }
-                case MAX -> { Double n = asNumber(raw); if (n == null || n > asDouble(rule.getValue())) errors.add(msg); }
-                case PATTERN -> { if (rule.getPattern() != null && !Pattern.compile(rule.getPattern()).matcher(str).matches()) errors.add(msg); }
-                case EMAIL -> { if (!EMAIL.matcher(str).matches()) errors.add(msg); }
-                case SSN -> { if (!SSN.matcher(str).matches()) errors.add(msg); }
-                case EIN -> { if (!EIN.matcher(str).matches()) errors.add(msg); }
-                case ROUTING_NUMBER -> { if (!ROUTING.matcher(str).matches() || !validRouting(str)) errors.add(msg); }
-                case CHECKED -> { if (!Boolean.parseBoolean(str)) errors.add(msg); }
-                case ENUM -> { if (rule.getValue() instanceof List<?> allowed && !allowed.contains(str)) errors.add(msg); }
-                case DATE -> { if (parseIsoDate(str) == null) errors.add(msg); }
+                case MIN_LENGTH -> {
+                    if (str.length() < asInt(rule.getValue())) errors.add(msg);
+                }
+                case MAX_LENGTH -> {
+                    if (str.length() > asInt(rule.getValue())) errors.add(msg);
+                }
+                case MIN -> {
+                    Double n = asNumber(raw);
+                    if (n == null || n < asDouble(rule.getValue())) errors.add(msg);
+                }
+                case MAX -> {
+                    Double n = asNumber(raw);
+                    if (n == null || n > asDouble(rule.getValue())) errors.add(msg);
+                }
+                case PATTERN -> {
+                    if (rule.getPattern() != null && !Pattern.compile(rule.getPattern()).matcher(str).matches())
+                        errors.add(msg);
+                }
+                case EMAIL -> {
+                    if (!EMAIL.matcher(str).matches()) errors.add(msg);
+                }
+                case SSN -> {
+                    if (!SSN.matcher(str).matches()) errors.add(msg);
+                }
+                case EIN -> {
+                    if (!EIN.matcher(str).matches()) errors.add(msg);
+                }
+                case ROUTING_NUMBER -> {
+                    if (!ROUTING.matcher(str).matches() || !validRouting(str)) errors.add(msg);
+                }
+                case CHECKED -> {
+                    if (!Boolean.parseBoolean(str)) errors.add(msg);
+                }
+                case ENUM -> {
+                    if (rule.getValue() instanceof List<?> allowed && !allowed.contains(str)) errors.add(msg);
+                }
+                case DATE -> {
+                    if (parseIsoDate(str) == null) errors.add(msg);
+                }
                 case AGE_MIN -> {
                     LocalDate dob = parseIsoDate(str);
                     if (dob == null || Period.between(dob, LocalDate.now()).getYears() < asInt(rule.getValue())) {
@@ -225,7 +254,9 @@ public class FormSchemaService {
         }
     }
 
-    /** ABA routing number checksum. */
+    /**
+     * ABA routing number checksum.
+     */
     private boolean validRouting(String digits) {
         int[] d = digits.chars().map(c -> c - '0').toArray();
         int sum = 3 * (d[0] + d[3] + d[6])
@@ -234,34 +265,53 @@ public class FormSchemaService {
         return sum % 10 == 0;
     }
 
-    private String label(FormField f) { return f.getLabel() != null ? f.getLabel() : f.getId(); }
+    private String label(FormField f) {
+        return f.getLabel() != null ? f.getLabel() : f.getId();
+    }
 
     private String defaultMessage(FormField field, ValidationRule rule) {
         return label(field) + " failed validation: " + rule.getType();
     }
 
-    private int asInt(Object o) { return (int) asDouble(o); }
+    private int asInt(Object o) {
+        return (int) asDouble(o);
+    }
 
     private double asDouble(Object o) {
         if (o instanceof Number n) return n.doubleValue();
-        try { return Double.parseDouble(String.valueOf(o)); }
-        catch (NumberFormatException e) { return Double.NaN; }
+        try {
+            return Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return Double.NaN;
+        }
     }
 
-    /** Parse a value as a numeric, or {@code null} when it is not a number. */
+    /**
+     * Parse a value as a numeric, or {@code null} when it is not a number.
+     */
     private Double asNumber(Object o) {
         if (o instanceof Number n) return n.doubleValue();
-        try { return Double.parseDouble(String.valueOf(o)); }
-        catch (NumberFormatException e) { return null; }
+        try {
+            return Double.parseDouble(String.valueOf(o));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
-    /** Parse an ISO-8601 date (yyyy-MM-dd), or {@code null} when invalid. */
+    /**
+     * Parse an ISO-8601 date (yyyy-MM-dd), or {@code null} when invalid.
+     */
     private LocalDate parseIsoDate(String s) {
-        try { return LocalDate.parse(s); }
-        catch (Exception e) { return null; }
+        try {
+            return LocalDate.parse(s);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
-    /** The set of valid value keys ("sectionId.fieldId") declared by a schema. */
+    /**
+     * The set of valid value keys ("sectionId.fieldId") declared by a schema.
+     */
     private Set<String> knownKeys(FormSchema schema) {
         Set<String> keys = new HashSet<>();
         if (schema.getSections() == null) return keys;
@@ -289,7 +339,9 @@ public class FormSchemaService {
         return cleaned;
     }
 
-    /** Keys ("sectionId.fieldId") whose field is marked {@code sensitive}. */
+    /**
+     * Keys ("sectionId.fieldId") whose field is marked {@code sensitive}.
+     */
     public Set<String> sensitiveKeys(FormSchema schema) {
         Set<String> keys = new HashSet<>();
         if (schema.getSections() == null) return keys;

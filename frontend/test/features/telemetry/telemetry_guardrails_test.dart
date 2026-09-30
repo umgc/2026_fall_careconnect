@@ -261,5 +261,34 @@ void main() {
       expect(result!.containsKey('patientId'), isFalse);
       expect(result['scope'], 'single');
     });
+
+    // TC-TEL-ING-019 - client half of the allowlist drift guard.
+    //
+    // TelemetryService.allowedEvents and TelemetryGuardrails.allowedEvents are
+    // hand-copied duplicates (DEF-TEL-07). TC-TEL-21 compares them, but it runs
+    // in the backend module and skips rather than fails when the Flutter tree
+    // is not reachable, so a frontend-only job guards nothing. This case pins
+    // the one entry that exists solely for parity, from the side TC-TEL-21
+    // cannot see.
+    //
+    // dev_emit is the server-side default TelemetryController applies when a
+    // payload carries no eventName. No client code emits it. It is listed here
+    // so the two sets stay identical; removing it from this file alone turns
+    // TC-TEL-21 red, and removing it from both is the only correct way out.
+    //
+    // Test ID TC-TEL-ING-019 is permanent. Never renumber, never reuse.
+    test('TC-TEL-ING-019: dev_emit is whitelisted for parity with the backend', () {
+      expect(
+        TelemetryGuardrails.allowedEvents,
+        contains('dev_emit'),
+        reason: 'dev_emit must stay in step with TelemetryService.allowedEvents '
+            '(TC-TEL-21); remove it from both allowlists or neither',
+      );
+
+      final result = TelemetryGuardrails.sanitize('dev_emit', {'screen': 'home'});
+
+      expect(result, isNotNull);
+      expect(result!['screen'], 'home');
+    });
   });
 }

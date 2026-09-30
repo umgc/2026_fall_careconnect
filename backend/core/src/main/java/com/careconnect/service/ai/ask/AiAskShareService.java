@@ -20,6 +20,7 @@ import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,6 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,7 +48,8 @@ public class AiAskShareService {
 
     private static final Logger log = LoggerFactory.getLogger(AiAskShareService.class);
     private static final int MAX_TRANSCRIPT_CHARS = 200_000;
-    private static final TypeReference<List<Long>> LONG_LIST = new TypeReference<>() {};
+    private static final TypeReference<List<Long>> LONG_LIST = new TypeReference<>() {
+    };
 
     private final RetrievalScopeService retrievalScopeService;
     private final PatientRepository patientRepository;
@@ -75,6 +78,19 @@ public class AiAskShareService {
         this.chatAuditService = chatAuditService;
         this.objectMapper = objectMapper;
         this.self = self != null ? self : this;
+    }
+
+    private static String normalizeRole(final String role) {
+        if (role == null || role.isBlank()) {
+            return "assistant";
+        }
+        final String normalized = role.trim().toLowerCase();
+        if (Objects.equals(normalized, "user")
+                || Objects.equals(normalized, "assistant")
+                || Objects.equals(normalized, "system")) {
+            return normalized;
+        }
+        return "assistant";
     }
 
     /**
@@ -382,19 +398,9 @@ public class AiAskShareService {
         }
     }
 
-    private static String normalizeRole(final String role) {
-        if (role == null || role.isBlank()) {
-            return "assistant";
-        }
-        final String normalized = role.trim().toLowerCase();
-        if (Objects.equals(normalized, "user")
-                || Objects.equals(normalized, "assistant")
-                || Objects.equals(normalized, "system")) {
-            return normalized;
-        }
-        return "assistant";
+    /**
+     * Visible for persistNewShare signature / unit tests.
+     */
+    public record TranscriptPayload(String json, int messageCount) {
     }
-
-    /** Visible for persistNewShare signature / unit tests. */
-    public record TranscriptPayload(String json, int messageCount) {}
 }

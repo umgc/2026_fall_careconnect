@@ -30,17 +30,19 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class SymptomControllerTest {
 
-    @Mock private SymptomService symptomService;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private CaregiverService caregiverService;
-
+    private static final Long PATIENT_ID = 1L;
+    private static final Long SYMPTOM_ID = 10L;
+    private static final String USER_EMAIL = "user@test.com";
+    @Mock
+    private SymptomService symptomService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private CaregiverService caregiverService;
     @InjectMocks
     private SymptomController controller;
-
-    private static final Long PATIENT_ID  = 1L;
-    private static final Long SYMPTOM_ID  = 10L;
-    private static final String USER_EMAIL = "user@test.com";
 
     @AfterEach
     void clearSecurity() throws Exception {
@@ -326,8 +328,7 @@ class SymptomControllerTest {
         final ResponseEntity<?> response = controller.delete(SYMPTOM_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertThat(body).containsEntry("message", "Symptom deleted");
     }
 

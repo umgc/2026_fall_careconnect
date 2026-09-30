@@ -52,28 +52,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @DisplayName("ClientController – in-home residential support endpoints")
 class ClientControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean private PatientService patientService;
-    @MockitoBean private UserRepository userRepository;
-    @MockitoBean private CaregiverPatientLinkService caregiverPatientLinkService;
-    @MockitoBean private FamilyMemberService familyMemberService;
-    @MockitoBean private CaregiverRepository caregiverRepository;
-    @MockitoBean private BehavioralIncidentRepository behavioralIncidentRepository;
-    @MockitoBean private IncidentReportRepository incidentReportRepository;
-    @MockitoBean private ClientEventRepository clientEventRepository;
-    @MockitoBean private ActivityLogRepository activityLogRepository;
-
-    private ObjectMapper objectMapper;
-    private User caregiverUser;
-    private Patient patient;
-    private Caregiver caregiver;
-
     private static final Long CLIENT_ID = 10L;
     private static final Long CAREGIVER_USER_ID = 42L;
     private static final Long CAREGIVER_ID = 99L;
     private static final Long PATIENT_USER_ID = 1L;
+    @Autowired
+    private MockMvc mockMvc;
+    @MockitoBean
+    private PatientService patientService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @MockitoBean
+    private FamilyMemberService familyMemberService;
+    @MockitoBean
+    private CaregiverRepository caregiverRepository;
+    @MockitoBean
+    private BehavioralIncidentRepository behavioralIncidentRepository;
+    @MockitoBean
+    private IncidentReportRepository incidentReportRepository;
+    @MockitoBean
+    private ClientEventRepository clientEventRepository;
+    @MockitoBean
+    private ActivityLogRepository activityLogRepository;
+    private ObjectMapper objectMapper;
+    private User caregiverUser;
+    private Patient patient;
+    private Caregiver caregiver;
 
     @BeforeEach
     void setUp() {
@@ -97,7 +103,9 @@ class ClientControllerTest {
         caregiver.setUser(caregiverUser);
     }
 
-    /** Sets up standard caregiver-access mocks used by most tests. */
+    /**
+     * Sets up standard caregiver-access mocks used by most tests.
+     */
     private void stubCaregiverAccess() {
         when(userRepository.findByEmail("caregiver@test.com")).thenReturn(Optional.of(caregiverUser));
         when(patientService.getPatientById(CLIENT_ID)).thenReturn(patient);

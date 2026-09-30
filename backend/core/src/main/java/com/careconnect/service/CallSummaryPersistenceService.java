@@ -22,6 +22,25 @@ public class CallSummaryPersistenceService {
     private final CallSummaryRepository summaryRepository;
     private final IndexingEventEmitter indexingEventEmitter;
 
+    private static boolean isTerminalSuccess(final CallSummary summary) {
+        return SUCCESS.equals(summary.getStatus()) || NO_TRANSCRIPT.equals(summary.getStatus());
+    }
+
+    private static void copyAttempt(final CallSummary source, final CallSummary target) {
+        target.setPatientId(source.getPatientId());
+        target.setSummaryJson(source.getSummaryJson());
+        target.setStatus(source.getStatus());
+        target.setTranscriptSegmentCount(source.getTranscriptSegmentCount());
+        target.setGeneratedByUserId(source.getGeneratedByUserId());
+        target.setErrorMessage(source.getErrorMessage());
+        target.setGeneratedAt(source.getGeneratedAt());
+        target.setRiskLevel(source.getRiskLevel());
+        target.setCaregiverVisibility(source.getCaregiverVisibility());
+        target.setSummaryConfidence(source.getSummaryConfidence());
+        target.setSummarizationEngine(source.getSummarizationEngine());
+        target.setTranscriptAvailable(source.getTranscriptAvailable());
+    }
+
     /**
      * Persists one summary per call/snapshot/model key and its SUCCESS outbox event
      * in the same transaction.
@@ -72,24 +91,5 @@ public class CallSummaryPersistenceService {
                     saved.getSummarizationEngine(),
                     ContentHashUtil.sha256(saved.getSummaryJson())));
         }
-    }
-
-    private static boolean isTerminalSuccess(final CallSummary summary) {
-        return SUCCESS.equals(summary.getStatus()) || NO_TRANSCRIPT.equals(summary.getStatus());
-    }
-
-    private static void copyAttempt(final CallSummary source, final CallSummary target) {
-        target.setPatientId(source.getPatientId());
-        target.setSummaryJson(source.getSummaryJson());
-        target.setStatus(source.getStatus());
-        target.setTranscriptSegmentCount(source.getTranscriptSegmentCount());
-        target.setGeneratedByUserId(source.getGeneratedByUserId());
-        target.setErrorMessage(source.getErrorMessage());
-        target.setGeneratedAt(source.getGeneratedAt());
-        target.setRiskLevel(source.getRiskLevel());
-        target.setCaregiverVisibility(source.getCaregiverVisibility());
-        target.setSummaryConfidence(source.getSummaryConfidence());
-        target.setSummarizationEngine(source.getSummarizationEngine());
-        target.setTranscriptAvailable(source.getTranscriptAvailable());
     }
 }

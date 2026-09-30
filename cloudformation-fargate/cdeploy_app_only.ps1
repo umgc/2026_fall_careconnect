@@ -11,6 +11,25 @@ param(
 
     [switch]$RunTests,
 
+    # Omit to leave CareConnectAiEnabled as whatever parameters/{env}-service.json
+    # already has committed; pass "true"/"false" to override it for this deploy.
+    [string]$AiEnabled,
+
+    # Omit to leave AiModel as whatever parameters/{env}-service.json already
+    # has committed; pass a Bedrock model ID to override it for this deploy.
+    [string]$AiModel,
+
+    # Omit to leave FrontendBaseUrl/CorsAllowedList as whatever
+    # parameters/{env}-service.json already has committed. When set, appends
+    # the given URL to the committed CORS list (which already carries the
+    # localhost/127.0.0.1 entries) rather than replacing it.
+    [string]$FrontendUrl,
+
+    # Skips the Maven/Docker build+push entirely and reuses the service
+    # stack's currently-deployed BackendImageUri — for a parameter-only
+    # update (e.g. just -FrontendUrl or -AiEnabled) with no backend code change.
+    [switch]$SkipBuild,
+
     [Alias("h")]
     [switch]$Help
 )
@@ -41,6 +60,19 @@ Options:
   -Region <region>      AWS region (default: us-east-1)
   -ImageTag <tag>       Docker/ECR image tag (default: env + git SHA or timestamp)
   -RunTests             Run Maven tests during package build
+  -AiEnabled <bool>     Override CareConnectAiEnabled (true/false) on the
+                         service stack; omit to leave the committed
+                         parameters/{env}-service.json value as-is
+  -AiModel <model-id>   Override AiModel (Bedrock model ID) on the service
+                         stack; omit to leave the committed
+                         parameters/{env}-service.json value as-is
+  -FrontendUrl <url>    Full https:// Amplify/frontend URL to allow — sets
+                         FrontendBaseUrl and appends to CorsAllowedList;
+                         omit to leave both as committed
+  -SkipBuild            Skip the Maven/Docker build+push and reuse the
+                         service stack's currently-deployed image — useful
+                         for a parameter-only update (e.g. just -FrontendUrl,
+                         -AiEnabled, or -AiModel) with no backend code change
   -Help, -h             Show this help text
 "@ | Write-Host
     exit 0
@@ -298,9 +330,28 @@ function Get-CloudFormationOutput {
     return [string]$value
 }
 
+function Get-CloudFormationParameter {
+    param(
+        [string]$StackName,
+        [string]$ParameterKey
+    )
+
+    $value = & aws cloudformation describe-stacks `
+        --region $Region `
+        --stack-name $StackName `
+        --query "Stacks[0].Parameters[?ParameterKey=='$ParameterKey'].ParameterValue" `
+        --output text
+    Assert-LastExitCode "Reading CloudFormation parameter '$ParameterKey' from stack '$StackName'"
+    return [string]$value
+}
+
 try {
     Write-Step "Checking prerequisites"
-    foreach ($command in @("aws", "docker", "java")) {
+    $requiredCommands = @("aws")
+    if (-not $SkipBuild) {
+        $requiredCommands += @("docker", "java")
+    }
+    foreach ($command in $requiredCommands) {
         if (-not (Test-CommandExists $command)) {
             throw "Required command not found in PATH: $command"
         }
@@ -310,7 +361,7 @@ try {
     Assert-PathExists $ServiceParameters
     Assert-PathExists $BackendDir
 
-    if (-not (Test-Path -LiteralPath (Join-Path $BackendDir "mvnw.cmd"))) {
+    if (-not $SkipBuild -and -not (Test-Path -LiteralPath (Join-Path $BackendDir "mvnw.cmd"))) {
         throw "Expected Maven wrapper not found at '$BackendDir\mvnw.cmd'."
     }
 
@@ -328,57 +379,79 @@ try {
         throw "Platform stack '$PlatformStackName' does not exist. Run the full deploy first so the ECR repository and ECS cluster are available."
     }
 
-    Write-Step "Reading ECR repository URI"
-    $script:CurrentOperation = "Reading ECR repository URI"
-    $RepositoryUri = (Get-CloudFormationOutput -StackName $PlatformStackName -OutputKey "EcrRepositoryUri").Trim()
-    if (-not $RepositoryUri -or $RepositoryUri -eq "None") {
-        throw "Platform stack '$PlatformStackName' did not return EcrRepositoryUri."
-    }
-
-    $RepositoryName = ($RepositoryUri -split "/", 2)[1]
-    $ImageUri = "$RepositoryUri`:$ImageTag"
-    $LocalImageName = "careconnect-backend-local:$ImageTag"
-
-    Write-Step "Building backend jar"
-    Push-Location $BackendDir
-    try {
-        $script:CurrentOperation = "Building backend jar"
-        # Use batch mode and suppress Maven transfer-progress spam so CI logs stay
-        # readable and it is easier to tell whether the build is really moving.
-        $mavenArgs = @("-B", "-ntp", "clean", "package", "-Pdocker")
-        if (-not $RunTests) {
-            $mavenArgs += "-DskipTests"
+    if ($SkipBuild) {
+        Write-Step "Reading current BackendImageUri from $ServiceStackName (-SkipBuild)"
+        $script:CurrentOperation = "Reading current BackendImageUri"
+        $ImageUri = (Get-CloudFormationParameter -StackName $ServiceStackName -ParameterKey "BackendImageUri").Trim()
+        if (-not $ImageUri -or $ImageUri -eq "None") {
+            throw "Could not read the current BackendImageUri from stack '$ServiceStackName'. Has the service stack been deployed at least once? -SkipBuild has nothing to reuse."
         }
-        & .\mvnw.cmd @mavenArgs
-        Assert-LastExitCode "Maven package build"
-
-        Write-Step "Logging into ECR"
-        $script:CurrentOperation = "Logging into ECR"
-        $RegistryHost = ($RepositoryUri -split "/", 2)[0]
-        $LoginPassword = & aws ecr get-login-password --region $Region
-        Assert-LastExitCode "ECR login password retrieval"
-        $LoginPassword | docker login --username AWS --password-stdin $RegistryHost
-        Assert-LastExitCode "Docker login to ECR"
-
-        Write-Step "Building Docker image"
-        $script:CurrentOperation = "Building Docker image"
-        & docker build --platform linux/amd64 -t $LocalImageName .
-        Assert-LastExitCode "Docker build"
-
-        Write-Step "Tagging and pushing Docker image to ECR"
-        $script:CurrentOperation = "Pushing Docker image to ECR"
-        & docker tag $LocalImageName $ImageUri
-        Assert-LastExitCode "Docker tag"
-        & docker push $ImageUri
-        Assert-LastExitCode "Docker push"
+        Write-Host "Reusing image: $ImageUri" -ForegroundColor DarkCyan
+        $RepositoryName = "(skipped -- reused existing image)"
     }
-    finally {
-        Pop-Location
+    else {
+        Write-Step "Reading ECR repository URI"
+        $script:CurrentOperation = "Reading ECR repository URI"
+        $RepositoryUri = (Get-CloudFormationOutput -StackName $PlatformStackName -OutputKey "EcrRepositoryUri").Trim()
+        if (-not $RepositoryUri -or $RepositoryUri -eq "None") {
+            throw "Platform stack '$PlatformStackName' did not return EcrRepositoryUri."
+        }
+
+        $RepositoryName = ($RepositoryUri -split "/", 2)[1]
+        $ImageUri = "$RepositoryUri`:$ImageTag"
+        $LocalImageName = "careconnect-backend-local:$ImageTag"
+
+        Write-Step "Building backend jar"
+        Push-Location $BackendDir
+        try {
+            $script:CurrentOperation = "Building backend jar"
+            # Use batch mode and suppress Maven transfer-progress spam so CI logs stay
+            # readable and it is easier to tell whether the build is really moving.
+            $mavenArgs = @("-B", "-ntp", "clean", "package", "-Pdocker")
+            if (-not $RunTests) {
+                $mavenArgs += "-DskipTests"
+            }
+            & .\mvnw.cmd @mavenArgs
+            Assert-LastExitCode "Maven package build"
+
+            Write-Step "Logging into ECR"
+            $script:CurrentOperation = "Logging into ECR"
+            $RegistryHost = ($RepositoryUri -split "/", 2)[0]
+            $LoginPassword = & aws ecr get-login-password --region $Region
+            Assert-LastExitCode "ECR login password retrieval"
+            $LoginPassword | docker login --username AWS --password-stdin $RegistryHost
+            Assert-LastExitCode "Docker login to ECR"
+
+            Write-Step "Building Docker image"
+            $script:CurrentOperation = "Building Docker image"
+            & docker build --platform linux/amd64 -t $LocalImageName .
+            Assert-LastExitCode "Docker build"
+
+            Write-Step "Tagging and pushing Docker image to ECR"
+            $script:CurrentOperation = "Pushing Docker image to ECR"
+            & docker tag $LocalImageName $ImageUri
+            Assert-LastExitCode "Docker tag"
+            & docker push $ImageUri
+            Assert-LastExitCode "Docker push"
+        }
+        finally {
+            Pop-Location
+        }
     }
 
     Write-Step "Deploying service stack: $ServiceStackName"
     $ServiceOverrides = @{
         BackendImageUri = $ImageUri
+    }
+    if ($AiEnabled) {
+        $ServiceOverrides["CareConnectAiEnabled"] = $AiEnabled
+    }
+    if ($AiModel) {
+        $ServiceOverrides["AiModel"] = $AiModel
+    }
+    if ($FrontendUrl) {
+        $ServiceOverrides["FrontendBaseUrl"] = $FrontendUrl
+        $ServiceOverrides["CorsAllowedList"] = "http://localhost:*,http://127.0.0.1:*,$FrontendUrl"
     }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 

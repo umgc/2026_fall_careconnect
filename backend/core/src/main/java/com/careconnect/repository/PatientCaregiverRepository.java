@@ -9,10 +9,11 @@ import java.util.List;
 
 @Repository
 public interface PatientCaregiverRepository extends JpaRepository<CaregiverPatientLink, Long> {
-    
+
     boolean existsByCaregiverUserAndPatientUserAndStatus(
-        User caregiverUser, User patientUser, CaregiverPatientLink.LinkStatus status);
-    
+            User caregiverUser, User patientUser, CaregiverPatientLink.LinkStatus status);
+
     List<CaregiverPatientLink> findByCaregiverUser(User caregiverUser);
+
     List<CaregiverPatientLink> findByPatientUser(User patientUser);
 }

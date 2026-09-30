@@ -1,9 +1,11 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.PostCallTranscriptionJob;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 public interface PostCallTranscriptionJobRepository
         extends JpaRepository<PostCallTranscriptionJob, Long> {
     Optional<PostCallTranscriptionJob> findByRecordingId(Long recordingId);
+
     Optional<PostCallTranscriptionJob> findByIdAndClaimToken(Long id, UUID claimToken);
 
     @Query(value = """

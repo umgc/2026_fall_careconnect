@@ -1,6 +1,7 @@
 package com.careconnect.dto;
 
 import lombok.Builder;
+
 import java.time.LocalDateTime;
 
 @Builder
@@ -11,4 +12,5 @@ public record LatestMoodPainDTO(
         String note,
         LocalDateTime timestamp,
         LocalDateTime createdAt
-) {}
+) {
+}

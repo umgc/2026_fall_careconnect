@@ -15,9 +15,11 @@ import com.careconnect.repository.MedicationRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.TaskRepository;
 import com.careconnect.repository.UserRepository;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,126 +33,126 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class StmlCheckInService {
 
-  private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
-  private final UserRepository userRepository;
-  private final PatientRepository patientRepository;
-  private final ClinicalNotesRepository clinicalNotesRepository;
-  private final TaskRepository taskRepository;
-  private final MedicationRepository medicationRepository;
-  private final AllergyRepository allergyRepository;
+    private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
+    private final UserRepository userRepository;
+    private final PatientRepository patientRepository;
+    private final ClinicalNotesRepository clinicalNotesRepository;
+    private final TaskRepository taskRepository;
+    private final MedicationRepository medicationRepository;
+    private final AllergyRepository allergyRepository;
 
-  /**
-   * Returns a check-in preparation view for a caregiver.
-   * Access is gated by an active caregiver-patient consent link.
-   *
-   * @param patientId   the ID of the patient
-   * @param caregiverId the ID of the caregiver requesting the view
-   * @return the check-in preparation DTO
-   */
-  public StmlCheckInDTO getCheckInView(final Long patientId, final Long caregiverId) {
-    User caregiver = userRepository.findById(caregiverId).orElse(null);
-    // patientId is the Patient entity id (matches every other STML endpoint's
-    // path variable), not a User id — the consent link is keyed by the
-    // patient's User account, so resolve it through Patient.getUser().
-    Patient patientEntity = patientRepository.findById(patientId).orElse(null);
-    User patient = patientEntity != null ? patientEntity.getUser() : null;
+    /**
+     * Returns a check-in preparation view for a caregiver.
+     * Access is gated by an active caregiver-patient consent link.
+     *
+     * @param patientId   the ID of the patient
+     * @param caregiverId the ID of the caregiver requesting the view
+     * @return the check-in preparation DTO
+     */
+    public StmlCheckInDTO getCheckInView(final Long patientId, final Long caregiverId) {
+        User caregiver = userRepository.findById(caregiverId).orElse(null);
+        // patientId is the Patient entity id (matches every other STML endpoint's
+        // path variable), not a User id — the consent link is keyed by the
+        // patient's User account, so resolve it through Patient.getUser().
+        Patient patientEntity = patientRepository.findById(patientId).orElse(null);
+        User patient = patientEntity != null ? patientEntity.getUser() : null;
 
-    boolean hasConsent = false;
-    if (caregiver != null && patient != null) {
-      hasConsent = caregiverPatientLinkRepository
-          .existsActiveNonExpiredLink(caregiver, patient, LocalDateTime.now());
+        boolean hasConsent = false;
+        if (caregiver != null && patient != null) {
+            hasConsent = caregiverPatientLinkRepository
+                    .existsActiveNonExpiredLink(caregiver, patient, LocalDateTime.now());
+        }
+
+        if (!hasConsent) {
+            return StmlCheckInDTO.builder()
+                    .patientId(patientId)
+                    .caregiverId(caregiverId)
+                    .generatedAt(LocalDateTime.now())
+                    .consentGranted(false)
+                    .notes(List.of())
+                    .pendingItems(List.of())
+                    .disclaimer(
+                            "Access denied. The care recipient has not granted"
+                                    + " consent for caregiver check-in view.")
+                    .build();
+        }
+
+        List<StmlCheckInItemDTO> notes = new ArrayList<>();
+        List<StmlCheckInItemDTO> pendingItems = new ArrayList<>();
+
+        try {
+            List<ClinicalNote> clinicalNotes = clinicalNotesRepository
+                    .findByPatientIdOrderByCreatedAtDesc(patientId)
+                    .stream().limit(5).toList();
+            for (ClinicalNote n : clinicalNotes) {
+                notes.add(StmlCheckInItemDTO.builder()
+                        .type("NOTE")
+                        .summary(n.getNoteType() + ": " + n.getContent())
+                        .date(n.getCreatedAt().toLocalDate().toString())
+                        .source("CLINICAL_NOTE")
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("Could not load notes for patient {}: {}", patientId, e.getMessage());
+        }
+
+        try {
+            List<Medication> meds = medicationRepository.findActiveByPatientId(patientId);
+            for (Medication m : meds) {
+                notes.add(StmlCheckInItemDTO.builder()
+                        .type("MEDICATION")
+                        .summary(m.getMedicationName()
+                                + (m.getDosage() != null ? " " + m.getDosage() : "")
+                                + (m.getFrequency() != null ? ", " + m.getFrequency() : ""))
+                        .date(null)
+                        .source("MEDICATION")
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("Could not load medications for patient {}: {}", patientId, e.getMessage());
+        }
+
+        try {
+            List<Allergy> allergies = allergyRepository.findByPatientId(patientId);
+            for (Allergy a : allergies) {
+                notes.add(StmlCheckInItemDTO.builder()
+                        .type("ALLERGY")
+                        .summary(a.getAllergen()
+                                + (a.getReaction() != null ? " - " + a.getReaction() : ""))
+                        .date(null)
+                        .source("ALLERGY")
+                        .build());
+            }
+        } catch (Exception e) {
+            log.warn("Could not load allergies for patient {}: {}", patientId, e.getMessage());
+        }
+
+        try {
+            List<Task> tasks = taskRepository
+                    .findByPatientId(patientId).orElse(List.of());
+            tasks.stream()
+                    .filter(t -> !t.isCompleted())
+                    .forEach(t -> pendingItems.add(StmlCheckInItemDTO.builder()
+                            .type("TASK")
+                            .summary(t.getName()
+                                    + (t.getDescription() != null ? ": " + t.getDescription() : ""))
+                            .date(t.getDate())
+                            .source("TASK")
+                            .build()));
+        } catch (Exception e) {
+            log.warn("Could not load tasks for patient {}: {}", patientId, e.getMessage());
+        }
+
+        return StmlCheckInDTO.builder()
+                .patientId(patientId)
+                .caregiverId(caregiverId)
+                .generatedAt(LocalDateTime.now())
+                .consentGranted(true)
+                .notes(notes)
+                .pendingItems(pendingItems)
+                .disclaimer(
+                        "This information is drawn from the care recipient's records."
+                                + " It is not medical advice.")
+                .build();
     }
-
-    if (!hasConsent) {
-      return StmlCheckInDTO.builder()
-          .patientId(patientId)
-          .caregiverId(caregiverId)
-          .generatedAt(LocalDateTime.now())
-          .consentGranted(false)
-          .notes(List.of())
-          .pendingItems(List.of())
-          .disclaimer(
-              "Access denied. The care recipient has not granted"
-              + " consent for caregiver check-in view.")
-          .build();
-    }
-
-    List<StmlCheckInItemDTO> notes = new ArrayList<>();
-    List<StmlCheckInItemDTO> pendingItems = new ArrayList<>();
-
-    try {
-      List<ClinicalNote> clinicalNotes = clinicalNotesRepository
-          .findByPatientIdOrderByCreatedAtDesc(patientId)
-          .stream().limit(5).toList();
-      for (ClinicalNote n : clinicalNotes) {
-        notes.add(StmlCheckInItemDTO.builder()
-            .type("NOTE")
-            .summary(n.getNoteType() + ": " + n.getContent())
-            .date(n.getCreatedAt().toLocalDate().toString())
-            .source("CLINICAL_NOTE")
-            .build());
-      }
-    } catch (Exception e) {
-      log.warn("Could not load notes for patient {}: {}", patientId, e.getMessage());
-    }
-
-    try {
-      List<Medication> meds = medicationRepository.findActiveByPatientId(patientId);
-      for (Medication m : meds) {
-        notes.add(StmlCheckInItemDTO.builder()
-            .type("MEDICATION")
-            .summary(m.getMedicationName()
-                + (m.getDosage() != null ? " " + m.getDosage() : "")
-                + (m.getFrequency() != null ? ", " + m.getFrequency() : ""))
-            .date(null)
-            .source("MEDICATION")
-            .build());
-      }
-    } catch (Exception e) {
-      log.warn("Could not load medications for patient {}: {}", patientId, e.getMessage());
-    }
-
-    try {
-      List<Allergy> allergies = allergyRepository.findByPatientId(patientId);
-      for (Allergy a : allergies) {
-        notes.add(StmlCheckInItemDTO.builder()
-            .type("ALLERGY")
-            .summary(a.getAllergen()
-                + (a.getReaction() != null ? " - " + a.getReaction() : ""))
-            .date(null)
-            .source("ALLERGY")
-            .build());
-      }
-    } catch (Exception e) {
-      log.warn("Could not load allergies for patient {}: {}", patientId, e.getMessage());
-    }
-
-    try {
-      List<Task> tasks = taskRepository
-          .findByPatientId(patientId).orElse(List.of());
-      tasks.stream()
-          .filter(t -> !t.isCompleted())
-          .forEach(t -> pendingItems.add(StmlCheckInItemDTO.builder()
-              .type("TASK")
-              .summary(t.getName()
-                  + (t.getDescription() != null ? ": " + t.getDescription() : ""))
-              .date(t.getDate())
-              .source("TASK")
-              .build()));
-    } catch (Exception e) {
-      log.warn("Could not load tasks for patient {}: {}", patientId, e.getMessage());
-    }
-
-    return StmlCheckInDTO.builder()
-        .patientId(patientId)
-        .caregiverId(caregiverId)
-        .generatedAt(LocalDateTime.now())
-        .consentGranted(true)
-        .notes(notes)
-        .pendingItems(pendingItems)
-        .disclaimer(
-            "This information is drawn from the care recipient's records."
-            + " It is not medical advice.")
-        .build();
-  }
 }

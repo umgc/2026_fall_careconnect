@@ -20,13 +20,13 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * Endpoints for the care-circle invite-token lifecycle (issue #53).
- *
+ * <p>
  * Routes:
- *   POST   /v1/api/care-circle/{linkId}/invite              create  (permission-gated)
- *   GET    /v1/api/invite/{token}                           preview (public)
- *   POST   /v1/api/invite/{token}/accept                    accept  (authenticated)
- *   DELETE /v1/api/care-circle/{linkId}/invite/{tokenId}    revoke  (permission-gated)
- *
+ * POST   /v1/api/care-circle/{linkId}/invite              create  (permission-gated)
+ * GET    /v1/api/invite/{token}                           preview (public)
+ * POST   /v1/api/invite/{token}/accept                    accept  (authenticated)
+ * DELETE /v1/api/care-circle/{linkId}/invite/{tokenId}    revoke  (permission-gated)
+ * <p>
  * Kept as a dedicated controller (rather than folded into LinkManagementController)
  * so the public preview path stays clean and is easy to permit in SecurityConfig.
  */
@@ -87,7 +87,7 @@ public class InviteController {
     /**
      * Public preview ("Who Invited Me?", issue #59). No authentication required
      * so an invitee can see context before signing up.
-     *
+     * <p>
      * Non-enumerating (issue #81): ALWAYS returns 200 with a stable body; the
      * {@code status} field (VALID/EXPIRED/REVOKED/ACCEPTED/INVALID) distinguishes
      * cases and context fields are null for any non-valid token. Unknown and
@@ -103,7 +103,9 @@ public class InviteController {
                 inviteTokenService.previewInvite(token, extractIp(httpRequest)));
     }
 
-    /** Accept an invite, binding the authenticated user into the care circle. */
+    /**
+     * Accept an invite, binding the authenticated user into the care circle.
+     */
     @PostMapping("/invite/{token}/accept")
     public ResponseEntity<AcceptInviteResponse> acceptInvite(
             @PathVariable String token,
@@ -114,7 +116,9 @@ public class InviteController {
                 inviteTokenService.acceptInvite(token, currentUser, extractIp(httpRequest)));
     }
 
-    /** Revoke a pending invite token. Idempotent. */
+    /**
+     * Revoke a pending invite token. Idempotent.
+     */
     @DeleteMapping("/care-circle/{linkId}/invite/{tokenId}")
     public ResponseEntity<Void> revokeInvite(
             @PathVariable Long linkId,

@@ -11,8 +11,8 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "role", visible = true)
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = PatientRegistration.class, name = "PATIENT"),
-    @JsonSubTypes.Type(value = CaregiverRegistration.class, name = "CAREGIVER")
+        @JsonSubTypes.Type(value = PatientRegistration.class, name = "PATIENT"),
+        @JsonSubTypes.Type(value = CaregiverRegistration.class, name = "CAREGIVER")
 })
 public abstract class RegisterRequest {
     private String name;

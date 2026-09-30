@@ -39,15 +39,34 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class NaturalLanguageMailSearchServiceTest {
 
-    @Mock private AuthorizationService authorizationService;
-    @Mock private RetrievalScopeService retrievalScopeService;
-    @Mock private FullTextSearchService fullTextSearchService;
-    @Mock private com.careconnect.service.ai.retrieval.VectorSimilaritySearchService vectorSimilaritySearchService;
-    @Mock private com.careconnect.service.ai.embedding.ChunkEmbeddingService chunkEmbeddingService;
-    @Mock private UspsMailpieceRepository mailpieceRepository;
+    @Mock
+    private AuthorizationService authorizationService;
+    @Mock
+    private RetrievalScopeService retrievalScopeService;
+    @Mock
+    private FullTextSearchService fullTextSearchService;
+    @Mock
+    private com.careconnect.service.ai.retrieval.VectorSimilaritySearchService vectorSimilaritySearchService;
+    @Mock
+    private com.careconnect.service.ai.embedding.ChunkEmbeddingService chunkEmbeddingService;
+    @Mock
+    private UspsMailpieceRepository mailpieceRepository;
 
     private NaturalLanguageMailSearchService service;
     private User caregiver;
+
+    private static UspsMailpiece mailpiece(
+            final Long id, final String sender, final String summary, final String level) {
+        final UspsMailpiece piece = new UspsMailpiece();
+        piece.setId(id);
+        piece.setPatientId(42L);
+        piece.setSender(sender);
+        piece.setSummary(summary);
+        piece.setImportanceLevel(level);
+        piece.setImportanceReasoning("test reasoning");
+        piece.setDigestDate(LocalDate.of(2025, 3, 3));
+        return piece;
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -170,18 +189,5 @@ class NaturalLanguageMailSearchServiceTest {
                 .isEqualTo(NaturalLanguageMailSearchService.rankBasedVectorScore(1));
         assertThat(NaturalLanguageMailSearchService.rankBasedVectorScore(1)).isEqualTo(0.72d);
         assertThat(NaturalLanguageMailSearchService.rankBasedVectorScore(3)).isEqualTo(0.62d);
-    }
-
-    private static UspsMailpiece mailpiece(
-            final Long id, final String sender, final String summary, final String level) {
-        final UspsMailpiece piece = new UspsMailpiece();
-        piece.setId(id);
-        piece.setPatientId(42L);
-        piece.setSender(sender);
-        piece.setSummary(summary);
-        piece.setImportanceLevel(level);
-        piece.setImportanceReasoning("test reasoning");
-        piece.setDigestDate(LocalDate.of(2025, 3, 3));
-        return piece;
     }
 }

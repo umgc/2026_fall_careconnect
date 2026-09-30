@@ -1,6 +1,7 @@
 package com.careconnect.model.invoice;
 
 import jakarta.persistence.*;
+
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.UUID;
@@ -43,33 +44,83 @@ public class InvoicePayment {
 
     // getters and setters
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public String getId() {
+        return id;
+    }
 
-    public Invoice getInvoice() { return invoice; }
-    public void setInvoice(Invoice invoice) { this.invoice = invoice; }
+    public void setId(String id) {
+        this.id = id;
+    }
 
-    public String getConfirmationNumber() { return confirmationNumber; }
-    public void setConfirmationNumber(String confirmationNumber) { this.confirmationNumber = confirmationNumber; }
+    public Invoice getInvoice() {
+        return invoice;
+    }
 
-    public OffsetDateTime getPaymentDate() { return paymentDate; }
-    public void setPaymentDate(OffsetDateTime paymentDate) { this.paymentDate = paymentDate; }
+    public void setInvoice(Invoice invoice) {
+        this.invoice = invoice;
+    }
 
-    public String getMethodKey() { return methodKey; }
-    public void setMethodKey(String methodKey) { this.methodKey = methodKey; }
+    public String getConfirmationNumber() {
+        return confirmationNumber;
+    }
 
-    public BigDecimal getAmountPaid() { return amountPaid; }
-    public void setAmountPaid(BigDecimal amountPaid) { this.amountPaid = amountPaid; }
+    public void setConfirmationNumber(String confirmationNumber) {
+        this.confirmationNumber = confirmationNumber;
+    }
 
-    public boolean isPlanEnabled() { return planEnabled; }
-    public void setPlanEnabled(boolean planEnabled) { this.planEnabled = planEnabled; }
+    public OffsetDateTime getPaymentDate() {
+        return paymentDate;
+    }
 
-    public Integer getPlanMonths() { return planMonths; }
-    public void setPlanMonths(Integer planMonths) { this.planMonths = planMonths; }
+    public void setPaymentDate(OffsetDateTime paymentDate) {
+        this.paymentDate = paymentDate;
+    }
 
-    public OffsetDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
+    public String getMethodKey() {
+        return methodKey;
+    }
 
-    public String getCreatedBy() { return createdBy; }
-    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public void setMethodKey(String methodKey) {
+        this.methodKey = methodKey;
+    }
+
+    public BigDecimal getAmountPaid() {
+        return amountPaid;
+    }
+
+    public void setAmountPaid(BigDecimal amountPaid) {
+        this.amountPaid = amountPaid;
+    }
+
+    public boolean isPlanEnabled() {
+        return planEnabled;
+    }
+
+    public void setPlanEnabled(boolean planEnabled) {
+        this.planEnabled = planEnabled;
+    }
+
+    public Integer getPlanMonths() {
+        return planMonths;
+    }
+
+    public void setPlanMonths(Integer planMonths) {
+        this.planMonths = planMonths;
+    }
+
+    public OffsetDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(OffsetDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
 }

@@ -36,10 +36,23 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 @ActiveProfiles("test")
 class DocumentComplianceRepositoryTest {
 
-    @Autowired private DocumentRequirementStatusRepository statusRepo;
-    @Autowired private DocumentStatusHistoryRepository historyRepo;
-    @Autowired private UserFileRepository fileRepo;
-    @Autowired private StructuredDocumentEntryRepository entryRepo;
+    @Autowired
+    private DocumentRequirementStatusRepository statusRepo;
+    @Autowired
+    private DocumentStatusHistoryRepository historyRepo;
+    @Autowired
+    private UserFileRepository fileRepo;
+    @Autowired
+    private StructuredDocumentEntryRepository entryRepo;
+
+    private static List<Throwable> rootCauseChain(Throwable t) {
+        java.util.ArrayList<Throwable> chain = new java.util.ArrayList<>();
+        while (t != null && !chain.contains(t)) {
+            chain.add(t);
+            t = t.getCause();
+        }
+        return chain;
+    }
 
     @BeforeEach
     void clean() {
@@ -92,6 +105,8 @@ class DocumentComplianceRepositoryTest {
                 .build());
     }
 
+    // ─────────────── Requirement status lookups ───────────────
+
     private StructuredDocumentEntry saveEntry(FileCategory type, Long employeeUserId, Long patientId,
                                               boolean active) {
         return entryRepo.saveAndFlush(StructuredDocumentEntry.builder()
@@ -103,8 +118,6 @@ class DocumentComplianceRepositoryTest {
                 .isActive(active)
                 .build());
     }
-
-    // ─────────────── Requirement status lookups ───────────────
 
     @Test
     @DisplayName("Status: lookup by subject + document type returns the tracked record")
@@ -146,6 +159,8 @@ class DocumentComplianceRepositoryTest {
         assertThat(statusRepo.findBySubjectType(SubjectType.CARE_CIRCLE)).hasSize(1);
     }
 
+    // ─────────────── Audit history ───────────────
+
     @Test
     @DisplayName("Status: one row per (subject, document type) — duplicates are rejected by the DB")
     void duplicateRequirementRow_rejected() {
@@ -157,8 +172,6 @@ class DocumentComplianceRepositoryTest {
 
         assertThat(thrown).isNotNull(); // unique constraint uq_doc_requirement_subject
     }
-
-    // ─────────────── Audit history ───────────────
 
     @Test
     @DisplayName("History: full trail is returned newest first")
@@ -228,15 +241,6 @@ class DocumentComplianceRepositoryTest {
         assertThat(thrown).isNotNull();
         assertThat(rootCauseChain(thrown))
                 .anyMatch(t -> t instanceof UnsupportedOperationException);
-    }
-
-    private static List<Throwable> rootCauseChain(Throwable t) {
-        java.util.ArrayList<Throwable> chain = new java.util.ArrayList<>();
-        while (t != null && !chain.contains(t)) {
-            chain.add(t);
-            t = t.getCause();
-        }
-        return chain;
     }
 
     // ─────────────── Dashboard bulk queries ───────────────

@@ -12,7 +12,8 @@ import java.util.stream.Collectors;
 
 public final class InvoiceMapper {
 
-    private InvoiceMapper() {}
+    private InvoiceMapper() {
+    }
 
     // ---------- to entity ----------
     public static Invoice toEntity(InvoiceDto dto) {
@@ -233,36 +234,54 @@ public final class InvoiceMapper {
     }
 
     // ---------- helpers ----------
-    private static String nz(String s) { return s == null ? "" : s; }
+    private static String nz(String s) {
+        return s == null ? "" : s;
+    }
 
     // tolerant parsing and normalized formatting
     private static OffsetDateTime parse(String s) {
         return DateParsers.parseOffsetOrLocalToUtc(s);
     }
+
     private static OffsetDateTime parseNullable(String s) {
         return DateParsers.parseNullableOffsetOrLocalToUtc(s);
     }
+
     private static String fmt(OffsetDateTime t) {
         return DateParsers.format(t);
     }
+
     private static String fmtNullable(OffsetDateTime t) {
         return DateParsers.formatNullable(t);
     }
 
-    private static BigDecimal toBD(Double d) { return d == null ? null : BigDecimal.valueOf(d); }
-    private static Double toD(BigDecimal bd) { return bd == null ? null : bd.doubleValue(); }
+    private static BigDecimal toBD(Double d) {
+        return d == null ? null : BigDecimal.valueOf(d);
+    }
+
+    private static Double toD(BigDecimal bd) {
+        return bd == null ? null : bd.doubleValue();
+    }
 
     private static PaymentStatus parseStatus(String s) {
         if (s == null) return PaymentStatus.PENDING;
         switch (s) {
-            case "pending": return PaymentStatus.PENDING;
-            case "overdue": return PaymentStatus.OVERDUE;
-            case "pendingInsurance": return PaymentStatus.PENDING_INSURANCE;
-            case "sent": return PaymentStatus.SENT;
-            case "paid": return PaymentStatus.PAID;
-            case "partialPayment": return PaymentStatus.PARTIAL_PAYMENT;
-            case "rejectedInsurance": return PaymentStatus.REJECTED_INSURANCE;
-            default: return PaymentStatus.PENDING;
+            case "pending":
+                return PaymentStatus.PENDING;
+            case "overdue":
+                return PaymentStatus.OVERDUE;
+            case "pendingInsurance":
+                return PaymentStatus.PENDING_INSURANCE;
+            case "sent":
+                return PaymentStatus.SENT;
+            case "paid":
+                return PaymentStatus.PAID;
+            case "partialPayment":
+                return PaymentStatus.PARTIAL_PAYMENT;
+            case "rejectedInsurance":
+                return PaymentStatus.REJECTED_INSURANCE;
+            default:
+                return PaymentStatus.PENDING;
         }
     }
 

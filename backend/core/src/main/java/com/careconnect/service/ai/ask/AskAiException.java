@@ -4,7 +4,9 @@ import org.springframework.http.HttpStatus;
 
 import java.util.UUID;
 
-/** Base exception for Ask AI failures that must preserve request correlation. */
+/**
+ * Base exception for Ask AI failures that must preserve request correlation.
+ */
 public abstract class AskAiException extends RuntimeException {
 
     private final UUID requestId;

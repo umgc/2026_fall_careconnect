@@ -13,10 +13,10 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link CorsFilterConfig}.
- *
+ * <p>
  * CorsFilterConfig produces a Spring Security {@code CorsConfigurationSource} bean that
  * controls which origins, methods, and headers are allowed for cross-origin requests.
- *
+ * <p>
  * The class reads allowed origins from a {@code @Value}-injected list, which Spring does
  * not populate when the object is instantiated directly (outside a Spring context).
  * {@link ReflectionTestUtils#setField} is therefore used in {@code setUp} to inject a

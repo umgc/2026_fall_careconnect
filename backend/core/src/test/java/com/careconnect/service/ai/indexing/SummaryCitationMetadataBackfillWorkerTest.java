@@ -35,6 +35,46 @@ class SummaryCitationMetadataBackfillWorkerTest {
 
     private SummaryCitationMetadataBackfillWorker worker;
 
+    private static SummaryReplayCandidate candidate(
+            final Long patientId,
+            final String sourceRecordId,
+            final int attempts) {
+        return candidate(patientId, sourceRecordId, SummarySourceKey.CALL_KIND, attempts);
+    }
+
+    private static SummaryReplayCandidate candidate(
+            final Long patientId,
+            final String sourceRecordId,
+            final String sourceKind,
+            final int attempts) {
+        return new SummaryReplayCandidate() {
+            @Override
+            public Long getPatientId() {
+                return patientId;
+            }
+
+            @Override
+            public String getSourceRecordId() {
+                return sourceRecordId;
+            }
+
+            @Override
+            public String getSourceKind() {
+                return sourceKind;
+            }
+
+            @Override
+            public UUID getClaimToken() {
+                return CLAIM_TOKEN;
+            }
+
+            @Override
+            public Integer getAttempts() {
+                return attempts;
+            }
+        };
+    }
+
     @BeforeEach
     void setUp() {
         worker = new SummaryCitationMetadataBackfillWorker(
@@ -49,8 +89,8 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(2),
                 any(),
                 eq(8))).thenReturn(List.of(
-                        candidate(42L, "not-a-number", 0),
-                        candidate(42L, "call-summary:42", 0)));
+                candidate(42L, "not-a-number", 0),
+                candidate(42L, "call-summary:42", 0)));
         when(retrievalIndexService.replaySummaryCitationMetadata(
                 eq(42L), eq(42L), eq(CLAIM_TOKEN), eq(300_000L)))
                 .thenReturn(SummaryCitationReplayOutcome.CURRENT);
@@ -80,8 +120,8 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(2),
                 any(),
                 eq(8))).thenReturn(List.of(
-                        candidate(42L, "call-summary:41", 0),
-                        candidate(42L, "call-summary:42", 0)));
+                candidate(42L, "call-summary:41", 0),
+                candidate(42L, "call-summary:42", 0)));
         when(retrievalIndexService.replaySummaryCitationMetadata(
                 eq(41L), eq(42L), eq(CLAIM_TOKEN), eq(300_000L)))
                 .thenThrow(new IllegalStateException("failed"));
@@ -241,45 +281,5 @@ class SummaryCitationMetadataBackfillWorkerTest {
                 eq(42L), eq("77"), any(), eq(CLAIM_TOKEN));
         verify(retrievalIndexService, never()).replaySummaryCitationMetadata(
                 any(), any(), any(), anyLong());
-    }
-
-    private static SummaryReplayCandidate candidate(
-            final Long patientId,
-            final String sourceRecordId,
-            final int attempts) {
-        return candidate(patientId, sourceRecordId, SummarySourceKey.CALL_KIND, attempts);
-    }
-
-    private static SummaryReplayCandidate candidate(
-            final Long patientId,
-            final String sourceRecordId,
-            final String sourceKind,
-            final int attempts) {
-        return new SummaryReplayCandidate() {
-            @Override
-            public Long getPatientId() {
-                return patientId;
-            }
-
-            @Override
-            public String getSourceRecordId() {
-                return sourceRecordId;
-            }
-
-            @Override
-            public String getSourceKind() {
-                return sourceKind;
-            }
-
-            @Override
-            public UUID getClaimToken() {
-                return CLAIM_TOKEN;
-            }
-
-            @Override
-            public Integer getAttempts() {
-                return attempts;
-            }
-        };
     }
 }

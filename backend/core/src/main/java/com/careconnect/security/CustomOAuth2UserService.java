@@ -32,9 +32,9 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
         String nameAttributeKey = (email != null) ? "email" : "name";
 
         return new DefaultOAuth2User(
-            List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase())),
-            oauthUser.getAttributes(),
-            nameAttributeKey
+                List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase())),
+                oauthUser.getAttributes(),
+                nameAttributeKey
         );
     }
 

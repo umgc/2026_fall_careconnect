@@ -42,6 +42,54 @@ class HybridRetrievalServiceTest {
 
     private HybridRetrievalService service;
 
+    private static RetrievalScope medScope(final Long patientId) {
+        return new RetrievalScope(
+                1L,
+                Role.PATIENT,
+                Set.of(patientId),
+                Set.of(
+                        RetrievalRecordType.CALL_SUMMARY,
+                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT),
+                Set.of(),
+                new CaregiverVisibilityFilter(Role.PATIENT, true),
+                true);
+    }
+
+    private static RetrievalIndexChunk timelineChunk(final UUID id, final String metadata) {
+        return RetrievalIndexChunk.builder()
+                .id(id)
+                .patientId(42L)
+                .recordType(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name())
+                .sourceRecordId("visit-summary:1")
+                .chunkText("Medication started: metformin")
+                .chunkMetadata(metadata)
+                .consentScope("auto")
+                .build();
+    }
+
+    private static RetrievalScope scope(final Long patientId) {
+        return new RetrievalScope(
+                1L,
+                Role.PATIENT,
+                Set.of(patientId),
+                Set.of(RetrievalRecordType.CALL_SUMMARY, RetrievalRecordType.TRANSCRIPT_SEGMENT),
+                Set.of(),
+                new CaregiverVisibilityFilter(Role.PATIENT, true),
+                true);
+    }
+
+    private static RetrievalIndexChunk chunk(
+            final UUID id, final String recordType, final String consentScope) {
+        return RetrievalIndexChunk.builder()
+                .id(id)
+                .patientId(42L)
+                .recordType(recordType)
+                .sourceRecordId("src-1")
+                .chunkText("Started metformin 500mg")
+                .consentScope(consentScope)
+                .build();
+    }
+
     @BeforeEach
     void setUp() {
         lenient().when(chunkRepository.findByPatientIdAndRecordType(anyLong(), anyString()))
@@ -184,9 +232,9 @@ class HybridRetrievalServiceTest {
                 .thenReturn(List.of());
         when(chunkEmbeddingService.embedQuery("lipitor")).thenReturn(Optional.empty());
         when(chunkRepository.findByPatientIdAndRecordTypeOrderByIndexedAtDesc(
-                        eq(42L),
-                        eq(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name()),
-                        anyInt()))
+                eq(42L),
+                eq(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name()),
+                anyInt()))
                 .thenReturn(List.of(timelineChunk(
                         otherMed, "{\"medicationNameNormalized\":\"metformin\"}")));
 
@@ -202,53 +250,5 @@ class HybridRetrievalServiceTest {
                 eq(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name()),
                 anyInt());
         verify(chunkRepository, never()).findByPatientIdAndRecordType(anyLong(), anyString());
-    }
-
-    private static RetrievalScope medScope(final Long patientId) {
-        return new RetrievalScope(
-                1L,
-                Role.PATIENT,
-                Set.of(patientId),
-                Set.of(
-                        RetrievalRecordType.CALL_SUMMARY,
-                        RetrievalRecordType.MEDICATION_TIMELINE_EVENT),
-                Set.of(),
-                new CaregiverVisibilityFilter(Role.PATIENT, true),
-                true);
-    }
-
-    private static RetrievalIndexChunk timelineChunk(final UUID id, final String metadata) {
-        return RetrievalIndexChunk.builder()
-                .id(id)
-                .patientId(42L)
-                .recordType(RetrievalRecordType.MEDICATION_TIMELINE_EVENT.name())
-                .sourceRecordId("visit-summary:1")
-                .chunkText("Medication started: metformin")
-                .chunkMetadata(metadata)
-                .consentScope("auto")
-                .build();
-    }
-
-    private static RetrievalScope scope(final Long patientId) {
-        return new RetrievalScope(
-                1L,
-                Role.PATIENT,
-                Set.of(patientId),
-                Set.of(RetrievalRecordType.CALL_SUMMARY, RetrievalRecordType.TRANSCRIPT_SEGMENT),
-                Set.of(),
-                new CaregiverVisibilityFilter(Role.PATIENT, true),
-                true);
-    }
-
-    private static RetrievalIndexChunk chunk(
-            final UUID id, final String recordType, final String consentScope) {
-        return RetrievalIndexChunk.builder()
-                .id(id)
-                .patientId(42L)
-                .recordType(recordType)
-                .sourceRecordId("src-1")
-                .chunkText("Started metformin 500mg")
-                .consentScope(consentScope)
-                .build();
     }
 }

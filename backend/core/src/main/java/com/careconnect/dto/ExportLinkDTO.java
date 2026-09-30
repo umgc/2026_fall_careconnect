@@ -4,6 +4,7 @@ import lombok.Data;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import lombok.Builder;
+
 import java.time.Instant;
 
 
@@ -18,6 +19,6 @@ public class ExportLinkDTO {
     private Long fileSizeBytes;
     private String expiresAt;
     private String status;
-    private String url;         
+    private String url;
     private Instant instantExpiresAt;
 }

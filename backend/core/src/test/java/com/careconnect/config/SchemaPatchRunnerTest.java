@@ -47,7 +47,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         assertThat(source).contains("idx_call_sessions_call_id_uidx");
         assertThat(source).contains("idx_call_participants_session_user_uidx");
@@ -92,7 +92,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final String applyRetrievalBody = source.substring(
                 source.indexOf("private void applyRetrievalIndexChunkPatches()"),
@@ -117,7 +117,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final int unlockIndexes = source.indexOf("ensureRetrievalConcurrentIndexes();");
         final int embeddingVerify = source.indexOf(
@@ -141,7 +141,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         assertThat(source).contains("TimeUnit.MINUTES.toNanos(10)");
         assertThat(source).doesNotContain("TimeUnit.SECONDS.toNanos(30)");
@@ -157,7 +157,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final int methodStart = source.indexOf("private void verifyCallTerminationSchema()");
         final int methodEnd = source.indexOf(
