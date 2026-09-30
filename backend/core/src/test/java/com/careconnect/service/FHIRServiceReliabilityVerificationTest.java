@@ -1,6 +1,8 @@
 package com.careconnect.service;
 
 import ca.uhn.fhir.context.FhirContext;
+import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
+import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.hl7.fhir.r4.model.Bundle;
@@ -33,16 +35,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * WBS 3.6.4 Performance and reliability verification (M3), FHIR retrieval part.
- * Verifies {@link FHIRService} against STP-M3-E-01 (pagination), STP-M3-E-02
- * (partial failure) and STP-M3-E-03 (backoff) using a local stand-in for the
- * Blue Button FHIR server, so no network or CMS credentials are needed.
+ * Verifies {@link FHIRService} against WBS 6.2.35 (pagination, partial failure and
+ * backoff) and SRS FR-MCR-13/14 (retrieval with the stored access token) and
+ * FR-MCR-23 (retry on rate limiting), using a local stand-in for the Blue Button
+ * FHIR server, so no network or CMS credentials are needed.
  *
- * <p>Tests named {@code finding_*} pin behaviour that does NOT meet the STP
- * requirement today. They pass so the build stays green, and each one is listed
- * as a defect in docs/verification/3.6.4-fhir-retrieval-reliability.md. When the
+ * <p>Tests named {@code finding_*} pin behaviour that does NOT meet the requirement
+ * today. They pass so the build stays green, and each one names its defect
+ * (DEF-MCR-nn) in docs/verification/3.6.4-fhir-retrieval-reliability.md. When the
  * code is fixed, the matching test must be flipped to assert the requirement.
  *
- * <p>Test IDs (VER-FHIR-xx) match the verification report.
+ * <p>Test IDs (TC-MCR-FHIR-nnn) are the Software Test Plan's, §3.12.
  */
 class FHIRServiceReliabilityVerificationTest {
 
@@ -136,10 +139,10 @@ class FHIRServiceReliabilityVerificationTest {
         return rs.stream().map(r -> r.getIdElement().getIdPart()).collect(Collectors.toList());
     }
 
-    // ---- STP-M3-E-01 Pagination --------------------------------------------------------------
+    // ---- Pagination (WBS 6.2.35; FR-MCR-13/14) -------------------------------------------------
 
     @Test
-    @DisplayName("VER-FHIR-01 Coverage retrieval follows every next link across 3 pages with no duplicates")
+    @DisplayName("TC-MCR-FHIR-001 Coverage retrieval follows every next link across 3 pages with no duplicates")
     void coverageFollowsAllPages() {
         routes.put("Coverage", ex -> new Reply(200, json(page(coverages("c", 2), 5, base + "Coverage?page=2"))));
         routes.put("Coverage?page=2", ex -> new Reply(200, json(page(coverages("d", 2), 5, base + "Coverage?page=3"))));
@@ -152,7 +155,7 @@ class FHIRServiceReliabilityVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-FHIR-02 EOB retrieval follows every next link across 3 pages")
+    @DisplayName("TC-MCR-FHIR-002 EOB retrieval follows every next link across 3 pages")
     void eobFollowsAllPages() {
         routes.put("ExplanationOfBenefit", ex -> new Reply(200, json(page(eobs("a", 3), 7, base + "ExplanationOfBenefit?page=2"))));
         routes.put("ExplanationOfBenefit?page=2", ex -> new Reply(200, json(page(eobs("b", 3), 7, base + "ExplanationOfBenefit?page=3"))));
@@ -165,14 +168,14 @@ class FHIRServiceReliabilityVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-FHIR-03 An empty search result returns an empty list, not an error")
+    @DisplayName("TC-MCR-FHIR-003 An empty search result returns an empty list, not an error")
     void emptyResultIsEmptyList() {
         routes.put("Coverage", ex -> new Reply(200, json(page(List.of(), 0, null))));
         assertTrue(service().requestMedicareCoverageInfo(TOKEN).isEmpty());
     }
 
     @Test
-    @DisplayName("VER-FHIR-04 Every request carries the patient's bearer token")
+    @DisplayName("TC-MCR-FHIR-004 Every request carries the patient's bearer token")
     void bearerTokenOnEveryRequest() {
         routes.put("Coverage", ex -> new Reply(200, json(page(coverages("c", 1), 2, base + "Coverage?page=2"))));
         routes.put("Coverage?page=2", ex -> new Reply(200, json(page(coverages("d", 1), 2, null))));
@@ -184,7 +187,7 @@ class FHIRServiceReliabilityVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-FHIR-05 An incremental sync sends _lastUpdated=ge<date>")
+    @DisplayName("TC-MCR-FHIR-005 An incremental sync sends _lastUpdated=ge<date>")
     void incrementalSyncSendsLastUpdated() {
         routes.put("Coverage", ex -> new Reply(200, json(page(List.of(), 0, null))));
         Date since = Date.from(Instant.parse("2026-09-01T00:00:00Z"));
@@ -199,7 +202,7 @@ class FHIRServiceReliabilityVerificationTest {
     }
 
     @Test
-    @DisplayName("VER-FHIR-06 Patient lookup returns the single Patient, and refuses zero or several")
+    @DisplayName("TC-MCR-FHIR-006 Patient lookup returns the single Patient, and refuses zero or several")
     void patientLookup() {
         Patient p = new Patient();
         p.setId("p1");
@@ -211,44 +214,87 @@ class FHIRServiceReliabilityVerificationTest {
         routes.put("Patient", ex -> new Reply(200, json(page(List.of(p, q), 2, null))));
         RuntimeException e = assertThrows(RuntimeException.class, () -> service().requestMedicarePatientInfo(TOKEN));
         assertTrue(e.getMessage().contains("quantity"), e.getMessage());
+
+        routes.put("Patient", ex -> new Reply(200, json(page(List.of(), 0, null))));
+        RuntimeException none = assertThrows(RuntimeException.class, () -> service().requestMedicarePatientInfo(TOKEN));
+        assertTrue(none.getMessage().contains("quantity: 0"), none.getMessage());
     }
 
     @Test
-    @DisplayName("VER-FHIR-07 A wrong resource type in a Coverage search is rejected")
+    @DisplayName("TC-MCR-FHIR-007 A wrong resource type in a Coverage search is rejected")
     void wrongResourceTypeRejected() {
         routes.put("Coverage", ex -> new Reply(200, json(page(eobs("x", 1), 1, null))));
-        assertThrows(RuntimeException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        RuntimeException e = assertThrows(RuntimeException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertTrue(e.getMessage().contains("response type: ExplanationOfBenefit"), e.getMessage());
     }
 
-    // ---- Findings: behaviour that does not meet the STP today ----------------------------------
+    @Test
+    @DisplayName("TC-MCR-FHIR-013 A rejected token (HTTP 401) is tried once and surfaces as an authentication failure")
+    void rejectedTokenIsNotRetried() {
+        // FR-MCR-09: no further Medicare call with a token Medicare rejected. This must still hold
+        // once DEF-MCR-02 adds retries: only 429 and 5xx may be retried, never 401.
+        routes.put("Coverage", ex -> new Reply(401, "{}"));
+        assertThrows(AuthenticationException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertEquals(1, hits.get("Coverage"), "exactly one attempt with the rejected token");
+    }
 
     @Test
-    @DisplayName("VER-FHIR-08 Finding (STP-M3-E-02): a failed page discards the pages already retrieved")
+    @DisplayName("TC-MCR-FHIR-015 The public constructor still targets the CMS Blue Button sandbox")
+    void publicConstructorUsesSandbox() throws ReflectiveOperationException {
+        // The package-private base-URL constructor is a test seam only; the bean Spring builds must
+        // keep the sandbox URL.
+        java.lang.reflect.Field f = FHIRService.class.getDeclaredField("bluebuttonBase");
+        f.setAccessible(true);
+        assertEquals("https://sandbox.bluebutton.cms.gov/v2/fhir/", f.get(new FHIRService()));
+    }
+
+    // ---- Findings: behaviour that does not meet the requirement today ---------------------------
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-008 Finding (DEF-MCR-01): a failed page discards the pages already retrieved")
     void finding_failedPageDiscardsEarlierPages() {
         routes.put("Coverage", ex -> new Reply(200, json(page(coverages("c", 2), 4, base + "Coverage?page=2"))));
         routes.put("Coverage?page=2", ex -> new Reply(500, "{}"));
 
-        // STP-M3-E-02 requires the retrieved pages to be kept and the failure reported. Today the
+        // WBS 6.2.35 requires the retrieved pages to be kept and the failure reported. Today the
         // exception propagates and the caller receives nothing, so page 1's two records are lost.
-        assertThrows(Exception.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        BaseServerResponseException e =
+                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertEquals(500, e.getStatusCode());
         assertEquals(2, hits.get("Coverage"), "page 1 was fetched, then lost");
     }
 
     @Test
-    @DisplayName("VER-FHIR-09 Finding (STP-M3-E-03): a 429 or 503 is not retried")
+    @DisplayName("TC-MCR-FHIR-014 Finding (DEF-MCR-01): a failed EOB page discards the pages already retrieved")
+    void finding_failedEobPageDiscardsEarlierPages() {
+        routes.put("ExplanationOfBenefit", ex -> new Reply(200, json(page(eobs("a", 2), 4, base + "ExplanationOfBenefit?page=2"))));
+        routes.put("ExplanationOfBenefit?page=2", ex -> new Reply(500, "{}"));
+
+        BaseServerResponseException e =
+                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareEOBInfo(TOKEN));
+        assertEquals(500, e.getStatusCode());
+        assertEquals(2, hits.get("ExplanationOfBenefit"), "page 1 was fetched, then lost");
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-009 Finding (DEF-MCR-02): a 429 or 503 is not retried")
     void finding_rateLimitIsNotRetried() {
         routes.put("Coverage", ex -> new Reply(429, "{}"));
-        assertThrows(Exception.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        BaseServerResponseException rateLimited =
+                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertEquals(429, rateLimited.getStatusCode());
         assertEquals(1, hits.get("Coverage"), "exactly one attempt: no retry and no backoff");
 
         hits.clear();
         routes.put("Coverage", ex -> new Reply(503, "{}"));
-        assertThrows(Exception.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        BaseServerResponseException unavailable =
+                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertEquals(503, unavailable.getStatusCode());
         assertEquals(1, hits.get("Coverage"));
     }
 
     @Test
-    @DisplayName("VER-FHIR-10 Finding: a page with entries but no Bundle.total returns nothing")
+    @DisplayName("TC-MCR-FHIR-010 Finding (DEF-MCR-03): a page with entries but no Bundle.total returns nothing")
     void finding_missingTotalDropsEntries() {
         // Bundle.total is optional in FHIR search results (0..1). The service checks getTotal() == 0
         // before reading entries, so records the server did send are silently dropped.
@@ -257,5 +303,27 @@ class FHIRServiceReliabilityVerificationTest {
         List<Coverage> result = service().requestMedicareCoverageInfo(TOKEN);
 
         assertTrue(result.isEmpty(), "3 records were sent but none are returned");
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-011 Finding (DEF-MCR-03): an EOB page with entries but no Bundle.total returns nothing")
+    void finding_missingTotalDropsEobEntries() {
+        routes.put("ExplanationOfBenefit", ex -> new Reply(200, json(page(eobs("a", 2), null, null))));
+
+        List<ExplanationOfBenefit> result = service().requestMedicareEOBInfo(TOKEN);
+
+        assertTrue(result.isEmpty(), "2 records were sent but none are returned");
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-012 Finding (DEF-MCR-03): a Patient bundle with one entry but no Bundle.total is refused")
+    void finding_missingTotalRefusesPatient() {
+        // The lookup tests getTotal() == 1, so an absent total reads as zero patients.
+        Patient p = new Patient();
+        p.setId("p1");
+        routes.put("Patient", ex -> new Reply(200, json(page(List.of(p), null, null))));
+
+        RuntimeException e = assertThrows(RuntimeException.class, () -> service().requestMedicarePatientInfo(TOKEN));
+        assertTrue(e.getMessage().contains("quantity: 0"), e.getMessage());
     }
 }
