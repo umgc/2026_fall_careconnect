@@ -9,20 +9,26 @@ import java.util.ArrayList;
 
 import lombok.*;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 /**
- * <p><b>Extends {@link Auditable} since 2026-09-29.</b> It previously carried no timestamps at all.
+ * A person receiving care, and the record every other patient-scoped entity hangs off.
+ * <p>
+ * <b>Extends {@link Auditable} since 2026-09-29.</b> It previously carried no timestamps at all.
  * The EHR identity reconciliation algorithm needs {@code updated_at} as its baseline of last resort:
  * when a field has no {@code ehr_identity_field_provenance} row yet -- because the value was typed
  * at signup rather than established by a sync -- {@code updated_at} is what an incoming EHR value
  * must beat to be applied (Assumption A1). Without the column that comparison has nothing to stand
  * on. Existing rows are backfilled by SchemaPatchRunner; see that patch for what the chosen backfill
  * value means for pre-existing patients.
+ * <p>
+ * Adding the superclass is source-compatible: Lombok's {@code @Builder} and
+ * {@code @AllArgsConstructor} do not include superclass fields, so existing construction sites are
+ * unaffected. JSON responses do gain {@code createdAt} and {@code updatedAt}.
  */
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 @Entity
 public class Patient extends Auditable {
     @Id
