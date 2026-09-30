@@ -1,33 +1,40 @@
 // WBS 3.6.1 (Team E, Milestone 3): the end-to-end workflows the suite covers.
 //
-// Each flow comes from one STP-M3-E test requirement in
-// docs/verification/M3-STP-test-requirements-team-e.md. A flow stays blocked
-// until the features it depends on are merged to team-e-develop (the STP entry
-// criterion). When a feature lands, wire its steps in
+// Each flow is one case in Software Test Plan §3.13 (TC-E2E-001..004). A flow
+// stays blocked until the features it depends on are merged to team-e-develop
+// (the entry criterion). When a feature lands, wire its steps in
 // team_e_m3_workflows_e2e_test.dart and set `landed: true` here.
+//
+// The skip logic lives here, not in the test file, so that
+// test/integration_test_support/team_e_m3_flows_test.dart (TC-E2E-005..009)
+// can check it in CI, which does not run integration_test/.
 
 class TeamEFlow {
   const TeamEFlow({
-    required this.stpId,
+    required this.caseId,
     required this.title,
     required this.workPackage,
+    required this.trace,
     required this.dependsOn,
     required this.landed,
     required this.steps,
     required this.passCriteria,
   });
 
-  /// STP-M3-E requirement this flow verifies, e.g. `STP-M3-E-16`.
-  final String stpId;
+  /// Test Plan case ID, e.g. `TC-E2E-001`.
+  final String caseId;
   final String title;
 
   /// Level 3 work package in the Team Echo work plan.
   final String workPackage;
 
-  /// M3 build packages that must be merged before the flow can run.
+  /// SRS 1.4 requirements the flow exercises, or TBD where the SRS has none.
+  final String trace;
+
+  /// Build packages and PRs that must be merged before the flow can run.
   final List<String> dependsOn;
 
-  /// True once every package in [dependsOn] is merged to team-e-develop.
+  /// True once everything in [dependsOn] is merged to team-e-develop.
   final bool landed;
 
   /// What the test does, in order. Mirrors docs/verification/3.6.1-e2e-workflow-suite.md.
@@ -38,13 +45,29 @@ class TeamEFlow {
       'Blocked: waiting on ${dependsOn.join(', ')} to merge to team-e-develop';
 }
 
-/// Status as of 2026-09-29: none of the Medicare, sharing or photo capture
-/// endpoints exist on team-e-develop yet (canonical schema is in PR #209).
+/// Why [flow] is skipped, or null when it should run.
+///
+/// [enabled] is the `TEAM_E_M3_E2E` opt-in; [backendUrl] is `BACKEND_URL`,
+/// the same define the app reads for its API base URL.
+String? skipReasonFor(
+  TeamEFlow flow, {
+  required bool enabled,
+  required String backendUrl,
+}) {
+  if (!enabled) return 'Opt-in: pass --dart-define=TEAM_E_M3_E2E=true';
+  if (backendUrl.isEmpty) return 'Set --dart-define=BACKEND_URL';
+  if (!flow.landed) return flow.blockedReason;
+  return null;
+}
+
+/// Status as of 2026-09-30: none of the Medicare, record sharing or photo
+/// capture features are on team-e-develop yet.
 const teamEFlows = <TeamEFlow>[
   TeamEFlow(
-    stpId: 'STP-M3-E-16',
+    caseId: 'TC-E2E-001',
     title: 'Patient signs in, opens their Medicare data and reads a claim',
     workPackage: '6.2.40 Accessible Medicare Data Views',
+    trace: 'FEAT-02 FR-MCR-13, FR-MCR-14 (TC-21.1, TC-21.2); FEAT-01 sign-in',
     dependsOn: ['3.1.6'],
     landed: false,
     steps: [
@@ -56,9 +79,10 @@ const teamEFlows = <TeamEFlow>[
     passCriteria: 'Flow completes on Android and web',
   ),
   TeamEFlow(
-    stpId: 'STP-M3-E-21',
+    caseId: 'TC-E2E-002',
     title: 'User accepts or rejects each flagged reconciliation conflict',
     workPackage: '6.2.41 Cross-Source Reconciliation & Deduplication',
+    trace: 'FR-EHR-07; accept/reject workflow has no SRS requirement (TBD)',
     dependsOn: ['3.2.3'],
     landed: false,
     steps: [
@@ -66,15 +90,16 @@ const teamEFlows = <TeamEFlow>[
       'Sign in as the patient; the conflict appears in the review list',
       'Accept one conflict and reject another',
       'Each choice is applied and an audit row is written',
-      'A medication conflict leaves the medication list unchanged until acted on (STP-M3-E-20)',
+      'A medication conflict leaves the medication list unchanged until acted on (FR-EHR-07)',
     ],
     passCriteria: 'Each choice is applied and audited',
   ),
   TeamEFlow(
-    stpId: 'STP-M3-E-22',
+    caseId: 'TC-E2E-003',
     title: 'Photo capture creates a medication with the right type',
     workPackage: '6.2.42 Medication Photo Capture',
-    dependsOn: ['3.4.3'],
+    trace: 'Handoff item 1.10; no SRS requirement (TBD)',
+    dependsOn: ['3.4.3', 'PR #207 (KI-05)'],
     landed: false,
     steps: [
       'Sign in as the patient and start medication photo capture',
@@ -86,9 +111,10 @@ const teamEFlows = <TeamEFlow>[
     passCriteria: 'Saved medication matches the confirmed values; types use backend names',
   ),
   TeamEFlow(
-    stpId: 'STP-M3-E-27',
+    caseId: 'TC-E2E-004',
     title: 'Patient shares data with a caregiver who reads it in-app',
     workPackage: '6.2.43 Secure Sharing Controls',
+    trace: 'No SRS requirement for record sharing or revoke (TBD)',
     dependsOn: ['3.3.3'],
     landed: false,
     steps: [
