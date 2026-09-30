@@ -508,6 +508,18 @@ public class SchemaPatchRunner implements CommandLineRunner {
      * than being left as a permanent null baseline.
      */
     private void applyPatientAuditTimestampBackfill() {
+        // Defaults first. The backfill below repairs rows that exist when it runs; a row inserted by
+        // SQL after it -- the dev seed in db/migration/mock_data.sql, loaded by DevDataLoader after
+        // this runner -- would otherwise carry no baseline until the next boot, and
+        // JpaPatientFieldAccessor.getPatientUpdatedAt refuses a null one. DEF-EHR-REC-02.
+        applyRequiredPatch(
+                "V2609291230c - patient.created_at defaults to now() for rows inserted outside JPA",
+                "ALTER TABLE patient ALTER COLUMN created_at SET DEFAULT now()"
+        );
+        applyRequiredPatch(
+                "V2609291230d - patient.updated_at defaults to now() for rows inserted outside JPA",
+                "ALTER TABLE patient ALTER COLUMN updated_at SET DEFAULT now()"
+        );
         applyRequiredPatch(
                 "V2609291230a - backfill patient.created_at for rows predating Auditable",
                 "UPDATE patient SET created_at = now() WHERE created_at IS NULL"

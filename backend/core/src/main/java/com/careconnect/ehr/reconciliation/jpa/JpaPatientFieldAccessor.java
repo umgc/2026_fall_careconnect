@@ -10,7 +10,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -59,6 +61,10 @@ import java.util.function.Function;
  * would shift this baseline, because this particular value decides who wins a reconciliation.
  */
 public class JpaPatientFieldAccessor implements PatientFieldAccessor {
+
+    /** The onboarding registration screen's date shape; STRICT so 02/30/1950 is not silently rolled. */
+    private static final DateTimeFormatter US_DATE =
+            DateTimeFormatter.ofPattern("MM/dd/uuuu").withResolverStyle(ResolverStyle.STRICT);
 
     /**
      * One entry per field the library may reconcile. Held as an ordered map purely so the error
@@ -164,7 +170,7 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
         map.put("given_name", simple(Patient::getFirstName, Patient::setFirstName));
         map.put("family_name", simple(Patient::getLastName, Patient::setLastName));
         map.put("date_of_birth", new FieldBinding(
-                Patient::getDob, Patient::setDob, JpaPatientFieldAccessor::requireIsoDate));
+                patient -> storedDobAsIso(patient.getDob()), Patient::setDob, JpaPatientFieldAccessor::requireIsoDate));
         map.put("phone", simple(Patient::getPhone, Patient::setPhone));
         map.put("email", simple(Patient::getEmail, Patient::setEmail));
         map.put("address_line1", address(Address::getLine1, Address::setLine1));
@@ -194,6 +200,30 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
                     write.accept(patient.getAddress(), value);
                 },
                 String::trim);
+    }
+
+    /**
+     * patient.dob is free text, and the app writes it in two shapes: the onboarding registration
+     * screen stores MM/DD/YYYY, the sign-up screen stores ISO. A FHIR birthDate is always ISO, so
+     * the stored value is compared in ISO form; otherwise the same date "disagrees" and opens a
+     * patient confirmation for a date that did not change (DEF-EHR-REC-03). Read-side only: the
+     * stored value is not rewritten. Anything that is neither shape is returned as stored, so a
+     * genuinely different value is still a disagreement.
+     */
+    private static String storedDobAsIso(String stored) {
+        if (stored == null || stored.isBlank()) {
+            return stored;
+        }
+        String trimmed = stored.trim();
+        try {
+            return LocalDate.parse(trimmed).toString();
+        } catch (DateTimeParseException notIso) {
+            try {
+                return LocalDate.parse(trimmed, US_DATE).toString();
+            } catch (DateTimeParseException notUs) {
+                return stored;
+            }
+        }
     }
 
     /**

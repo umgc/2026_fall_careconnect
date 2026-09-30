@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS ehr_source_identity (
     city              VARCHAR(100),
     state             VARCHAR(50),
     postal_code       VARCHAR(20),
+    -- Stored verbatim, outside the reconciliation vocabulary (2026-09-29): gender is the FHIR code,
+    -- not the Gender enum; member_id is not patient.ma_number.
+    member_id         VARCHAR(128),
+    gender            VARCHAR(16),
+    managing_org      VARCHAR(255),
+    language          VARCHAR(35),
     created_at        TIMESTAMP,
     updated_at        TIMESTAMP,
     CONSTRAINT uq_ehr_source_identity_patient_source UNIQUE (patient_id, source_id)
@@ -99,3 +105,7 @@ CREATE TABLE IF NOT EXISTS ehr_identity_field_provenance (
     updated_at        TIMESTAMP,
     CONSTRAINT uq_ehr_identity_field_provenance_patient_field UNIQUE (patient_id, field_name)
 );
+
+-- patient.created_at / updated_at (Patient extends Auditable since 2026-09-29) are added by
+-- ddl-auto=update. SchemaPatchRunner V2609291230a..d gives both a DEFAULT now() and backfills
+-- existing rows to the migration time; updated_at is the Assumption A1 reconciliation baseline.
