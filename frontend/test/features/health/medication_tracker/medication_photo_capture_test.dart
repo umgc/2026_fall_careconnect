@@ -1094,6 +1094,222 @@ void main() {
   });
 
   // ── Accessibility semantics ──────────────────────────────────────────────
+  // ── Manual entry and save paths ──────────────────────────────────────────
+  group('manual entry and save paths', () {
+    const createPath = '/medications';
+
+    // Save touches platform storage for the auth header and fires telemetry
+    // timers, so pump a fixed window instead of pumpAndSettle.
+    Future<void> tapSaveAndWait(WidgetTester tester) async {
+      await tester
+          .ensureVisible(find.byKey(const Key('medication-save-button')));
+      await tester.tap(find.byKey(const Key('medication-save-button')));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 500)));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(seconds: 3));
+    }
+
+    Future<void> pickFromDropdown(
+        WidgetTester tester, String current, String choice) async {
+      await tester.ensureVisible(find.text(current).first);
+      await tester.tap(find.text(current).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(choice).last);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> fillRequired(WidgetTester tester) async {
+      await tester.enterText(
+          find.byKey(const Key('medication-name-field')), 'Metformin');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '500 mg');
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'TC-MED-PHOTO-093: choosing Custom frequency requires text, switching away clears it, and save sends the custom text and chosen route',
+        (tester) async {
+      // Arrange
+      final posted = <Map<String, dynamic>>[];
+      ApiService.debugSetHttpClient(MockClient((r) async {
+        if (!r.url.path.endsWith(createPath)) return http.Response('{}', 200);
+        final body = jsonDecode(r.body) as Map<String, dynamic>;
+        posted.add(body);
+        return http.Response(jsonEncode({'id': 11, ...body}), 200);
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+      final h = _Harness();
+      await _pump(tester, h);
+      await fillRequired(tester);
+
+      // Act: pick Custom and try to save without text
+      await pickFromDropdown(tester, 'Once daily', 'Custom');
+      expect(find.byKey(const Key('medication-custom-frequency-field')),
+          findsOneWidget);
+      await tester
+          .ensureVisible(find.byKey(const Key('medication-save-button')));
+      await tester.tap(find.byKey(const Key('medication-save-button')));
+      await tester.pumpAndSettle();
+
+      // Assert: validator blocks the save
+      expect(find.text('Please enter custom frequency'), findsOneWidget);
+      expect(posted, isEmpty);
+
+      // Act: type, switch away (clears), come back, type again, change route
+      await tester.enterText(
+          find.byKey(const Key('medication-custom-frequency-field')),
+          'Every 8 hours');
+      await pickFromDropdown(tester, 'Custom', 'Twice daily');
+      expect(find.byKey(const Key('medication-custom-frequency-field')),
+          findsNothing);
+      await pickFromDropdown(tester, 'Twice daily', 'Custom');
+      expect(_fieldText(tester, 'medication-custom-frequency-field'), isEmpty);
+      await tester.enterText(
+          find.byKey(const Key('medication-custom-frequency-field')),
+          'Every 8 hours');
+      await pickFromDropdown(tester, 'Oral', 'Topical');
+      await tapSaveAndWait(tester);
+
+      // Assert
+      expect(posted, hasLength(1));
+      expect(posted.single['frequency'], 'Every 8 hours');
+      expect(posted.single['route'], 'Topical');
+      expect(posted.single['medicationType'], 'PRESCRIPTION');
+    });
+
+    testWidgets(
+        'TC-MED-PHOTO-094: the three date pickers set their dates and save sends them with Prescribed By',
+        (tester) async {
+      // Arrange
+      Map<String, dynamic>? body;
+      ApiService.debugSetHttpClient(MockClient((r) async {
+        if (!r.url.path.endsWith(createPath)) return http.Response('{}', 200);
+        body = jsonDecode(r.body) as Map<String, dynamic>;
+        return http.Response(jsonEncode({'id': 12, ...body!}), 200);
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+      final h = _Harness();
+      await _pump(tester, h);
+      await fillRequired(tester);
+      await tester.enterText(
+          find.ancestor(
+              of: find.text('e.g., Dr. Smith'),
+              matching: find.byType(TextFormField)),
+          'Dr. Smith');
+      final now = DateTime.now();
+      final today =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // Act: prescribed, start and end dates, each confirmed on today
+      for (var i = 0; i < 3; i++) {
+        await tester.ensureVisible(find.text('Select date').first);
+        await tester.tap(find.text('Select date').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+      }
+
+      // Assert: all three show the chosen date
+      expect(find.text('Select date'), findsNothing);
+      expect(find.text(today), findsNWidgets(3));
+
+      // Act
+      await tapSaveAndWait(tester);
+
+      // Assert
+      expect(body, isNotNull);
+      expect(body!['prescribedBy'], 'Dr. Smith');
+      expect(body!['prescribedDate'], today);
+      expect(body!['startDate'], today);
+      expect(body!['endDate'], today);
+    });
+
+    testWidgets(
+        'TC-MED-PHOTO-095: save shows a spinner while waiting, and a failed create shows the status code',
+        (tester) async {
+      // Arrange: hold the create response until the spinner is checked
+      final reply = Completer<http.Response>();
+      ApiService.debugSetHttpClient(MockClient((r) async {
+        if (!r.url.path.endsWith(createPath)) return http.Response('{}', 200);
+        return reply.future;
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+      Medication? added;
+      final h = _Harness(onAdded: (m) => added = m);
+      await _pump(tester, h);
+      await fillRequired(tester);
+
+      // Act
+      await tester
+          .ensureVisible(find.byKey(const Key('medication-save-button')));
+      await tester.tap(find.byKey(const Key('medication-save-button')));
+      await tester.pump();
+
+      // Assert: spinner inside the Save button while the request is pending
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('medication-save-button')),
+              matching: find.byType(CircularProgressIndicator)),
+          findsOneWidget);
+
+      // Act: server answers with an error
+      reply.complete(http.Response('server error', 500));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 500)));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Assert
+      expect(find.text('Failed to add medication: 500'), findsOneWidget);
+      expect(added, isNull);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets(
+        'TC-MED-PHOTO-096: with no Care Recipient ID on the session, save shows an error and sends nothing',
+        (tester) async {
+      // Arrange
+      var createCalls = 0;
+      ApiService.debugSetHttpClient(MockClient((r) async {
+        if (r.url.path.endsWith(createPath)) createCalls++;
+        return http.Response('{}', 200);
+      }));
+      addTearDown(ApiService.debugResetHttpClient);
+      final h = _Harness(patientId: null);
+      await _pump(tester, h);
+      await fillRequired(tester);
+
+      // Act
+      await tapSaveAndWait(tester);
+
+      // Assert
+      expect(createCalls, 0);
+      expect(find.textContaining('Patient ID not found'), findsOneWidget);
+    });
+
+    testWidgets(
+        'TC-MED-PHOTO-097: read-aloud speaks the custom text when the scanned frequency is not a dropdown option',
+        (tester) async {
+      // Arrange
+      final h = _Harness(
+          extractor: (_, __, ___) async =>
+              _prefilled(frequency: 'Every 8 hours'));
+      await _pump(tester, h);
+      await _scan(tester);
+
+      // Act
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester.pumpAndSettle();
+
+      // Assert
+      expect(h.engine.spoken, hasLength(1));
+      expect(h.engine.spoken.single, contains('Every 8 hours'));
+    });
+  });
+
   group('accessibility semantics', () {
     testWidgets(
         'TC-MED-PHOTO-064: capture and read-aloud controls expose labels and >=48dp tap height',
