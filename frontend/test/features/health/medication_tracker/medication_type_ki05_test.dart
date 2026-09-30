@@ -208,7 +208,7 @@ void main() {
         await tester.ensureVisible(dropdown);
         await tester.tap(dropdown);
         await tester.pumpAndSettle();
-        await tester.tap(find.text('OVER_THE_COUNTER').last);
+        await tester.tap(find.text(MedicationType.OVER_THE_COUNTER.label).last);
         await tester.pumpAndSettle();
 
         final submit = find.text('Add Medication');
@@ -228,14 +228,14 @@ void main() {
 
   group('KI-05 follow-up: caregiver card', () {
     testWidgets(
-        'TC-MED-TYPE-020: a backend OVER_THE_COUNTER row shows as '
-        'OVER_THE_COUNTER, not PRESCRIPTION, on the caregiver card',
+        'TC-MED-TYPE-020: a backend OVER_THE_COUNTER row shows the '
+        'over-the-counter label, not Prescription, on the caregiver card',
         (tester) async {
       await tester.pumpWidget(_wrap(CurrentMedicationsSection(
         entries: [Medication.fromJson(_wire('OVER_THE_COUNTER'))],
       )));
-      expect(find.text('OVER_THE_COUNTER'), findsOneWidget);
-      expect(find.text('PRESCRIPTION'), findsNothing);
+      expect(find.text(MedicationType.OVER_THE_COUNTER.label), findsOneWidget);
+      expect(find.text(MedicationType.PRESCRIPTION.label), findsNothing);
     });
   });
 
@@ -277,7 +277,7 @@ void main() {
             await tester.ensureVisible(dropdown);
             await tester.tap(dropdown);
             await tester.pumpAndSettle();
-            await tester.tap(find.text(t.name).last);
+            await tester.tap(find.text(t.label).last);
             await tester.pumpAndSettle();
           }
         } finally {
@@ -301,10 +301,10 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final t in MedicationType.values) {
-        expect(find.text(t.name), findsWidgets, reason: '${t.name} missing');
+        expect(find.text(t.label), findsWidgets, reason: '${t.label} missing');
       }
 
-      await tester.tap(find.text('HERBAL').last);
+      await tester.tap(find.text(MedicationType.HERBAL.label).last);
       await tester.pumpAndSettle();
 
       final field = tester.widget<DropdownButton<MedicationType>>(

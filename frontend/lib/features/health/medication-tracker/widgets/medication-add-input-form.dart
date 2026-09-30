@@ -299,7 +299,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                       items: MedicationType.values.map((MedicationType type) {
                         return DropdownMenuItem<MedicationType>(
                           value: type,
-                          child: Text(type.name, overflow: TextOverflow.ellipsis),
+                          child: Text(type.label, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (MedicationType? newValue) {

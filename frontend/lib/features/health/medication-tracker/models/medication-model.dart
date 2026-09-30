@@ -5,6 +5,18 @@
 /// still reads the old name defensively (the backend never stored it).
 enum MedicationType { PRESCRIPTION, OVER_THE_COUNTER, SUPPLEMENT, HERBAL, EMERGENCY }
 
+/// What the user sees for a [MedicationType]. Mirrors the backend display
+/// names in Medication.java. The wire value is still [MedicationType.name].
+extension MedicationTypeLabel on MedicationType {
+  String get label => switch (this) {
+        MedicationType.PRESCRIPTION => 'Prescription',
+        MedicationType.OVER_THE_COUNTER => 'Over-the-counter',
+        MedicationType.SUPPLEMENT => 'Supplement/Vitamin',
+        MedicationType.HERBAL => 'Herbal/Natural',
+        MedicationType.EMERGENCY => 'Emergency Medication',
+      };
+}
+
 /// Medication status enum (for UI display purposes)
 enum MedicationStatus { upcoming, taken, missed }
 
