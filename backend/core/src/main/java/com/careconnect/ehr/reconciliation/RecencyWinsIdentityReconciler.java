@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -89,6 +90,21 @@ import java.util.concurrent.atomic.AtomicReference;
  * against that row's timestamp, read fresh inside the field's own transaction while its lock is
  * held. That read must stay per field — it is how a concurrent adapter's just-committed write is
  * observed, and hoisting it would undo the concurrency guarantee the lock exists to provide.
+ *
+ * <h2>Fields are processed in sorted order, and that is a lock-ordering guarantee</h2>
+ * Field order is the order provenance row locks are acquired in. Under the default arrangement one
+ * transaction covers one field, so only one lock is ever held and order is irrelevant. It stops
+ * being irrelevant the moment a caller wraps a whole snapshot in its own transaction — see
+ * {@code SpringTransactionRunner}, whose propagation is {@code REQUIRED} — because the locks then
+ * accumulate until that outer transaction ends.
+ *
+ * <p>Callers build the field map with {@code Map.of()}, whose iteration order OpenJDK deliberately
+ * randomises per JVM run. Two adapters reconciling the same patient inside outer transactions could
+ * therefore acquire the same two field locks in opposite orders and deadlock — intermittently, under
+ * load, and never in a single-threaded test. Iterating a {@code TreeMap} view imposes one global
+ * lock order, and lock-ordering deadlock cannot occur when every participant acquires in the same
+ * order. Raised as a documentation request in the PR #209 review; fixed rather than documented,
+ * because a warning not to do something is weaker than making it safe to do.
  */
 public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
@@ -126,7 +142,18 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
         Instant fallbackBaseline = patientAccessor.getPatientUpdatedAt(snapshot.patientId());
 
         List<ReconciliationOutcome> outcomes = new ArrayList<>();
-        for (var entry : snapshot.fields().entrySet()) {
+        // Fields are processed in a deterministic order -- sorted by name -- because that order is
+        // also the order provenance row locks are acquired in. It matters whenever locks accumulate
+        // instead of being released per field, which is exactly what happens when a caller wraps a
+        // whole snapshot in its own transaction (see SpringTransactionRunner: propagation is
+        // REQUIRED, so this joins rather than starting a new transaction per field).
+        //
+        // Callers build the map with Map.of(), whose iteration order OpenJDK deliberately randomises
+        // per JVM run. Two adapters reconciling the same patient could therefore take the same two
+        // field locks in opposite orders and deadlock -- intermittently, in production, under load,
+        // and never in a single-threaded test. Sorting removes the possibility rather than
+        // documenting it: with a global lock order, lock-ordering deadlock cannot occur.
+        for (var entry : new TreeMap<>(snapshot.fields()).entrySet()) {
             String fieldName = entry.getKey();
             String incomingValue = entry.getValue();
             if (incomingValue == null || incomingValue.isBlank()) {

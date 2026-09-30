@@ -143,9 +143,7 @@ schema addition that makes decentralized reconciliation actually safe.
 
 ## Verified, not just written
 
-This package's logic was run and checked before being circulated, not just reviewed on paper (this
-sandbox has no access to your build's real dependencies, so verification here used a dependency-free
-harness exercising the exact same production classes — see `manual-verify/`):
+This package's logic is run and checked by the normal build, not just reviewed on paper:
 
 - All 16 contract scenarios (8 original + 8 added for the `date_of_birth` carve-out) pass consistently
   against the real, correctly-locking store.
@@ -164,10 +162,15 @@ in `IdentityFieldProvenanceStore.lockOrCreate` exists to close — implement tha
 your own database, or these exact races reappear in your adapter.
 
 When you build this against your own real database (not the in-memory fakes), re-run the adversarial
-comparison once against your own store with the lock deliberately stubbed out, the same way
-`manual-verify/AdversarialCheck.java` does here — for *both* the general recency-wins race and the
-`date_of_birth` pending-conflict race — if neither can be made to fail against a broken store, your test
-isn't exercising the lock either.
+comparison once against your own store with the lock deliberately stubbed out — for *both* the general
+recency-wins race and the `date_of_birth` pending-conflict race. If neither can be made to fail against
+a broken store, your test isn't exercising the lock either.
+
+Two worked examples are in the build. `AdversarialLockProofTest` runs the race 60 times against the
+in-memory store and, with `EHR_ADVERSARIAL=1`, against a deliberately non-locking one. The
+single-transaction equivalent against real PostgreSQL is `JpaIdentityFieldProvenanceStorePostgresTest`
+TC-EHR-PROV-003, which was verified by swapping its locking read for a plain one — it failed, and it
+was the only one of that class's five cases that did.
 
 **There is now a committed example of exactly that.**
 `JpaIdentityFieldProvenanceStorePostgresTest` TC-EHR-PROV-003 drives two real transactions on two
@@ -224,5 +227,8 @@ the test that proves it has to run on PostgreSQL.
   codebase, so an earlier TODO to "match patient's real tenant column" had nothing to match and
   nothing that could have populated a NOT NULL column. See the plan's 2026-09-26 org-scoping
   reversal; `orgId` left this library's interfaces for the same reason.
-- `manual-verify/` — sandbox-only verification harness (no JUnit/Maven Central access here); not part
-  of what you integrate, kept only so the "verified, not just written" claim above is checkable.
+`manual-verify/` used to sit here: three files outside every Maven module, written when the authoring
+environment had no JUnit or Maven Central. Nothing compiled them, so nothing noticed when the
+`Object`-to-`Long` id change broke all three. They were removed on 2026-09-30 and replaced by
+`AdversarialLockProofTest` plus `support/UnsafeProvenanceStore` in `backend/core/src/test`, which the
+build compiles and the linters see. Raised in the PR #209 review.

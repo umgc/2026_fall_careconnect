@@ -20,8 +20,18 @@ import java.util.Objects;
  *
  * <p>The practical consequence to know: under a caller-supplied outer transaction, every field's
  * provenance lock is held until that outer transaction ends rather than being released field by
- * field. That is safe — it can only serialise more, never less — but it makes a long-running
- * wrapper hold locks for longer than the per-field design assumes.
+ * field. It makes a long-running wrapper hold locks for longer than the per-field design assumes.
+ *
+ * <p><b>Accumulated locks change what deadlock is possible</b>, which an earlier version of this
+ * note glossed as simply "safe — it can only serialise more, never less." That is true of
+ * correctness and false of liveness. Holding one lock at a time cannot deadlock; holding several
+ * can, as soon as two transactions acquire them in different orders. Raised in the PR #209 review.
+ *
+ * <p>{@code RecencyWinsIdentityReconciler} now processes fields in sorted order precisely so that
+ * cannot happen — one global lock order across all callers. Two things follow for anyone wrapping
+ * {@code reconcile()} in an outer transaction: it is safe with respect to <em>this</em> library's
+ * locks, and it stops being safe if that outer transaction also takes locks of its own in some
+ * other order. Keep the wrapper short, and do not interleave other locking work inside it.
  */
 public class SpringTransactionRunner implements TransactionRunner {
 

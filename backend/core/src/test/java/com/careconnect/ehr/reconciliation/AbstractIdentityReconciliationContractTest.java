@@ -212,13 +212,13 @@ public abstract class AbstractIdentityReconciliationContractTest {
      * converge to the correct (newest-timestamped) winner regardless of which thread's database write
      * actually lands first. This is the test that fails under a naive
      * "read-compare-in-application-code-then-write" implementation without a row lock — see
-     * {@link IdentityFieldProvenanceStore}'s javadoc, and this sandbox's manual verification run
-     * (ManualContractCheck vs. UnsafeProvenanceStore) for a demonstration that it actually does.
+     * {@link IdentityFieldProvenanceStore}'s javadoc, and {@code AdversarialLockProofTest} for the
+     * same race run repeatedly against a deliberately non-locking store.
      *
      * <p>Uses "family_name" rather than date_of_birth (which this scenario used before the DOB
      * reversal): this test asserts an applied, converged value, which date_of_birth can no longer
      * produce for a genuine disagreement between two other sources. See
-     * {@code AdversarialCheck}'s date-of-birth section for the DOB-specific equivalent of this same
+     * the date_of_birth cases below for the DOB-specific equivalent of this same
      * concurrency guarantee (converging on which candidate ends up PENDING, not which value gets applied).
      *
      * <p>The scenario matters: both racing timestamps must independently beat the ORIGINAL baseline,
