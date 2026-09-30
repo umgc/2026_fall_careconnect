@@ -16,7 +16,7 @@ public interface PatientFieldAccessor {
      * triggers the "fill when empty" rule (apply directly, no provenance comparison needed) —
      * see {@link RecencyWinsIdentityReconciler}.
      */
-    Optional<String> getCurrentValue(Object patientId, String fieldName);
+    Optional<String> getCurrentValue(Long patientId, String fieldName);
 
     /**
      * {@code patient.updated_at} for the whole row. Used only as the fallback freshness baseline for
@@ -24,8 +24,8 @@ public interface PatientFieldAccessor {
      * {@link IdentityFieldProvenanceStore} has a row for a field, this is never consulted again for
      * that field.
      */
-    Instant getPatientUpdatedAt(Object patientId);
+    Instant getPatientUpdatedAt(Long patientId);
 
     /** Writes the new value. Must be called on the same connection/transaction as the provenance lock. */
-    void applyValue(Object patientId, String fieldName, String newValue);
+    void applyValue(Long patientId, String fieldName, String newValue);
 }

@@ -53,5 +53,5 @@ public interface IdentityReconciler {
      * @throws IllegalStateException if no {@code date_of_birth} conflict is currently {@code PENDING}
      *                                for this patient.
      */
-    ReconciliationOutcome finalizePendingDateOfBirth(Object patientId, boolean acceptIncoming);
+    ReconciliationOutcome finalizePendingDateOfBirth(Long patientId, boolean acceptIncoming);
 }

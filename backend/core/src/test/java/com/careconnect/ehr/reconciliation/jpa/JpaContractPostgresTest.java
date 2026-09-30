@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 /**
  * Runs the entire identity-reconciliation contract against real PostgreSQL, with all four JPA
@@ -146,17 +147,17 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
     protected PatientFieldAccessor patientAccessor() {
         return new PatientFieldAccessor() {
             @Override
-            public java.util.Optional<String> getCurrentValue(Object patientId, String fieldName) {
+            public java.util.Optional<String> getCurrentValue(Long patientId, String fieldName) {
                 return tx.execute(status -> patientAccessor.getCurrentValue(patientId, fieldName));
             }
 
             @Override
-            public Instant getPatientUpdatedAt(Object patientId) {
+            public Instant getPatientUpdatedAt(Long patientId) {
                 return tx.execute(status -> patientAccessor.getPatientUpdatedAt(patientId));
             }
 
             @Override
-            public void applyValue(Object patientId, String fieldName, String newValue) {
+            public void applyValue(Long patientId, String fieldName, String newValue) {
                 tx.executeWithoutResult(status -> patientAccessor.applyValue(patientId, fieldName, newValue));
                 // A seeded starting value must not also move the A1 baseline: the scenarios set
                 // patient.updated_at explicitly via seedPatientUpdatedAt, and Auditable's @PreUpdate
@@ -173,7 +174,7 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
     protected IdentityConflictAuditWriter auditWriter() {
         return new IdentityConflictAuditWriter() {
             @Override
-            public void recordDecision(Object patientId, Object sourceId, String fieldName,
+            public void recordDecision(Long patientId, Long sourceId, String fieldName,
                                        String canonicalValueBefore, String incomingValue,
                                        Instant sourceUpdatedAt, Outcome outcome, ResolvedBy resolvedBy,
                                        Instant detectedAndResolvedAt) {
@@ -183,7 +184,7 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
             }
 
             @Override
-            public void openPendingConflict(Object patientId, Object sourceId, String fieldName,
+            public void openPendingConflict(Long patientId, Long sourceId, String fieldName,
                                             String canonicalValueBefore, String incomingValue,
                                             Instant sourceUpdatedAt, Instant detectedAt) {
                 tx.executeWithoutResult(status -> auditWriter.openPendingConflict(patientId, sourceId,
@@ -191,12 +192,12 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
             }
 
             @Override
-            public java.util.Optional<PendingConflict> currentPendingConflict(Object patientId, String fieldName) {
+            public java.util.Optional<PendingConflict> currentPendingConflict(Long patientId, String fieldName) {
                 return tx.execute(status -> auditWriter.currentPendingConflict(patientId, fieldName));
             }
 
             @Override
-            public void resolvePendingConflict(Object patientId, String fieldName, Outcome outcome,
+            public void resolvePendingConflict(Long patientId, String fieldName, Outcome outcome,
                                                ResolvedBy resolvedBy, Instant resolvedAt) {
                 tx.executeWithoutResult(status -> auditWriter.resolvePendingConflict(patientId,
                         fieldName, outcome, resolvedBy, resolvedAt));
@@ -207,17 +208,17 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
     private final Map<Object, Instant> seededUpdatedAt = new ConcurrentHashMap<>();
 
     @Override
-    protected void seedPatientUpdatedAt(Object patientId, Instant instant) {
+    protected void seedPatientUpdatedAt(Long patientId, Instant instant) {
         seededUpdatedAt.put(patientId, instant);
         writeUpdatedAt(patientId, instant);
     }
 
-    private void writeUpdatedAt(Object patientId, Instant instant) {
+    private void writeUpdatedAt(Long patientId, Instant instant) {
         LocalDateTime asLocal = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
         tx.executeWithoutResult(status -> entityManager
                 .createNativeQuery("update patient set updated_at = :ts where id = :id")
                 .setParameter("ts", asLocal)
-                .setParameter("id", JpaIds.asLong(patientId, "patientId"))
+                .setParameter("id", Objects.requireNonNull(patientId, "patientId"))
                 .executeUpdate());
     }
 
@@ -226,9 +227,9 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
      * contract's assertions count decisions.
      */
     @Override
-    protected List<RecordedDecision> decisionsFor(Object patientId, String fieldName) {
+    protected List<RecordedDecision> decisionsFor(Long patientId, String fieldName) {
         return tx.execute(status -> conflictRepository
-                .findByPatientIdOrderByDetectedAtDesc(JpaIds.asLong(patientId, "patientId"))
+                .findByPatientIdOrderByDetectedAtDesc(Objects.requireNonNull(patientId, "patientId"))
                 .stream()
                 .filter(row -> row.getFieldName().equals(fieldName))
                 .filter(row -> row.getStatus() != EhrConflictStatus.PENDING)
@@ -251,7 +252,7 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
     }
 
     @Override
-    protected Object freshPatientId() {
+    protected Long freshPatientId() {
         Long id = tx.execute(status -> {
             // Every field left null on purpose. The contract's scenarios establish a starting value
             // by reconciling one in and relying on the fill-empty path; pre-populating any field
@@ -272,7 +273,7 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
      * the id here.
      */
     @Override
-    protected Object sourceId(String sourceCode) {
+    protected Long sourceId(String sourceCode) {
         return SOURCE_IDS.computeIfAbsent(sourceCode, code -> tx.execute(status -> {
             entityManager.createNativeQuery(
                             "INSERT INTO ehr_source (code, display_name, fhir_version, enabled, created_at, updated_at) "

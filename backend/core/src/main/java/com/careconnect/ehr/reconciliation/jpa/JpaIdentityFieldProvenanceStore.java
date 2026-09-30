@@ -88,9 +88,9 @@ public class JpaIdentityFieldProvenanceStore implements IdentityFieldProvenanceS
     }
 
     @Override
-    public Optional<FieldProvenance> lockOrCreate(Object patientId, String fieldName) {
+    public Optional<FieldProvenance> lockOrCreate(Long patientId, String fieldName) {
         requireTransaction("lockOrCreate");
-        Long resolvedPatientId = JpaIds.asLong(patientId, "patientId");
+        Long resolvedPatientId = Objects.requireNonNull(patientId, "patientId");
         String resolvedFieldName = requireFieldName(fieldName);
 
         Optional<EhrIdentityFieldProvenance> locked =
@@ -115,11 +115,11 @@ public class JpaIdentityFieldProvenanceStore implements IdentityFieldProvenanceS
 
     @Override
     public void recordAsFreshest(
-            Object patientId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
+            Long patientId, String fieldName, Long sourceId, Instant sourceUpdatedAt) {
         requireTransaction("recordAsFreshest");
-        Long resolvedPatientId = JpaIds.asLong(patientId, "patientId");
+        Long resolvedPatientId = Objects.requireNonNull(patientId, "patientId");
         String resolvedFieldName = requireFieldName(fieldName);
-        Long resolvedSourceId = JpaIds.asLong(sourceId, "sourceId");
+        Long resolvedSourceId = Objects.requireNonNull(sourceId, "sourceId");
         Objects.requireNonNull(sourceUpdatedAt, "sourceUpdatedAt");
 
         // Re-taking the lock is re-entrant within this transaction — PostgreSQL row locks are held

@@ -13,7 +13,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     private enum Status { PENDING, ACCEPTED, REJECTED }
 
     private record Row(
-            Object patientId, Object sourceId, String fieldName,
+            Long patientId, Long sourceId, String fieldName,
             String canonicalValueBefore, String incomingValue, Instant sourceUpdatedAt,
             Status status, ResolvedBy resolvedBy, Instant detectedAt, Instant resolvedAt) {
     }
@@ -22,7 +22,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     private final List<Row> rows = new CopyOnWriteArrayList<>();
 
     @Override
-    public void recordDecision(Object patientId, Object sourceId, String fieldName,
+    public void recordDecision(Long patientId, Long sourceId, String fieldName,
                                 String canonicalValueBefore, String incomingValue, Instant sourceUpdatedAt,
                                 Outcome outcome, ResolvedBy resolvedBy, Instant detectedAndResolvedAt) {
         // Stored, not null. This fake used to write null here, which cost nothing in memory and could
@@ -33,7 +33,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     }
 
     @Override
-    public void openPendingConflict(Object patientId, Object sourceId, String fieldName,
+    public void openPendingConflict(Long patientId, Long sourceId, String fieldName,
                                      String canonicalValueBefore, String incomingValue, Instant sourceUpdatedAt,
                                      Instant detectedAt) {
         boolean alreadyOpen = rows.stream().anyMatch(r -> r.status() == Status.PENDING
@@ -49,7 +49,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     }
 
     @Override
-    public Optional<PendingConflict> currentPendingConflict(Object patientId, String fieldName) {
+    public Optional<PendingConflict> currentPendingConflict(Long patientId, String fieldName) {
         return rows.stream()
                 .filter(r -> r.status() == Status.PENDING && r.patientId().equals(patientId) && r.fieldName().equals(fieldName))
                 .findFirst()
@@ -58,7 +58,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     }
 
     @Override
-    public void resolvePendingConflict(Object patientId, String fieldName, Outcome outcome, ResolvedBy resolvedBy,
+    public void resolvePendingConflict(Long patientId, String fieldName, Outcome outcome, ResolvedBy resolvedBy,
                                         Instant resolvedAt) {
         for (int i = 0; i < rows.size(); i++) {
             Row r = rows.get(i);
@@ -72,7 +72,7 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     }
 
     /** Finalized decisions only -- an open PENDING row is not a "decision" yet; see {@link #currentPendingConflict}. */
-    public List<RecordedDecision> decisionsFor(Object patientId, String fieldName) {
+    public List<RecordedDecision> decisionsFor(Long patientId, String fieldName) {
         return rows.stream()
                 .filter(r -> r.status() != Status.PENDING)
                 .filter(r -> r.patientId().equals(patientId) && r.fieldName().equals(fieldName))

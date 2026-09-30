@@ -26,7 +26,7 @@ public interface IdentityFieldProvenanceStore {
      * empty one first if none exists yet, so the lock always has a row to attach to. Must be called
      * inside the caller's transaction and must not release the lock until that transaction ends.
      */
-    Optional<FieldProvenance> lockOrCreate(Object patientId, String fieldName);
+    Optional<FieldProvenance> lockOrCreate(Long patientId, String fieldName);
 
     /**
      * Records {@code sourceId}/{@code sourceUpdatedAt} as the new freshest-known provenance for this
@@ -34,5 +34,5 @@ public interface IdentityFieldProvenanceStore {
      * when the incoming snapshot is at least as fresh as what was already there (see
      * {@link RecencyWinsIdentityReconciler} for the exact comparison and the tie-break rule).
      */
-    void recordAsFreshest(Object patientId, String fieldName, Object sourceId, Instant sourceUpdatedAt);
+    void recordAsFreshest(Long patientId, String fieldName, Long sourceId, Instant sourceUpdatedAt);
 }

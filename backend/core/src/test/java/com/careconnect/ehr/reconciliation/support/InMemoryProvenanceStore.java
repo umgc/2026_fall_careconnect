@@ -13,7 +13,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public final class InMemoryProvenanceStore implements IdentityFieldProvenanceStore {
 
-    private record Key(Object patientId, String fieldName) {
+    private record Key(Long patientId, String fieldName) {
     }
 
     private final Map<Key, Lock> locks = new ConcurrentHashMap<>();
@@ -23,7 +23,7 @@ public final class InMemoryProvenanceStore implements IdentityFieldProvenanceSto
     public final List<Key> acquireOrder = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     @Override
-    public Optional<FieldProvenance> lockOrCreate(Object patientId, String fieldName) {
+    public Optional<FieldProvenance> lockOrCreate(Long patientId, String fieldName) {
         Key key = new Key(patientId, fieldName);
         Lock lock = locks.computeIfAbsent(key, k -> new ReentrantLock());
         FakeTransactionSupport.acquireForTransaction(lock);
@@ -32,11 +32,11 @@ public final class InMemoryProvenanceStore implements IdentityFieldProvenanceSto
     }
 
     @Override
-    public void recordAsFreshest(Object patientId, String fieldName, Object sourceId, Instant sourceUpdatedAt) {
+    public void recordAsFreshest(Long patientId, String fieldName, Long sourceId, Instant sourceUpdatedAt) {
         rows.put(new Key(patientId, fieldName), new FieldProvenance(sourceId, sourceUpdatedAt));
     }
 
-    public Optional<FieldProvenance> peek(Object patientId, String fieldName) {
+    public Optional<FieldProvenance> peek(Long patientId, String fieldName) {
         return Optional.ofNullable(rows.get(new Key(patientId, fieldName)));
     }
 }

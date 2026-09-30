@@ -55,17 +55,17 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     protected abstract IdentityConflictAuditWriter auditWriter();
 
-    protected abstract void seedPatientUpdatedAt(Object patientId, Instant instant);
+    protected abstract void seedPatientUpdatedAt(Long patientId, Instant instant);
 
-    protected abstract List<RecordedDecision> decisionsFor(Object patientId, String fieldName);
+    protected abstract List<RecordedDecision> decisionsFor(Long patientId, String fieldName);
 
     /** A fresh, distinct patient id for each test, so tests never share state. Implement with a counter/UUID. */
-    protected abstract Object freshPatientId();
+    protected abstract Long freshPatientId();
 
 
-    protected abstract Object sourceId(String sourceCode);
+    protected abstract Long sourceId(String sourceCode);
 
-    private static SourceIdentitySnapshot snapshot(Object patientId, Object sourceId,
+    private static SourceIdentitySnapshot snapshot(Long patientId, Long sourceId,
                                                      Instant sourceUpdatedAt, String fieldName, String value) {
         return new SourceIdentitySnapshot(patientId, sourceId, sourceUpdatedAt,
                 java.util.Map.of(fieldName, value));
@@ -73,8 +73,8 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void fillsEmptyFieldDirectlyWithNoAuditRow() {
-        Object patientId = freshPatientId();
-        Object athena = sourceId("ATHENAHEALTH");
+        Long patientId = freshPatientId();
+        Long athena = sourceId("ATHENAHEALTH");
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
 
         // date_of_birth deliberately, to also prove the fill-empty rule is unaffected by the DOB
@@ -89,7 +89,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void blankIncomingValueIsIgnoredEntirely() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
 
         var outcomes = reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t1, "phone", "   "));
@@ -100,9 +100,9 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void agreeingValuesWriteNoAuditRowButStillAdvanceProvenanceBaseline() {
-        Object patientId = freshPatientId();
-        Object athena = sourceId("ATHENAHEALTH");
-        Object epic = sourceId("EPIC");
+        Long patientId = freshPatientId();
+        Long athena = sourceId("ATHENAHEALTH");
+        Long epic = sourceId("EPIC");
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(10, ChronoUnit.DAYS);
         Instant t3BetweenT1AndT2 = t1.plus(5, ChronoUnit.DAYS);
@@ -126,7 +126,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void acceptsAndAppliesADisagreementThatIsNewerThanTheBaseline() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
 
@@ -146,7 +146,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void rejectsAndDiscardsADisagreementThatIsOlderThanTheBaselineButStillAudits() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant tOlder = t1.minus(1, ChronoUnit.DAYS);
 
@@ -164,7 +164,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void exactlyEqualTimestampsFavorTheExistingValueDeterministically() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
 
         reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, "family_name", "Smith"));
@@ -182,7 +182,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
         // ACCEPTED_NEWER/REJECTED_STALE outcomes that date_of_birth can no longer return for a genuine
         // disagreement. See dateOfBirthFirstDisagreementWithNoPriorProvenanceAlsoFallsBackToPatientUpdatedAt
         // below for the DOB-specific equivalent of this same assumption.
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant patientEditedAt = Instant.parse("2026-06-01T00:00:00Z");
         seedPatientUpdatedAt(patientId, patientEditedAt);
 
@@ -232,7 +232,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
      */
     @Test
     void concurrentRacingAdaptersConvergeOnTheNewerValueRegardlessOfArrivalOrder() throws InterruptedException {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant baseline = Instant.parse("2026-01-01T00:00:00Z");
         Instant middle = baseline.plus(1, ChronoUnit.DAYS);   // beats baseline, loses to `latest`
         Instant latest = baseline.plus(2, ChronoUnit.DAYS);   // beats both
@@ -269,7 +269,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void dateOfBirthFirstDisagreementWithNoPriorProvenanceAlsoFallsBackToPatientUpdatedAt() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant patientEditedAt = Instant.parse("2026-06-01T00:00:00Z");
         seedPatientUpdatedAt(patientId, patientEditedAt);
         patientAccessor().applyValue(patientId, DATE_OF_BIRTH, "1950-05-04");
@@ -293,10 +293,10 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void dateOfBirthDisagreementOpensPendingConfirmationInsteadOfAutoApplying() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
-        Object epic = sourceId("EPIC");
+        Long epic = sourceId("EPIC");
 
         reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
         var outcomes = reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
@@ -319,7 +319,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void dateOfBirthCandidateNotNewerThanConfirmedBaselineNeverInterruptsThePatient() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant tOlder = t1.minus(1, ChronoUnit.DAYS);
 
@@ -339,11 +339,11 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void dateOfBirthPendingConflictIsSupersededByAGenuinelyNewerCandidate() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
         Instant t3 = t1.plus(2, ChronoUnit.DAYS);
-        Object oracle = sourceId("ORACLE_HEALTH");
+        Long oracle = sourceId("ORACLE_HEALTH");
 
         reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
         reconciler().reconcile(snapshot(patientId, sourceId("EPIC"), t2, DATE_OF_BIRTH, "1950-05-06"));
@@ -367,7 +367,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void dateOfBirthCandidateNotNewerThanTheOpenPendingOneIsIgnored() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t3 = t1.plus(3, ChronoUnit.DAYS);
         Instant t2BetweenT1AndT3 = t1.plus(1, ChronoUnit.DAYS);
@@ -387,7 +387,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void finalizingPendingDateOfBirthAsAcceptedAppliesTheValueAndClearsThePending() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
 
@@ -416,7 +416,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void finalizingPendingDateOfBirthAsRejectedLeavesPatientUnchangedAndClearsThePending() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
 
@@ -440,7 +440,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
 
     @Test
     void finalizingWithNoPendingConflictThrows() {
-        Object patientId = freshPatientId();
+        Long patientId = freshPatientId();
         assertThrows(IllegalStateException.class,
                 () -> reconciler().finalizePendingDateOfBirth(patientId, true),
                 "there is nothing to finalize when no date_of_birth conflict is open");

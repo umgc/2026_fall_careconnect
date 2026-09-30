@@ -58,8 +58,8 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
 
     @Override
     public void recordDecision(
-            Object patientId,
-            Object sourceId,
+            Long patientId,
+            Long sourceId,
             String fieldName,
             String canonicalValueBefore,
             String incomingValue,
@@ -74,8 +74,8 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
         Objects.requireNonNull(detectedAndResolvedAt, "detectedAndResolvedAt");
 
         EhrIdentityConflict row = EhrIdentityConflict.builder()
-                .patientId(JpaIds.asLong(patientId, "patientId"))
-                .sourceId(JpaIds.asLong(sourceId, "sourceId"))
+                .patientId(Objects.requireNonNull(patientId, "patientId"))
+                .sourceId(Objects.requireNonNull(sourceId, "sourceId"))
                 .fieldName(requireFieldName(fieldName))
                 .canonicalValueBefore(canonicalValueBefore)
                 .incomingValue(incomingValue)
@@ -94,8 +94,8 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
 
     @Override
     public void openPendingConflict(
-            Object patientId,
-            Object sourceId,
+            Long patientId,
+            Long sourceId,
             String fieldName,
             String canonicalValueBefore,
             String incomingValue,
@@ -106,8 +106,8 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
         Objects.requireNonNull(detectedAt, "detectedAt");
 
         EhrIdentityConflict row = EhrIdentityConflict.builder()
-                .patientId(JpaIds.asLong(patientId, "patientId"))
-                .sourceId(JpaIds.asLong(sourceId, "sourceId"))
+                .patientId(Objects.requireNonNull(patientId, "patientId"))
+                .sourceId(Objects.requireNonNull(sourceId, "sourceId"))
                 .fieldName(requireFieldName(fieldName))
                 .canonicalValueBefore(canonicalValueBefore)
                 .incomingValue(incomingValue)
@@ -128,10 +128,10 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
     }
 
     @Override
-    public Optional<PendingConflict> currentPendingConflict(Object patientId, String fieldName) {
+    public Optional<PendingConflict> currentPendingConflict(Long patientId, String fieldName) {
         return repository
                 .findByPatientIdAndFieldNameAndStatus(
-                        JpaIds.asLong(patientId, "patientId"),
+                        Objects.requireNonNull(patientId, "patientId"),
                         requireFieldName(fieldName),
                         EhrConflictStatus.PENDING)
                 .map(row -> new PendingConflict(
@@ -150,13 +150,13 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
      */
     @Override
     public void resolvePendingConflict(
-            Object patientId, String fieldName, Outcome outcome, ResolvedBy resolvedBy, Instant resolvedAt) {
+            Long patientId, String fieldName, Outcome outcome, ResolvedBy resolvedBy, Instant resolvedAt) {
         requireTransaction("resolvePendingConflict");
         Objects.requireNonNull(outcome, "outcome");
         Objects.requireNonNull(resolvedBy, "resolvedBy");
         Objects.requireNonNull(resolvedAt, "resolvedAt");
 
-        Long resolvedPatientId = JpaIds.asLong(patientId, "patientId");
+        Long resolvedPatientId = Objects.requireNonNull(patientId, "patientId");
         String resolvedFieldName = requireFieldName(fieldName);
 
         EhrIdentityConflict row = repository

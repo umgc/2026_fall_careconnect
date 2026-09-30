@@ -16,5 +16,5 @@ import java.time.Instant;
  * @param sourceUpdatedAt that source's {@code source_updated_at} at the time it last won (or tied)
  *                        the comparison for this field.
  */
-public record FieldProvenance(Object sourceId, Instant sourceUpdatedAt) {
+public record FieldProvenance(Long sourceId, Instant sourceUpdatedAt) {
 }

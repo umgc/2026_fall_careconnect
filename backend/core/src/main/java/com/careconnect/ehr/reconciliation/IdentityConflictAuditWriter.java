@@ -66,8 +66,8 @@ public interface IdentityConflictAuditWriter {
      *                              as stale.
      */
     void recordDecision(
-            Object patientId,
-            Object sourceId,
+            Long patientId,
+            Long sourceId,
             String fieldName,
             String canonicalValueBefore,
             String incomingValue,
@@ -94,8 +94,8 @@ public interface IdentityConflictAuditWriter {
      * read by the algorithm.
      */
     void openPendingConflict(
-            Object patientId,
-            Object sourceId,
+            Long patientId,
+            Long sourceId,
             String fieldName,
             String canonicalValueBefore,
             String incomingValue,
@@ -108,7 +108,7 @@ public interface IdentityConflictAuditWriter {
      * {@link #openPendingConflict}). {@code date_of_birth} only — nothing else in this library ever
      * leaves a row in this state.
      */
-    Optional<PendingConflict> currentPendingConflict(Object patientId, String fieldName);
+    Optional<PendingConflict> currentPendingConflict(Long patientId, String fieldName);
 
     /**
      * Finalizes the open {@code PENDING} conflict for {@code (patientId, fieldName)} — the write side
@@ -117,7 +117,7 @@ public interface IdentityConflictAuditWriter {
      * this without having just confirmed one exists in the same transaction.
      */
     void resolvePendingConflict(
-            Object patientId,
+            Long patientId,
             String fieldName,
             Outcome outcome,
             ResolvedBy resolvedBy,
@@ -136,7 +136,7 @@ public interface IdentityConflictAuditWriter {
      * @param detectedAt           when this conflict was opened.
      */
     record PendingConflict(
-            Object sourceId,
+            Long sourceId,
             String canonicalValueBefore,
             String incomingValue,
             Instant sourceUpdatedAt,

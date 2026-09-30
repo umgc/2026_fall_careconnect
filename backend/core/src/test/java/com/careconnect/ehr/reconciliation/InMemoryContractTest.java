@@ -8,6 +8,8 @@ import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -23,6 +25,8 @@ class InMemoryContractTest extends AbstractIdentityReconciliationContractTest {
     private InMemoryAuditWriter auditWriter;
     private IdentityReconciler reconciler;
     private final AtomicLong patientIdSeq = new AtomicLong(1);
+    private final AtomicLong sourceIdSeq = new AtomicLong(1);
+    private final Map<String, Long> sourceIds = new ConcurrentHashMap<>();
 
     @BeforeEach
     void setUp() {
@@ -49,22 +53,31 @@ class InMemoryContractTest extends AbstractIdentityReconciliationContractTest {
     }
 
     @Override
-    protected void seedPatientUpdatedAt(Object patientId, Instant instant) {
+    protected void seedPatientUpdatedAt(Long patientId, Instant instant) {
         patientAccessor.seedPatientUpdatedAt(patientId, instant);
     }
 
     @Override
-    protected List<RecordedDecision> decisionsFor(Object patientId, String fieldName) {
+    protected List<RecordedDecision> decisionsFor(Long patientId, String fieldName) {
         return auditWriter.decisionsFor(patientId, fieldName);
     }
 
     @Override
-    protected Object freshPatientId() {
+    protected Long freshPatientId() {
         return patientIdSeq.getAndIncrement();
     }
 
+    /**
+     * Synthesises a numeric id per source code, stable within a test.
+     * <p>
+     * This used to return the code string itself, which the interfaces allowed when ids were typed
+     * {@code Object}. They are {@code Long} as of PR #209 review: every table these ids land in
+     * declares them {@code bigint} with a foreign key to {@code patient.id} or {@code ehr_source.id},
+     * so no real implementation could ever have used anything else. The fake now matches that
+     * instead of exercising a shape the schema forbids.
+     */
     @Override
-    protected Object sourceId(String sourceCode) {
-        return sourceCode; // in-memory fakes treat the source code itself as the id
+    protected Long sourceId(String sourceCode) {
+        return sourceIds.computeIfAbsent(sourceCode, code -> sourceIdSeq.getAndIncrement());
     }
 }

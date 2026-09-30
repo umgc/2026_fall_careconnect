@@ -20,6 +20,12 @@ except `date_of_birth`, that's the entire integration surface — everything abo
 decided inside the library, identically, regardless of which of you calls it. For `date_of_birth`
 specifically, there is a second entry point too — see "The `date_of_birth` carve-out" below.
 
+**Ids are `Long`, as of the PR #209 review (2026-09-30).** They were typed `Object` so adapters
+would not be forced onto this codebase's key types. That never bought anything: every table these
+ids land in declares `patient_id` and `source_id` as `bigint` with foreign keys to `patient.id`
+and `ehr_source.id`, so no implementation could have used another type. `Object` only moved the
+failure from compile time to runtime.
+
 You do not decide winners yourselves, and you do not write to `patient` directly for any field this
 library manages — that's the write-contract the original reconciliation design established, and it's
 still the rule.

@@ -84,7 +84,7 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
     }
 
     @Override
-    public Optional<String> getCurrentValue(Object patientId, String fieldName) {
+    public Optional<String> getCurrentValue(Long patientId, String fieldName) {
         FieldBinding binding = bindingFor(fieldName);
         Patient patient = require(patientId);
         String value = binding.read().apply(patient);
@@ -92,7 +92,7 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
     }
 
     @Override
-    public Instant getPatientUpdatedAt(Object patientId) {
+    public Instant getPatientUpdatedAt(Long patientId) {
         Patient patient = require(patientId);
         LocalDateTime updatedAt = patient.getUpdatedAt();
         if (updatedAt == null) {
@@ -115,7 +115,7 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
      * until each has provenance of its own.
      */
     @Override
-    public void applyValue(Object patientId, String fieldName, String newValue) {
+    public void applyValue(Long patientId, String fieldName, String newValue) {
         requireTransaction();
         FieldBinding binding = bindingFor(fieldName);
         Objects.requireNonNull(newValue, "newValue");
@@ -124,8 +124,8 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
         patientRepository.save(patient);
     }
 
-    private Patient require(Object patientId) {
-        Long id = JpaIds.asLong(patientId, "patientId");
+    private Patient require(Long patientId) {
+        Long id = Objects.requireNonNull(patientId, "patientId");
         return patientRepository.findById(id).orElseThrow(() -> new IllegalArgumentException(
                 "No patient with id " + id + " to reconcile against"));
     }

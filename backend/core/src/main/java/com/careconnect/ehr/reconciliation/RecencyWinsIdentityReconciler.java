@@ -141,7 +141,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
     }
 
     @Override
-    public ReconciliationOutcome finalizePendingDateOfBirth(Object patientId, boolean acceptIncoming) {
+    public ReconciliationOutcome finalizePendingDateOfBirth(Long patientId, boolean acceptIncoming) {
         AtomicReference<ReconciliationOutcome> outcomeRef = new AtomicReference<>();
         transactionRunner.runInTransaction(() ->
                 outcomeRef.set(finalizePendingDateOfBirthLocked(patientId, acceptIncoming)));
@@ -161,8 +161,8 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
      */
     ReconciliationOutcome reconcileOneFieldLocked(
             SourceIdentitySnapshot snapshot, String fieldName, String incomingValue, Instant fallbackBaseline) {
-        Object patientId = snapshot.patientId();
-        Object sourceId = snapshot.sourceId();
+        Long patientId = snapshot.patientId();
+        Long sourceId = snapshot.sourceId();
         Instant incomingTimestamp = snapshot.sourceUpdatedAt();
 
         Optional<FieldProvenance> provenance = provenanceStore.lockOrCreate(patientId, fieldName);
@@ -233,7 +233,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
      * for anything patient-visible beyond "which value ends up in the confirmation prompt."
      */
     private ReconciliationOutcome reconcileDateOfBirthDisagreement(
-            Object patientId, Object sourceId, String currentValue, String incomingValue,
+            Long patientId, Long sourceId, String currentValue, String incomingValue,
             Instant incomingTimestamp, boolean incomingIsNewerThanConfirmedBaseline, Instant decidedAt) {
 
         if (!incomingIsNewerThanConfirmedBaseline) {
@@ -274,7 +274,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
      * Package-private, same reason {@link #reconcileOneFieldLocked} is: lets the contract test suite
      * exercise this directly under simulated concurrency.
      */
-    ReconciliationOutcome finalizePendingDateOfBirthLocked(Object patientId, boolean acceptIncoming) {
+    ReconciliationOutcome finalizePendingDateOfBirthLocked(Long patientId, boolean acceptIncoming) {
         // Take the same per-(patientId, date_of_birth) lock every reconcile() call takes for this
         // field, so a finalize racing a concurrent reconcile() supersede attempt serializes correctly
         // instead of both reading the same pending conflict and stepping on each other.
@@ -300,7 +300,7 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
     }
 
     private void refreshProvenanceIfNewer(
-            Object patientId, String fieldName, Object sourceId, Instant incomingTimestamp,
+            Long patientId, String fieldName, Long sourceId, Instant incomingTimestamp,
             Optional<FieldProvenance> existing) {
         boolean shouldRefresh = existing.isEmpty()
                 || !incomingTimestamp.isBefore(existing.get().sourceUpdatedAt());

@@ -26,8 +26,8 @@ import java.util.Map;
  *                        {@link RecencyWinsIdentityReconciler}).
  */
 public record SourceIdentitySnapshot(
-        Object patientId,
-        Object sourceId,
+        Long patientId,
+        Long sourceId,
         Instant sourceUpdatedAt,
         Map<String, String> fields) {
 }
