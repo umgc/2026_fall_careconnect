@@ -392,6 +392,35 @@ void main() {
       await tts.stop();
       expect(e.calls.last, 'stop');
     });
+
+    test(
+        'TC-MED-PHOTO-091: with no engine injected, read-aloud uses the flutter_tts platform channel',
+        () async {
+      // Arrange: record calls on the flutter_tts channel instead of reaching a device.
+      const channel = MethodChannel('flutter_tts');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return 1;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      // Act
+      final tts = MedicationPhotoTts();
+      await tts.speak('Aspirin 81 mg');
+      await tts.stop();
+
+      // Assert
+      final methods = calls.map((c) => c.method).toList();
+      expect(methods,
+          containsAll(['setLanguage', 'setSpeechRate', 'speak', 'stop']));
+      expect(calls.firstWhere((c) => c.method == 'setLanguage').arguments,
+          'en-US');
+      expect(calls.firstWhere((c) => c.method == 'speak').arguments,
+          'Aspirin 81 mg');
+    });
   });
 
   // ── Modal: entry, prefill, tracking ──────────────────────────────────────
