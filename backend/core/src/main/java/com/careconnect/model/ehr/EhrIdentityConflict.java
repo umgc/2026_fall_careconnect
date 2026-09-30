@@ -34,6 +34,20 @@ import java.time.Instant;
  * accepted everywhere except DOB — so {@code ck_ehr_identity_conflict_pending_dob} enforces it
  * where it cannot be forgotten.
  * <p>
+ * <strong>This table is PHI-bearing.</strong> {@code canonical_value_before} and
+ * {@code incoming_value} hold the actual demographic values that disagreed, in plain text — a
+ * {@code date_of_birth} row contains two dates of birth, and other rows contain names, addresses
+ * and phone numbers. Treat it as patient data, not as metadata about patient data.
+ * <p>
+ * Its retention question is harder than {@code ehr_raw_payload}'s, because the two requirements
+ * pull against each other: the table exists <em>to be kept</em>, since the whole reason for
+ * recording rejections is that a bad crosswalk stays reconstructable months later, which argues for
+ * a <em>minimum</em> retention — while the PHI it holds argues for a <em>maximum</em>. A TTL alone
+ * cannot satisfy both, and redacting the values while keeping the decision record is a compliance
+ * decision rather than an engineering one. Tracked in the {@code hipaa}/{@code retention} issue
+ * raised against PR #209; do not add a purge job here before that lands, or the audit trail this
+ * table exists for will be deleted on a schedule nobody agreed to.
+ * <p>
  * Both CHECK constraints and the partial unique index are applied by {@code SchemaPatchRunner};
  * Hibernate will not create them.
  */
