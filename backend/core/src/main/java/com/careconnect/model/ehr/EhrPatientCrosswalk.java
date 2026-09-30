@@ -21,10 +21,16 @@ import lombok.Setter;
  * <p>
  * The external identifier is retained for provenance and for addressing subsequent requests
  * to that source. It is <strong>not</strong> an authorization token and not grounds for a
- * merge: per FR-CERN-06 and BR-11, a raw external patient id, name or birth date alone must
- * never authorize access or trigger an automatic cross-source merge. Reconciliation of the
- * demographic fields behind these identifiers is a separate concern handled through
- * {@code ehr_source_identity}.
+ * merge: a raw external patient id, name or birth date alone must never authorize access or
+ * trigger an automatic cross-source merge. Reconciliation of the demographic fields behind
+ * these identifiers is a separate concern handled through {@code ehr_source_identity}.
+ * <p>
+ * That rule previously cited "FR-CERN-06 and BR-11". Those identifiers are not in SRS 1.4
+ * Integrated and appear in no document in this repository (PR #209 review, 2026-09-30), so the
+ * citation has been removed rather than left implying a traceability link that does not exist.
+ * The rule itself is not in question -- treating an external identifier as proof of identity is
+ * how records get attached to the wrong patient -- it is simply unattributed until someone can
+ * point at a real requirement.
  * <p>
  * Both unique constraints are deliberately tight. {@code (source_id, external_patient_id)}
  * stops one external record being claimed by two patients; {@code (patient_id, source_id)}

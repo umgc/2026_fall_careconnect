@@ -13,8 +13,9 @@ public interface EhrPatientCrosswalkRepository extends JpaRepository<EhrPatientC
 
     /**
      * Reverse lookup used when a source reports an identifier and the owning patient must be
-     * found. Returning the crosswalk row does not by itself authorize access to that patient
-     * (FR-CERN-06, BR-11); callers still apply their own authorization check.
+     * found. Returning the crosswalk row does not by itself authorize access to that patient;
+     * callers still apply their own authorization check. (This previously cited FR-CERN-06 and
+     * BR-11, which are not in SRS 1.4 Integrated -- see {@code EhrPatientCrosswalk}.)
      */
     Optional<EhrPatientCrosswalk> findBySourceIdAndExternalPatientId(
             Long sourceId, String externalPatientId);

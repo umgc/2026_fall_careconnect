@@ -552,9 +552,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
      * created before those constraints were declared.
      * <p>
      * Deliberately adds no organization/tenant column: FR-EHR-10 instructs reuse of an existing
-     * organization-identifier isolation pattern, and none exists in this schema. The gap is
-     * filed for the Requirements Owner and DE-02 rather than hidden behind a placeholder column
-     * that no query could filter on.
+     * organization-identifier isolation pattern, and none exists in this schema. The gap is filed
+     * for the tech leads to route, rather than hidden behind a placeholder column that no query
+     * could filter on. (An earlier version named a "Requirements Owner" role and a "DE-02" item;
+     * neither is defined anywhere in this repository, so the routing is left to the leads instead
+     * of asserted.)
      */
     private void applyEhrCanonicalSchemaPatches() {
         // Seed rows use only plain types and portable predicates, so they apply on H2 too.
