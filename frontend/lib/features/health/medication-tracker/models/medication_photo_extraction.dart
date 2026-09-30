@@ -61,7 +61,9 @@ class MedicationPhotoExtractionResult {
   /// The machine-generated value for [key], or null when it was not read.
   String? prefilledValue(String key) {
     for (final field in fields) {
-      if (field.key == key && field.machineGenerated && field.value.isNotEmpty) {
+      if (field.key == key &&
+          field.machineGenerated &&
+          field.value.isNotEmpty) {
         return field.value;
       }
     }

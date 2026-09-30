@@ -15,7 +15,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:care_connect_app/features/health/medication-tracker/data/medication_photo_tts.dart';
 import 'package:care_connect_app/features/health/medication-tracker/data/medications_api.dart';
@@ -73,8 +72,7 @@ class FakeTtsEngine implements TtsEngine {
   Future<dynamic> stop() async => calls.add('stop');
 }
 
-MedicationPhotoExtractedField _f(String key, String value,
-        {bool? machine}) =>
+MedicationPhotoExtractedField _f(String key, String value, {bool? machine}) =>
     MedicationPhotoExtractedField(
       key: key,
       label: key,
@@ -167,12 +165,14 @@ class _Harness {
 }
 
 Future<void> _scan(WidgetTester tester) async {
-  await tester.ensureVisible(find.byKey(const Key('medication-photo-capture-button')));
+  await tester
+      .ensureVisible(find.byKey(const Key('medication-photo-capture-button')));
   await tester.tap(find.byKey(const Key('medication-photo-capture-button')));
   await tester.pumpAndSettle();
 }
 
-Future<void> _pump(WidgetTester tester, _Harness h, {double scale = 1.0}) async {
+Future<void> _pump(WidgetTester tester, _Harness h,
+    {double scale = 1.0}) async {
   tester.view.physicalSize = const Size(900, 3000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -182,10 +182,8 @@ Future<void> _pump(WidgetTester tester, _Harness h, {double scale = 1.0}) async 
   await tester.pumpAndSettle();
 }
 
-String _fieldText(WidgetTester tester, String key) => tester
-    .widget<TextFormField>(find.byKey(Key(key)))
-    .controller!
-    .text;
+String _fieldText(WidgetTester tester, String key) =>
+    tester.widget<TextFormField>(find.byKey(Key(key))).controller!.text;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -193,8 +191,7 @@ void main() {
   // platform channels so those calls resolve instead of throwing.
   setUpAll(() {
     SharedPreferences.setMockInitialValues({});
-    final messenger =
-        TestWidgetsFlutterBinding.instance.defaultBinaryMessenger;
+    final messenger = TestWidgetsFlutterBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
       const MethodChannel('dev.fluttercommunity.plus/connectivity'),
       (call) async => call.method == 'check' ? ['wifi'] : null,
@@ -216,8 +213,18 @@ void main() {
         'status': 'PREFILLED',
         'message': 'ok',
         'fields': [
-          {'key': 'medicationName', 'label': 'Medication Name', 'value': 'A', 'machineGenerated': true},
-          {'key': 'dosage', 'label': 'Dosage', 'value': '', 'machineGenerated': false},
+          {
+            'key': 'medicationName',
+            'label': 'Medication Name',
+            'value': 'A',
+            'machineGenerated': true
+          },
+          {
+            'key': 'dosage',
+            'label': 'Dosage',
+            'value': '',
+            'machineGenerated': false
+          },
         ],
       });
       expect(r.manualEntryRequired, isFalse);
@@ -227,7 +234,9 @@ void main() {
       expect(r.prefilledValue('frequency'), isNull);
     });
 
-    test('TC-MED-PHOTO-034: prefilledValue ignores values not flagged machineGenerated', () {
+    test(
+        'TC-MED-PHOTO-034: prefilledValue ignores values not flagged machineGenerated',
+        () {
       final r = MedicationPhotoExtractionResult(
         status: 'PREFILLED',
         fields: [_f('dosage', '5 mg', machine: false)],
@@ -235,20 +244,29 @@ void main() {
       expect(r.prefilledValue('dosage'), isNull);
     });
 
-    test('TC-MED-PHOTO-035: missing status defaults to manual entry; fallback has no fields', () {
-      expect(MedicationPhotoExtractionResult.fromJson({}).manualEntryRequired, isTrue);
+    test(
+        'TC-MED-PHOTO-035: missing status defaults to manual entry; fallback has no fields',
+        () {
+      expect(MedicationPhotoExtractionResult.fromJson({}).manualEntryRequired,
+          isTrue);
       final f = MedicationPhotoExtractionResult.manualFallback(message: 'm');
       expect(f.manualEntryRequired, isTrue);
       expect(f.fields, isEmpty);
       expect(f.message, 'm');
     });
 
-    test('TC-MED-PHOTO-036: medicationTypeFromExtracted maps backend names, blank/unknown -> null', () {
-      expect(medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
+    test(
+        'TC-MED-PHOTO-036: medicationTypeFromExtracted maps backend names, blank/unknown -> null',
+        () {
+      expect(
+          medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
       expect(medicationTypeFromExtracted('HERBAL'), MedicationType.HERBAL);
-      expect(medicationTypeFromExtracted('EMERGENCY'), MedicationType.EMERGENCY);
-      expect(medicationTypeFromExtracted('PRESCRIPTION'), MedicationType.PRESCRIPTION);
-      expect(medicationTypeFromExtracted('SUPPLEMENT'), MedicationType.SUPPLEMENT);
+      expect(
+          medicationTypeFromExtracted('EMERGENCY'), MedicationType.EMERGENCY);
+      expect(medicationTypeFromExtracted('PRESCRIPTION'),
+          MedicationType.PRESCRIPTION);
+      expect(
+          medicationTypeFromExtracted('SUPPLEMENT'), MedicationType.SUPPLEMENT);
       expect(medicationTypeFromExtracted(''), isNull);
       expect(medicationTypeFromExtracted(null), isNull);
       expect(medicationTypeFromExtracted('VITAMIN'), isNull);
@@ -260,9 +278,14 @@ void main() {
   group('extractMedicationPhoto API', () {
     Future<MedicationPhotoExtractionResult> call(MockClient c) =>
         extractMedicationPhoto(
-            patientId: 7, imageBytes: _imageBytes, fileName: 'label.jpg', client: c);
+            patientId: 7,
+            imageBytes: _imageBytes,
+            fileName: 'label.jpg',
+            client: c);
 
-    test('TC-MED-PHOTO-037: posts multipart part "image" to the v3 extract-photo route and parses 200', () async {
+    test(
+        'TC-MED-PHOTO-037: posts multipart part "image" to the v3 extract-photo route and parses 200',
+        () async {
       http.BaseRequest? seen;
       Uint8List? sentBody;
       final c = MockClient.streaming((req, stream) async {
@@ -273,7 +296,12 @@ void main() {
             'status': 'PREFILLED',
             'message': 'ok',
             'fields': [
-              {'key': 'medicationName', 'label': 'n', 'value': 'Lisinopril', 'machineGenerated': true}
+              {
+                'key': 'medicationName',
+                'label': 'n',
+                'value': 'Lisinopril',
+                'machineGenerated': true
+              }
             ],
           }))),
           200,
@@ -282,22 +310,27 @@ void main() {
       });
       final r = await call(c);
       expect(seen!.method, 'POST');
-      expect(seen!.url.path, endsWith('/v3/api/patients/7/medications/extract-photo'));
+      expect(seen!.url.path,
+          endsWith('/v3/api/patients/7/medications/extract-photo'));
       final bodyStr = latin1.decode(sentBody!);
       expect(bodyStr, contains('name="image"'));
       expect(bodyStr, contains('filename="label.jpg"'));
       expect(r.prefilledValue('medicationName'), 'Lisinopril');
     });
 
-    test('TC-MED-PHOTO-038: 400 with server message surfaces that message as fallback', () async {
-      final c = MockClient((_) async =>
-          http.Response(jsonEncode({'message': 'Please use a JPEG or PNG photo.'}), 400));
+    test(
+        'TC-MED-PHOTO-038: 400 with server message surfaces that message as fallback',
+        () async {
+      final c = MockClient((_) async => http.Response(
+          jsonEncode({'message': 'Please use a JPEG or PNG photo.'}), 400));
       final r = await call(c);
       expect(r.manualEntryRequired, isTrue);
       expect(r.message, 'Please use a JPEG or PNG photo.');
     });
 
-    test('TC-MED-PHOTO-039: 500, non-JSON body and network exception all fall back without retry', () async {
+    test(
+        'TC-MED-PHOTO-039: 500, non-JSON body and network exception all fall back without retry',
+        () async {
       var calls = 0;
       final c500 = MockClient((_) async {
         calls++;
@@ -311,20 +344,28 @@ void main() {
       final cBad = MockClient((_) async => http.Response('<html>', 200));
       expect((await call(cBad)).message, _unreadable);
 
-      final cErr = MockClient((_) async => throw http.ClientException('offline'));
+      final cErr =
+          MockClient((_) async => throw http.ClientException('offline'));
       final rErr = await call(cErr);
       expect(rErr.manualEntryRequired, isTrue);
       expect(rErr.message, _unreadable);
       expect(rErr.message, isNot(contains(_marker)));
     });
 
-    test('TC-MED-PHOTO-040: backend MANUAL_ENTRY_REQUIRED 200 body parses as manual entry', () async {
+    test(
+        'TC-MED-PHOTO-040: backend MANUAL_ENTRY_REQUIRED 200 body parses as manual entry',
+        () async {
       final c = MockClient((_) async => http.Response(
           jsonEncode({
             'status': 'MANUAL_ENTRY_REQUIRED',
             'message': 'The photo could not be read.',
             'fields': [
-              {'key': 'dosage', 'label': 'Dosage', 'value': '', 'machineGenerated': false}
+              {
+                'key': 'dosage',
+                'label': 'Dosage',
+                'value': '',
+                'machineGenerated': false
+              }
             ]
           }),
           200));
@@ -336,13 +377,16 @@ void main() {
 
   // ── TTS wrapper ──────────────────────────────────────────────────────────
   group('MedicationPhotoTts', () {
-    test('TC-MED-PHOTO-041: configures en-US voice, stops before speaking, ignores blank text', () async {
+    test(
+        'TC-MED-PHOTO-041: configures en-US voice, stops before speaking, ignores blank text',
+        () async {
       final e = FakeTtsEngine();
       final tts = MedicationPhotoTts(engine: e);
       await tts.speak('   ');
       expect(e.calls, isEmpty);
       await tts.speak('Hello');
-      expect(e.calls, containsAll(['lang:en-US', 'rate:0.45', 'vol:1.0', 'pitch:1.0']));
+      expect(e.calls,
+          containsAll(['lang:en-US', 'rate:0.45', 'vol:1.0', 'pitch:1.0']));
       expect(e.calls.indexOf('stop'), lessThan(e.calls.indexOf('speak')));
       expect(e.spoken, ['Hello']);
       await tts.stop();
@@ -352,17 +396,23 @@ void main() {
 
   // ── Modal: entry, prefill, tracking ──────────────────────────────────────
   group('AddMedicationModal photo flow', () {
-    testWidgets('TC-MED-PHOTO-042: Scan Label entry point is present with a tooltip; manual form is unchanged', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-042: Scan Label entry point is present with a tooltip; manual form is unchanged',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
-      expect(find.byKey(const Key('medication-photo-capture-button')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-capture-button')),
+          findsOneWidget);
       expect(find.text('Scan Label'), findsOneWidget);
       expect(find.byType(Tooltip), findsWidgets);
       expect(find.text('Add New Medication'), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-read-aloud-button')), findsNothing);
+      expect(find.byKey(const Key('medication-photo-read-aloud-button')),
+          findsNothing);
     });
 
-    testWidgets('TC-MED-PHOTO-043: prefill fills name, dosage, frequency, type; review title, disclaimer and read-aloud appear', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-043: prefill fills name, dosage, frequency, type; review title, disclaimer and read-aloud appear',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
@@ -371,163 +421,246 @@ void main() {
       expect(_fieldText(tester, 'medication-dosage-field'), '10 mg');
       expect(find.text('Once daily'), findsWidgets);
       expect(find.text('Review Medication'), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-read-aloud-button')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-review-message')), findsOneWidget);
-      final dd = tester.widget<DropdownButtonFormField<MedicationType>>(find.descendant(
-          of: find.byKey(const Key('medication-type-field')),
-          matching: find.byType(DropdownButtonFormField<MedicationType>)));
+      expect(find.byKey(const Key('medication-photo-read-aloud-button')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-review-message')),
+          findsOneWidget);
+      final dd = tester.widget<DropdownButtonFormField<MedicationType>>(
+          find.descendant(
+              of: find.byKey(const Key('medication-type-field')),
+              matching: find.byType(DropdownButtonFormField<MedicationType>)));
       expect(dd.initialValue, MedicationType.PRESCRIPTION);
       expect(h.extractCalls, 1);
       // Disclaimer banner (DisclaimerBanner.medication) is on the review screen.
-      expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == 'DisclaimerBanner'), findsOneWidget);
+      expect(
+          find.byWidgetPredicate(
+              (w) => w.runtimeType.toString() == 'DisclaimerBanner'),
+          findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-044: every prefilled field is marked "Read from photo" (machine generated)', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-044: every prefilled field is marked "Read from photo" (machine generated)',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
-      for (final k in ['medicationName', 'dosage', 'frequency', 'medicationType']) {
-        expect(find.byKey(Key('medication-photo-ai-note-$k')), findsOneWidget, reason: k);
-        expect(find.byKey(Key('medication-photo-edited-note-$k')), findsNothing, reason: k);
+      for (final k in [
+        'medicationName',
+        'dosage',
+        'frequency',
+        'medicationType'
+      ]) {
+        expect(find.byKey(Key('medication-photo-ai-note-$k')), findsOneWidget,
+            reason: k);
+        expect(find.byKey(Key('medication-photo-edited-note-$k')), findsNothing,
+            reason: k);
       }
     });
 
-    testWidgets('TC-MED-PHOTO-045: editing one field flips only that field to edited-by-user', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-045: editing one field flips only that field to edited-by-user',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
 
-      await tester.enterText(find.byKey(const Key('medication-name-field')), 'Lisinopril HCTZ');
+      await tester.enterText(
+          find.byKey(const Key('medication-name-field')), 'Lisinopril HCTZ');
       await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('medication-photo-edited-note-medicationName')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')), findsNothing);
-      expect(find.byKey(const Key('medication-photo-ai-note-dosage')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-edited-note-dosage')), findsNothing);
+      expect(
+          find.byKey(const Key('medication-photo-edited-note-medicationName')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')),
+          findsNothing);
+      expect(find.byKey(const Key('medication-photo-ai-note-dosage')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-edited-note-dosage')),
+          findsNothing);
 
       // A second edit of the same field does not un-flip it.
-      await tester.enterText(find.byKey(const Key('medication-name-field')), 'Lisinopril HCTZ 2');
+      await tester.enterText(
+          find.byKey(const Key('medication-name-field')), 'Lisinopril HCTZ 2');
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('medication-photo-edited-note-medicationName')), findsOneWidget);
+      expect(
+          find.byKey(const Key('medication-photo-edited-note-medicationName')),
+          findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-046: editing dosage marks dosage edited, name stays machine generated', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-046: editing dosage marks dosage edited, name stays machine generated',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
-      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '20 mg');
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('medication-photo-edited-note-dosage')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-edited-note-dosage')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')),
+          findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-047: edits made before scanning are not tracked (no review state yet)', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-047: edits made before scanning are not tracked (no review state yet)',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
-      await tester.enterText(find.byKey(const Key('medication-name-field')), 'Typed first');
+      await tester.enterText(
+          find.byKey(const Key('medication-name-field')), 'Typed first');
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('medication-photo-edited-note-medicationName')), findsNothing);
-      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')), findsNothing);
+      expect(
+          find.byKey(const Key('medication-photo-edited-note-medicationName')),
+          findsNothing);
+      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')),
+          findsNothing);
     });
 
-    testWidgets('TC-MED-PHOTO-048: frequency matching an option selects it, otherwise Custom with the text', (tester) async {
-      final h = _Harness(extractor: (_, __, ___) async => _prefilled(frequency: 'twice daily'));
+    testWidgets(
+        'TC-MED-PHOTO-048: frequency matching an option selects it, otherwise Custom with the text',
+        (tester) async {
+      final h = _Harness(
+          extractor: (_, __, ___) async =>
+              _prefilled(frequency: 'twice daily'));
       await _pump(tester, h);
       await _scan(tester);
-      expect(find.byKey(const Key('medication-custom-frequency-field')), findsNothing);
+      expect(find.byKey(const Key('medication-custom-frequency-field')),
+          findsNothing);
       expect(find.text('Twice daily'), findsWidgets);
 
-      final h2 = _Harness(extractor: (_, __, ___) async => _prefilled(frequency: 'Every 6 hours'));
+      final h2 = _Harness(
+          extractor: (_, __, ___) async =>
+              _prefilled(frequency: 'Every 6 hours'));
       await _pump(tester, h2);
       await _scan(tester);
-      expect(_fieldText(tester, 'medication-custom-frequency-field'), 'Every 6 hours');
-      expect(find.byKey(const Key('medication-photo-ai-note-frequency')), findsOneWidget);
+      expect(_fieldText(tester, 'medication-custom-frequency-field'),
+          'Every 6 hours');
+      expect(find.byKey(const Key('medication-photo-ai-note-frequency')),
+          findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-049: OVER_THE_COUNTER, HERBAL and EMERGENCY select the matching dropdown value', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-049: OVER_THE_COUNTER, HERBAL and EMERGENCY select the matching dropdown value',
+        (tester) async {
       for (final entry in {
         'OVER_THE_COUNTER': 'OTC',
         'HERBAL': 'HERBAL',
         'EMERGENCY': 'EMERGENCY',
       }.entries) {
-        final h = _Harness(extractor: (_, __, ___) async => _prefilled(type: entry.key));
+        final h = _Harness(
+            extractor: (_, __, ___) async => _prefilled(type: entry.key));
         await _pump(tester, h);
         await _scan(tester);
         final dd = tester.widget<DropdownButtonFormField<MedicationType>>(
             find.descendant(
                 of: find.byKey(const Key('medication-type-field')),
-                matching: find.byType(DropdownButtonFormField<MedicationType>)));
+                matching:
+                    find.byType(DropdownButtonFormField<MedicationType>)));
         expect(dd.initialValue?.name, entry.value, reason: entry.key);
-        expect(find.byKey(const Key('medication-photo-ai-note-medicationType')), findsOneWidget);
+        expect(find.byKey(const Key('medication-photo-ai-note-medicationType')),
+            findsOneWidget);
       }
     });
   });
 
   // ── Table 25 in the UI ───────────────────────────────────────────────────
   group('Table 25 fallbacks in the modal', () {
-    testWidgets('TC-MED-PHOTO-050: row 1 OCR/LLM failure -> manual form, message shown, no review UI, no retry', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-050: row 1 OCR/LLM failure -> manual form, message shown, no review UI, no retry',
+        (tester) async {
       final h = _Harness(
           extractor: (_, __, ___) async =>
-              MedicationPhotoExtractionResult.manualFallback(message: _unreadable));
+              MedicationPhotoExtractionResult.manualFallback(
+                  message: _unreadable));
       await _pump(tester, h);
       await _scan(tester);
-      expect(find.byKey(const Key('medication-photo-fallback-message')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-fallback-message')),
+          findsOneWidget);
       expect(find.text(_unreadable), findsOneWidget);
       expect(find.text('Add New Medication'), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-read-aloud-button')), findsNothing);
-      expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == 'DisclaimerBanner'), findsNothing);
+      expect(find.byKey(const Key('medication-photo-read-aloud-button')),
+          findsNothing);
+      expect(
+          find.byWidgetPredicate(
+              (w) => w.runtimeType.toString() == 'DisclaimerBanner'),
+          findsNothing);
       expect(_fieldText(tester, 'medication-name-field'), isEmpty);
       expect(h.extractCalls, 1);
       // The manual form still works.
-      await tester.enterText(find.byKey(const Key('medication-name-field')), 'Typed');
+      await tester.enterText(
+          find.byKey(const Key('medication-name-field')), 'Typed');
       await tester.pumpAndSettle();
       expect(_fieldText(tester, 'medication-name-field'), 'Typed');
     });
 
-    testWidgets('TC-MED-PHOTO-051: extractor throws -> unreadable fallback, form stays usable', (tester) async {
-      final h = _Harness(extractor: (_, __, ___) async => throw Exception('boom'));
+    testWidgets(
+        'TC-MED-PHOTO-051: extractor throws -> unreadable fallback, form stays usable',
+        (tester) async {
+      final h =
+          _Harness(extractor: (_, __, ___) async => throw Exception('boom'));
       await _pump(tester, h);
       await _scan(tester);
       expect(find.text(_unreadable), findsOneWidget);
       expect(find.byKey(const Key('medication-name-field')), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-052: row 2 partial extraction leaves blanks empty with "Not found" note; extracted fields keep AI note', (tester) async {
-      final h = _Harness(extractor: (_, __, ___) async => _prefilled(dosage: '', frequency: ''));
+    testWidgets(
+        'TC-MED-PHOTO-052: row 2 partial extraction leaves blanks empty with "Not found" note; extracted fields keep AI note',
+        (tester) async {
+      final h = _Harness(
+          extractor: (_, __, ___) async =>
+              _prefilled(dosage: '', frequency: ''));
       await _pump(tester, h);
       await _scan(tester);
       expect(_fieldText(tester, 'medication-dosage-field'), isEmpty);
-      expect(find.byKey(const Key('medication-photo-missing-note-dosage')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-missing-note-frequency')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-missing-note-dosage')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-missing-note-frequency')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')),
+          findsOneWidget);
       // Blank field is editable like any other.
-      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '5 mg');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '5 mg');
       await tester.pumpAndSettle();
       expect(_fieldText(tester, 'medication-dosage-field'), '5 mg');
     });
 
-    testWidgets('TC-MED-PHOTO-053: row 3 invalid/blank medicationType leaves the dropdown unselected; save is blocked until chosen', (tester) async {
-      final h = _Harness(extractor: (_, __, ___) async => _prefilled(type: 'VITAMIN'));
+    testWidgets(
+        'TC-MED-PHOTO-053: row 3 invalid/blank medicationType leaves the dropdown unselected; save is blocked until chosen',
+        (tester) async {
+      final h = _Harness(
+          extractor: (_, __, ___) async => _prefilled(type: 'VITAMIN'));
       await _pump(tester, h);
       await _scan(tester);
       expect(find.text('Select a type'), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-missing-note-medicationType')), findsOneWidget);
+      expect(
+          find.byKey(const Key('medication-photo-missing-note-medicationType')),
+          findsOneWidget);
 
-      await tester.ensureVisible(find.byKey(const Key('medication-save-button')));
+      await tester
+          .ensureVisible(find.byKey(const Key('medication-save-button')));
       await tester.tap(find.byKey(const Key('medication-save-button')));
       await tester.pumpAndSettle();
       expect(find.text('Please select a medication type'), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-054: no patientId -> "not available" fallback and extraction is not called', (tester) async {
-      final h = _Harness(patientId: null, extractor: (_, __, ___) async => _prefilled());
+    testWidgets(
+        'TC-MED-PHOTO-054: no patientId -> "not available" fallback and extraction is not called',
+        (tester) async {
+      final h = _Harness(
+          patientId: null, extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
-      expect(find.textContaining('Photo reading is not available'), findsOneWidget);
+      expect(find.textContaining('Photo reading is not available'),
+          findsOneWidget);
       expect(h.extractCalls, 0);
     });
 
-    testWidgets('TC-MED-PHOTO-055: camera picker throws -> camera fallback; picker returns null -> nothing changes', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-055: camera picker throws -> camera fallback; picker returns null -> nothing changes',
+        (tester) async {
       final h = _Harness(
           picker: () async => throw Exception('no camera'),
           extractor: (_, __, ___) async => _prefilled());
@@ -536,25 +669,34 @@ void main() {
       expect(find.textContaining('camera could not be opened'), findsOneWidget);
       expect(h.extractCalls, 0);
 
-      final h2 = _Harness(picker: () async => null, extractor: (_, __, ___) async => _prefilled());
+      final h2 = _Harness(
+          picker: () async => null,
+          extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h2);
       await _scan(tester);
       expect(h2.pickCalls, 1);
       expect(h2.extractCalls, 0);
-      expect(find.byKey(const Key('medication-photo-fallback-message')), findsNothing);
+      expect(find.byKey(const Key('medication-photo-fallback-message')),
+          findsNothing);
       expect(find.text('Add New Medication'), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-056: capture button is disabled while reading and progress is shown', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-056: capture button is disabled while reading and progress is shown',
+        (tester) async {
       final gate = Completer<MedicationPhotoExtractionResult>();
       final h = _Harness(extractor: (_, __, ___) => gate.future);
       await _pump(tester, h);
-      await tester.ensureVisible(find.byKey(const Key('medication-photo-capture-button')));
-      await tester.tap(find.byKey(const Key('medication-photo-capture-button')));
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-capture-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-capture-button')));
       await tester.pump();
       await tester.pump();
-      expect(find.byKey(const Key('medication-photo-progress')), findsOneWidget);
-      final btn = tester.widget<OutlinedButton>(find.byKey(const Key('medication-photo-capture-button')));
+      expect(
+          find.byKey(const Key('medication-photo-progress')), findsOneWidget);
+      final btn = tester.widget<OutlinedButton>(
+          find.byKey(const Key('medication-photo-capture-button')));
       expect(btn.onPressed, isNull, reason: 'double-submit guard');
       gate.complete(_prefilled());
       await tester.pumpAndSettle();
@@ -562,7 +704,9 @@ void main() {
       expect(find.byKey(const Key('medication-photo-progress')), findsNothing);
     });
 
-    testWidgets('TC-MED-PHOTO-057: bytes handed to the extractor are the picked image and the file name', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-057: bytes handed to the extractor are the picked image and the file name',
+        (tester) async {
       Uint8List? got;
       String? gotName;
       int? gotId;
@@ -585,83 +729,123 @@ void main() {
 
   // ── Rescan regression (found by review, fixed in c7114c8e) ───────────────
   group('rescan after a successful scan', () {
-    testWidgets('TC-MED-PHOTO-070: failed rescan keeps prior values, flags, banner, read-aloud and title', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-070: failed rescan keeps prior values, flags, banner, read-aloud and title',
+        (tester) async {
       var call = 0;
       final h = _Harness(extractor: (_, __, ___) async {
         call++;
         return call == 1
             ? _prefilled()
-            : MedicationPhotoExtractionResult.manualFallback(message: 'Failed again.');
+            : MedicationPhotoExtractionResult.manualFallback(
+                message: 'Failed again.');
       });
       await _pump(tester, h);
       await _scan(tester);
       // The user edits one field between scans, so both flag kinds are live.
-      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '20 mg');
       await tester.pumpAndSettle();
 
       await _scan(tester);
 
       expect(call, 2);
       expect(find.text('Failed again.'), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-fallback-message')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-fallback-message')),
+          findsOneWidget);
       expect(_fieldText(tester, 'medication-name-field'), 'Lisinopril');
       expect(_fieldText(tester, 'medication-dosage-field'), '20 mg');
-      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-edited-note-dosage')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-read-aloud-button')), findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-ai-note-medicationName')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-edited-note-dosage')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-read-aloud-button')),
+          findsOneWidget);
       expect(find.text('Review Medication'), findsOneWidget);
-      expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == 'DisclaimerBanner'), findsOneWidget);
+      expect(
+          find.byWidgetPredicate(
+              (w) => w.runtimeType.toString() == 'DisclaimerBanner'),
+          findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-071: a later successful rescan clears the failure message and replaces the flags', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-071: a later successful rescan clears the failure message and replaces the flags',
+        (tester) async {
       var call = 0;
       final h = _Harness(extractor: (_, __, ___) async {
         call++;
         if (call == 2) {
-          return MedicationPhotoExtractionResult.manualFallback(message: 'Failed again.');
+          return MedicationPhotoExtractionResult.manualFallback(
+              message: 'Failed again.');
         }
         return _prefilled(name: call == 1 ? 'Lisinopril' : 'Metformin');
       });
       await _pump(tester, h);
       await _scan(tester);
-      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '20 mg');
       await tester.pumpAndSettle();
       await _scan(tester); // fails
       await _scan(tester); // succeeds
 
       expect(find.text('Failed again.'), findsNothing);
-      expect(find.byKey(const Key('medication-photo-fallback-message')), findsNothing);
+      expect(find.byKey(const Key('medication-photo-fallback-message')),
+          findsNothing);
       expect(_fieldText(tester, 'medication-name-field'), 'Metformin');
-      expect(find.byKey(const Key('medication-photo-ai-note-dosage')), findsOneWidget);
-      expect(find.byKey(const Key('medication-photo-edited-note-dosage')), findsNothing);
+      expect(find.byKey(const Key('medication-photo-ai-note-dosage')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-edited-note-dosage')),
+          findsNothing);
     });
   });
 
   // ── OTC wire mapping (KI-05 option A, commit 2a96dc51) ───────────────────
   group('OTC wire mapping', () {
-    test('TC-MED-PHOTO-072: wireName is OVER_THE_COUNTER for OTC and the constant name for every other type', () {
+    test(
+        'TC-MED-PHOTO-072: wireName is OVER_THE_COUNTER for OTC and the constant name for every other type',
+        () {
       expect(MedicationType.OTC.wireName, 'OVER_THE_COUNTER');
-      for (final t in MedicationType.values.where((t) => t != MedicationType.OTC)) {
+      for (final t
+          in MedicationType.values.where((t) => t != MedicationType.OTC)) {
         expect(t.wireName, t.name);
       }
-      expect(MedicationType.values.map((t) => t.wireName).toSet(),
-          {'PRESCRIPTION', 'OVER_THE_COUNTER', 'SUPPLEMENT', 'HERBAL', 'EMERGENCY'});
+      expect(MedicationType.values.map((t) => t.wireName).toSet(), {
+        'PRESCRIPTION',
+        'OVER_THE_COUNTER',
+        'SUPPLEMENT',
+        'HERBAL',
+        'EMERGENCY'
+      });
     });
 
     Map<String, dynamic> wire(String type) => {
-          'id': 3, 'medicationName': 'Ibuprofen', 'dosage': '200 mg',
-          'frequency': 'As needed', 'route': 'Oral', 'medicationType': type,
+          'id': 3,
+          'medicationName': 'Ibuprofen',
+          'dosage': '200 mg',
+          'frequency': 'As needed',
+          'route': 'Oral',
+          'medicationType': type,
           'isActive': true,
         };
 
-    test('TC-MED-PHOTO-073: fromJson accepts OVER_THE_COUNTER and legacy OTC as OTC; toJson round-trips to OVER_THE_COUNTER; unknown still falls back to PRESCRIPTION', () {
-      expect(Medication.fromJson(wire('OVER_THE_COUNTER')).medicationType, MedicationType.OTC);
-      expect(Medication.fromJson(wire('OTC')).medicationType, MedicationType.OTC);
-      expect(Medication.fromJson(wire('OVER_THE_COUNTER')).toJson()['medicationType'], 'OVER_THE_COUNTER');
-      expect(Medication.fromJson(wire('BOGUS')).medicationType, MedicationType.PRESCRIPTION);
+    test(
+        'TC-MED-PHOTO-073: fromJson accepts OVER_THE_COUNTER and legacy OTC as OTC; toJson round-trips to OVER_THE_COUNTER; unknown still falls back to PRESCRIPTION',
+        () {
+      expect(Medication.fromJson(wire('OVER_THE_COUNTER')).medicationType,
+          MedicationType.OTC);
+      expect(
+          Medication.fromJson(wire('OTC')).medicationType, MedicationType.OTC);
+      expect(
+          Medication.fromJson(wire('OVER_THE_COUNTER'))
+              .toJson()['medicationType'],
+          'OVER_THE_COUNTER');
+      expect(Medication.fromJson(wire('BOGUS')).medicationType,
+          MedicationType.PRESCRIPTION);
     });
 
-    testWidgets('TC-MED-PHOTO-074: a stored OVER_THE_COUNTER medication parses to OTC and shows the Remove button', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-074: a stored OVER_THE_COUNTER medication parses to OTC and shows the Remove button',
+        (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
@@ -675,8 +859,11 @@ void main() {
       expect(find.byIcon(Icons.delete_outline), findsOneWidget);
     });
 
-    test('TC-MED-PHOTO-075: medicationTypeFromExtracted maps OVER_THE_COUNTER and OTC to OTC and leaves blank or unknown null (Table 25 row 3)', () {
-      expect(medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
+    test(
+        'TC-MED-PHOTO-075: medicationTypeFromExtracted maps OVER_THE_COUNTER and OTC to OTC and leaves blank or unknown null (Table 25 row 3)',
+        () {
+      expect(
+          medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
       expect(medicationTypeFromExtracted('OTC'), MedicationType.OTC);
       expect(medicationTypeFromExtracted('BOGUS'), isNull);
       expect(medicationTypeFromExtracted(''), isNull);
@@ -686,14 +873,19 @@ void main() {
 
   // ── Read aloud ───────────────────────────────────────────────────────────
   group('read aloud', () {
-    testWidgets('TC-MED-PHOTO-058: Read Aloud speaks the CURRENT form values (after an edit)', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-058: Read Aloud speaks the CURRENT form values (after an edit)',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
-      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '20 mg');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const Key('medication-photo-read-aloud-button')));
-      await tester.tap(find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-read-aloud-button')));
       await tester.pumpAndSettle();
       expect(h.engine.spoken, hasLength(1));
       final s = h.engine.spoken.single;
@@ -703,34 +895,47 @@ void main() {
       expect(s, contains('Frequency: Once daily'));
     });
 
-    testWidgets('TC-MED-PHOTO-059: blank values are read as "not filled in"', (tester) async {
-      final h = _Harness(extractor: (_, __, ___) async => _prefilled(dosage: ''));
+    testWidgets('TC-MED-PHOTO-059: blank values are read as "not filled in"',
+        (tester) async {
+      final h =
+          _Harness(extractor: (_, __, ___) async => _prefilled(dosage: ''));
       await _pump(tester, h);
       await _scan(tester);
-      await tester.ensureVisible(find.byKey(const Key('medication-photo-read-aloud-button')));
-      await tester.tap(find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-read-aloud-button')));
       await tester.pumpAndSettle();
       expect(h.engine.spoken.single, contains('not filled in'));
     });
 
-    testWidgets('TC-MED-PHOTO-060: TTS failure shows a snackbar and does not break the form', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-060: TTS failure shows a snackbar and does not break the form',
+        (tester) async {
       final e = FakeTtsEngine()..throwOnSpeak = true;
       final h = _Harness(tts: e, extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
-      await tester.ensureVisible(find.byKey(const Key('medication-photo-read-aloud-button')));
-      await tester.tap(find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-read-aloud-button')));
       await tester.pumpAndSettle();
-      expect(find.text('Read aloud is not available on this device.'), findsOneWidget);
+      expect(find.text('Read aloud is not available on this device.'),
+          findsOneWidget);
       expect(find.byKey(const Key('medication-name-field')), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-061: speech is stopped when the modal is disposed', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-061: speech is stopped when the modal is disposed',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
-      await tester.ensureVisible(find.byKey(const Key('medication-photo-read-aloud-button')));
-      await tester.tap(find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-read-aloud-button')));
       await tester.pumpAndSettle();
       h.engine.calls.clear();
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
@@ -741,7 +946,9 @@ void main() {
 
   // ── Cancel and save ──────────────────────────────────────────────────────
   group('cancel and save', () {
-    testWidgets('TC-MED-PHOTO-062: cancel closes the modal, creates nothing, and a reopened form has no extracted data', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-062: cancel closes the modal, creates nothing, and a reopened form has no extracted data',
+        (tester) async {
       var created = 0;
       http.Request? posted;
       ApiService.debugSetHttpClient(MockClient((r) async {
@@ -772,8 +979,11 @@ void main() {
                           isScrollControlled: true,
                           builder: (_) => AddMedicationModal(
                                 onMedicationAdded: (_) {},
-                                pickLabelPhoto: () async => XFile.fromData(_imageBytes, name: 'label.jpg'),
-                                extractLabelPhoto: (a, b, d) async => _prefilled(),
+                                pickLabelPhoto: () async => XFile.fromData(
+                                    _imageBytes,
+                                    name: 'label.jpg'),
+                                extractLabelPhoto: (a, b, d) async =>
+                                    _prefilled(),
                                 readAloud: MedicationPhotoTts(engine: h.engine),
                               )),
                       child: const Text('open')),
@@ -801,7 +1011,9 @@ void main() {
       expect(find.text('Add New Medication'), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-063: save posts edited values via the existing create endpoint, an OTC scan is sent as OVER_THE_COUNTER, and no image or tracking data', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-063: save posts edited values via the existing create endpoint, an OTC scan is sent as OVER_THE_COUNTER, and no image or tracking data',
+        (tester) async {
       Map<String, dynamic>? body;
       String? path;
       ApiService.debugSetHttpClient(MockClient((r) async {
@@ -818,17 +1030,21 @@ void main() {
       Medication? added;
       final h = _Harness(
           onAdded: (m) => added = m,
-          extractor: (_, __, ___) async => _prefilled(type: 'OVER_THE_COUNTER'));
+          extractor: (_, __, ___) async =>
+              _prefilled(type: 'OVER_THE_COUNTER'));
       await _pump(tester, h);
       await _scan(tester);
-      await tester.enterText(find.byKey(const Key('medication-dosage-field')), '20 mg');
+      await tester.enterText(
+          find.byKey(const Key('medication-dosage-field')), '20 mg');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.byKey(const Key('medication-save-button')));
+      await tester
+          .ensureVisible(find.byKey(const Key('medication-save-button')));
       await tester.tap(find.byKey(const Key('medication-save-button')));
       // The success SnackBar and telemetry keep timers alive, so pump a fixed
       // window instead of pumpAndSettle.
       // Auth header lookup touches platform storage, which needs real async time.
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500)));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 500)));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump(const Duration(seconds: 3));
 
@@ -838,7 +1054,8 @@ void main() {
       expect(body!['dosage'], '20 mg');
       expect(body!['frequency'], 'Once daily');
       expect(body!['medicationType'], 'OVER_THE_COUNTER',
-          reason: 'KI-05 fix: scanned OTC label is saved with the backend constant name');
+          reason:
+              'KI-05 fix: scanned OTC label is saved with the backend constant name');
       final all = jsonEncode(body);
       expect(all, isNot(contains('machineGenerated')));
       expect(all, isNot(contains('editedByUser')));
@@ -849,56 +1066,82 @@ void main() {
 
   // ── Accessibility semantics ──────────────────────────────────────────────
   group('accessibility semantics', () {
-    testWidgets('TC-MED-PHOTO-064: capture and read-aloud controls expose labels and >=48dp tap height', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-064: capture and read-aloud controls expose labels and >=48dp tap height',
+        (tester) async {
       final handle = tester.ensureSemantics();
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       expect(find.bySemanticsLabel(RegExp('Scan Label')), findsWidgets);
       await _scan(tester);
       expect(find.bySemanticsLabel(RegExp('Read Aloud')), findsWidgets);
-      for (final k in ['medication-photo-capture-button', 'medication-photo-read-aloud-button']) {
+      for (final k in [
+        'medication-photo-capture-button',
+        'medication-photo-read-aloud-button'
+      ]) {
         final size = tester.getSize(find.byKey(Key(k)));
-        expect(size.height, greaterThanOrEqualTo(48), reason: '$k tap target height (WCAG 2.5.5 guidance / Material)');
+        expect(size.height, greaterThanOrEqualTo(48),
+            reason: '$k tap target height (WCAG 2.5.5 guidance / Material)');
       }
       handle.dispose();
     });
 
-    testWidgets('TC-MED-PHOTO-065: progress, fallback and review messages are live regions', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-065: progress, fallback and review messages are live regions',
+        (tester) async {
       final handle = tester.ensureSemantics();
       final gate = Completer<MedicationPhotoExtractionResult>();
       final h = _Harness(extractor: (_, __, ___) => gate.future);
       await _pump(tester, h);
-      await tester.ensureVisible(find.byKey(const Key('medication-photo-capture-button')));
-      await tester.tap(find.byKey(const Key('medication-photo-capture-button')));
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-capture-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-capture-button')));
       await tester.pump();
       await tester.pump();
       bool live(String key) {
-        final n = tester.getSemantics(find.descendant(
-            of: find.byKey(Key(key)), matching: find.byType(Semantics)).first);
+        final n = tester.getSemantics(find
+            .descendant(
+                of: find.byKey(Key(key)), matching: find.byType(Semantics))
+            .first);
         return n.getSemanticsData().flagsCollection.isLiveRegion;
       }
+
       expect(find.text('Reading the label photo...'), findsOneWidget);
-      expect(tester.getSemantics(find.text('Reading the label photo...')).label, contains('Reading'));
-      gate.complete(MedicationPhotoExtractionResult.manualFallback(message: _unreadable));
+      expect(tester.getSemantics(find.text('Reading the label photo...')).label,
+          contains('Reading'));
+      gate.complete(
+          MedicationPhotoExtractionResult.manualFallback(message: _unreadable));
       await tester.pumpAndSettle();
       expect(live('medication-photo-fallback-message'), isTrue);
       handle.dispose();
     });
 
-    testWidgets('TC-MED-PHOTO-066: field status is conveyed by icon plus text, not colour alone', (tester) async {
-      final h = _Harness(extractor: (_, __, ___) async => _prefilled(dosage: ''));
+    testWidgets(
+        'TC-MED-PHOTO-066: field status is conveyed by icon plus text, not colour alone',
+        (tester) async {
+      final h =
+          _Harness(extractor: (_, __, ___) async => _prefilled(dosage: ''));
       await _pump(tester, h);
       await _scan(tester);
-      for (final k in ['medication-photo-ai-note-medicationName', 'medication-photo-missing-note-dosage']) {
+      for (final k in [
+        'medication-photo-ai-note-medicationName',
+        'medication-photo-missing-note-dosage'
+      ]) {
         final note = find.byKey(Key(k));
-        expect(find.descendant(of: note, matching: find.byType(Icon)), findsOneWidget);
-        expect(find.descendant(of: note, matching: find.byType(Text)), findsOneWidget);
+        expect(find.descendant(of: note, matching: find.byType(Icon)),
+            findsOneWidget);
+        expect(find.descendant(of: note, matching: find.byType(Text)),
+            findsOneWidget);
       }
       expect(find.text('Read from photo. Please check it.'), findsWidgets);
-      expect(find.text('Not found on the label. Please fill this in.'), findsOneWidget);
+      expect(find.text('Not found on the label. Please fill this in.'),
+          findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-067: review form has no overflow at 200% text scale', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-067: review form has no overflow at 200% text scale',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h, scale: 2.0);
       await _scan(tester);
@@ -906,7 +1149,9 @@ void main() {
       expect(find.text('Review Medication'), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-068: form fields keep visible labels (name, dosage, frequency, type)', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-068: form fields keep visible labels (name, dosage, frequency, type)',
+        (tester) async {
       final h = _Harness(extractor: (_, __, ___) async => _prefilled());
       await _pump(tester, h);
       await _scan(tester);
@@ -916,7 +1161,9 @@ void main() {
       expect(find.text('Medication Type'), findsOneWidget);
     });
 
-    testWidgets('TC-MED-PHOTO-069: fallback message colours meet 4.5:1 contrast (computed on the light Material theme)', (tester) async {
+    testWidgets(
+        'TC-MED-PHOTO-069: fallback message colours meet 4.5:1 contrast (computed on the light Material theme)',
+        (tester) async {
       final scheme = ColorScheme.fromSeed(seedColor: Colors.blue);
       double lum(Color c) => c.computeLuminance();
       double ratio(Color a, Color b) {
@@ -924,7 +1171,9 @@ void main() {
         final hi = l1 > l2 ? l1 : l2, lo = l1 > l2 ? l2 : l1;
         return (hi + 0.05) / (lo + 0.05);
       }
-      expect(ratio(scheme.onErrorContainer, scheme.errorContainer), greaterThanOrEqualTo(4.5));
+
+      expect(ratio(scheme.onErrorContainer, scheme.errorContainer),
+          greaterThanOrEqualTo(4.5));
       expect(ratio(scheme.primary, scheme.surface), greaterThanOrEqualTo(4.5),
           reason: 'note icon/text colour on surface');
     });
