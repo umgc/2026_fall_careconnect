@@ -1,5 +1,6 @@
 package com.careconnect.controller;
 
+import com.careconnect.service.BlueButtonRetrieval;
 import com.careconnect.service.FHIRService;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Coverage;
@@ -15,7 +16,6 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 
 /**
  * Returns what CMS Blue Button actually sent back for the signed-in beneficiary.
@@ -66,19 +66,25 @@ public class BluebuttonController {
 
         try {
             final Patient patient = fhirService.requestMedicarePatientInfo(accessToken);
-            final List<Coverage> coverages = fhirService.requestMedicareCoverageInfo(accessToken);
-            final List<ExplanationOfBenefit> eobs = fhirService.requestMedicareEOBInfo(accessToken);
+            // If a later page fails, these keep the pages that arrived (DEF-MCR-01), so the
+            // response reports what was retrieved and where it stopped instead of a bare 502.
+            final BlueButtonRetrieval<Coverage> coverages = fhirService.retrieveMedicareCoverage(accessToken, null);
+            final BlueButtonRetrieval<ExplanationOfBenefit> eobs = fhirService.retrieveMedicareEOB(accessToken, null);
 
-            final int coverageCount = coverages == null ? 0 : coverages.size();
-            final int eobCount = eobs == null ? 0 : eobs.size();
+            final int coverageCount = coverages.records().size();
+            final int eobCount = eobs.records().size();
+            final boolean complete = coverages.isComplete() && eobs.isComplete();
 
-            log.info("Blue Button: retrieved patient={} coverages={} eobs={}",
+            log.info("Blue Button: retrieved patient={} coverages={} eobs={} complete={}",
                     patient == null ? "none" : patient.getIdElement().getIdPart(),
-                    coverageCount, eobCount);
+                    coverageCount, eobCount, complete);
 
             final String body = "{\"patient\":" + fhirService.patientToJSON(patient)
                     + ",\"coverageCount\":" + coverageCount
-                    + ",\"eobCount\":" + eobCount + "}";
+                    + ",\"eobCount\":" + eobCount
+                    + ",\"complete\":" + complete
+                    + ",\"incomplete\":[" + incomplete("Coverage", coverages) + separator(coverages, eobs)
+                    + incomplete("ExplanationOfBenefit", eobs) + "]}";
 
             return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(body);
         } catch (RuntimeException e) {
@@ -90,5 +96,21 @@ public class BluebuttonController {
                     .body("{\"error\":\"blue button retrieval failed\",\"detail\":\""
                             + String.valueOf(e.getMessage()).replace('"', '\'') + "\"}");
         }
+    }
+
+    /** One JSON object describing where a retrieval stopped, or "" if it completed. */
+    private static String incomplete(final String resource, final BlueButtonRetrieval<?> retrieval) {
+        if (retrieval.isComplete()) {
+            return "";
+        }
+        return "{\"resource\":\"" + resource + "\""
+                + ",\"retrieved\":" + retrieval.records().size()
+                + ",\"pagesRetrieved\":" + retrieval.pagesRetrieved()
+                + ",\"failedPage\":" + retrieval.failedPage()
+                + ",\"status\":" + retrieval.failureStatus() + "}";
+    }
+
+    private static String separator(final BlueButtonRetrieval<?> first, final BlueButtonRetrieval<?> second) {
+        return !first.isComplete() && !second.isComplete() ? "," : "";
     }
 }

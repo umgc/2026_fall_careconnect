@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -28,6 +29,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -60,7 +62,14 @@ class FHIRServiceReliabilityVerificationTest {
     /** path + "?" + query -> response; unmatched requests get 404. */
     private final Map<String, Function<HttpExchange, Reply>> routes = new ConcurrentHashMap<>();
 
-    private record Reply(int status, String body) {}
+    private record Reply(int status, String body, Map<String, String> headers) {
+        Reply(int status, String body) {
+            this(status, body, Map.of());
+        }
+    }
+
+    /** Waits the retry policy asked for; recorded instead of slept, so retry tests run instantly. */
+    private final List<Duration> waits = Collections.synchronizedList(new ArrayList<>());
 
     @BeforeEach
     void start() throws IOException {
@@ -91,6 +100,7 @@ class FHIRServiceReliabilityVerificationTest {
         Reply r = route == null ? new Reply(404, "{}") : route.apply(ex);
         byte[] bytes = r.body().getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", "application/fhir+json");
+        r.headers().forEach((k, v) -> ex.getResponseHeaders().add(k, v));
         ex.sendResponseHeaders(r.status(), bytes.length);
         try (OutputStream os = ex.getResponseBody()) {
             os.write(bytes);
@@ -132,7 +142,13 @@ class FHIRServiceReliabilityVerificationTest {
     }
 
     private FHIRService service() {
-        return new FHIRService(base);
+        return new FHIRService(base, waits::add);
+    }
+
+    /** Replies in order, repeating the last one: e.g. fail once, then succeed. */
+    private static Function<HttpExchange, Reply> sequence(Reply... replies) {
+        AtomicInteger next = new AtomicInteger();
+        return ex -> replies[Math.min(next.getAndIncrement(), replies.length - 1)];
     }
 
     private static List<String> ids(List<? extends Resource> rs) {
@@ -248,50 +264,140 @@ class FHIRServiceReliabilityVerificationTest {
         assertEquals("https://sandbox.bluebutton.cms.gov/v2/fhir/", f.get(new FHIRService()));
     }
 
-    // ---- Findings: behaviour that does not meet the requirement today ---------------------------
+    // ---- Partial failure and retry (WBS 6.2.35; FR-MCR-23): DEF-MCR-01 and DEF-MCR-02, fixed ------
 
     @Test
-    @DisplayName("TC-MCR-FHIR-008 Finding (DEF-MCR-01): a failed page discards the pages already retrieved")
-    void finding_failedPageDiscardsEarlierPages() {
+    @DisplayName("TC-MCR-FHIR-008 A failed later Coverage page keeps the pages already retrieved (DEF-MCR-01)")
+    void failedLaterPageKeepsEarlierPages() {
         routes.put("Coverage", ex -> new Reply(200, json(page(coverages("c", 2), 4, base + "Coverage?page=2"))));
         routes.put("Coverage?page=2", ex -> new Reply(500, "{}"));
 
-        // WBS 6.2.35 requires the retrieved pages to be kept and the failure reported. Today the
-        // exception propagates and the caller receives nothing, so page 1's two records are lost.
-        BaseServerResponseException e =
-                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
-        assertEquals(500, e.getStatusCode());
-        assertEquals(2, hits.get("Coverage"), "page 1 was fetched, then lost");
+        BlueButtonRetrieval<Coverage> result = service().retrieveMedicareCoverage(TOKEN, null);
+
+        assertFalse(result.isComplete());
+        assertEquals(List.of("c1", "c2"), ids(result.records()), "page 1's records are kept, not discarded");
+        assertEquals(1, result.pagesRetrieved());
+        assertEquals(2, result.failedPage(), "the caller can tell how far retrieval got");
+        assertEquals(500, result.failureStatus());
+        assertEquals(1 + BlueButtonRetryPolicy.MAX_ATTEMPTS, hits.get("Coverage"),
+                "page 1 once, then page 2 tried the full number of times before giving up");
     }
 
     @Test
-    @DisplayName("TC-MCR-FHIR-014 Finding (DEF-MCR-01): a failed EOB page discards the pages already retrieved")
-    void finding_failedEobPageDiscardsEarlierPages() {
+    @DisplayName("TC-MCR-FHIR-014 A failed later EOB page keeps the pages already retrieved (DEF-MCR-01)")
+    void failedLaterEobPageKeepsEarlierPages() {
         routes.put("ExplanationOfBenefit", ex -> new Reply(200, json(page(eobs("a", 2), 4, base + "ExplanationOfBenefit?page=2"))));
         routes.put("ExplanationOfBenefit?page=2", ex -> new Reply(500, "{}"));
 
-        BaseServerResponseException e =
-                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareEOBInfo(TOKEN));
-        assertEquals(500, e.getStatusCode());
-        assertEquals(2, hits.get("ExplanationOfBenefit"), "page 1 was fetched, then lost");
+        BlueButtonRetrieval<ExplanationOfBenefit> result = service().retrieveMedicareEOB(TOKEN, null);
+
+        assertFalse(result.isComplete());
+        assertEquals(List.of("a1", "a2"), ids(result.records()));
+        assertEquals(2, result.failedPage());
+        assertEquals(500, result.failureStatus());
     }
 
     @Test
-    @DisplayName("TC-MCR-FHIR-009 Finding (DEF-MCR-02): a 429 or 503 is not retried")
-    void finding_rateLimitIsNotRetried() {
+    @DisplayName("TC-MCR-FHIR-009 HTTP 429 and 503 are tried 3 times with 2 s then 4 s backoff (DEF-MCR-02)")
+    void rateLimitIsRetriedWithBackoff() {
         routes.put("Coverage", ex -> new Reply(429, "{}"));
         BaseServerResponseException rateLimited =
                 assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
         assertEquals(429, rateLimited.getStatusCode());
-        assertEquals(1, hits.get("Coverage"), "exactly one attempt: no retry and no backoff");
+        assertEquals(3, hits.get("Coverage"), "FR-MCR-23: up to 3 attempts");
+        assertEquals(List.of(Duration.ofSeconds(2), Duration.ofSeconds(4)), waits, "exponential backoff from 2 s");
 
         hits.clear();
+        waits.clear();
         routes.put("Coverage", ex -> new Reply(503, "{}"));
         BaseServerResponseException unavailable =
                 assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
         assertEquals(503, unavailable.getStatusCode());
-        assertEquals(1, hits.get("Coverage"));
+        assertEquals(3, hits.get("Coverage"));
+        assertEquals(List.of(Duration.ofSeconds(2), Duration.ofSeconds(4)), waits);
     }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-016 The List methods still fail, rather than return a short list, when a later page fails")
+    void listMethodStillThrowsOnPartialRetrieval() {
+        // Callers that need the complete set keep the old contract; only retrieveMedicare* returns partial data.
+        routes.put("Coverage", ex -> new Reply(200, json(page(coverages("c", 2), 4, base + "Coverage?page=2"))));
+        routes.put("Coverage?page=2", ex -> new Reply(500, "{}"));
+
+        BaseServerResponseException e =
+                assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertEquals(500, e.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-017 A request that fails once with 503 succeeds on the retry")
+    void transientFailureRecoversOnRetry() {
+        routes.put("Coverage", sequence(new Reply(503, "{}"),
+                new Reply(200, json(page(coverages("c", 2), 2, null)))));
+
+        List<Coverage> result = service().requestMedicareCoverageInfo(TOKEN);
+
+        assertEquals(List.of("c1", "c2"), ids(result));
+        assertEquals(2, hits.get("Coverage"));
+        assertEquals(List.of(Duration.ofSeconds(2)), waits);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-018 A Retry-After header sets the wait instead of the default backoff")
+    void retryAfterIsHonoured() {
+        routes.put("Coverage", sequence(new Reply(429, "{}", Map.of("Retry-After", "7")),
+                new Reply(200, json(page(coverages("c", 1), 1, null)))));
+
+        assertEquals(1, service().requestMedicareCoverageInfo(TOKEN).size());
+        assertEquals(List.of(Duration.ofSeconds(7)), waits);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-019 A very long Retry-After is capped so a request thread is not held for minutes")
+    void retryAfterIsCapped() {
+        routes.put("Coverage", sequence(new Reply(429, "{}", Map.of("Retry-After", "600")),
+                new Reply(200, json(page(coverages("c", 1), 1, null)))));
+
+        service().requestMedicareCoverageInfo(TOKEN);
+        assertEquals(List.of(BlueButtonRetryPolicy.MAX_RETRY_AFTER), waits);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-020 Other 4xx errors (404) are not retried")
+    void notFoundIsNotRetried() {
+        routes.put("Coverage", ex -> new Reply(404, "{}"));
+        assertThrows(BaseServerResponseException.class, () -> service().requestMedicareCoverageInfo(TOKEN));
+        assertEquals(1, hits.get("Coverage"));
+        assertTrue(waits.isEmpty());
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-021 The Patient search is retried the same way")
+    void patientSearchIsRetried() {
+        Patient p = new Patient();
+        p.setId("p1");
+        routes.put("Patient", sequence(new Reply(503, "{}"), new Reply(200, json(page(List.of(p), 1, null)))));
+
+        assertEquals("p1", service().requestMedicarePatientInfo(TOKEN).getIdElement().getIdPart());
+        assertEquals(2, hits.get("Patient"));
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-022 A retrieval with no failures reports itself complete")
+    void completeRetrievalIsMarkedComplete() {
+        routes.put("ExplanationOfBenefit", ex -> new Reply(200, json(page(eobs("a", 2), 3, base + "ExplanationOfBenefit?page=2"))));
+        routes.put("ExplanationOfBenefit?page=2", ex -> new Reply(200, json(page(eobs("b", 1), 3, null))));
+
+        BlueButtonRetrieval<ExplanationOfBenefit> result = service().retrieveMedicareEOB(TOKEN, null);
+
+        assertTrue(result.isComplete());
+        assertEquals(List.of("a1", "a2", "b1"), ids(result.records()));
+        assertEquals(2, result.pagesRetrieved());
+        assertNull(result.failedPage());
+        assertTrue(waits.isEmpty());
+    }
+
+    // ---- Findings: behaviour that does not meet the requirement today ---------------------------
 
     @Test
     @DisplayName("TC-MCR-FHIR-010 Finding (DEF-MCR-03): a page with entries but no Bundle.total returns nothing")
