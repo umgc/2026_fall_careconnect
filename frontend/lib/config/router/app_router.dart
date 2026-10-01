@@ -21,6 +21,7 @@ import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_p
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/features/summary/summary_confirmation_list.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
+import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
@@ -200,6 +201,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
     GoRoute(path: '/health-data', builder: (_, __) => const HealthDataScreen()),
+    GoRoute(path: '/dob-confirm', builder: (_, __) => const DobConfirmationScreen()),
     GoRoute(
       path: '/ui-preview',
       builder: (_, __) => const UiPreviewScreen(),
