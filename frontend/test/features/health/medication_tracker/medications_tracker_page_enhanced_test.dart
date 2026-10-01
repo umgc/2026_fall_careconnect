@@ -10,6 +10,7 @@
 //  - Page body structure (SafeArea, Column, Container decoration)
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
@@ -22,6 +23,8 @@ Widget _wrapWithPatientId(int? patientId) {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: patientId),
   );
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const MedicationsTrackerPage(),
