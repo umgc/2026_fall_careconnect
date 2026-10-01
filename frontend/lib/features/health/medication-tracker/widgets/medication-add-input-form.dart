@@ -276,6 +276,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                     const SizedBox(height: 8),
                     DropdownButtonFormField<MedicationType>(
                       initialValue: _selectedMedicationType,
+                      isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -298,7 +299,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                       items: MedicationType.values.map((MedicationType type) {
                         return DropdownMenuItem<MedicationType>(
                           value: type,
-                          child: Text(type.name),
+                          child: Text(type.label, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (MedicationType? newValue) {

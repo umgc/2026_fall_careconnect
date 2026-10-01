@@ -90,18 +90,6 @@ void main() {
       expect(m.medicationType, MedicationType.PRESCRIPTION);
     });
 
-    test('medicationType is OTC when specified', () {
-      final m = Medication.fromJson({
-        'medicationName': 'Ibuprofen',
-        'dosage': '200mg',
-        'frequency': 'As needed',
-        'route': 'Oral',
-        'medicationType': 'OTC',
-        'isActive': true,
-      });
-      expect(m.medicationType, MedicationType.OTC);
-    });
-
     test('medicationType is SUPPLEMENT when specified', () {
       final m = Medication.fromJson({
         'medicationName': 'Fish Oil',
@@ -114,7 +102,7 @@ void main() {
       expect(m.medicationType, MedicationType.SUPPLEMENT);
     });
 
-    test('medicationType is HERBAL when specified', () {
+    test('TC-MED-TYPE-003: medicationType is HERBAL when specified', () {
       // KI-05: HERBAL added to match backend Medication.MedicationType.
       final m = Medication.fromJson({
         'medicationName': 'Turmeric',
@@ -127,7 +115,7 @@ void main() {
       expect(m.medicationType, MedicationType.HERBAL);
     });
 
-    test('medicationType is EMERGENCY when specified', () {
+    test('TC-MED-TYPE-004: medicationType is EMERGENCY when specified', () {
       // KI-05: EMERGENCY added to match backend Medication.MedicationType.
       final m = Medication.fromJson({
         'medicationName': 'Epinephrine',

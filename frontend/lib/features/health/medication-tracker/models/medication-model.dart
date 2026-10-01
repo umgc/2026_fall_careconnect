@@ -1,8 +1,21 @@
 /// Medication type enum
-/// Mirrors backend Medication.MedicationType (Medication.java) — PRESCRIPTION,
-/// SUPPLEMENT, HERBAL, and EMERGENCY match the backend enum's constant names.
-/// OTC remains distinct from the backend's OVER_THE_COUNTER; see KI-05.
-enum MedicationType { PRESCRIPTION, OTC, SUPPLEMENT, HERBAL, EMERGENCY }
+/// Mirrors backend Medication.MedicationType (Medication.java): every constant
+/// name here is the backend's wire name, so `.name` can be sent and parsed as-is.
+/// OVER_THE_COUNTER was OTC until the KI-05 follow-up; [Medication.fromJson]
+/// still reads the old name defensively (the backend never stored it).
+enum MedicationType { PRESCRIPTION, OVER_THE_COUNTER, SUPPLEMENT, HERBAL, EMERGENCY }
+
+/// What the user sees for a [MedicationType]. Mirrors the backend display
+/// names in Medication.java. The wire value is still [MedicationType.name].
+extension MedicationTypeLabel on MedicationType {
+  String get label => switch (this) {
+        MedicationType.PRESCRIPTION => 'Prescription',
+        MedicationType.OVER_THE_COUNTER => 'Over-the-counter',
+        MedicationType.SUPPLEMENT => 'Supplement/Vitamin',
+        MedicationType.HERBAL => 'Herbal/Natural',
+        MedicationType.EMERGENCY => 'Emergency Medication',
+      };
+}
 
 /// Medication status enum (for UI display purposes)
 enum MedicationStatus { upcoming, taken, missed }
@@ -55,10 +68,7 @@ class Medication {
       frequency: json['frequency'] as String,
       route: json['route'] as String,
       medicationType: json['medicationType'] != null
-          ? MedicationType.values.firstWhere(
-              (e) => e.name == json['medicationType'],
-              orElse: () => MedicationType.PRESCRIPTION,
-            )
+          ? _parseMedicationType(json['medicationType'] as String)
           : null,
       prescribedBy: json['prescribedBy'] as String?,
       prescribedDate: json['prescribedDate'] as String?,
@@ -91,6 +101,18 @@ class Medication {
       if (notes != null) 'notes': notes,
       'isActive': isActive,
     };
+  }
+
+  /// Parses the backend wire name. 'OTC' is the pre-KI-05-follow-up frontend
+  /// name. The backend rejected it, so no stored row carries it; it is
+  /// accepted defensively, and any other unknown value falls back to
+  /// PRESCRIPTION as before.
+  static MedicationType _parseMedicationType(String wire) {
+    if (wire == 'OTC') return MedicationType.OVER_THE_COUNTER;
+    return MedicationType.values.firstWhere(
+      (e) => e.name == wire,
+      orElse: () => MedicationType.PRESCRIPTION,
+    );
   }
 
   /// Helper method to calculate next dose time (placeholder logic)
