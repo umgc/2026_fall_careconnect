@@ -5,6 +5,7 @@
 // With patientId=null, returns early setting error without HTTP call.
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
@@ -18,6 +19,8 @@ Widget _wrap() {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: null),
   );
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const MedicationsTrackerPage(),

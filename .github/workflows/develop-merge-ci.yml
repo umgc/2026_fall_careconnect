@@ -185,24 +185,12 @@ jobs:
       # runners; --concurrency is still the worker count *within* this
       # one shard's runner. Each shard writes its own coverage/lcov.info,
       # merged back into one report by frontend-coverage below.
-      #
-      # QUARANTINE: test/features/usps/usps_test_screen_test.dart hangs
-      # on a leaked async callback in its "Clear Cache with null user"
-      # case and eats the full 10-minute default test timeout --
-      # `--timeout=60s` does NOT help here, since testWidgets() passes
-      # its own Timeout through TestWidgetsFlutterBinding, which takes
-      # priority over package:test's CLI default. Whichever shard draws
-      # this file is stuck for 10 minutes regardless of shard count, so
-      # the file is excluded from this run entirely (not fixed here --
-      # tracked with the rest of the known frontend failures). Remove
-      # this exclusion once that hang is fixed.
       - name: Flutter test (shard ${{ matrix.shard }}/${{ env.FLUTTER_TEST_SHARDS }})
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: |
           mapfile -t TEST_FILES < <(
             find test -name '*_test.dart' \
-              ! -path 'test/features/usps/usps_test_screen_test.dart' \
             | sort
           )
           flutter test "${TEST_FILES[@]}" \
