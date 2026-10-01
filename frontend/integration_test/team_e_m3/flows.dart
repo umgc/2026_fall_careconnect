@@ -60,8 +60,8 @@ String? skipReasonFor(
   return null;
 }
 
-/// Status as of 2026-09-30: none of the Medicare, record sharing or photo
-/// capture features are on team-e-develop yet.
+/// Status as of 2026-10-01: none of the Medicare, reconciliation review, record
+/// sharing or photo capture features are on team-e-develop yet.
 const teamEFlows = <TeamEFlow>[
   TeamEFlow(
     caseId: 'TC-E2E-001',
@@ -99,7 +99,8 @@ const teamEFlows = <TeamEFlow>[
     title: 'Photo capture creates a medication with the right type',
     workPackage: '6.2.42 Medication Photo Capture',
     trace: 'Handoff item 1.10; no SRS requirement (TBD)',
-    dependsOn: ['3.4.3', 'PR #207 (KI-05)'],
+    // PR #207 (KI-05, OVER_THE_COUNTER) merged to team-e-develop on 2026-09-30.
+    dependsOn: ['3.4.3'],
     landed: false,
     steps: [
       'Sign in as the patient and start medication photo capture',

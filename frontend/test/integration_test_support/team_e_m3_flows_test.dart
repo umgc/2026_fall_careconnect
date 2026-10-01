@@ -65,7 +65,8 @@ void main() {
       }
     }
     final photo = teamEFlows.singleWhere((f) => f.caseId == 'TC-E2E-003');
-    expect(photo.dependsOn, containsAll(['3.4.3', 'PR #207 (KI-05)']));
+    // PR #207 (KI-05) merged on 2026-09-30, so photo capture now waits only on 3.4.3.
+    expect(photo.dependsOn, ['3.4.3']);
   });
 
   test('TC-E2E-009: opted in with a backend, a landed flow is not skipped', () {
