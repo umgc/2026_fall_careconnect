@@ -6,8 +6,10 @@
 -- way the usps_mailpiece and ai_audit_ledger patch methods mirror theirs.
 --
 -- created_at/updated_at come from the shared Auditable @MappedSuperclass, which maps them as
--- nullable LocalDateTime (so TIMESTAMP, not TIMESTAMPTZ) and populates them in @PrePersist.
--- This mirrors what Hibernate ddl-auto actually creates rather than tightening past it.
+-- nullable LocalDateTime and populates them in @PrePersist. Hibernate ddl-auto creates those as
+-- TIMESTAMP; they are TIMESTAMPTZ here (PR #209 review, 2026-09-30) so the column holds an
+-- instant rather than a wall-clock time whose meaning depends on the writer's zone.
+-- SchemaPatchRunner.applyEhrAuditTimestampZonePatches() converts what Hibernate created.
 --
 -- Deliberately carries no organization/tenant column. FR-EHR-10 instructs reuse of an
 -- existing organization-identifier isolation pattern, and no such column exists anywhere in
@@ -20,8 +22,8 @@ CREATE TABLE IF NOT EXISTS ehr_source (
     display_name VARCHAR(128) NOT NULL,
     fhir_version VARCHAR(16)  NOT NULL,
     enabled      BOOLEAN      NOT NULL,
-    created_at   TIMESTAMP,
-    updated_at   TIMESTAMP
+    created_at   TIMESTAMPTZ,
+    updated_at   TIMESTAMPTZ
 );
 
 INSERT INTO ehr_source (code, display_name, fhir_version, enabled, created_at, updated_at)
@@ -36,8 +38,8 @@ CREATE TABLE IF NOT EXISTS ehr_patient_crosswalk (
     patient_id          BIGINT       NOT NULL REFERENCES patient (id) ON DELETE CASCADE,
     source_id           BIGINT       NOT NULL REFERENCES ehr_source (id),
     external_patient_id VARCHAR(255) NOT NULL,
-    created_at          TIMESTAMP,
-    updated_at          TIMESTAMP,
+    created_at          TIMESTAMPTZ,
+    updated_at          TIMESTAMPTZ,
     CONSTRAINT uq_ehr_crosswalk_source_external UNIQUE (source_id, external_patient_id),
     CONSTRAINT uq_ehr_crosswalk_patient_source  UNIQUE (patient_id, source_id)
 );
@@ -58,8 +60,8 @@ CREATE TABLE IF NOT EXISTS ehr_raw_payload (
     payload_size_bytes   INTEGER      NOT NULL,
     photo_stripped       BOOLEAN      NOT NULL,
     retrieved_at         TIMESTAMPTZ  NOT NULL,
-    created_at           TIMESTAMP,
-    updated_at           TIMESTAMP
+    created_at           TIMESTAMPTZ,
+    updated_at           TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_ehr_raw_payload_patient_resource

@@ -369,6 +369,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyUspsMailpiecePatches();
         applyEhrCanonicalSchemaPatches();
         applyEhrIdentityReconciliationPatches();
+        applyEhrAuditTimestampZonePatches();
         seedDemoScheduledVisits();
     }
 
@@ -528,6 +529,63 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "V2609291230b - backfill patient.updated_at for rows predating Auditable",
                 "UPDATE patient SET updated_at = now() WHERE updated_at IS NULL"
         );
+    }
+
+    /**
+     * Makes {@code created_at} / {@code updated_at} on the six {@code ehr_*} tables
+     * {@code TIMESTAMPTZ}. Raised in the PR #209 review.
+     * <p>
+     * The entities inherit both columns from the shared {@code Auditable}, which maps them as
+     * {@code LocalDateTime}, so {@code ddl-auto=update} creates them as {@code timestamp without
+     * time zone}. A zone-less column stores a wall-clock reading, and which instant that reading
+     * means depends on settings outside the schema: {@code hibernate.jdbc.time_zone} decides what
+     * Hibernate writes and the session {@code TimeZone} decides what {@code now()} writes. The
+     * application sets both to UTC, so it agrees with itself; a connection that sets neither --
+     * psql, a test profile, a second service -- does not. {@code TIMESTAMPTZ} stores the instant,
+     * which removes the dependency instead of documenting it.
+     * <p>
+     * {@code Auditable} is unchanged, so no other team's entity is affected. Binding a
+     * {@code LocalDateTime} to a {@code TIMESTAMPTZ} column is safe because the driver sends the
+     * value with an explicit offset, which a zone-aware column honours and a zone-less one discards.
+     * <p>
+     * Existing values are read as UTC, which is what the application wrote. Scoped to the
+     * {@code ehr_*} tables: {@code patient.updated_at}, the Assumption A1 baseline, is the same
+     * shape on a shared table and is deliberately not converted here.
+     */
+    private void applyEhrAuditTimestampZonePatches() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL EHR audit-timestamp zone patches for non-PostgreSQL datasource");
+            return;
+        }
+
+        for (final String table : new String[]{
+                "ehr_source",
+                "ehr_patient_crosswalk",
+                "ehr_raw_payload",
+                "ehr_source_identity",
+                "ehr_identity_conflict",
+                "ehr_identity_field_provenance"}) {
+            for (final String column : new String[]{"created_at", "updated_at"}) {
+                applyRequiredPatch(
+                        "V2609301900 - " + table + "." + column + " is TIMESTAMPTZ",
+                        timestamptzIfZoneless(table, column)
+                );
+            }
+        }
+    }
+
+    /**
+     * Idempotent {@code timestamp} to {@code timestamptz} conversion. The type guard is what makes
+     * a re-run a no-op: {@code AT TIME ZONE} applied to a column that is already zone-aware would
+     * convert it back to a wall-clock reading and shift every value by the session offset.
+     */
+    private static String timestamptzIfZoneless(final String table, final String column) {
+        return "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns "
+                + "WHERE table_schema = current_schema() AND table_name = '" + table + "' "
+                + "AND column_name = '" + column + "' "
+                + "AND data_type = 'timestamp without time zone') THEN "
+                + "ALTER TABLE " + table + " ALTER COLUMN " + column
+                + " TYPE TIMESTAMPTZ USING " + column + " AT TIME ZONE 'UTC'; END IF; END $$;";
     }
 
     /**

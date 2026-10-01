@@ -22,7 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Proves the parts of the EHR canonical schema that {@code SchemaPatchRunner} applies and that no
  * other test reached: the {@code ehr_source} seed, the crosswalk and source-identity unique indexes,
  * the foreign keys and their {@code ON DELETE CASCADE}, the four source-identity columns added on
- * 2026-09-29, and the {@code patient} timestamps reconciliation reads as its baseline.
+ * 2026-09-29, the {@code patient} timestamps reconciliation reads as its baseline, and the
+ * zone-aware audit timestamps on the {@code ehr_*} tables.
  * <p>
  * PostgreSQL only, for the reason {@link EhrIdentityConflictConstraintPostgresTest} gives: on H2 the
  * patches never run, so every assertion here would pass or fail for the wrong reason. Opt-in, and
@@ -35,8 +36,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Every test runs in the {@code @DataJpaTest} transaction and is rolled back. PostgreSQL aborts the
  * transaction on a constraint violation, so an expected violation is always the last statement.
  * <p>
- * Test IDs TC-EHR-SCH-001..008 are permanent. Never renumber, never reuse. Added by the Testing Lead
- * on the PR #209 review (2026-09-29).
+ * Test IDs TC-EHR-SCH-001..010 are permanent. Never renumber, never reuse. 001..008 were added by
+ * the Testing Lead on the PR #209 review (2026-09-29); 009 and 010 with the TIMESTAMPTZ conversion
+ * the same review asked for (2026-09-30).
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -49,6 +51,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "spring.datasource.driver-class-name=org.postgresql.Driver",
         "spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect",
         "spring.jpa.hibernate.ddl-auto=none",
+        // As src/main application.properties has it; src/test's copy shadows that file.
+        "spring.jpa.properties.hibernate.jdbc.time_zone=UTC",
         "spring.flyway.enabled=false",
         "spring.sql.init.mode=never"
 })
@@ -201,6 +205,55 @@ class EhrCanonicalSchemaPostgresTest {
 
         assertThat(stamps[0]).as("created_at").isNotNull();
         assertThat(stamps[1]).as("updated_at, the A1 baseline").isNotNull();
+    }
+
+    // ---- TC-EHR-SCH-009 ----
+
+    @Test
+    @DisplayName("TC-EHR-SCH-009: created_at and updated_at are timestamptz on all six ehr_* tables")
+    void auditTimestampsAreZoneAwareOnEveryEhrTable() {
+        @SuppressWarnings("unchecked")
+        List<Object[]> columns = entityManager
+                .createNativeQuery("select table_name, column_name, data_type from information_schema.columns"
+                        + " where table_schema = current_schema()"
+                        + " and table_name in ('ehr_source', 'ehr_patient_crosswalk', 'ehr_raw_payload',"
+                        + " 'ehr_source_identity', 'ehr_identity_conflict', 'ehr_identity_field_provenance')"
+                        + " and column_name in ('created_at', 'updated_at')")
+                .getResultList();
+
+        assertThat(columns).as("six tables, two columns each").hasSize(12);
+        assertThat(columns)
+                .allSatisfy(c -> assertThat(c[2]).as(c[0] + "." + c[1]).isEqualTo("timestamp with time zone"));
+    }
+
+    // ---- TC-EHR-SCH-010 ----
+
+    /**
+     * The behaviour the column type buys. {@code Auditable} stamps a {@code LocalDateTime}, and
+     * Hibernate binds it with an explicit UTC offset (this class sets {@code hibernate.jdbc.time_zone}
+     * as production does). A zone-aware column honours that offset. A zone-less one discards it and
+     * keeps the UTC wall-clock reading, which this session -- whose zone is the JVM's, not UTC --
+     * then reads back as local time: off by the JVM's UTC offset on any machine not running in UTC.
+     */
+    @Test
+    @DisplayName("TC-EHR-SCH-010: a row stamped by Auditable holds the instant it was written, whatever the session zone")
+    void auditableStampIsTheInstantItWasWritten() {
+        EhrSourceIdentity saved = sourceIdentityRepository.saveAndFlush(EhrSourceIdentity.builder()
+                .patientId(newPatient())
+                .sourceId(sourceId("MEDICARE"))
+                .sourceUpdatedAt(Instant.now().truncatedTo(ChronoUnit.MICROS))
+                .build());
+
+        Object[] skew = (Object[]) entityManager
+                .createNativeQuery("select abs(extract(epoch from (clock_timestamp() - created_at))),"
+                        + " abs(extract(epoch from (clock_timestamp() - updated_at)))"
+                        + " from ehr_source_identity where id = :id")
+                .setParameter("id", saved.getId()).getSingleResult();
+
+        assertThat(((Number) skew[0]).doubleValue()).as("created_at skew from the database clock, seconds")
+                .isLessThan(60.0);
+        assertThat(((Number) skew[1]).doubleValue()).as("updated_at skew from the database clock, seconds")
+                .isLessThan(60.0);
     }
 
     /** By native SQL on purpose, naming no timestamp column: the same shape as the dev seed insert. */

@@ -4,9 +4,11 @@
 -- SchemaPatchRunner.applyEhrIdentityReconciliationPatches() mirrors it for dev and prod.
 --
 -- created_at/updated_at come from the shared Auditable @MappedSuperclass, which maps them as
--- nullable LocalDateTime (so TIMESTAMP). source_updated_at and detected_at are Instant and
--- therefore TIMESTAMPTZ: they are compared ACROSS sources, and a zone-less type would let a
--- snapshot from another offset appear newer than it is.
+-- nullable LocalDateTime. Hibernate ddl-auto creates those as TIMESTAMP; they are TIMESTAMPTZ here
+-- (PR #209 review, 2026-09-30), converted by SchemaPatchRunner.applyEhrAuditTimestampZonePatches().
+-- source_updated_at and detected_at are Instant and were always TIMESTAMPTZ: they are compared
+-- ACROSS sources, and a zone-less type would let a snapshot from another offset appear newer
+-- than it is.
 --
 -- No organization column on any of these three. FR-EHR-10 instructs reuse of an existing
 -- organization-identifier isolation pattern; no such column exists anywhere in this schema, so
@@ -36,8 +38,8 @@ CREATE TABLE IF NOT EXISTS ehr_source_identity (
     gender            VARCHAR(16),
     managing_org      VARCHAR(255),
     language          VARCHAR(35),
-    created_at        TIMESTAMP,
-    updated_at        TIMESTAMP,
+    created_at        TIMESTAMPTZ,
+    updated_at        TIMESTAMPTZ,
     CONSTRAINT uq_ehr_source_identity_patient_source UNIQUE (patient_id, source_id)
 );
 
@@ -58,8 +60,8 @@ CREATE TABLE IF NOT EXISTS ehr_identity_conflict (
     source_updated_at      TIMESTAMPTZ  NOT NULL,
     detected_at            TIMESTAMPTZ  NOT NULL,
     resolved_at            TIMESTAMPTZ,
-    created_at             TIMESTAMP,
-    updated_at             TIMESTAMP,
+    created_at             TIMESTAMPTZ,
+    updated_at             TIMESTAMPTZ,
 
     CONSTRAINT ck_ehr_identity_conflict_status
         CHECK (status IN ('PENDING', 'ACCEPTED', 'REJECTED')),
@@ -101,8 +103,8 @@ CREATE TABLE IF NOT EXISTS ehr_identity_field_provenance (
     field_name        VARCHAR(64) NOT NULL,
     source_id         BIGINT      REFERENCES ehr_source (id),
     source_updated_at TIMESTAMPTZ,
-    created_at        TIMESTAMP,
-    updated_at        TIMESTAMP,
+    created_at        TIMESTAMPTZ,
+    updated_at        TIMESTAMPTZ,
     CONSTRAINT uq_ehr_identity_field_provenance_patient_field UNIQUE (patient_id, field_name)
 );
 
