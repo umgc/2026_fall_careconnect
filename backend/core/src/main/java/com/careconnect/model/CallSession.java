@@ -7,13 +7,17 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Durable authorization and ownership record for a video call. */
+/**
+ * Durable authorization and ownership record for a video call.
+ */
 @Entity
 @Getter
 @Setter
@@ -30,7 +34,9 @@ public class CallSession extends Auditable {
     @Column(name = "call_id", nullable = false, length = 120)
     private String callId;
 
-    /** Patient profile primary key (patient.id), not the patient's users.id. */
+    /**
+     * Patient profile primary key (patient.id), not the patient's users.id.
+     */
     @Column(name = "patient_id", nullable = false)
     private Long patientId;
 
@@ -46,7 +52,9 @@ public class CallSession extends Auditable {
     @Column(name = "status", nullable = false, length = 24)
     private String status;
 
-    /** One-way durable election for threshold-triggered system capture. */
+    /**
+     * One-way durable election for threshold-triggered system capture.
+     */
     @Column(name = "recording_start_elected", nullable = false)
     private boolean recordingStartElected;
 
@@ -71,7 +79,9 @@ public class CallSession extends Auditable {
     @Column(name = "termination_last_error", columnDefinition = "TEXT")
     private String terminationLastError;
 
-    /** Comma-delimited immutable user-id snapshot captured when termination starts. */
+    /**
+     * Comma-delimited immutable user-id snapshot captured when termination starts.
+     */
     @Column(name = "termination_notify_user_ids", columnDefinition = "TEXT")
     private String terminationNotifyUserIds;
 

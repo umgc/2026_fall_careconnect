@@ -2,7 +2,9 @@ package com.careconnect.service.ai.indexing;
 
 import java.util.Optional;
 
-/** Namespaced retrieval source keys for summary tables with independent numeric IDs. */
+/**
+ * Namespaced retrieval source keys for summary tables with independent numeric IDs.
+ */
 public final class SummarySourceKey {
 
     public static final String CALL_KIND = "CALL_SUMMARY";

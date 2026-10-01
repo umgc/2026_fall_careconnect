@@ -63,15 +63,24 @@ class FileControllerIntakeTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockitoBean private FileManagementService fileManagementService;
-    @MockitoBean private S3StorageService s3StorageService;
-    @MockitoBean private UserRepository userRepository;
-    @MockitoBean private PatientRepository patientRepository;
-    @MockitoBean private MessageRepository messageRepository;
-    @MockitoBean private CaregiverService caregiverService;
-    @MockitoBean private PatientService patientService;
-    @MockitoBean private AuthorizationService authorizationService;
-    @MockitoBean private SecurityUtil securityUtil;
+    @MockitoBean
+    private FileManagementService fileManagementService;
+    @MockitoBean
+    private S3StorageService s3StorageService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private PatientRepository patientRepository;
+    @MockitoBean
+    private MessageRepository messageRepository;
+    @MockitoBean
+    private CaregiverService caregiverService;
+    @MockitoBean
+    private PatientService patientService;
+    @MockitoBean
+    private AuthorizationService authorizationService;
+    @MockitoBean
+    private SecurityUtil securityUtil;
 
     private User patientUser;
     private User adminUser;

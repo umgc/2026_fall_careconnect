@@ -338,19 +338,19 @@ class AiAskAuditServiceTest {
     void terminalEventType_heldAndErrorDefaults() {
         assertThat(AiAskAuditService.terminalEventType(null)).isEqualTo(AiAskAuditService.ERROR);
         assertThat(AiAskAuditService.terminalEventType(
-                        AiAskAuditService.FinalizeCommand.held(
-                                UUID.randomUUID(),
-                                "draft",
-                                List.of(),
-                                List.of(),
-                                "[]",
-                                Map.of(),
-                                Map.of(),
-                                "model",
-                                1)))
+                AiAskAuditService.FinalizeCommand.held(
+                        UUID.randomUUID(),
+                        "draft",
+                        List.of(),
+                        List.of(),
+                        "[]",
+                        Map.of(),
+                        Map.of(),
+                        "model",
+                        1)))
                 .isEqualTo(AiAskAuditService.HELD);
         assertThat(AiAskAuditService.terminalEventType(
-                        AiAskAuditService.FinalizeCommand.error("X", Map.of(), 1)))
+                AiAskAuditService.FinalizeCommand.error("X", Map.of(), 1)))
                 .isEqualTo(AiAskAuditService.ERROR);
     }
 
@@ -413,22 +413,22 @@ class AiAskAuditServiceTest {
     @DisplayName("terminalEventType unknown status without error defaults to DELIVERED")
     void terminalEventType_unknownWithoutError_delivered() {
         assertThat(AiAskAuditService.terminalEventType(
-                        new AiAskAuditService.FinalizeCommand(
-                                "WEIRD",
-                                1,
-                                false,
-                                null,
-                                null,
-                                null,
-                                List.of(),
-                                Map.of(),
-                                List.of(),
-                                null,
-                                Map.of(),
-                                Map.of(),
-                                null,
-                                null,
-                                1)))
+                new AiAskAuditService.FinalizeCommand(
+                        "WEIRD",
+                        1,
+                        false,
+                        null,
+                        null,
+                        null,
+                        List.of(),
+                        Map.of(),
+                        List.of(),
+                        null,
+                        Map.of(),
+                        Map.of(),
+                        null,
+                        null,
+                        1)))
                 .isEqualTo(AiAskAuditService.DELIVERED);
     }
 

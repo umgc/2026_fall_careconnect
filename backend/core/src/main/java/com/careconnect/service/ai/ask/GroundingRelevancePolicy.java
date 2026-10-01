@@ -27,7 +27,7 @@ final class GroundingRelevancePolicy {
     private static final Set<String> GENERIC_QUERY_TERMS = Set.of(
             "allergy", "allergies", "appointment", "appointments", "care",
             "change", "changed", "changes", "current", "currently", "details", "dose",
-            "dosage", "drug", "drugs", "happened", "history", "information",
+            "dosage", "dosed", "dosing", "drug", "drugs", "happened", "history", "information",
             "latest", "level", "levels", "list", "medication", "medications",
             "medicine", "medicines", "meds", "most", "newest", "now", "patient",
             "pain", "recent", "recently", "status", "tablet", "tablets", "taking",
@@ -89,13 +89,25 @@ final class GroundingRelevancePolicy {
                 && (left.startsWith(right) || right.startsWith(left));
     }
 
+    private static final Pattern DOSAGE_TERM = Pattern.compile(
+            "^\\d+(?:\\.\\d+)?(mg|mcg|ml|g|units?)$", Pattern.CASE_INSENSITIVE);
+
     private static boolean conceptRelevant(
             final Set<String> queryTerms, final Set<String> evidenceTerms) {
         for (final Map.Entry<String, Set<String>> concept : CONCEPTS.entrySet()) {
             final boolean queryMatches = queryTerms.stream().anyMatch(term ->
                     concept.getValue().contains(term)
                             || ("meds".equals(term) && "medication".equals(concept.getKey())));
-            if (queryMatches && evidenceTerms.stream().anyMatch(concept.getValue()::contains)) {
+            if (!queryMatches) {
+                continue;
+            }
+            final boolean evidenceMatches = evidenceTerms.stream().anyMatch(concept.getValue()::contains)
+                    // A dosage figure (e.g. "10mg") is strong, general evidence that a span is
+                    // about medication — more reliable than an inherently incomplete hardcoded
+                    // drug-name list (which cannot enumerate every real medication).
+                    || ("medication".equals(concept.getKey())
+                            && evidenceTerms.stream().anyMatch(term -> DOSAGE_TERM.matcher(term).matches()));
+            if (evidenceMatches) {
                 return true;
             }
         }

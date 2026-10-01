@@ -44,9 +44,9 @@ class CitationMetadataMapperTest {
         final CitationMetadataMapper.CitationMetadata metadata = mapper.map(
                 RetrievalRecordType.VISIT_SUMMARY,
                 """
-                {"visitId":"v-9","episodeType":"HOME","occurredAt":"2026-07-01",
-                 "confidence":0.91,"title":""}
-                """);
+                        {"visitId":"v-9","episodeType":"HOME","occurredAt":"2026-07-01",
+                         "confidence":0.91,"title":""}
+                        """);
 
         assertThat(metadata.title()).startsWith("Visit summary — 2026-07-01");
         assertThat(metadata.confidence()).isEqualTo(0.91d);
@@ -61,9 +61,9 @@ class CitationMetadataMapperTest {
         final CitationMetadataMapper.CitationMetadata mail = mapper.map(
                 RetrievalRecordType.USPS_MAIL,
                 """
-                {"digestDate":"2026-07-02","importanceLevel":"HIGH",
-                 "importanceCategory":"MEDS","headline":"Pharmacy mail"}
-                """);
+                        {"digestDate":"2026-07-02","importanceLevel":"HIGH",
+                         "importanceCategory":"MEDS","headline":"Pharmacy mail"}
+                        """);
         assertThat(mail.title()).isEqualTo("Pharmacy mail");
         assertThat(mail.metadata())
                 .containsEntry("digestDate", "2026-07-02")

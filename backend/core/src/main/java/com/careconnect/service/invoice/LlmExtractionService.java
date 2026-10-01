@@ -17,28 +17,28 @@ public class LlmExtractionService {
     public String extractInvoiceData(String rawInvoiceText) {
 
         String systemMessageText = """
-        You are an invoice extraction engine.
-
-        Extract invoice data and return ONLY valid JSON.
-
-        Do NOT explain anything.
-        Do NOT return text.
-        Do NOT use markdown.
-
-        Return EXACTLY this format:
-
-        {
-          "invoiceNumber": "",
-          "provider": {
-            "name": ""
-          },
-          "amounts": {
-            "total": 0
-          }
-        }
-
-        Only return JSON.
-        """;
+                You are an invoice extraction engine.
+                
+                Extract invoice data and return ONLY valid JSON.
+                
+                Do NOT explain anything.
+                Do NOT return text.
+                Do NOT use markdown.
+                
+                Return EXACTLY this format:
+                
+                {
+                  "invoiceNumber": "",
+                  "provider": {
+                    "name": ""
+                  },
+                  "amounts": {
+                    "total": 0
+                  }
+                }
+                
+                Only return JSON.
+                """;
 
         String prompt = systemMessageText + "\n\nInvoice:\n" + rawInvoiceText;
 

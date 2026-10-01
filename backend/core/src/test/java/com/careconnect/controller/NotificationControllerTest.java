@@ -28,17 +28,18 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationControllerTest {
 
-    @Mock private NotificationWebSocketHandler notificationWebSocketHandler;
-    @Mock private NotificationService notificationService;
-
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
+    private static final Long USER_ID = 1L;
+    private static final Long PATIENT_ID = 2L;
+    @Mock
+    private NotificationWebSocketHandler notificationWebSocketHandler;
+    @Mock
+    private NotificationService notificationService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
     @InjectMocks
     private NotificationController controller;
-
-    private static final Long USER_ID    = 1L;
-    private static final Long PATIENT_ID = 2L;
 
     // ─── sendWebSocketNotificationToUser ──────────────────────────────────────
 

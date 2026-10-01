@@ -31,27 +31,39 @@ public class HhaExchangeProperties {
     @Getter
     @Setter
     public static class Api {
-        /** Base URL for the HHAExchange REST API. */
+        /**
+         * Base URL for the HHAExchange REST API.
+         */
         private String baseUrl = "https://implementation.hhaexchange.com";
-        /** API authentication key supplied via X-API-KEY header. */
+        /**
+         * API authentication key supplied via X-API-KEY header.
+         */
         private String key = "";
     }
 
     @Getter
     @Setter
     public static class Provider {
-        /** Federal Tax Identification Number (EIN) of the home-care provider agency. */
+        /**
+         * Federal Tax Identification Number (EIN) of the home-care provider agency.
+         */
         private String taxId = "";
-        /** NPI of the home-care provider office used in the office.identifier field. */
+        /**
+         * NPI of the home-care provider office used in the office.identifier field.
+         */
         private String npi = "";
-        /** Human-readable agency name used in shift sign-off. */
+        /**
+         * Human-readable agency name used in shift sign-off.
+         */
         private String name = "CareConnect Agency";
     }
 
     @Getter
     @Setter
     public static class Payer {
-        /** HHAExchange payer identifier (e.g. LCDP for Virginia DMAS). */
+        /**
+         * HHAExchange payer identifier (e.g. LCDP for Virginia DMAS).
+         */
         private String id = "LCDP";
     }
 }

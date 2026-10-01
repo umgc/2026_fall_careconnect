@@ -49,7 +49,10 @@ fi
 if [ ${#missing_vars[@]} -eq 0 ]; then
     if [ "$1" = "flutter" ]; then
         echo "Using sentiment mode: $CC_SENTIMENT_MODE"
-        exec "$@" --dart-define=CARECONNECT_SENTIMENT_MODE="$CC_SENTIMENT_MODE"
+        exec "$@" --dart-define=CARECONNECT_SENTIMENT_MODE="$CC_SENTIMENT_MODE" \
+            --dart-define=GOOGLE_PLACES_API_KEY="${GOOGLE_PLACES_API_KEY:-}" \
+            --dart-define=APPLE_MERCHANT_ID="${APPLE_MERCHANT_ID:-}" \
+            --dart-define=GOOGLE_PAY_MERCHANT_ID="${GOOGLE_PAY_MERCHANT_ID:-}"
     else
         exec "$@"
     fi

@@ -2,6 +2,7 @@ package com.careconnect.dto;
 
 import com.careconnect.model.Medication.MedicationType;
 import lombok.Builder;
+
 import java.time.Instant;
 
 @Builder
@@ -20,4 +21,5 @@ public record MedicationDTO(
         String notes,
         Boolean isActive,
         Instant lastTaken
-) {}
+) {
+}

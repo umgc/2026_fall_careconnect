@@ -3,6 +3,7 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.OffsetDateTime;
 import java.util.*;
 
@@ -14,9 +15,13 @@ import java.util.*;
                 @Index(name = "idx_checkins_patient_created", columnList = "patient_id, created_at")
         }
 )
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class CheckIn {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     // FK -> patients(id)
@@ -49,6 +54,7 @@ public class CheckIn {
         cq.setCheckIn(this);
         selectedQuestions.add(cq);
     }
+
     public void removeSelectedQuestion(CheckInQuestion cq) {
         selectedQuestions.remove(cq);
         cq.setCheckIn(null);

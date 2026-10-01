@@ -6,11 +6,13 @@ import com.careconnect.service.ai.retrieval.RankedChunk;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,6 +30,37 @@ import org.springframework.stereotype.Component;
 public class DefaultMedicationTimelineAggregator implements MedicationTimelineAggregator {
 
     private final ObjectMapper objectMapper;
+
+    private static String dedupeKey(final MedicationTimelineEventDto event) {
+        if (event.itemId() != null && !event.itemId().isBlank()) {
+            return "id:" + event.itemId();
+        }
+        return "fp:" + nullToEmpty(event.medicationNameNormalized())
+                + '|' + nullToEmpty(event.effectiveDate())
+                + '|' + nullToEmpty(event.eventType());
+    }
+
+    private static String textOrNull(final JsonNode node, final String field) {
+        if (node == null) {
+            return null;
+        }
+        final JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        // Accept textual and non-textual JSON (numbers/bools) so dose/date metadata
+        // typed as numbers is not dropped.
+        final String text = value.asText();
+        return text == null || text.isBlank() ? null : text;
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value;
+    }
 
     @Override
     public MedicationTimelineDto aggregate(final List<RankedChunk> chunks) {
@@ -79,15 +112,6 @@ public class DefaultMedicationTimelineAggregator implements MedicationTimelineAg
                 chunk.citationRef());
     }
 
-    private static String dedupeKey(final MedicationTimelineEventDto event) {
-        if (event.itemId() != null && !event.itemId().isBlank()) {
-            return "id:" + event.itemId();
-        }
-        return "fp:" + nullToEmpty(event.medicationNameNormalized())
-                + '|' + nullToEmpty(event.effectiveDate())
-                + '|' + nullToEmpty(event.eventType());
-    }
-
     private JsonNode parseMetadata(final String chunkMetadataJson) {
         if (chunkMetadataJson == null || chunkMetadataJson.isBlank()) {
             return null;
@@ -100,27 +124,5 @@ public class DefaultMedicationTimelineAggregator implements MedicationTimelineAg
             }
             return null;
         }
-    }
-
-    private static String textOrNull(final JsonNode node, final String field) {
-        if (node == null) {
-            return null;
-        }
-        final JsonNode value = node.get(field);
-        if (value == null || value.isNull()) {
-            return null;
-        }
-        // Accept textual and non-textual JSON (numbers/bools) so dose/date metadata
-        // typed as numbers is not dropped.
-        final String text = value.asText();
-        return text == null || text.isBlank() ? null : text;
-    }
-
-    private static String firstNonBlank(final String a, final String b) {
-        return a != null && !a.isBlank() ? a : b;
-    }
-
-    private static String nullToEmpty(final String value) {
-        return value == null ? "" : value;
     }
 }

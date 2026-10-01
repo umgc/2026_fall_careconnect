@@ -16,4 +16,5 @@ public record VitalSampleDTO(
         Double weight,
         Integer moodValue,         // 1-10 scale
         Integer painValue          // 1-10 scale
-) {}
+) {
+}

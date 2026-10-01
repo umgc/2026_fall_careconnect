@@ -13,10 +13,10 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * OpenAPI configuration for CareConnect Backend API
- *
+ * <p>
  * This configuration provides comprehensive API documentation using OpenAPI 3.0.
  * It includes JWT authentication setup, server configuration, and API metadata.
- *
+ * <p>
  * Access the documentation at:
  * - Swagger UI: http://localhost:8080/swagger-ui.html
  * - OpenAPI JSON: http://localhost:8080/api-docs

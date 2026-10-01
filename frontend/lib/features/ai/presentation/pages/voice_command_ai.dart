@@ -85,35 +85,85 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _CommandMatch(phrase: 'open menu', intent: 'navigate', entity: 'menu'),
     _CommandMatch(phrase: 'menu', intent: 'navigate', entity: 'menu'),
     // Health
-    _CommandMatch(phrase: 'open medication tracker', intent: 'navigate', entity: 'medication'),
-    _CommandMatch(phrase: 'take me to medications', intent: 'navigate', entity: 'medications'),
-    _CommandMatch(phrase: 'open medications', intent: 'navigate', entity: 'medications'),
-    _CommandMatch(phrase: 'open my medications', intent: 'navigate', entity: 'medications'),
-    _CommandMatch(phrase: 'open virtual check in', intent: 'navigate', entity: 'virtual checkin'),
-    _CommandMatch(phrase: 'start check in', intent: 'navigate', entity: 'virtual checkin'),
+    _CommandMatch(
+        phrase: 'open medication tracker',
+        intent: 'navigate',
+        entity: 'medication'),
+    _CommandMatch(
+        phrase: 'take me to medications',
+        intent: 'navigate',
+        entity: 'medications'),
+    _CommandMatch(
+        phrase: 'open medications', intent: 'navigate', entity: 'medications'),
+    _CommandMatch(
+        phrase: 'open my medications',
+        intent: 'navigate',
+        entity: 'medications'),
+    _CommandMatch(
+        phrase: 'open virtual check in',
+        intent: 'navigate',
+        entity: 'virtual checkin'),
+    _CommandMatch(
+        phrase: 'start check in',
+        intent: 'navigate',
+        entity: 'virtual checkin'),
     // Integrations
-    _CommandMatch(phrase: 'open wearables', intent: 'navigate', entity: 'wearables'),
-    _CommandMatch(phrase: 'open smart devices', intent: 'navigate', entity: 'smart devices'),
-    _CommandMatch(phrase: 'open home monitoring', intent: 'navigate', entity: 'home monitoring'),
+    _CommandMatch(
+        phrase: 'open wearables', intent: 'navigate', entity: 'wearables'),
+    _CommandMatch(
+        phrase: 'open smart devices',
+        intent: 'navigate',
+        entity: 'smart devices'),
+    _CommandMatch(
+        phrase: 'open home monitoring',
+        intent: 'navigate',
+        entity: 'home monitoring'),
     // Social
-    _CommandMatch(phrase: 'open social feed', intent: 'navigate', entity: 'social feed'),
+    _CommandMatch(
+        phrase: 'open social feed', intent: 'navigate', entity: 'social feed'),
     // Caregiver
-    _CommandMatch(phrase: 'open patient list', intent: 'navigate', entity: 'patient list'),
-    _CommandMatch(phrase: 'show my patients', intent: 'navigate', entity: 'patients'),
+    _CommandMatch(
+        phrase: 'open patient list',
+        intent: 'navigate',
+        entity: 'patient list'),
+    _CommandMatch(
+        phrase: 'show my patients', intent: 'navigate', entity: 'patients'),
     _CommandMatch(phrase: 'open evv', intent: 'navigate', entity: 'evv'),
-    _CommandMatch(phrase: 'open notetaker', intent: 'navigate', entity: 'notetaker'),
-    _CommandMatch(phrase: 'open invoice assistant', intent: 'navigate', entity: 'invoice assistant'),
+    _CommandMatch(
+        phrase: 'open notetaker', intent: 'navigate', entity: 'notetaker'),
+    _CommandMatch(
+        phrase: 'open invoice assistant',
+        intent: 'navigate',
+        entity: 'invoice assistant'),
     // Files & documents
-    _CommandMatch(phrase: 'open file management', intent: 'navigate', entity: 'file management'),
+    _CommandMatch(
+        phrase: 'open file management',
+        intent: 'navigate',
+        entity: 'file management'),
     _CommandMatch(phrase: 'open my files', intent: 'navigate', entity: 'files'),
-    _CommandMatch(phrase: 'open informed delivery', intent: 'navigate', entity: 'informed delivery'),
+    _CommandMatch(
+        phrase: 'open informed delivery',
+        intent: 'navigate',
+        entity: 'informed delivery'),
     _CommandMatch(phrase: 'check my mail', intent: 'navigate', entity: 'mail'),
     // Other features
-    _CommandMatch(phrase: 'open gamification', intent: 'navigate', entity: 'gamification'),
-    _CommandMatch(phrase: 'show achievements', intent: 'navigate', entity: 'achievements'),
+    _CommandMatch(
+        phrase: 'open gamification',
+        intent: 'navigate',
+        entity: 'gamification'),
+    _CommandMatch(
+        phrase: 'show achievements',
+        intent: 'navigate',
+        entity: 'achievements'),
     _CommandMatch(phrase: 'open search', intent: 'navigate', entity: 'search'),
-    _CommandMatch(phrase: 'open subscription', intent: 'navigate', entity: 'subscription'),
-    _CommandMatch(phrase: 'open ai configuration', intent: 'navigate', entity: 'ai configuration'),
+    _CommandMatch(
+        phrase: 'open subscription',
+        intent: 'navigate',
+        entity: 'subscription'),
+    _CommandMatch(
+        phrase: 'open ai configuration',
+        intent: 'navigate',
+        entity: 'ai configuration'),
     //emergency
     _CommandMatch(phrase: 'emergency', intent: 'sos', entity: 'emergency'),
   ];
@@ -320,11 +370,15 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   String _commandLabelToDisplayText(String commandLabel) {
     switch (commandLabel) {
       case 'Home':
-        return AppLocalizations.of(context)?.voicecommand_commandLabelHome ?? 'Home';
+        return AppLocalizations.of(context)?.voicecommand_commandLabelHome ??
+            'Home';
       case 'Calendar':
-        return AppLocalizations.of(context)?.voicecommand_commandLabelCalendar ?? 'Calendar';
+        return AppLocalizations.of(context)
+                ?.voicecommand_commandLabelCalendar ??
+            'Calendar';
       case 'Symptom Tracker':
-        return AppLocalizations.of(context)?.voicecommand_commandLabelTracker ?? 'Symptom Tracker';
+        return AppLocalizations.of(context)?.voicecommand_commandLabelTracker ??
+            'Symptom Tracker';
       default:
         return commandLabel;
     }
@@ -333,11 +387,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   String _commandPhraseToTranslatedString(String commandPhrase) {
     switch (commandPhrase) {
       case 'take me home':
-        return AppLocalizations.of(context)?.voicecommand_commandPhraseHome ?? 'take me home';
+        return AppLocalizations.of(context)?.voicecommand_commandPhraseHome ??
+            'take me home';
       case 'take me to calendar':
-        return AppLocalizations.of(context)?.voicecommand_commandPhraseCalendar ?? 'take me to calendar';
+        return AppLocalizations.of(context)
+                ?.voicecommand_commandPhraseCalendar ??
+            'take me to calendar';
       case 'take me to my tracker':
-        return AppLocalizations.of(context)?.voicecommand_commandPhraseTracker ?? 'take me to my tracker';
+        return AppLocalizations.of(context)
+                ?.voicecommand_commandPhraseTracker ??
+            'take me to my tracker';
       default:
         return commandPhrase;
     }
@@ -740,7 +799,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             setState(() {
               _pendingDestination = destination.route;
               _pendingIntent = match.intent;
-              _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
+              _pendingDetail =
+                  '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
               _voiceStatus = _VoiceStatus.confirming;
               _statusDetail = _pendingDetail!;
             });
@@ -752,7 +812,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         else if (intentDef != null) {
           setState(() {
             _pendingDestination = null; // NOT navigating to a screen, keep null
-            _pendingIntent = match.intent; 
+            _pendingIntent = match.intent;
             _pendingDetail = '${intentDef.displayLabel} \u2014 confirm?';
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
@@ -803,7 +863,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             setState(() {
               _pendingDestination = destination.route;
               _pendingIntent = match.intent;
-              _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
+              _pendingDetail =
+                  '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${_commandLabelToDisplayText(destination.displayLabel)}?';
               _voiceStatus = _VoiceStatus.confirming;
               _statusDetail = _pendingDetail!;
             });
@@ -815,7 +876,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         else if (intentDef != null) {
           setState(() {
             _pendingDestination = null; // NOT navigating to a screen, keep null
-            _pendingIntent = match.intent; 
+            _pendingIntent = match.intent;
             _pendingDetail = '${intentDef.displayLabel} \u2014 confirm?';
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
@@ -826,14 +887,17 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
           return;
         }
       }
-      
 
       _setStatus(
         status: _VoiceStatus.fallback,
         recognizedText: words,
-        detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+        detail:
+            '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
       );
-      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+      _showError(
+          AppLocalizations.of(context)?.voicecommand_commandNotRecognized ??
+              'Command not recognized \u2014 please try again.',
+          updateStatus: false);
       await Future.delayed(_statusDisplayDelay);
       _reset();
     } catch (e) {
@@ -841,7 +905,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (!mounted) return;
       _setStatus(
         status: _VoiceStatus.error,
-        detail: AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.',
+        detail:
+            AppLocalizations.of(context)?.voicecommand_commandNotRecognized ??
+                'Command not recognized \u2014 please try again.',
       );
       _reset();
     }
@@ -910,9 +976,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _setStatus(
         status: _VoiceStatus.fallback,
         recognizedText: words,
-        detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+        detail:
+            '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
       );
-      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+      _showError(
+          AppLocalizations.of(context)?.voicecommand_commandNotRecognized ??
+              'Command not recognized \u2014 please try again.',
+          updateStatus: false);
       _resetAfterDelay();
       return;
     }
@@ -930,7 +1000,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         setState(() {
           _pendingDestination = resolved.route;
           _pendingIntent = result.intent;
-          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? resolved.displayLabel}?';
+          _pendingDetail =
+              '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? resolved.displayLabel}?';
           _voiceStatus = _VoiceStatus.confirming;
           _statusDetail = _pendingDetail!;
         });
@@ -938,7 +1009,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         setState(() {
           _pendingDestination = result.destination;
           _pendingIntent = result.intent;
-          _pendingDetail = '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? 'page'}?';
+          _pendingDetail =
+              '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successOpen ?? 'open'} ${result.displayLabel ?? 'page'}?';
           _voiceStatus = _VoiceStatus.confirming;
           _statusDetail = _pendingDetail!;
         });
@@ -946,16 +1018,21 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         _setStatus(
           status: _VoiceStatus.fallback,
           recognizedText: words,
-          detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+          detail:
+              '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
         );
-        _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+        _showError(
+            AppLocalizations.of(context)?.voicecommand_commandNotRecognized ??
+                'Command not recognized \u2014 please try again.',
+            updateStatus: false);
         _resetAfterDelay();
       }
     } else if (intentDef.requiresConfirmation) {
       setState(() {
         _pendingDestination = null;
         _pendingIntent = result.intent;
-        _pendingDetail = '${result.displayLabel ?? intentDef.displayLabel} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
+        _pendingDetail =
+            '${result.displayLabel ?? intentDef.displayLabel} \u2014 ${AppLocalizations.of(context)?.voicecommand_onClarifyCommandConfirm ?? 'confirm'}?';
         _voiceStatus = _VoiceStatus.confirming;
         _statusDetail = _pendingDetail!;
       });
@@ -963,9 +1040,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _setStatus(
         status: _VoiceStatus.fallback,
         recognizedText: words,
-        detail: '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
+        detail:
+            '${AppLocalizations.of(context)?.voicecommand_successRecognized ?? 'Recognized'}: "$words" \u2014 ${AppLocalizations.of(context)?.voicecommand_successNotRecognized ?? 'command not recognized'}',
       );
-      _showError(AppLocalizations.of(context)?.voicecommand_commandNotRecognized ?? 'Command not recognized \u2014 please try again.', updateStatus: false);
+      _showError(
+          AppLocalizations.of(context)?.voicecommand_commandNotRecognized ??
+              'Command not recognized \u2014 please try again.',
+          updateStatus: false);
       _resetAfterDelay();
     }
   }
@@ -978,7 +1059,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   void _onTimeout() {
     if (!mounted || !_isListening) return;
 
-    final txt = _buffer.trim().isNotEmpty ? _buffer : _lastRecognizedWordsBackend();
+    final txt =
+        _buffer.trim().isNotEmpty ? _buffer : _lastRecognizedWordsBackend();
 
     if (txt.trim().isNotEmpty) {
       _process(txt);
@@ -1148,10 +1230,10 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
       _ambiguousMatches = [];
       _reset();
       _navigateTo(destination);
-    } else if (intentDef != null && intentDef.handler != null) { 
+    } else if (intentDef != null && intentDef.handler != null) {
       //if the intent is defined and has a handler, call the handler
       await intentDef.handler!({}); // Calls the handler for the intent
-      
+
       _setStatus(
         status: _VoiceStatus.success,
         detail:
@@ -1326,7 +1408,9 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
   }
 
   Widget _buildVoiceScaffold({required bool showCloseAction}) {
-    final title = AppLocalizations.of(context)?.voicecommand_voiceCommandTitle ?? 'Voice Commands';
+    final title =
+        AppLocalizations.of(context)?.voicecommand_voiceCommandTitle ??
+            'Voice Commands';
 
     return Scaffold(
       appBar: AppBar(
@@ -1465,7 +1549,9 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
             key: const Key('voice_confirm_btn'),
             onPressed: _onConfirm,
             icon: const Icon(Icons.check),
-            label: Text(AppLocalizations.of(context)?.voicecommand_confirmButton ?? 'Confirm'),
+            label: Text(
+                AppLocalizations.of(context)?.voicecommand_confirmButton ??
+                    'Confirm'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green.shade700,
               foregroundColor: Colors.white,

@@ -117,6 +117,53 @@ public class RetrievalIndexService {
         this.chunkEmbeddingService = chunkEmbeddingService;
     }
 
+    private static String firstNonBlank(final String a, final String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    private static void assertMailpieceEventMatches(
+            final MailpieceIndexedPayload payload,
+            final UspsMailpiece mailpiece) {
+        if (!Objects.equals(payload.patientId(), mailpiece.getPatientId())
+                || !Objects.equals(payload.sourceKey(), mailpiece.getSourceKey())
+                || !Objects.equals(payload.contentHash(), mailpiece.getContentHash())
+                || !Objects.equals(payload.sender(), mailpiece.getSender())
+                || !Objects.equals(payload.summary(), mailpiece.getSummary())
+                || !Objects.equals(payload.digestDate(), mailpiece.getDigestDate())
+                || !Objects.equals(payload.consentScope(), mailpiece.getConsentScope())) {
+            throw new IndexingDeferredException(
+                    "MAILPIECE_INDEXED event does not match authoritative UspsMailpiece");
+        }
+    }
+
+    private static boolean isVisitSummary(final SummaryCreatedPayload payload) {
+        final String sourceTable = payload.sourceTable();
+        final String episodeType = payload.episodeType();
+        return (sourceTable != null && sourceTable.trim().equalsIgnoreCase("visit_summaries"))
+                || (episodeType != null && episodeType.trim().equalsIgnoreCase("visit"));
+    }
+
+    private static String truncateSourceId(final String sourceRecordId) {
+        if (sourceRecordId == null) {
+            return null;
+        }
+        if (sourceRecordId.length() <= RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH) {
+            return sourceRecordId;
+        }
+        return sourceRecordId.substring(0, RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH);
+    }
+
+    private static String truncateConsent(final String consentScope) {
+        if (consentScope == null || consentScope.isBlank()) {
+            return null;
+        }
+        final String trimmed = consentScope.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.length() <= RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH) {
+            return trimmed;
+        }
+        return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
+    }
+
     /**
      * Indexes a successful call summary. Replaces prior chunks for the same
      * {@code source_record_id} (summary id) only when new drafts are non-empty.
@@ -200,9 +247,9 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneOffset.UTC)
-                                .toInstant()
-                                .toString());
+                        .atZone(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString());
         final List<RetrievalIndexChunk> existing =
                 chunkRepository.findCallSummaryChunksForReplacement(
                         patientId,
@@ -301,9 +348,9 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneOffset.UTC)
-                                .toInstant()
-                                .toString());
+                        .atZone(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString());
         final List<RetrievalIndexChunk> existing =
                 chunkRepository.findCallSummaryChunksForReplacement(
                         patientId,
@@ -393,9 +440,9 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneOffset.UTC)
-                                .toInstant()
-                                .toString());
+                        .atZone(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString());
         if (expectedDrafts.isEmpty()) {
             return SummaryCitationReplayOutcome.RETRYABLE;
         }
@@ -796,25 +843,6 @@ public class RetrievalIndexService {
         return true;
     }
 
-    private static String firstNonBlank(final String a, final String b) {
-        return a != null && !a.isBlank() ? a : b;
-    }
-
-    private static void assertMailpieceEventMatches(
-            final MailpieceIndexedPayload payload,
-            final UspsMailpiece mailpiece) {
-        if (!Objects.equals(payload.patientId(), mailpiece.getPatientId())
-                || !Objects.equals(payload.sourceKey(), mailpiece.getSourceKey())
-                || !Objects.equals(payload.contentHash(), mailpiece.getContentHash())
-                || !Objects.equals(payload.sender(), mailpiece.getSender())
-                || !Objects.equals(payload.summary(), mailpiece.getSummary())
-                || !Objects.equals(payload.digestDate(), mailpiece.getDigestDate())
-                || !Objects.equals(payload.consentScope(), mailpiece.getConsentScope())) {
-            throw new IndexingDeferredException(
-                    "MAILPIECE_INDEXED event does not match authoritative UspsMailpiece");
-        }
-    }
-
     private int persistDrafts(
             final Long patientId,
             final String sourceRecordId,
@@ -910,7 +938,7 @@ public class RetrievalIndexService {
                     || !SummarySourceKey.CALL_KIND.equals(chunk.getSourceKind())
                     || !contentHash.equals(metadata.path("contentHash").asText(null))
                     || metadata.path("citationMetadataVersion").asInt(-1)
-                            < SummaryChunker.CITATION_METADATA_VERSION
+                    < SummaryChunker.CITATION_METADATA_VERSION
                     || !metadata.path("chunkIndex").isIntegralNumber()) {
                 return false;
             }
@@ -919,8 +947,8 @@ public class RetrievalIndexService {
             final IndexingChunkDraft expected = expectedBySignature.remove(signature);
             if (expected == null
                     || !Objects.equals(
-                            truncateConsent(chunk.getConsentScope()),
-                            truncateConsent(expected.consentScope()))
+                    truncateConsent(chunk.getConsentScope()),
+                    truncateConsent(expected.consentScope()))
                     || !containsExpectedMetadata(metadata, expected.metadata())) {
                 return false;
             }
@@ -1037,34 +1065,6 @@ public class RetrievalIndexService {
         } catch (final JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize chunk metadata", ex);
         }
-    }
-
-    private static boolean isVisitSummary(final SummaryCreatedPayload payload) {
-        final String sourceTable = payload.sourceTable();
-        final String episodeType = payload.episodeType();
-        return (sourceTable != null && sourceTable.trim().equalsIgnoreCase("visit_summaries"))
-                || (episodeType != null && episodeType.trim().equalsIgnoreCase("visit"));
-    }
-
-    private static String truncateSourceId(final String sourceRecordId) {
-        if (sourceRecordId == null) {
-            return null;
-        }
-        if (sourceRecordId.length() <= RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH) {
-            return sourceRecordId;
-        }
-        return sourceRecordId.substring(0, RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH);
-    }
-
-    private static String truncateConsent(final String consentScope) {
-        if (consentScope == null || consentScope.isBlank()) {
-            return null;
-        }
-        final String trimmed = consentScope.trim().toLowerCase(Locale.ROOT);
-        if (trimmed.length() <= RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH) {
-            return trimmed;
-        }
-        return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
     }
 
 }

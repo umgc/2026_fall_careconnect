@@ -16,7 +16,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class EvvLocationResponse {
-    
+
     private UUID id;
     private Long evvRecordId;
     private EvvLocationRole role;

@@ -16,17 +16,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PatientNotetakerConfigDTOTest {
 
-    @Mock
-    private PatientNotetakerConfig mockConfig;
-
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 1, 15, 10, 30);
-
     private static final List<PatientNotetakerKeyword> KEYWORDS = List.of(
             PatientNotetakerKeyword.builder()
                     .keyword("pain")
                     .eventType(PatientNotetakerKeyword.EventType.ALERT)
                     .build()
     );
+    @Mock
+    private PatientNotetakerConfig mockConfig;
 
     // ─── No-arg constructor ───────────────────────────────────────────────────
 

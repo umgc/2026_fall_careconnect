@@ -5,6 +5,7 @@ import com.careconnect.model.CallTelemetryEvent;
 import com.careconnect.repository.CallSummaryRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
@@ -13,427 +14,443 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Service that generates, stores, and returns call summaries. */
+/**
+ * Service that generates, stores, and returns call summaries.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CallSummaryService {
 
-  private static final String TRANSCRIPT_ARCHIVED = "transcriptArchived";
-  private static final String DEFAULT_SENTIMENT_LABEL = "ANXIOUS";
-  private static final String EMPTY_SUMMARY_HEADLINE = "No transcript captured";
-  private static final String EMPTY_SUMMARY_ASSESSMENT =
-      "Call transcript was not available for summarization.";
-  private static final String FAILED_SUMMARY_HEADLINE = "Summary unavailable";
-  private static final String FAILED_SUMMARY_ASSESSMENT =
-      "Automated summary could not be generated.";
-  private static final List<String> TERMINAL_SUCCESS_STATUSES =
-      List.of("SUCCESS", "NO_TRANSCRIPT");
+    private static final String TRANSCRIPT_ARCHIVED = "transcriptArchived";
+    private static final String DEFAULT_SENTIMENT_LABEL = "ANXIOUS";
+    private static final String EMPTY_SUMMARY_HEADLINE = "No transcript captured";
+    private static final String EMPTY_SUMMARY_ASSESSMENT =
+            "Call transcript was not available for summarization.";
+    private static final String FAILED_SUMMARY_HEADLINE = "Summary unavailable";
+    private static final String FAILED_SUMMARY_ASSESSMENT =
+            "Automated summary could not be generated.";
+    private static final List<String> TERMINAL_SUCCESS_STATUSES =
+            List.of("SUCCESS", "NO_TRANSCRIPT");
 
-  /** Repository used to persist generated call summaries. */
-  private final CallSummaryRepository summaryRepository;
+    /**
+     * Repository used to persist generated call summaries.
+     */
+    private final CallSummaryRepository summaryRepository;
 
-  /** Service used to read transcript data for summary generation. */
-  private final CallTranscriptService transcriptService;
+    /**
+     * Service used to read transcript data for summary generation.
+     */
+    private final CallTranscriptService transcriptService;
 
-  /** Sentiment service used to build AI-backed summary payloads. */
-  private final BedrockSentimentService sentimentService;
+    /**
+     * Sentiment service used to build AI-backed summary payloads.
+     */
+    private final BedrockSentimentService sentimentService;
 
-  /** JSON mapper used to serialize and deserialize summary payloads. */
-  private final ObjectMapper objectMapper;
+    /**
+     * JSON mapper used to serialize and deserialize summary payloads.
+     */
+    private final ObjectMapper objectMapper;
 
-  /** Resolves the authoritative patient entity associated with a call. */
-  private final CallPatientResolver callPatientResolver;
+    /**
+     * Resolves the authoritative patient entity associated with a call.
+     */
+    private final CallPatientResolver callPatientResolver;
 
-  /** Persists summaries and their outbox events in a second atomic transaction. */
-  private final CallSummaryPersistenceService persistenceService;
+    /**
+     * Persists summaries and their outbox events in a second atomic transaction.
+     */
+    private final CallSummaryPersistenceService persistenceService;
 
-  /**
-   * Returns the latest stored summary entity for a call when available.
-   *
-   * @param callId call identifier
-   * @return latest stored summary entity
-   */
-  public Optional<CallSummary> getLatestSummaryEntity(final String callId) {
-    final String normalizedCallId = normalize(callId);
-    final Optional<CallSummary> result;
-    if (normalizedCallId == null) {
-      result = Optional.empty();
-    } else {
-      result = summaryRepository.findTopByCallIdOrderByGeneratedAtDesc(normalizedCallId);
+    private static Map<String, Object> withSnapshotVersion(
+            final Map<String, Object> payload,
+            final String snapshotVersion) {
+        final Map<String, Object> versioned = new LinkedHashMap<>(payload);
+        versioned.put("transcriptSnapshotVersion", snapshotVersion);
+        return versioned;
     }
-    return result;
-  }
 
-  /**
-   * Returns the latest stored summary payload for a call when available.
-   *
-   * @param callId call identifier
-   * @return latest stored summary payload
-   */
-  public Optional<Map<String, Object>> getLatestSummary(final String callId) {
-    return getLatestSummaryEntity(callId).map(this::toResponse);
-  }
-
-  /**
-   * Returns the stored summary entity by its database identifier when present.
-   *
-   * <p>Used by the read-side endpoint {@code GET /api/v3/summaries/{id}}
-   * (WBS 3.11.6). Unlike {@link #getLatestSummaryEntity(String)} this
-   * method does not resolve "latest per call" — it fetches exactly the row
-   * with the given primary key, so callers reach the specific summary
-   * emitted in a {@code SUMMARY_CREATED} event.
-   *
-   * @param id database identifier of the summary row
-   * @return matching summary when found, empty otherwise
-   */
-  public Optional<CallSummary> getSummaryEntityById(final Long id) {
-    final Optional<CallSummary> result;
-    if (id == null) {
-      result = Optional.empty();
-    } else {
-      result = summaryRepository.findById(id);
+    private static Map<String, Object> emptySummaryPayload(
+            final String headline,
+            final String overallAssessment) {
+        return Map.of(
+                "headline", headline,
+                "overallAssessment", overallAssessment,
+                "keyConcerns", List.of(),
+                "recommendedActions", List.of(),
+                "followUpQuestions", List.of());
     }
-    return result;
-  }
 
-  /**
-   * Returns the stored summary payload by its database identifier when
-   * present. Response shape matches {@link #getLatestSummary(String)} so
-   * consumers can treat the two endpoints as interchangeable read paths.
-   *
-   * @param id database identifier of the summary row
-   * @return summary response payload when found
-   */
-  public Optional<Map<String, Object>> getSummaryById(final Long id) {
-    return getSummaryEntityById(id).map(this::toResponse);
-  }
+    private static void logSummaryFailure(final String normalizedCallId, final Exception ex) {
+        if (log.isWarnEnabled()) {
+            log.warn(
+                    "Call summary generation failed for callId {}: {}",
+                    normalizedCallId,
+                    ex.getMessage());
+        }
+    }
 
-  /**
-   * Generates, stores, and returns a summary for the supplied call.
-   *
-   * @param callId call identifier
-   * @param generatedByUserId generating user identifier, when known
-   * @param latestByChannel latest channel sentiment events
-   * @return stored summary response payload
-   */
-  public Map<String, Object> generateAndStoreSummary(
-      final String callId,
-      final Long generatedByUserId,
-      final Map<String, CallTelemetryEvent> latestByChannel) {
-    final String normalizedCallId = requireCallId(callId);
-    final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
-    final CallTranscriptService.TranscriptSnapshot snapshot =
-        transcriptService.captureSummarySnapshot(normalizedCallId);
-    final String modelConfigVersion = sentimentService.summaryModelConfigVersion();
-    final Optional<CallSummary> existing =
-        summaryRepository
-            .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+    private static String requireCallId(final String callId) {
+        final String normalizedCallId = normalize(callId);
+        if (normalizedCallId == null) {
+            throw new IllegalArgumentException("callId is required");
+        }
+        return normalizedCallId;
+    }
+
+    private static String normalizeChannel(final String channel) {
+        return channel.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Reads an optional string field from the Bedrock summary payload,
+     * returning null when the field is absent or blank. Preserves
+     * entity nullability for downstream consumers that treat null as
+     * "not classified" (see WBS 3.4.3, 3.4.4).
+     */
+    private static String extractStringField(
+            final Map<String, Object> payload,
+            final String fieldName) {
+        final Object value = payload.get(fieldName);
+        final String result;
+        if (value == null) {
+            result = null;
+        } else {
+            final String trimmed = value.toString().trim();
+            result = trimmed.isEmpty() ? null : trimmed;
+        }
+        return result;
+    }
+
+    /**
+     * Extracts caregiver_visibility from the Bedrock summary payload,
+     * defaulting to on_consent when absent so that caregivers cannot
+     * view the summary unless consent is granted.
+     */
+    private static String extractCaregiverVisibility(
+            final Map<String, Object> payload) {
+        final String raw = extractStringField(payload, "caregiverVisibility");
+        return raw == null ? "on_consent" : raw;
+    }
+
+    private static String normalize(final String callId) {
+        final String normalized;
+        if (callId == null) {
+            normalized = null;
+        } else {
+            final String trimmed = callId.trim();
+            normalized = trimmed.isEmpty() ? null : trimmed;
+        }
+        return normalized;
+    }
+
+    /**
+     * Returns the latest stored summary entity for a call when available.
+     *
+     * @param callId call identifier
+     * @return latest stored summary entity
+     */
+    public Optional<CallSummary> getLatestSummaryEntity(final String callId) {
+        final String normalizedCallId = normalize(callId);
+        final Optional<CallSummary> result;
+        if (normalizedCallId == null) {
+            result = Optional.empty();
+        } else {
+            result = summaryRepository.findTopByCallIdOrderByGeneratedAtDesc(normalizedCallId);
+        }
+        return result;
+    }
+
+    /**
+     * Returns the latest stored summary payload for a call when available.
+     *
+     * @param callId call identifier
+     * @return latest stored summary payload
+     */
+    public Optional<Map<String, Object>> getLatestSummary(final String callId) {
+        return getLatestSummaryEntity(callId).map(this::toResponse);
+    }
+
+    /**
+     * Returns the stored summary entity by its database identifier when present.
+     *
+     * <p>Used by the read-side endpoint {@code GET /api/v3/summaries/{id}}
+     * (WBS 3.11.6). Unlike {@link #getLatestSummaryEntity(String)} this
+     * method does not resolve "latest per call" — it fetches exactly the row
+     * with the given primary key, so callers reach the specific summary
+     * emitted in a {@code SUMMARY_CREATED} event.
+     *
+     * @param id database identifier of the summary row
+     * @return matching summary when found, empty otherwise
+     */
+    public Optional<CallSummary> getSummaryEntityById(final Long id) {
+        final Optional<CallSummary> result;
+        if (id == null) {
+            result = Optional.empty();
+        } else {
+            result = summaryRepository.findById(id);
+        }
+        return result;
+    }
+
+    /**
+     * Returns the stored summary payload by its database identifier when
+     * present. Response shape matches {@link #getLatestSummary(String)} so
+     * consumers can treat the two endpoints as interchangeable read paths.
+     *
+     * @param id database identifier of the summary row
+     * @return summary response payload when found
+     */
+    public Optional<Map<String, Object>> getSummaryById(final Long id) {
+        return getSummaryEntityById(id).map(this::toResponse);
+    }
+
+    /**
+     * Generates, stores, and returns a summary for the supplied call.
+     *
+     * @param callId            call identifier
+     * @param generatedByUserId generating user identifier, when known
+     * @param latestByChannel   latest channel sentiment events
+     * @return stored summary response payload
+     */
+    public Map<String, Object> generateAndStoreSummary(
+            final String callId,
+            final Long generatedByUserId,
+            final Map<String, CallTelemetryEvent> latestByChannel) {
+        final String normalizedCallId = requireCallId(callId);
+        final Long patientId = callPatientResolver.requirePatientId(normalizedCallId);
+        final CallTranscriptService.TranscriptSnapshot snapshot =
+                transcriptService.captureSummarySnapshot(normalizedCallId);
+        final String modelConfigVersion = sentimentService.summaryModelConfigVersion();
+        final Optional<CallSummary> existing =
+                summaryRepository
+                        .findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+                                normalizedCallId,
+                                snapshot.version(),
+                                modelConfigVersion,
+                                TERMINAL_SUCCESS_STATUSES);
+        if (existing.isPresent()) {
+            return toResponse(existing.get());
+        }
+        final String transcript = snapshot.transcriptText();
+        Map<String, Object> response = Map.of();
+
+        if (transcript.isBlank()) {
+            response = buildNoTranscriptResponse(
+                    normalizedCallId, patientId, generatedByUserId, snapshot, modelConfigVersion);
+        } else {
+            final Map<String, BedrockSentimentService.SentimentResult> channelScores =
+                    toChannelScores(normalizedCallId, latestByChannel);
+            response = generateSummaryResponse(
+                    normalizedCallId,
+                    patientId,
+                    transcript,
+                    generatedByUserId,
+                    snapshot,
+                    modelConfigVersion,
+                    channelScores);
+        }
+        return response;
+    }
+
+    private Map<String, Object> buildNoTranscriptResponse(
+            final String normalizedCallId,
+            final Long patientId,
+            final Long generatedByUserId,
+            final CallTranscriptService.TranscriptSnapshot snapshot,
+            final String modelConfigVersion) {
+        final CallSummary summary = new CallSummary();
+        summary.setCallId(normalizedCallId);
+        summary.setPatientId(patientId);
+        summary.setStatus("NO_TRANSCRIPT");
+        summary.setTranscriptSegmentCount(Math.toIntExact(snapshot.segmentCount()));
+        summary.setGeneratedByUserId(generatedByUserId);
+        summary.setTranscriptSnapshotVersion(snapshot.version());
+        summary.setModelConfigVersion(modelConfigVersion);
+        summary.setErrorMessage("No transcript segments were available.");
+        // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
+        summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
+        summary.setSummaryJson(
+                toJsonSafe(withSnapshotVersion(
+                        emptySummaryPayload(EMPTY_SUMMARY_HEADLINE, EMPTY_SUMMARY_ASSESSMENT),
+                        snapshot.version())));
+        return persistResponse(normalizedCallId, summary);
+    }
+
+    private Map<String, Object> generateSummaryResponse(
+            final String normalizedCallId,
+            final Long patientId,
+            final String transcript,
+            final Long generatedByUserId,
+            final CallTranscriptService.TranscriptSnapshot snapshot,
+            final String modelConfigVersion,
+            final Map<String, BedrockSentimentService.SentimentResult> channelScores) {
+        final Map<String, Object> summaryPayload;
+        try {
+            summaryPayload =
+                    sentimentService.summarizeTranscript(normalizedCallId, transcript, channelScores);
+        } catch (ModelInferenceException ex) {
+            logSummaryFailure(normalizedCallId, ex);
+            final CallSummary failed = buildStoredSummary(
+                    normalizedCallId,
+                    patientId,
+                    generatedByUserId,
+                    snapshot.segmentCount(),
+                    "ERROR",
+                    ex.getMessage(),
+                    withSnapshotVersion(
+                            emptySummaryPayload(FAILED_SUMMARY_HEADLINE, FAILED_SUMMARY_ASSESSMENT),
+                            snapshot.version()));
+            failed.setTranscriptSnapshotVersion(snapshot.version());
+            failed.setModelConfigVersion(modelConfigVersion);
+            failed.setSummarizationEngine(sentimentService.summaryEngine());
+            return persistResponse(normalizedCallId, failed);
+        }
+        final CallSummary stored = buildStoredSummary(
                 normalizedCallId,
-                snapshot.version(),
-                modelConfigVersion,
-                TERMINAL_SUCCESS_STATUSES);
-    if (existing.isPresent()) {
-      return toResponse(existing.get());
-    }
-    final String transcript = snapshot.transcriptText();
-    Map<String, Object> response = Map.of();
-
-    if (transcript.isBlank()) {
-      response = buildNoTranscriptResponse(
-          normalizedCallId, patientId, generatedByUserId, snapshot, modelConfigVersion);
-    } else {
-      final Map<String, BedrockSentimentService.SentimentResult> channelScores =
-          toChannelScores(normalizedCallId, latestByChannel);
-      response = generateSummaryResponse(
-          normalizedCallId,
-          patientId,
-          transcript,
-          generatedByUserId,
-          snapshot,
-          modelConfigVersion,
-          channelScores);
-    }
-    return response;
-  }
-
-  private Map<String, Object> buildNoTranscriptResponse(
-      final String normalizedCallId,
-      final Long patientId,
-      final Long generatedByUserId,
-      final CallTranscriptService.TranscriptSnapshot snapshot,
-      final String modelConfigVersion) {
-    final CallSummary summary = new CallSummary();
-    summary.setCallId(normalizedCallId);
-    summary.setPatientId(patientId);
-    summary.setStatus("NO_TRANSCRIPT");
-    summary.setTranscriptSegmentCount(Math.toIntExact(snapshot.segmentCount()));
-    summary.setGeneratedByUserId(generatedByUserId);
-    summary.setTranscriptSnapshotVersion(snapshot.version());
-    summary.setModelConfigVersion(modelConfigVersion);
-    summary.setErrorMessage("No transcript segments were available.");
-    // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
-    summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
-    summary.setSummaryJson(
-        toJsonSafe(withSnapshotVersion(
-            emptySummaryPayload(EMPTY_SUMMARY_HEADLINE, EMPTY_SUMMARY_ASSESSMENT),
-            snapshot.version())));
-    return persistResponse(normalizedCallId, summary);
-  }
-
-  private Map<String, Object> generateSummaryResponse(
-      final String normalizedCallId,
-      final Long patientId,
-      final String transcript,
-      final Long generatedByUserId,
-      final CallTranscriptService.TranscriptSnapshot snapshot,
-      final String modelConfigVersion,
-      final Map<String, BedrockSentimentService.SentimentResult> channelScores) {
-    final Map<String, Object> summaryPayload;
-    try {
-      summaryPayload =
-          sentimentService.summarizeTranscript(normalizedCallId, transcript, channelScores);
-    } catch (ModelInferenceException ex) {
-      logSummaryFailure(normalizedCallId, ex);
-      final CallSummary failed = buildStoredSummary(
-          normalizedCallId,
-          patientId,
-          generatedByUserId,
-          snapshot.segmentCount(),
-          "ERROR",
-          ex.getMessage(),
-          withSnapshotVersion(
-              emptySummaryPayload(FAILED_SUMMARY_HEADLINE, FAILED_SUMMARY_ASSESSMENT),
-              snapshot.version()));
-      failed.setTranscriptSnapshotVersion(snapshot.version());
-      failed.setModelConfigVersion(modelConfigVersion);
-      failed.setSummarizationEngine(sentimentService.summaryEngine());
-      return persistResponse(normalizedCallId, failed);
-    }
-    final CallSummary stored = buildStoredSummary(
-        normalizedCallId,
-        patientId,
-        generatedByUserId,
-        snapshot.segmentCount(),
-        "SUCCESS",
-        null,
-        withSnapshotVersion(summaryPayload, snapshot.version()));
-    stored.setTranscriptSnapshotVersion(snapshot.version());
-    stored.setModelConfigVersion(modelConfigVersion);
-    stored.setSummarizationEngine(sentimentService.summaryEngine());
-    return persistResponse(normalizedCallId, stored);
-  }
-
-  private CallSummary buildStoredSummary(
-      final String normalizedCallId,
-      final Long patientId,
-      final Long generatedByUserId,
-      final long segmentCount,
-      final String status,
-      final String errorMessage,
-      final Map<String, Object> summaryPayload) {
-    final CallSummary summary = new CallSummary();
-    summary.setCallId(normalizedCallId);
-    summary.setPatientId(patientId);
-    summary.setStatus(status);
-    summary.setTranscriptSegmentCount((int) segmentCount);
-    summary.setGeneratedByUserId(generatedByUserId);
-    // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
-    summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
-    summary.setErrorMessage(errorMessage);
-    summary.setRiskLevel(extractStringField(summaryPayload, "riskLevel"));
-    summary.setCaregiverVisibility(extractCaregiverVisibility(summaryPayload));
-    summary.setSummaryJson(toJsonSafe(summaryPayload));
-    return summary;
-  }
-
-  private Map<String, Object> persistResponse(
-      final String normalizedCallId,
-      final CallSummary summary) {
-    final CallSummary saved = persistenceService.persist(summary);
-    transcriptService.archiveIfEligible(normalizedCallId);
-    final Map<String, Object> response = toResponse(saved);
-    response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(normalizedCallId));
-    return response;
-  }
-
-  private static Map<String, Object> withSnapshotVersion(
-      final Map<String, Object> payload,
-      final String snapshotVersion) {
-    final Map<String, Object> versioned = new LinkedHashMap<>(payload);
-    versioned.put("transcriptSnapshotVersion", snapshotVersion);
-    return versioned;
-  }
-
-  private static Map<String, Object> emptySummaryPayload(
-      final String headline,
-      final String overallAssessment) {
-    return Map.of(
-        "headline", headline,
-        "overallAssessment", overallAssessment,
-        "keyConcerns", List.of(),
-        "recommendedActions", List.of(),
-        "followUpQuestions", List.of());
-  }
-
-  private static void logSummaryFailure(final String normalizedCallId, final Exception ex) {
-    if (log.isWarnEnabled()) {
-      log.warn(
-          "Call summary generation failed for callId {}: {}",
-          normalizedCallId,
-          ex.getMessage());
-    }
-  }
-
-  private static String requireCallId(final String callId) {
-    final String normalizedCallId = normalize(callId);
-    if (normalizedCallId == null) {
-      throw new IllegalArgumentException("callId is required");
-    }
-    return normalizedCallId;
-  }
-
-  private Map<String, BedrockSentimentService.SentimentResult> toChannelScores(
-      final String callId,
-      final Map<String, CallTelemetryEvent> latestByChannel) {
-    final Map<String, BedrockSentimentService.SentimentResult> scores;
-    if (latestByChannel == null || latestByChannel.isEmpty()) {
-      scores = Map.of();
-    } else {
-      scores =
-          latestByChannel.entrySet().stream()
-              .filter(
-                  entry ->
-                      entry.getValue() != null
-                          && entry.getValue().getSentimentScore() != null)
-              .collect(
-                  Collectors.toMap(
-                      entry -> normalizeChannel(entry.getKey()),
-                      entry -> toSentimentResult(callId, entry),
-                      (left, right) -> left,
-                      LinkedHashMap::new));
-    }
-    return scores;
-  }
-
-  private BedrockSentimentService.SentimentResult toSentimentResult(
-      final String callId,
-      final Map.Entry<String, CallTelemetryEvent> entry) {
-    final CallTelemetryEvent event = entry.getValue();
-    return new BedrockSentimentService.SentimentResult(
-        event.getSentimentScore(),
-        event.getSentimentLabel() == null
-            ? DEFAULT_SENTIMENT_LABEL
-            : event.getSentimentLabel(),
-        event.getSentimentNotes() == null ? "" : event.getSentimentNotes(),
-        normalizeChannel(entry.getKey()),
-        callId,
-        event.getAnalysisTimestamp() == null
-            ? System.currentTimeMillis()
-            : event.getAnalysisTimestamp(),
-        false);
-  }
-
-  private static String normalizeChannel(final String channel) {
-    return channel.trim().toUpperCase(Locale.ROOT);
-  }
-
-  private Map<String, Object> toResponse(final CallSummary summary) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    if (summary.getSummaryJson() != null && !summary.getSummaryJson().isBlank()) {
-      try {
-        payload =
-            objectMapper.readValue(
-                summary.getSummaryJson(), new TypeReference<Map<String, Object>>() {});
-      } catch (Exception ignored) {
-        payload = new LinkedHashMap<>();
-      }
+                patientId,
+                generatedByUserId,
+                snapshot.segmentCount(),
+                "SUCCESS",
+                null,
+                withSnapshotVersion(summaryPayload, snapshot.version()));
+        stored.setTranscriptSnapshotVersion(snapshot.version());
+        stored.setModelConfigVersion(modelConfigVersion);
+        stored.setSummarizationEngine(sentimentService.summaryEngine());
+        return persistResponse(normalizedCallId, stored);
     }
 
-    final Map<String, Object> response = new LinkedHashMap<>();
-    response.put("callId", summary.getCallId());
-    response.put("status", summary.getStatus());
-    response.put("generatedAt", summary.getGeneratedAt());
-    response.put("transcriptSegmentCount", summary.getTranscriptSegmentCount());
-    response.put("generatedByUserId", summary.getGeneratedByUserId());
-    if (summary.getErrorMessage() != null && !summary.getErrorMessage().isBlank()) {
-      response.put("errorMessage", summary.getErrorMessage());
+    private CallSummary buildStoredSummary(
+            final String normalizedCallId,
+            final Long patientId,
+            final Long generatedByUserId,
+            final long segmentCount,
+            final String status,
+            final String errorMessage,
+            final Map<String, Object> summaryPayload) {
+        final CallSummary summary = new CallSummary();
+        summary.setCallId(normalizedCallId);
+        summary.setPatientId(patientId);
+        summary.setStatus(status);
+        summary.setTranscriptSegmentCount((int) segmentCount);
+        summary.setGeneratedByUserId(generatedByUserId);
+        // generated_at is a legacy timestamp-without-zone column; persist UTC consistently.
+        summary.setGeneratedAt(LocalDateTime.now(ZoneOffset.UTC));
+        summary.setErrorMessage(errorMessage);
+        summary.setRiskLevel(extractStringField(summaryPayload, "riskLevel"));
+        summary.setCaregiverVisibility(extractCaregiverVisibility(summaryPayload));
+        summary.setSummaryJson(toJsonSafe(summaryPayload));
+        return summary;
     }
-    response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(summary.getCallId()));
-    response.put("summary", payload);
-    return response;
-  }
 
-  /**
-   * Reads an optional string field from the Bedrock summary payload,
-   * returning null when the field is absent or blank. Preserves
-   * entity nullability for downstream consumers that treat null as
-   * "not classified" (see WBS 3.4.3, 3.4.4).
-   */
-  private static String extractStringField(
-      final Map<String, Object> payload,
-      final String fieldName) {
-    final Object value = payload.get(fieldName);
-    final String result;
-    if (value == null) {
-      result = null;
-    } else {
-      final String trimmed = value.toString().trim();
-      result = trimmed.isEmpty() ? null : trimmed;
+    private Map<String, Object> persistResponse(
+            final String normalizedCallId,
+            final CallSummary summary) {
+        final CallSummary saved = persistenceService.persist(summary);
+        transcriptService.archiveIfEligible(normalizedCallId);
+        final Map<String, Object> response = toResponse(saved);
+        response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(normalizedCallId));
+        return response;
     }
-    return result;
-  }
 
-  /**
-   * Extracts caregiver_visibility from the Bedrock summary payload,
-   * defaulting to on_consent when absent so that caregivers cannot
-   * view the summary unless consent is granted.
-   */
-  private static String extractCaregiverVisibility(
-      final Map<String, Object> payload) {
-    final String raw = extractStringField(payload, "caregiverVisibility");
-    return raw == null ? "on_consent" : raw;
-  }
-
-  private String toJsonSafe(final Object value) {
-    try {
-      return objectMapper.writeValueAsString(value);
-    } catch (Exception ex) {
-      throw new IllegalStateException("Failed to serialize call summary payload", ex);
+    private Map<String, BedrockSentimentService.SentimentResult> toChannelScores(
+            final String callId,
+            final Map<String, CallTelemetryEvent> latestByChannel) {
+        final Map<String, BedrockSentimentService.SentimentResult> scores;
+        if (latestByChannel == null || latestByChannel.isEmpty()) {
+            scores = Map.of();
+        } else {
+            scores =
+                    latestByChannel.entrySet().stream()
+                            .filter(
+                                    entry ->
+                                            entry.getValue() != null
+                                                    && entry.getValue().getSentimentScore() != null)
+                            .collect(
+                                    Collectors.toMap(
+                                            entry -> normalizeChannel(entry.getKey()),
+                                            entry -> toSentimentResult(callId, entry),
+                                            (left, right) -> left,
+                                            LinkedHashMap::new));
+        }
+        return scores;
     }
-  }
 
-  private static String normalize(final String callId) {
-    final String normalized;
-    if (callId == null) {
-      normalized = null;
-    } else {
-      final String trimmed = callId.trim();
-      normalized = trimmed.isEmpty() ? null : trimmed;
+    private BedrockSentimentService.SentimentResult toSentimentResult(
+            final String callId,
+            final Map.Entry<String, CallTelemetryEvent> entry) {
+        final CallTelemetryEvent event = entry.getValue();
+        return new BedrockSentimentService.SentimentResult(
+                event.getSentimentScore(),
+                event.getSentimentLabel() == null
+                        ? DEFAULT_SENTIMENT_LABEL
+                        : event.getSentimentLabel(),
+                event.getSentimentNotes() == null ? "" : event.getSentimentNotes(),
+                normalizeChannel(entry.getKey()),
+                callId,
+                event.getAnalysisTimestamp() == null
+                        ? System.currentTimeMillis()
+                        : event.getAnalysisTimestamp(),
+                false);
     }
-    return normalized;
-  }
 
-  /**
-   * Deletes stored summaries for a call.
-   *
-   * @param callId call identifier
-   * @return number of deleted rows
-   */
-  @Transactional
-  public long deleteSummariesForCall(final String callId) {
-    final String normalizedCallId = normalize(callId);
-    final long deleted;
-    if (normalizedCallId == null) {
-      deleted = 0;
-    } else {
-      deleted = summaryRepository.deleteByCallId(normalizedCallId);
+    private Map<String, Object> toResponse(final CallSummary summary) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (summary.getSummaryJson() != null && !summary.getSummaryJson().isBlank()) {
+            try {
+                payload =
+                        objectMapper.readValue(
+                                summary.getSummaryJson(), new TypeReference<Map<String, Object>>() {
+                                });
+            } catch (Exception ignored) {
+                payload = new LinkedHashMap<>();
+            }
+        }
+
+        final Map<String, Object> response = new LinkedHashMap<>();
+        response.put("callId", summary.getCallId());
+        response.put("status", summary.getStatus());
+        response.put("generatedAt", summary.getGeneratedAt());
+        response.put("transcriptSegmentCount", summary.getTranscriptSegmentCount());
+        response.put("generatedByUserId", summary.getGeneratedByUserId());
+        if (summary.getErrorMessage() != null && !summary.getErrorMessage().isBlank()) {
+            response.put("errorMessage", summary.getErrorMessage());
+        }
+        response.put(TRANSCRIPT_ARCHIVED, transcriptService.isArchived(summary.getCallId()));
+        response.put("summary", payload);
+        return response;
     }
-    return deleted;
-  }
+
+    private String toJsonSafe(final Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to serialize call summary payload", ex);
+        }
+    }
+
+    /**
+     * Deletes stored summaries for a call.
+     *
+     * @param callId call identifier
+     * @return number of deleted rows
+     */
+    @Transactional
+    public long deleteSummariesForCall(final String callId) {
+        final String normalizedCallId = normalize(callId);
+        final long deleted;
+        if (normalizedCallId == null) {
+            deleted = 0;
+        } else {
+            deleted = summaryRepository.deleteByCallId(normalizedCallId);
+        }
+        return deleted;
+    }
 }

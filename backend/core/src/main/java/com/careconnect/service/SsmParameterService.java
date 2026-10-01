@@ -35,7 +35,7 @@ public class SsmParameterService {
      * Retrieves a parameter value from SSM Parameter Store.
      * Parameters are cached to reduce API calls.
      *
-     * @param parameterName the name of the SSM parameter (e.g., "/careconnect/prod/stripe-secret-key")
+     * @param parameterName  the name of the SSM parameter (e.g., "/careconnect/prod/stripe-secret-key")
      * @param withDecryption whether to decrypt SecureString parameters
      * @return the parameter value, or null if not found
      */
@@ -85,7 +85,7 @@ public class SsmParameterService {
      * Retrieves a parameter value or returns a default value if not found.
      *
      * @param parameterName the name of the SSM parameter
-     * @param defaultValue the default value to return if parameter is not found
+     * @param defaultValue  the default value to return if parameter is not found
      * @return the parameter value or default value
      */
     public String getParameterOrDefault(String parameterName, String defaultValue) {

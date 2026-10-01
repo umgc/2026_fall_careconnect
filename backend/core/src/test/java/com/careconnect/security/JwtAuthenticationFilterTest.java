@@ -50,14 +50,14 @@ class JwtAuthenticationFilterTest {
     void shouldNotFilter_ShouldReturnTrueForExcludedPaths() throws Exception {
         // Test excluded paths
         Arrays.asList("/swagger-ui", "/v3/api-docs", "/v1/api/auth", "/api/v1/auth", "/v1/api/test")
-            .forEach(path -> {
-                when(request.getRequestURI()).thenReturn(path);
-                try {
-                    assert jwtAuthenticationFilter.shouldNotFilter(request);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            });
+                .forEach(path -> {
+                    when(request.getRequestURI()).thenReturn(path);
+                    try {
+                        assert jwtAuthenticationFilter.shouldNotFilter(request);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
     }
 
     @Test

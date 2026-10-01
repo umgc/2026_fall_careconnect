@@ -8,16 +8,24 @@ import org.hibernate.type.SqlTypes;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
-@Getter @Setter @Builder @NoArgsConstructor @AllArgsConstructor
-@Entity @Table(name = "evv_correction")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "evv_correction")
 public class EvvCorrection {
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "original_record_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "original_record_id", nullable = false)
     private EvvRecord originalRecord;
 
-    @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "corrected_record_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "corrected_record_id", nullable = false)
     private EvvRecord correctedRecord;
 
     @Column(name = "reason_code", nullable = false, length = 50)
@@ -46,12 +54,14 @@ public class EvvCorrection {
     private String approvalComment;
 
     // Store original values for audit trail
-    @Convert(disableConversion = true) @Column(name = "original_values", columnDefinition = "jsonb")
+    @Convert(disableConversion = true)
+    @Column(name = "original_values", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> originalValues;
 
     // Store corrected values for audit trail
-    @Convert(disableConversion = true) @Column(name = "corrected_values", columnDefinition = "jsonb")
+    @Convert(disableConversion = true)
+    @Column(name = "corrected_values", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> correctedValues;
 

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * Initializes default Virtual Check-In questions on application startup.
  * Questions are only created if the questions table is empty.
- *
+ * <p>
  * Based on V31__Virtual_Check_In_Questions.sql migration.
  */
 @Slf4j

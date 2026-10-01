@@ -64,8 +64,8 @@ public interface IndexingOutboxRepository extends JpaRepository<IndexingOutboxRo
      * Rows that have already reached {@code maxAttempts} are still selected so they
      * can be dead-lettered.
      *
-     * @param limit         maximum rows to claim
-     * @param leaseMinutes  rows claimed more recently than this many minutes ago are skipped
+     * @param limit        maximum rows to claim
+     * @param leaseMinutes rows claimed more recently than this many minutes ago are skipped
      * @return locked unprocessed rows in insertion order
      */
     @Query(value = """

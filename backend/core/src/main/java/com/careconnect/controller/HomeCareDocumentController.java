@@ -29,7 +29,7 @@ import java.util.Optional;
 
 /**
  * Home Care Document Digitization.
- *
+ * <p>
  * Reuses the invoice Textract + LLM extraction pipeline to prefill structured
  * home-care onboarding document fields for human review. Prefilled values are
  * flagged as machine-generated and remain editable; any OCR or LLM failure

@@ -33,12 +33,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class HomeCareDocumentControllerTest {
 
-    @Mock private TextractService textractService;
-    @Mock private HomeCareLlmExtractionService llmExtractionService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
+    @Mock
+    private TextractService textractService;
+    @Mock
+    private HomeCareLlmExtractionService llmExtractionService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
 
     @SuppressWarnings("unchecked")
     private HomeCareDocumentController controller(HomeCareLlmExtractionService llm) {

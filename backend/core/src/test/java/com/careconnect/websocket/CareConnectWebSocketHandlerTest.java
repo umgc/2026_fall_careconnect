@@ -23,14 +23,21 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CareConnectWebSocketHandlerTest {
 
-    @Mock UserRepository   userRepository;
-    @Mock JwtTokenProvider jwtTokenProvider;
-    @Mock WebSocketSession session;
-    @Mock WebSocketSession targetSession;
-    @Mock User             user;
-    @Mock User             targetUser;
+    @Mock
+    UserRepository userRepository;
+    @Mock
+    JwtTokenProvider jwtTokenProvider;
+    @Mock
+    WebSocketSession session;
+    @Mock
+    WebSocketSession targetSession;
+    @Mock
+    User user;
+    @Mock
+    User targetUser;
 
-    @InjectMocks CareConnectWebSocketHandler handler;
+    @InjectMocks
+    CareConnectWebSocketHandler handler;
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 

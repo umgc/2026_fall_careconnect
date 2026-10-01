@@ -19,6 +19,7 @@ public class GuardrailService {
 
     /**
      * Scans the input prompt for sensitive information and redacts it.
+     *
      * @param prompt The user's input text.
      * @return A sanitized version of the prompt.
      */
@@ -37,6 +38,7 @@ public class GuardrailService {
     /**
      * Scans the AI's response for forbidden content.
      * Throws an exception if forbidden content is found.
+     *
      * @param response The AI's generated text.
      */
     public void validateResponse(String response) {
