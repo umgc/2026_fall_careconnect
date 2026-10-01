@@ -366,6 +366,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                       child: DropdownButtonFormField<MedicationType>(
                       key: ValueKey('type-$_prefillGeneration'),
                       initialValue: _selectedMedicationType,
+                      isExpanded: true,
                       hint: const Text('Select a type'),
                       validator: (value) =>
                           value == null ? 'Please select a medication type' : null,
@@ -391,7 +392,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                       items: MedicationType.values.map((MedicationType type) {
                         return DropdownMenuItem<MedicationType>(
                           value: type,
-                          child: Text(type.name),
+                          child: Text(type.label, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (MedicationType? newValue) {
@@ -937,7 +938,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
           'dosage': _dosageController.text,
           'frequency': frequency,
           'route': _selectedRoute,
-          'medicationType': _selectedMedicationType!.wireName,
+          'medicationType': _selectedMedicationType!.name,
           if (_prescribedByController.text.isNotEmpty)
             'prescribedBy': _prescribedByController.text,
           if (_prescribedDate != null)

@@ -14,8 +14,9 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 /**
  * Wire contract for MedicationDTO.medicationType, as seen by the Flutter client
- * (PR #153, KI-05). The frontend matches on enum constant names, so the backend
- * must emit and accept constant names, not display names.
+ * (PR #153 and its follow-up PR #207, KI-05). The frontend matches on enum
+ * constant names, so the backend must emit and accept constant names, not
+ * display names.
  */
 class MedicationTypeWireContractTest {
 
@@ -42,7 +43,16 @@ class MedicationTypeWireContractTest {
     }
 
     @Test
-    @DisplayName("TC-MED-TYPE-013: OTC as sent by the Flutter add form is rejected (known mismatch, out of PR #153 scope)")
+    @DisplayName("TC-MED-TYPE-019: OVER_THE_COUNTER as sent by the Flutter add form is accepted")
+    void acceptsFrontendOverTheCounter() throws Exception {
+        MedicationDTO dto = mapper.readValue(
+                "{\"medicationName\":\"Synthetic\",\"medicationType\":\"OVER_THE_COUNTER\"}",
+                MedicationDTO.class);
+        assertThat(dto.medicationType()).isEqualTo(MedicationType.OVER_THE_COUNTER);
+    }
+
+    @Test
+    @DisplayName("TC-MED-TYPE-013: the legacy frontend name OTC is rejected, so the client must send OVER_THE_COUNTER")
     void rejectsFrontendOtc() {
         assertThatThrownBy(() -> mapper.readValue(
                 "{\"medicationName\":\"Synthetic\",\"medicationType\":\"OTC\"}",

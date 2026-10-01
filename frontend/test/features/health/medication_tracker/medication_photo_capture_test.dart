@@ -258,8 +258,8 @@ void main() {
     test(
         'TC-MED-PHOTO-036: medicationTypeFromExtracted maps backend names, blank/unknown -> null',
         () {
-      expect(
-          medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
+      expect(medicationTypeFromExtracted('OVER_THE_COUNTER'),
+          MedicationType.OVER_THE_COUNTER);
       expect(medicationTypeFromExtracted('HERBAL'), MedicationType.HERBAL);
       expect(
           medicationTypeFromExtracted('EMERGENCY'), MedicationType.EMERGENCY);
@@ -573,7 +573,7 @@ void main() {
         'TC-MED-PHOTO-049: OVER_THE_COUNTER, HERBAL and EMERGENCY select the matching dropdown value',
         (tester) async {
       for (final entry in {
-        'OVER_THE_COUNTER': 'OTC',
+        'OVER_THE_COUNTER': 'OVER_THE_COUNTER',
         'HERBAL': 'HERBAL',
         'EMERGENCY': 'EMERGENCY',
       }.entries) {
@@ -828,17 +828,13 @@ void main() {
     });
   });
 
-  // ── OTC wire mapping (KI-05 option A, commit 2a96dc51) ───────────────────
+  // ── OTC wire mapping (KI-05 follow-up, PR #207) ─────────────────────────
   group('OTC wire mapping', () {
     test(
-        'TC-MED-PHOTO-072: wireName is OVER_THE_COUNTER for OTC and the constant name for every other type',
+        'TC-MED-PHOTO-072: every MedicationType name is the backend wire name, including OVER_THE_COUNTER',
         () {
-      expect(MedicationType.OTC.wireName, 'OVER_THE_COUNTER');
-      for (final t
-          in MedicationType.values.where((t) => t != MedicationType.OTC)) {
-        expect(t.wireName, t.name);
-      }
-      expect(MedicationType.values.map((t) => t.wireName).toSet(), {
+      expect(MedicationType.OVER_THE_COUNTER.name, 'OVER_THE_COUNTER');
+      expect(MedicationType.values.map((t) => t.name).toSet(), {
         'PRESCRIPTION',
         'OVER_THE_COUNTER',
         'SUPPLEMENT',
@@ -858,12 +854,12 @@ void main() {
         };
 
     test(
-        'TC-MED-PHOTO-073: fromJson accepts OVER_THE_COUNTER and legacy OTC as OTC; toJson round-trips to OVER_THE_COUNTER; unknown still falls back to PRESCRIPTION',
+        'TC-MED-PHOTO-073: fromJson accepts OVER_THE_COUNTER and legacy OTC as OVER_THE_COUNTER; toJson round-trips to OVER_THE_COUNTER; unknown still falls back to PRESCRIPTION',
         () {
       expect(Medication.fromJson(wire('OVER_THE_COUNTER')).medicationType,
-          MedicationType.OTC);
-      expect(
-          Medication.fromJson(wire('OTC')).medicationType, MedicationType.OTC);
+          MedicationType.OVER_THE_COUNTER);
+      expect(Medication.fromJson(wire('OTC')).medicationType,
+          MedicationType.OVER_THE_COUNTER);
       expect(
           Medication.fromJson(wire('OVER_THE_COUNTER'))
               .toJson()['medicationType'],
@@ -873,7 +869,7 @@ void main() {
     });
 
     testWidgets(
-        'TC-MED-PHOTO-074: a stored OVER_THE_COUNTER medication parses to OTC and shows the Remove button',
+        'TC-MED-PHOTO-074: a stored OVER_THE_COUNTER medication parses to OVER_THE_COUNTER and shows the Remove button',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -889,11 +885,12 @@ void main() {
     });
 
     test(
-        'TC-MED-PHOTO-075: medicationTypeFromExtracted maps OVER_THE_COUNTER and OTC to OTC and leaves blank or unknown null (Table 25 row 3)',
+        'TC-MED-PHOTO-075: medicationTypeFromExtracted maps OVER_THE_COUNTER and OTC to OVER_THE_COUNTER and leaves blank or unknown null (Table 25 row 3)',
         () {
-      expect(
-          medicationTypeFromExtracted('OVER_THE_COUNTER'), MedicationType.OTC);
-      expect(medicationTypeFromExtracted('OTC'), MedicationType.OTC);
+      expect(medicationTypeFromExtracted('OVER_THE_COUNTER'),
+          MedicationType.OVER_THE_COUNTER);
+      expect(medicationTypeFromExtracted('OTC'),
+          MedicationType.OVER_THE_COUNTER);
       expect(medicationTypeFromExtracted('BOGUS'), isNull);
       expect(medicationTypeFromExtracted(''), isNull);
       expect(medicationTypeFromExtracted(null), isNull);
