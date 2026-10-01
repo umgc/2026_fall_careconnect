@@ -45,9 +45,9 @@ public class CaregiverPatientLinkController {
     public ResponseEntity<CaregiverPatientLinkResponse> createLink(
             @PathVariable Long caregiverId,
             @RequestBody CreateLinkRequest request) {
-        
+
         User currentUser = getCurrentUser();
-        
+
         // Only admins and the caregiver themselves can create links
         if (currentUser.getRole() != Role.ADMIN && !currentUser.getId().equals(caregiverId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
@@ -64,9 +64,9 @@ public class CaregiverPatientLinkController {
     public ResponseEntity<CaregiverPatientLinkResponse> updateLink(
             @PathVariable Long linkId,
             @RequestBody UpdateLinkRequest request) {
-        
+
         User currentUser = getCurrentUser();
-        
+
         // Only admins can update links for now (can be enhanced with more granular permissions)
         if (currentUser.getRole() != Role.ADMIN) {
             throw new AppException(HttpStatus.FORBIDDEN, "Only admins can update links");
@@ -82,7 +82,7 @@ public class CaregiverPatientLinkController {
     @PostMapping("/{linkId}/suspend")
     public ResponseEntity<CaregiverPatientLinkResponse> suspendLink(@PathVariable Long linkId) {
         User currentUser = getCurrentUser();
-        
+
         // Only admins and caregivers can suspend links
         if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.CAREGIVER) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
@@ -99,7 +99,7 @@ public class CaregiverPatientLinkController {
     @PostMapping("/{linkId}/reactivate")
     public ResponseEntity<CaregiverPatientLinkResponse> reactivateLink(@PathVariable Long linkId) {
         User currentUser = getCurrentUser();
-        
+
         // Only admins and caregivers can reactivate links
         if (currentUser.getRole() != Role.ADMIN && currentUser.getRole() != Role.CAREGIVER) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
@@ -115,7 +115,7 @@ public class CaregiverPatientLinkController {
     @DeleteMapping("/{linkId}")
     public ResponseEntity<Void> revokeLink(@PathVariable Long linkId) {
         User currentUser = getCurrentUser();
-        
+
         // Only admins can permanently revoke links
         if (currentUser.getRole() != Role.ADMIN) {
             throw new AppException(HttpStatus.FORBIDDEN, "Only admins can permanently revoke links");
@@ -131,7 +131,7 @@ public class CaregiverPatientLinkController {
     @GetMapping("/caregivers/{caregiverId}/patients")
     public ResponseEntity<List<CaregiverPatientLinkResponse>> getPatientsByCaregiver(@PathVariable Long caregiverId) {
         User currentUser = getCurrentUser();
-        
+
         // Caregiver can see their own patients, admins can see all
         if (currentUser.getRole() != Role.ADMIN && !currentUser.getId().equals(caregiverId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
@@ -168,7 +168,7 @@ public class CaregiverPatientLinkController {
     public ResponseEntity<Boolean> hasAccessToPatient(
             @PathVariable Long caregiverId,
             @PathVariable Long patientId) {
-        
+
         boolean hasAccess = linkService.hasAccessToPatient(caregiverId, patientId);
         return ResponseEntity.ok(hasAccess);
     }
@@ -179,7 +179,7 @@ public class CaregiverPatientLinkController {
     @GetMapping
     public ResponseEntity<List<CaregiverPatientLinkResponse>> getAllLinks() {
         User currentUser = getCurrentUser();
-        
+
         if (currentUser.getRole() != Role.ADMIN) {
             throw new AppException(HttpStatus.FORBIDDEN, "Only admins can view all links");
         }
@@ -194,7 +194,7 @@ public class CaregiverPatientLinkController {
     @PostMapping("/cleanup-expired")
     public ResponseEntity<Void> cleanupExpiredLinks() {
         User currentUser = getCurrentUser();
-        
+
         if (currentUser.getRole() != Role.ADMIN) {
             throw new AppException(HttpStatus.FORBIDDEN, "Only admins can cleanup expired links");
         }

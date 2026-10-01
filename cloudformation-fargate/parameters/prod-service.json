@@ -4,6 +4,7 @@
   { "ParameterKey": "SpringProfile", "ParameterValue": "prod" },
   { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "true" },
   { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
+  { "ParameterKey": "AiModel", "ParameterValue": "amazon.nova-lite-v1:0" },
   { "ParameterKey": "FromEmail", "ParameterValue": "REPLACE_ME_FROM_EMAIL" },
   { "ParameterKey": "WebSocketApiGatewayEndpoint", "ParameterValue": "" },
   { "ParameterKey": "FrontendBaseUrl", "ParameterValue": "REPLACE_ME_FRONTEND_BASE_URL" },

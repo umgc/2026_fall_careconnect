@@ -37,6 +37,35 @@ public class OAuthStateSigner {
         }
     }
 
+    private static String buildPayload(
+            String userId,
+            String returnUrl,
+            long expiresAtEpoch,
+            String nonce,
+            String prefix) {
+        String safeUserId = nullToEmpty(userId);
+        String safeReturnUrl = nullToEmpty(returnUrl);
+        if (prefix == null || prefix.isBlank()) {
+            return safeUserId + "|" + safeReturnUrl + "|" + expiresAtEpoch + "|" + nonce;
+        }
+        return prefix + "|" + safeUserId + "|" + safeReturnUrl + "|" + expiresAtEpoch + "|" + nonce;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null || a.length() != b.length()) {
+            return false;
+        }
+        int result = 0;
+        for (int i = 0; i < a.length(); i++) {
+            result |= a.charAt(i) ^ b.charAt(i);
+        }
+        return result == 0;
+    }
+
     public String sign(String userId, String returnUrl) {
         return buildSignedToken(userId, returnUrl, STATE_TTL_SECONDS, null);
     }
@@ -114,20 +143,6 @@ public class OAuthStateSigner {
         return new ParsedOAuthState(userId, returnUrl);
     }
 
-    private static String buildPayload(
-            String userId,
-            String returnUrl,
-            long expiresAtEpoch,
-            String nonce,
-            String prefix) {
-        String safeUserId = nullToEmpty(userId);
-        String safeReturnUrl = nullToEmpty(returnUrl);
-        if (prefix == null || prefix.isBlank()) {
-            return safeUserId + "|" + safeReturnUrl + "|" + expiresAtEpoch + "|" + nonce;
-        }
-        return prefix + "|" + safeUserId + "|" + safeReturnUrl + "|" + expiresAtEpoch + "|" + nonce;
-    }
-
     private String hmacSign(String payload) {
         try {
             Mac mac = Mac.getInstance(HMAC_ALGO);
@@ -139,20 +154,6 @@ public class OAuthStateSigner {
         }
     }
 
-    private static String nullToEmpty(String value) {
-        return value == null ? "" : value;
+    public record ParsedOAuthState(String userId, String returnUrl) {
     }
-
-    private static boolean constantTimeEquals(String a, String b) {
-        if (a == null || b == null || a.length() != b.length()) {
-            return false;
-        }
-        int result = 0;
-        for (int i = 0; i < a.length(); i++) {
-            result |= a.charAt(i) ^ b.charAt(i);
-        }
-        return result == 0;
-    }
-
-    public record ParsedOAuthState(String userId, String returnUrl) {}
 }

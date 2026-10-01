@@ -13,4 +13,5 @@ public record CreateInviteRequest(
         String invitedEmail,
         String inviteReason,
         Integer ttlHours
-) {}
+) {
+}

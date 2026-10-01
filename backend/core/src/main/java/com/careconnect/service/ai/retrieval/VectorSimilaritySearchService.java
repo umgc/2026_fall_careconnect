@@ -36,6 +36,24 @@ public class VectorSimilaritySearchService {
         this.chunkRepository = chunkRepository;
     }
 
+    private static Set<String> normalizeRecordTypes(final Set<String> allowedRecordTypes) {
+        if (allowedRecordTypes == null || allowedRecordTypes.isEmpty()) {
+            return Set.of();
+        }
+        return allowedRecordTypes.stream()
+                .filter(Objects::nonNull)
+                .map(t -> t.trim().toUpperCase(Locale.ROOT))
+                .filter(t -> !t.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static int clampLimit(final int limit) {
+        if (limit <= 0) {
+            return DEFAULT_LIMIT;
+        }
+        return Math.min(limit, MAX_LIMIT);
+    }
+
     /**
      * Runs cosine-distance ranking for a single patient.
      *
@@ -80,23 +98,5 @@ public class VectorSimilaritySearchService {
         }
         return chunkRepository.searchByPatientIdVectorAndRecordTypes(
                 patientId, literal, allowed, effectiveLimit);
-    }
-
-    private static Set<String> normalizeRecordTypes(final Set<String> allowedRecordTypes) {
-        if (allowedRecordTypes == null || allowedRecordTypes.isEmpty()) {
-            return Set.of();
-        }
-        return allowedRecordTypes.stream()
-                .filter(Objects::nonNull)
-                .map(t -> t.trim().toUpperCase(Locale.ROOT))
-                .filter(t -> !t.isEmpty())
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    private static int clampLimit(final int limit) {
-        if (limit <= 0) {
-            return DEFAULT_LIMIT;
-        }
-        return Math.min(limit, MAX_LIMIT);
     }
 }

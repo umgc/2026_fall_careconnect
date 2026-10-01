@@ -399,7 +399,7 @@ class AIChatControllerTest {
         Mockito.when(aiChatService.getRecentMessagesForUser(1L, 50))
                 .thenReturn(Collections.emptyList());
         Mockito.when(chatConversationRepository
-                .findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(1L))
+                        .findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(1L))
                 .thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/v1/api/ai-chat/history")
@@ -425,7 +425,7 @@ class AIChatControllerTest {
         Mockito.when(aiChatService.getRecentMessagesForUser(1L, 10))
                 .thenReturn(Collections.emptyList());
         Mockito.when(chatConversationRepository
-                .findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(1L))
+                        .findByUserIdAndIsActiveTrueOrderByUpdatedAtDesc(1L))
                 .thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/v1/api/ai-chat/history")

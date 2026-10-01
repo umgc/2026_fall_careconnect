@@ -34,7 +34,7 @@ public class BedrockTestService {
         this(
                 BedrockRuntimeClient.builder()
                         .region(Region.US_EAST_1)
-                    .credentialsProvider(DefaultCredentialsProvider.builder().build())
+                        .credentialsProvider(DefaultCredentialsProvider.builder().build())
                         .build(),
                 defaultModelId,
                 new ObjectMapper()
@@ -47,12 +47,12 @@ public class BedrockTestService {
         this.objectMapper = objectMapper;
     }
 
-        /**
-         * Sends a prompt to configured Bedrock model and extracts generated text.
-         *
-         * @param prompt User input
-         * @return Generated model response
-         */
+    /**
+     * Sends a prompt to configured Bedrock model and extracts generated text.
+     *
+     * @param prompt User input
+     * @return Generated model response
+     */
     public String testPrompt(String prompt) {
         try {
             String modelId = BedrockModelSupport.resolveModelId(null, defaultModelId);

@@ -69,6 +69,61 @@ class HitlServiceTest {
 
     private HitlService service;
 
+    private static SafetyInput safetyInput(final String query, final String draft) {
+        return new SafetyInput(
+                query,
+                draft,
+                List.of(),
+                42L,
+                7L,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "ASK_AI",
+                "en-US",
+                false,
+                List.of());
+    }
+
+    private static AiHeldItem pendingItem() {
+        final Instant now = Instant.now();
+        return AiHeldItem.builder()
+                .id(UUID.randomUUID())
+                .patientId(42L)
+                .requesterUserId(7L)
+                .sessionId(UUID.randomUUID())
+                .auditId(UUID.randomUUID())
+                .requestId(UUID.randomUUID())
+                .sourceSurface("ASK_AI")
+                .status(AiHeldItemStatus.PENDING_REVIEW)
+                .tier(2)
+                .triggerCodesJson("[\"MEDICATION_CHANGE\"]")
+                .queryText("Should I stop taking metformin?")
+                .queryTextHash("abc")
+                .draftAnswer("Draft answer text for review")
+                .citationsJson("[]")
+                .validationFindingsJson("[]")
+                .deliveryStatus("HELD")
+                .expiresAt(now.plus(72, ChronoUnit.HOURS))
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+    }
+
+    private static User requester() {
+        final User user = new User();
+        user.setId(7L);
+        user.setRole(Role.PATIENT);
+        return user;
+    }
+
+    private static User reviewer() {
+        final User user = new User();
+        user.setId(99L);
+        user.setRole(Role.CAREGIVER);
+        return user;
+    }
+
     @BeforeEach
     void setUp() {
         service = new HitlService(
@@ -149,8 +204,8 @@ class HitlServiceTest {
         when(openHoldWriter.insertOpenHold(any(AiHeldItem.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq"));
         when(heldItemRepository
-                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
-                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
                 .thenReturn(Optional.empty(), Optional.of(winner));
 
         final AiHeldItem result = service.createHold(input, outcome, List.of());
@@ -427,10 +482,10 @@ class HitlServiceTest {
                                 "Emergency language"))));
 
         assertThatThrownBy(() -> service.release(
-                        item.getId(),
-                        reviewer(),
-                        "Call 911 for chest pain immediately",
-                        "note"))
+                item.getId(),
+                reviewer(),
+                "Call 911 for chest pain immediately",
+                "note"))
                 .isInstanceOf(HitlConflictException.class)
                 .hasMessageContaining("emergency");
         verify(heldItemRepository, never()).updateOutcomeIfStatus(
@@ -449,7 +504,7 @@ class HitlServiceTest {
                 .isInstanceOf(HitlConflictException.class)
                 .hasMessageContaining("edited answer");
         assertThatThrownBy(() -> service.release(
-                        item.getId(), reviewer(), "Partial verified draft", null))
+                item.getId(), reviewer(), "Partial verified draft", null))
                 .isInstanceOf(HitlConflictException.class)
                 .hasMessageContaining("edited answer");
         verify(heldItemRepository, never()).updateOutcomeIfStatus(
@@ -613,61 +668,6 @@ class HitlServiceTest {
                 .thenReturn(Optional.of(patient));
     }
 
-    private static SafetyInput safetyInput(final String query, final String draft) {
-        return new SafetyInput(
-                query,
-                draft,
-                List.of(),
-                42L,
-                7L,
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                "ASK_AI",
-                "en-US",
-                false,
-                List.of());
-    }
-
-    private static AiHeldItem pendingItem() {
-        final Instant now = Instant.now();
-        return AiHeldItem.builder()
-                .id(UUID.randomUUID())
-                .patientId(42L)
-                .requesterUserId(7L)
-                .sessionId(UUID.randomUUID())
-                .auditId(UUID.randomUUID())
-                .requestId(UUID.randomUUID())
-                .sourceSurface("ASK_AI")
-                .status(AiHeldItemStatus.PENDING_REVIEW)
-                .tier(2)
-                .triggerCodesJson("[\"MEDICATION_CHANGE\"]")
-                .queryText("Should I stop taking metformin?")
-                .queryTextHash("abc")
-                .draftAnswer("Draft answer text for review")
-                .citationsJson("[]")
-                .validationFindingsJson("[]")
-                .deliveryStatus("HELD")
-                .expiresAt(now.plus(72, ChronoUnit.HOURS))
-                .createdAt(now)
-                .updatedAt(now)
-                .build();
-    }
-
-    private static User requester() {
-        final User user = new User();
-        user.setId(7L);
-        user.setRole(Role.PATIENT);
-        return user;
-    }
-
-    private static User reviewer() {
-        final User user = new User();
-        user.setId(99L);
-        user.setRole(Role.CAREGIVER);
-        return user;
-    }
-
     @Test
     @DisplayName("findOpenHold returns match and rejects blank args")
     void findOpenHold_returnsMatchAndRejectsBlankArgs() {
@@ -677,8 +677,8 @@ class HitlServiceTest {
 
         final AiHeldItem existing = pendingItem();
         when(heldItemRepository
-                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
-                                eq(42L), eq("ASK_AI"), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        eq(42L), eq("ASK_AI"), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
                 .thenReturn(Optional.of(existing));
 
         assertThat(service.findOpenHold(42L, "ASK_AI", "stable-key")).contains(existing);
@@ -689,8 +689,8 @@ class HitlServiceTest {
     void createHold_reusesExistingOpenHold() {
         final AiHeldItem existing = pendingItem();
         when(heldItemRepository
-                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
-                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
                 .thenReturn(Optional.of(existing));
 
         final AiHeldItem result = service.createHold(
@@ -718,21 +718,21 @@ class HitlServiceTest {
     @DisplayName("createHold rejects null patientId")
     void createHold_nullPatientId_throws() {
         assertThatThrownBy(() -> service.createHold(
-                        new SafetyInput(
-                                "q",
-                                "draft",
-                                List.of(),
-                                null,
-                                7L,
-                                null,
-                                null,
-                                null,
-                                "ASK_AI",
-                                "en-US",
-                                true,
-                                List.of()),
-                        SafetyOutcome.holdTier2(List.of(), List.of()),
-                        List.of()))
+                new SafetyInput(
+                        "q",
+                        "draft",
+                        List.of(),
+                        null,
+                        7L,
+                        null,
+                        null,
+                        null,
+                        "ASK_AI",
+                        "en-US",
+                        true,
+                        List.of()),
+                SafetyOutcome.holdTier2(List.of(), List.of()),
+                List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("patientId");
     }
@@ -805,7 +805,7 @@ class HitlServiceTest {
         final AiHeldItem item = pendingItem();
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
         when(heldItemRepository.updateOutcomeIfStatus(
-                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
                 .thenReturn(1);
 
         service.reject(item.getId(), reviewer(), "  ");
@@ -857,8 +857,8 @@ class HitlServiceTest {
     @DisplayName("createHold truncates long query and defaults null draft/citations")
     void createHold_truncatesLongQueryAndDefaults() {
         when(heldItemRepository
-                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
-                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
                 .thenReturn(Optional.empty());
         when(openHoldWriter.insertOpenHold(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -940,8 +940,8 @@ class HitlServiceTest {
     @DisplayName("createHold blank query stores null query text")
     void createHold_blankQuery_nullQueryText() {
         when(heldItemRepository
-                        .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
-                                any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
+                .findFirstByPatientIdAndSourceSurfaceAndQueryTextHashAndStatusOrderByCreatedAtDesc(
+                        any(), any(), any(), eq(AiHeldItemStatus.PENDING_REVIEW)))
                 .thenReturn(Optional.empty());
         when(openHoldWriter.insertOpenHold(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -987,7 +987,7 @@ class HitlServiceTest {
         final AiHeldItem item = pendingItem();
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
         when(heldItemRepository.updateOutcomeIfStatus(
-                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
                 .thenReturn(1);
 
         service.reject(item.getId(), reviewer(), "N".repeat(600));
@@ -1035,7 +1035,7 @@ class HitlServiceTest {
         final AiHeldItem item = pendingItem();
         when(heldItemRepository.findById(item.getId())).thenReturn(Optional.of(item));
         when(heldItemRepository.updateOutcomeIfStatus(
-                        any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
+                any(), any(), any(), any(), any(), any(), anyLong(), any(), any(), any()))
                 .thenReturn(1);
         final User admin = new User();
         admin.setId(1L);

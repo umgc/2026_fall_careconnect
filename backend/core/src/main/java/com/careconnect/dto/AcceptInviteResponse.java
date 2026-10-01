@@ -10,4 +10,5 @@ public record AcceptInviteResponse(
         Long patientUserId,
         String patientName,
         String message
-) {}
+) {
+}

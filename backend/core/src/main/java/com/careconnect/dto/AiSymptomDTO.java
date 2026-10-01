@@ -1,9 +1,12 @@
 package com.careconnect.dto;
 
 import lombok.Data;
+
 import java.util.Map;
 
-/** AI Symptom extraction (request + response) */
+/**
+ * AI Symptom extraction (request + response)
+ */
 public class AiSymptomDTO {
 
     @Data

@@ -38,7 +38,7 @@ public class SubscriptionService {
 
     public Plan getPlan(Long planId) {
         return planRepository.findById(planId)
-            .orElseThrow(() -> new IllegalArgumentException("Plan not found with ID: " + planId));
+                .orElseThrow(() -> new IllegalArgumentException("Plan not found with ID: " + planId));
     }
 
     @Transactional
@@ -54,23 +54,23 @@ public class SubscriptionService {
     @Transactional
     public List<Subscription> getUserSubscriptions(Long userId) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
         return subscriptionRepository.findByUser(user);
     }
 
     @Transactional
     public List<Subscription> getUserActiveSubscriptions(Long userId) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
         return subscriptionRepository.findByUserAndStatus(user, "ACTIVE");
     }
 
     @Transactional
     public Subscription createSubscriptionForUser(Long userId, Long planId, String platform) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
         Plan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new IllegalArgumentException("Plan not found with ID: " + planId));
+                .orElseThrow(() -> new IllegalArgumentException("Plan not found with ID: " + planId));
 
         Subscription subscription = new Subscription();
         subscription.setUser(user);
@@ -86,7 +86,7 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponseDTO createDirectSubscription(String customerId, String priceId) {
         User user = userRepository.findByPaymentCustomerId(customerId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found for customerId: " + customerId));
+                .orElseThrow(() -> new IllegalArgumentException("User not found for customerId: " + customerId));
 
         List<Subscription> active = subscriptionRepository.findByUserAndStatus(user, "ACTIVE");
         for (Subscription existing : active) {
@@ -117,7 +117,7 @@ public class SubscriptionService {
     @Transactional
     public SubscriptionResponseDTO createSubscriptionByUserId(Long userId, String priceId) {
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
+                .orElseThrow(() -> new IllegalArgumentException("User not found with ID: " + userId));
 
         List<Subscription> active = subscriptionRepository.findByUserAndStatus(user, "ACTIVE");
         for (Subscription existing : active) {

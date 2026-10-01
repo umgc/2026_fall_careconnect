@@ -26,14 +26,16 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v1/api/caregiver-visibility")
 @RequiredArgsConstructor
 @Tag(name = "Caregiver Visibility",
-     description = "Default-deny caregiver access to patient summaries, with review gate and grant/revoke")
+        description = "Default-deny caregiver access to patient summaries, with review gate and grant/revoke")
 public class CaregiverVisibilityController {
 
     private final CaregiverVisibilityService visibilityService;
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
 
-    /** Status is visible to the caregiver in question, the patient (consent owner), or an admin. */
+    /**
+     * Status is visible to the caregiver in question, the patient (consent owner), or an admin.
+     */
     private void requireStatusViewer(User user, Long caregiverUserId, Long patientUserId)
             throws UnauthorizedException {
         if (user != null && (user.isAdmin()
@@ -48,8 +50,8 @@ public class CaregiverVisibilityController {
     @GetMapping("/status")
     @Operation(summary = "Get caregiver visibility status for a patient (default-deny)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Status retrieved"),
-        @ApiResponse(responseCode = "403", description = "Access denied")
+            @ApiResponse(responseCode = "200", description = "Status retrieved"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
     })
     public ResponseEntity<VisibilityResponse> getStatus(
             @RequestParam Long caregiverUserId,
@@ -61,10 +63,10 @@ public class CaregiverVisibilityController {
     @RequirePermission(Permission.USE_AI_FEATURES)
     @PostMapping("/review")
     @Operation(summary = "Submit a caregiver for the pre-share review gate",
-               description = "Records the request as PENDING_REVIEW and queues a confirmation item for a reviewer")
+            description = "Records the request as PENDING_REVIEW and queues a confirmation item for a reviewer")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Submitted for review"),
-        @ApiResponse(responseCode = "403", description = "Access denied")
+            @ApiResponse(responseCode = "200", description = "Submitted for review"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
     })
     public ResponseEntity<VisibilityResponse> submitForReview(
             @Valid @RequestBody VisibilityRequest request) throws UnauthorizedException {
@@ -78,8 +80,8 @@ public class CaregiverVisibilityController {
     @PostMapping("/grant")
     @Operation(summary = "Grant caregiver access to a patient's summaries (approves the review gate)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Access granted"),
-        @ApiResponse(responseCode = "403", description = "Access denied")
+            @ApiResponse(responseCode = "200", description = "Access granted"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
     })
     public ResponseEntity<VisibilityResponse> grant(
             @Valid @RequestBody VisibilityRequest request) throws UnauthorizedException {
@@ -93,8 +95,8 @@ public class CaregiverVisibilityController {
     @PostMapping("/revoke")
     @Operation(summary = "Revoke caregiver access to a patient's summaries")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Access revoked"),
-        @ApiResponse(responseCode = "403", description = "Access denied")
+            @ApiResponse(responseCode = "200", description = "Access revoked"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
     })
     public ResponseEntity<VisibilityResponse> revoke(
             @Valid @RequestBody VisibilityRequest request) throws UnauthorizedException {

@@ -1,9 +1,11 @@
 package com.careconnect.controller;
 
 import com.careconnect.service.ChimeMediaStreamEventService;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,10 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnProperty(name = "careconnect.kvs.event-webhook.enabled", havingValue = "true")
 public class ChimeMediaStreamWebhookController {
 
-    private static final Logger log = LoggerFactory.getLogger(ChimeMediaStreamWebhookController.class);
-
     static final String EVENT_BRIDGE_CONNECTION_HEADER = "X-EventBridge-Connection";
-
+    private static final Logger log = LoggerFactory.getLogger(ChimeMediaStreamWebhookController.class);
     private final ChimeMediaStreamEventService chimeMediaStreamEventService;
     private final String sharedSecret;
 
@@ -46,8 +46,7 @@ public class ChimeMediaStreamWebhookController {
 
     @PostMapping("/media-stream-events")
     public ResponseEntity<Void> handleMediaStreamEvent(
-            @RequestHeader(value = EVENT_BRIDGE_CONNECTION_HEADER, required = false)
-                    final String connectionKey,
+            @RequestHeader(value = EVENT_BRIDGE_CONNECTION_HEADER, required = false) final String connectionKey,
             @RequestBody final Map<String, Object> payload) {
         if (!isAuthorized(connectionKey)) {
             if (log.isWarnEnabled()) {
@@ -61,8 +60,7 @@ public class ChimeMediaStreamWebhookController {
         }
         final Object detail = payload.get("detail");
         if (detail instanceof Map<?, ?> detailMap) {
-            @SuppressWarnings("unchecked")
-            final Map<String, Object> typedDetail = (Map<String, Object>) detailMap;
+            @SuppressWarnings("unchecked") final Map<String, Object> typedDetail = (Map<String, Object>) detailMap;
             chimeMediaStreamEventService.handleEventDetail(typedDetail);
         }
         return ResponseEntity.ok().build();

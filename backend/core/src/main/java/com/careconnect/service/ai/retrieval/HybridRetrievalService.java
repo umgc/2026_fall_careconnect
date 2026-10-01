@@ -65,10 +65,8 @@ public class HybridRetrievalService {
             @Value("${careconnect.ai.ask.retrieval.vector-top-k:20}") final int vectorTopK,
             @Value("${careconnect.ai.ask.retrieval.final-top-k:10}") final int finalTopK,
             @Value("${careconnect.ai.ask.retrieval.rrf-k:60}") final int rrfK,
-            @Value("${careconnect.ai.ask.retrieval.visibility-overfetch-factor:3}")
-                    final int visibilityOverfetchFactor,
-            @Value("${careconnect.ai.ask.retrieval.max-chunks-per-source:2}")
-                    final int maxChunksPerSource) {
+            @Value("${careconnect.ai.ask.retrieval.visibility-overfetch-factor:3}") final int visibilityOverfetchFactor,
+            @Value("${careconnect.ai.ask.retrieval.max-chunks-per-source:2}") final int maxChunksPerSource) {
         this.fullTextSearchService = fullTextSearchService;
         this.vectorSimilaritySearchService = vectorSimilaritySearchService;
         this.chunkEmbeddingService = chunkEmbeddingService;
@@ -79,6 +77,91 @@ public class HybridRetrievalService {
         this.rrfK = Math.max(1, rrfK);
         this.visibilityOverfetchFactor = Math.max(1, visibilityOverfetchFactor);
         this.maxChunksPerSource = Math.max(1, maxChunksPerSource);
+    }
+
+    private static boolean metadataContainsNormalizedName(
+            final RetrievalIndexChunk chunk, final String hint) {
+        if (chunk == null || chunk.getChunkMetadata() == null || hint == null || hint.isBlank()) {
+            return false;
+        }
+        final String meta = chunk.getChunkMetadata().toLowerCase(Locale.ROOT);
+        // Exact JSON field match only — avoid short-token substring false positives.
+        return meta.contains("\"medicationnamenormalized\":\"" + hint + "\"");
+    }
+
+    private static Set<String> narrowForMedicationTimeline(final Set<String> allowedTypes) {
+        final Set<String> narrowed = new LinkedHashSet<>();
+        for (final RetrievalRecordType type : MEDICATION_TIMELINE_TYPES) {
+            if (allowedTypes.contains(type.name())) {
+                narrowed.add(type.name());
+            }
+        }
+        return narrowed.isEmpty() ? allowedTypes : Set.copyOf(narrowed);
+    }
+
+    private static List<RankedChunk> toRankedChunks(
+            final List<ReciprocalRankFusion.MergedHit> merged) {
+        final List<RankedChunk> out = new ArrayList<>(merged.size());
+        for (int i = 0; i < merged.size(); i++) {
+            final ReciprocalRankFusion.MergedHit hit = merged.get(i);
+            final RetrievalIndexChunk chunk = hit.chunk();
+            out.add(new RankedChunk(
+                    chunk.getId(),
+                    chunk.getPatientId(),
+                    chunk.resolveRecordTypeEnum().orElse(null),
+                    chunk.getSourceKind(),
+                    chunk.getSourceRecordId(),
+                    chunk.getChunkText(),
+                    chunk.getChunkMetadata(),
+                    chunk.getConsentScope(),
+                    hit.rrfScore(),
+                    hit.ftsRank(),
+                    hit.vectorRank(),
+                    "C" + (i + 1)));
+        }
+        return List.copyOf(out);
+    }
+
+    private static List<RetrievalIndexChunk> applyVisibility(
+            final List<RetrievalIndexChunk> chunks, final CaregiverVisibilityFilter filter) {
+        if (chunks == null || chunks.isEmpty()) {
+            return List.of();
+        }
+        if (filter == null) {
+            return List.copyOf(chunks);
+        }
+        return chunks.stream()
+                .filter(c -> c != null && filter.permits(c.getConsentScope()))
+                .toList();
+    }
+
+    private static boolean requiresVisibilityFiltering(
+            final CaregiverVisibilityFilter filter) {
+        if (filter == null) {
+            return false;
+        }
+        return filter.callerRole() != Role.ADMIN && filter.callerRole() != Role.PATIENT;
+    }
+
+    private static Set<String> toRecordTypeNames(final Set<RetrievalRecordType> types) {
+        if (types == null || types.isEmpty()) {
+            return Set.of();
+        }
+        return types.stream()
+                .filter(Objects::nonNull)
+                .map(Enum::name)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private static String normalizeQuery(final String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        final String trimmed = query.trim();
+        if (trimmed.length() > RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH) {
+            return trimmed.substring(0, RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH);
+        }
+        return trimmed;
     }
 
     public HybridRetrievalResult search(
@@ -144,7 +227,7 @@ public class HybridRetrievalService {
 
         final List<RetrievalIndexChunk> structuredHits = effectivePlan.isMedicationTimeline()
                 ? structuredMedicationTimelineHits(
-                        patientId, effectivePlan.medicationNameHint(), scope.visibilityFilter())
+                patientId, effectivePlan.medicationNameHint(), scope.visibilityFilter())
                 : List.of();
 
         final List<ReciprocalRankFusion.MergedHit> merged =
@@ -198,62 +281,6 @@ public class HybridRetrievalService {
                 .toList();
     }
 
-    private static boolean metadataContainsNormalizedName(
-            final RetrievalIndexChunk chunk, final String hint) {
-        if (chunk == null || chunk.getChunkMetadata() == null || hint == null || hint.isBlank()) {
-            return false;
-        }
-        final String meta = chunk.getChunkMetadata().toLowerCase(Locale.ROOT);
-        // Exact JSON field match only — avoid short-token substring false positives.
-        return meta.contains("\"medicationnamenormalized\":\"" + hint + "\"");
-    }
-
-    private static Set<String> narrowForMedicationTimeline(final Set<String> allowedTypes) {
-        final Set<String> narrowed = new LinkedHashSet<>();
-        for (final RetrievalRecordType type : MEDICATION_TIMELINE_TYPES) {
-            if (allowedTypes.contains(type.name())) {
-                narrowed.add(type.name());
-            }
-        }
-        return narrowed.isEmpty() ? allowedTypes : Set.copyOf(narrowed);
-    }
-
-    private static List<RankedChunk> toRankedChunks(
-            final List<ReciprocalRankFusion.MergedHit> merged) {
-        final List<RankedChunk> out = new ArrayList<>(merged.size());
-        for (int i = 0; i < merged.size(); i++) {
-            final ReciprocalRankFusion.MergedHit hit = merged.get(i);
-            final RetrievalIndexChunk chunk = hit.chunk();
-            out.add(new RankedChunk(
-                    chunk.getId(),
-                    chunk.getPatientId(),
-                    chunk.resolveRecordTypeEnum().orElse(null),
-                    chunk.getSourceKind(),
-                    chunk.getSourceRecordId(),
-                    chunk.getChunkText(),
-                    chunk.getChunkMetadata(),
-                    chunk.getConsentScope(),
-                    hit.rrfScore(),
-                    hit.ftsRank(),
-                    hit.vectorRank(),
-                    "C" + (i + 1)));
-        }
-        return List.copyOf(out);
-    }
-
-    private static List<RetrievalIndexChunk> applyVisibility(
-            final List<RetrievalIndexChunk> chunks, final CaregiverVisibilityFilter filter) {
-        if (chunks == null || chunks.isEmpty()) {
-            return List.of();
-        }
-        if (filter == null) {
-            return List.copyOf(chunks);
-        }
-        return chunks.stream()
-                .filter(c -> c != null && filter.permits(c.getConsentScope()))
-                .toList();
-    }
-
     private int visibilityAwareLimit(
             final int configuredLimit, final CaregiverVisibilityFilter filter) {
         if (!requiresVisibilityFiltering(filter)) {
@@ -261,34 +288,5 @@ public class HybridRetrievalService {
         }
         final long overfetch = (long) configuredLimit * visibilityOverfetchFactor;
         return (int) Math.min(MAX_ARM_FETCH, overfetch);
-    }
-
-    private static boolean requiresVisibilityFiltering(
-            final CaregiverVisibilityFilter filter) {
-        if (filter == null) {
-            return false;
-        }
-        return filter.callerRole() != Role.ADMIN && filter.callerRole() != Role.PATIENT;
-    }
-
-    private static Set<String> toRecordTypeNames(final Set<RetrievalRecordType> types) {
-        if (types == null || types.isEmpty()) {
-            return Set.of();
-        }
-        return types.stream()
-                .filter(Objects::nonNull)
-                .map(Enum::name)
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    private static String normalizeQuery(final String query) {
-        if (query == null || query.isBlank()) {
-            return null;
-        }
-        final String trimmed = query.trim();
-        if (trimmed.length() > RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH) {
-            return trimmed.substring(0, RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH);
-        }
-        return trimmed;
     }
 }

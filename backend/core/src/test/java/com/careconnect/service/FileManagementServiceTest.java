@@ -29,18 +29,30 @@ import static org.mockito.Mockito.*;
 
 class FileManagementServiceTest {
 
-    @Mock private UserFileRepository userFileRepository;
-    @Mock private StructuredDocumentEntryRepository structuredEntryRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private DatabaseStorageService databaseStorageService;
-    @Mock private DocumentComplianceService documentComplianceService;
-    @Mock private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
-    @Mock private com.careconnect.service.ai.indexing.RetrievalIndexService retrievalIndexService;
-    @Mock private DocumentProcessingService documentProcessingService;
-    @Mock private S3StorageService s3StorageService;
-    @Mock private com.careconnect.service.ai.ask.AskAiDocumentOcrService askAiDocumentOcrService;
-    @Mock private MultipartFile multipartFile;
+    @Mock
+    private UserFileRepository userFileRepository;
+    @Mock
+    private StructuredDocumentEntryRepository structuredEntryRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private DatabaseStorageService databaseStorageService;
+    @Mock
+    private DocumentComplianceService documentComplianceService;
+    @Mock
+    private com.careconnect.indexing.IndexingEventEmitter indexingEventEmitter;
+    @Mock
+    private com.careconnect.service.ai.indexing.RetrievalIndexService retrievalIndexService;
+    @Mock
+    private DocumentProcessingService documentProcessingService;
+    @Mock
+    private S3StorageService s3StorageService;
+    @Mock
+    private com.careconnect.service.ai.ask.AskAiDocumentOcrService askAiDocumentOcrService;
+    @Mock
+    private MultipartFile multipartFile;
 
     private FileManagementService fileManagementService;
 
@@ -1082,7 +1094,7 @@ class FileManagementServiceTest {
         when(multipartFile.getSize()).thenReturn(2048L);
         when(multipartFile.getContentType()).thenReturn("application/pdf");
         when(multipartFile.getOriginalFilename()).thenReturn("scan.pdf");
-        when(multipartFile.getBytes()).thenReturn(new byte[] {1, 2, 3, 4});
+        when(multipartFile.getBytes()).thenReturn(new byte[]{1, 2, 3, 4});
         when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
                 .thenReturn("db://files/10");
         when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
@@ -1127,7 +1139,7 @@ class FileManagementServiceTest {
         when(multipartFile.getSize()).thenReturn(2048L);
         when(multipartFile.getContentType()).thenReturn("image/png");
         when(multipartFile.getOriginalFilename()).thenReturn("scan.png");
-        when(multipartFile.getBytes()).thenReturn(new byte[] {1, 2, 3});
+        when(multipartFile.getBytes()).thenReturn(new byte[]{1, 2, 3});
         when(databaseStorageService.uploadFile(eq(multipartFile), eq(1L), eq("PATIENT"), eq("MEDICAL_RECORD")))
                 .thenReturn("db://files/10");
         userFile.setContentType("image/png");

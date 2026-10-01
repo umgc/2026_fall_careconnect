@@ -19,7 +19,9 @@ import java.util.List;
 @AllArgsConstructor
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FormField {
-    /** Stable field key, unique within its section ([a-z0-9_]+). */
+    /**
+     * Stable field key, unique within its section ([a-z0-9_]+).
+     */
     private String id;
     private String label;
     private FieldType fieldType;
@@ -30,7 +32,9 @@ public class FormField {
     private Object defaultValue;
     @Builder.Default
     private boolean readOnly = false;
-    /** Marks PII/PHI fields (e.g., SSN) for masking and audit logging. */
+    /**
+     * Marks PII/PHI fields (e.g., SSN) for masking and audit logging.
+     */
     @Builder.Default
     private boolean sensitive = false;
     /**

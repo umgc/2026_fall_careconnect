@@ -4,6 +4,7 @@ import com.careconnect.model.indexing.IndexingOutboxRow;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -12,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -42,11 +44,11 @@ import org.springframework.stereotype.Service;
 @Service
 public class IndexingEventEmitter {
 
-    private static final Logger log = LoggerFactory.getLogger(IndexingEventEmitter.class);
-
-    /** Schema version for the outer envelope. Bump when the shape breaks. */
+    /**
+     * Schema version for the outer envelope. Bump when the shape breaks.
+     */
     static final int SCHEMA_VERSION = 1;
-
+    private static final Logger log = LoggerFactory.getLogger(IndexingEventEmitter.class);
     private final IndexingOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 

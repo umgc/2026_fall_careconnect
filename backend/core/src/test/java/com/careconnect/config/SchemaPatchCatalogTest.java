@@ -10,6 +10,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SchemaPatchCatalogTest {
 
+    private static String readRunnerSource() throws Exception {
+        final java.nio.file.Path runnerPath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(runnerPath)
+                ? runnerPath
+                : java.nio.file.Path.of(
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        return java.nio.file.Files.readString(resolved);
+    }
+
     @Test
     void catalog_keepsPrerequisitesBeforeDependentPatches() {
         final List<String> ids = SchemaPatchCatalog.PATCHES.stream()
@@ -136,16 +146,6 @@ class SchemaPatchCatalogTest {
         assertThat(sql)
                 .contains("quarantine_reason VARCHAR(255)")
                 .contains("summary_citation_replay_source");
-    }
-
-    private static String readRunnerSource() throws Exception {
-        final java.nio.file.Path runnerPath = java.nio.file.Path.of(
-                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
-        final java.nio.file.Path resolved = java.nio.file.Files.exists(runnerPath)
-                ? runnerPath
-                : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
-        return java.nio.file.Files.readString(resolved);
     }
 
     @Test

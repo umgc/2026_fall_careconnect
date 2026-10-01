@@ -3,6 +3,7 @@ package com.careconnect.config;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -16,9 +17,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration
 public class AskAiAsyncConfig {
 
-    private static final Logger log = LoggerFactory.getLogger(AskAiAsyncConfig.class);
-
     public static final String ASK_AI_OCR_EXECUTOR = "askAiOcrExecutor";
+    private static final Logger log = LoggerFactory.getLogger(AskAiAsyncConfig.class);
 
     @Bean(name = ASK_AI_OCR_EXECUTOR)
     public Executor askAiOcrExecutor() {

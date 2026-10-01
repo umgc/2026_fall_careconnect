@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Unit tests for {@link FitbitService}.
- *
+ * <p>
  * FitbitService is currently an empty shell -- all implementation is commented out.
  * These tests verify that the class can be instantiated and that the Spring-managed
  * bean contract (default no-arg constructor) is intact.

@@ -37,31 +37,23 @@ import java.util.Optional;
 @ExtendWith(MockitoExtension.class)
 class AlexaControllerTest {
 
-    @Mock
-    private SecurityUtil securityUtil;
-
-    @Mock
-    private AuthorizationService authorizationService;
-
-    @Mock
-    private JwtTokenProvider jwtTokenProvider;
-
-    @Mock
-    private UserRepository userRepository;
-
-    @Mock
-    private PatientRepository patientRepository;
-
-    @Mock
-    private TaskServiceV2 taskService;
-
-    @InjectMocks
-    private AlexaController controller;
-
     private static final String VALID_TOKEN = "valid.jwt.token";
     private static final String BEARER_TOKEN = "Bearer " + VALID_TOKEN;
     private static final Long PATIENT_ID = 42L;
-
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
+    @Mock
+    private JwtTokenProvider jwtTokenProvider;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private TaskServiceV2 taskService;
+    @InjectMocks
+    private AlexaController controller;
     private User patientUser;
     private Patient patient;
     private TaskDtoV2 sampleTask;

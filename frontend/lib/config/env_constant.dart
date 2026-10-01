@@ -34,6 +34,18 @@ const String _fitbitClientId = String.fromEnvironment('FITBIT_CLIENT_ID');
 const String _fitbitClientSecret = String.fromEnvironment(
   'FITBIT_CLIENT_SECRET',
 );
+const String _googlePlacesApiKey = String.fromEnvironment(
+  'GOOGLE_PLACES_API_KEY',
+  defaultValue: '',
+);
+const String _appleMerchantId = String.fromEnvironment(
+  'APPLE_MERCHANT_ID',
+  defaultValue: '',
+);
+const String _googlePayMerchantId = String.fromEnvironment(
+  'GOOGLE_PAY_MERCHANT_ID',
+  defaultValue: '',
+);
 
 String getFitbitClientId() {
   final clientId = _fitbitClientId;
@@ -127,7 +139,7 @@ String getBackendBaseUrl() {
   // https enforcement disabled for local testing
   // TODO: re-enable before production release
   //if (!kDebugMode && !resolved.startsWith('https://')) {
-    //throw Exception('BACKEND_URL must use https:// in release builds.');
+  //throw Exception('BACKEND_URL must use https:// in release builds.');
   //}
 
   return resolved;
@@ -246,6 +258,12 @@ String getGoogleClientId() {
   }
   return clientId;
 }
+
+String getGooglePlacesApiKey() => _googlePlacesApiKey;
+
+String getAppleMerchantId() => _appleMerchantId;
+
+String getGooglePayMerchantId() => _googlePayMerchantId;
 
 String getAppDomain() {
   // Now uses the const _appDomain (which has its own defaultValue)

@@ -29,7 +29,7 @@ public interface CaregiverPatientLinkRepository extends JpaRepository<CaregiverP
 
     // Check if link exists between caregiver and patient
     boolean existsByCaregiverUserAndPatientUserAndStatus(
-        User caregiverUser, User patientUser, CaregiverPatientLink.LinkStatus status);
+            User caregiverUser, User patientUser, CaregiverPatientLink.LinkStatus status);
 
     // Check if active and non-expired link exists
     @Query("SELECT CASE WHEN COUNT(cpl) > 0 THEN true ELSE false END FROM CaregiverPatientLink cpl WHERE cpl.caregiverUser = :caregiverUser AND cpl.patientUser = :patientUser AND cpl.status = 'ACTIVE' AND (cpl.expiresAt IS NULL OR cpl.expiresAt > :now)")

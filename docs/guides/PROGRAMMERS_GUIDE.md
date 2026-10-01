@@ -4474,7 +4474,7 @@ public class UserAIConfig {
     private Double temperature = 0.7;
 
     @Column(name = "conversation_history_limit")
-    private Integer conversationHistoryLimit = 10;
+    private final Integer conversationHistoryLimit = 10;
 
     @Column(name = "custom_system_prompt")
     private String customSystemPrompt;
@@ -5539,8 +5539,8 @@ public class EmergencyController {
 .requestMatchers("/v1/api/emergency/**").permitAll()  // No authentication required
 
 // JWT Authentication Filter excludes emergency endpoints
-private static final List<String> EXCLUDED_PATHS = Arrays.asList(
-    "/v1/api/emergency"  // Emergency PDF access (no auth required)
+private static final List<String> EXCLUDED_PATHS = List.of(
+        "/v1/api/emergency"  // Emergency PDF access (no auth required)
 );
 ```
 

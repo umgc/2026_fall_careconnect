@@ -65,7 +65,9 @@ public class RetrievalIndexChunk {
     @Column(name = "source_record_id", nullable = false, length = RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH)
     private String sourceRecordId;
 
-    /** First-class ownership discriminator for sources whose table-local IDs can collide. */
+    /**
+     * First-class ownership discriminator for sources whose table-local IDs can collide.
+     */
     @Column(name = "source_kind", length = RetrievalIndexSchema.RECORD_TYPE_MAX_LENGTH)
     private String sourceKind;
 
@@ -89,15 +91,21 @@ public class RetrievalIndexChunk {
     @Column(name = "citation_replay_after")
     private OffsetDateTime citationReplayAfter;
 
-    /** Compatibility-only; source-level attempts are authoritative. */
+    /**
+     * Compatibility-only; source-level attempts are authoritative.
+     */
     @Column(name = "citation_replay_attempts", nullable = false)
     private Integer citationReplayAttempts;
 
-    /** Compatibility-only; source-level leases are authoritative. */
+    /**
+     * Compatibility-only; source-level leases are authoritative.
+     */
     @Column(name = "citation_replay_claimed_until")
     private OffsetDateTime citationReplayClaimedUntil;
 
-    /** Compatibility-only; the source table's UUID token is the active fence. */
+    /**
+     * Compatibility-only; the source table's UUID token is the active fence.
+     */
     @Column(name = "citation_replay_claim_token")
     private UUID citationReplayClaimToken;
 
@@ -106,6 +114,10 @@ public class RetrievalIndexChunk {
 
     public RetrievalRecordType getRecordTypeEnum() {
         return recordType == null ? null : RetrievalRecordType.valueOf(recordType);
+    }
+
+    public void setRecordTypeEnum(RetrievalRecordType type) {
+        this.recordType = type == null ? null : type.name();
     }
 
     /**
@@ -120,10 +132,6 @@ public class RetrievalIndexChunk {
         } catch (IllegalArgumentException ex) {
             return Optional.empty();
         }
-    }
-
-    public void setRecordTypeEnum(RetrievalRecordType type) {
-        this.recordType = type == null ? null : type.name();
     }
 
     @PrePersist

@@ -31,13 +31,20 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MoodControllerTest {
 
-    @Mock private MoodService moodService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-    @Mock private UserRepository userRepository;
-    @Mock private CaregiverPatientLinkService caregiverPatientLinkService;
-    @Mock private FamilyMemberService familyMemberService;
-
+    private static final Long USER_ID = 1L;
+    private static final Long CAREGIVER_ID = 10L;
+    @Mock
+    private MoodService moodService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private CaregiverPatientLinkService caregiverPatientLinkService;
+    @Mock
+    private FamilyMemberService familyMemberService;
     @InjectMocks
     private MoodController controller;
 
@@ -54,9 +61,6 @@ class MoodControllerTest {
                 new UsernamePasswordAuthenticationToken("patient@test.com", null, List.of()));
         lenient().when(userRepository.findByEmail("patient@test.com")).thenReturn(Optional.of(patient));
     }
-
-    private static final Long USER_ID      = 1L;
-    private static final Long CAREGIVER_ID = 10L;
 
     private Mood makeMood(Long userId, int score, String label) {
         final Mood m = new Mood(userId, score, label);
@@ -108,8 +112,7 @@ class MoodControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         final Map<String, Object> body = response.getBody();
         assertThat(body.get("caregiverId")).isEqualTo(CAREGIVER_ID);
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> summaries = (List<Map<String, Object>>) body.get("summaries");
+        @SuppressWarnings("unchecked") final List<Map<String, Object>> summaries = (List<Map<String, Object>>) body.get("summaries");
         assertThat(summaries).hasSize(3);
         assertThat(summaries.get(0).get("score")).isEqualTo(7);
         assertThat(summaries.get(0).get("label")).isEqualTo("Good");
@@ -126,8 +129,7 @@ class MoodControllerTest {
         final ResponseEntity<Map<String, Object>> response = controller.getCaregiverMoodSummaries(CAREGIVER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> summaries =
+        @SuppressWarnings("unchecked") final List<Map<String, Object>> summaries =
                 (List<Map<String, Object>>) response.getBody().get("summaries");
         assertThat(summaries).hasSize(1);
         assertThat(summaries.get(0).get("patientId")).isEqualTo(1L);
@@ -142,8 +144,7 @@ class MoodControllerTest {
         final ResponseEntity<Map<String, Object>> response = controller.getCaregiverMoodSummaries(CAREGIVER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> summaries =
+        @SuppressWarnings("unchecked") final List<Map<String, Object>> summaries =
                 (List<Map<String, Object>>) response.getBody().get("summaries");
         assertThat(summaries).isEmpty();
     }
@@ -157,8 +158,7 @@ class MoodControllerTest {
 
         final ResponseEntity<Map<String, Object>> response = controller.getCaregiverMoodSummaries(CAREGIVER_ID);
 
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> summaries =
+        @SuppressWarnings("unchecked") final List<Map<String, Object>> summaries =
                 (List<Map<String, Object>>) response.getBody().get("summaries");
         assertThat(summaries.get(0)).containsKey("createdAt");
     }

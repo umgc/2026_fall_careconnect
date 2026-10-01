@@ -4,7 +4,8 @@ import com.careconnect.model.Question;
 
 public final class QuestionMapper {
 
-    private QuestionMapper() { }
+    private QuestionMapper() {
+    }
 
     public static QuestionDTO toDto(Question q) {
         return new QuestionDTO(

@@ -5,14 +5,18 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+
 import java.time.Instant;
 import java.util.UUID;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Durable Ask AI conversation share receipt for linked-caregiver medical-record review. */
+/**
+ * Durable Ask AI conversation share receipt for linked-caregiver medical-record review.
+ */
 @Entity
 @Table(name = "ai_ask_conversation_share")
 @Data
@@ -34,7 +38,9 @@ public class AiAskConversationShare {
     @Column(name = "session_id", updatable = false)
     private UUID sessionId;
 
-    /** JSON array of recipient caregiver user ids (kept for API payloads; ACL uses join table). */
+    /**
+     * JSON array of recipient caregiver user ids (kept for API payloads; ACL uses join table).
+     */
     @Column(name = "recipient_user_ids", nullable = false, columnDefinition = "TEXT")
     private String recipientUserIds;
 

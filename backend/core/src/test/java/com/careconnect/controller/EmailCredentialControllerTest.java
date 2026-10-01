@@ -30,6 +30,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EmailCredentialControllerTest {
 
+    private static final String USER_ID = "123";
     @Mock
     private EmailCredentialLifecycleService credentialLifecycle;
     @Mock
@@ -38,11 +39,8 @@ class EmailCredentialControllerTest {
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
-
     @InjectMocks
     private EmailCredentialController controller;
-
-    private static final String USER_ID = "123";
     private User currentUser;
 
     @BeforeEach

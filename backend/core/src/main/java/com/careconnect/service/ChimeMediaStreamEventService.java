@@ -2,6 +2,7 @@ package com.careconnect.service;
 
 import java.util.List;
 import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,14 @@ public class ChimeMediaStreamEventService {
         this.registry = registry;
         this.chimeService = chimeService;
         this.callAttendeeService = callAttendeeService;
+    }
+
+    private static String stringValue(final Object value) {
+        if (value == null) {
+            return null;
+        }
+        final String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
     }
 
     /**
@@ -171,13 +180,5 @@ public class ChimeMediaStreamEventService {
             return fromExternal;
         }
         return chimeService.findCallIdByMeetingId(meetingId);
-    }
-
-    private static String stringValue(final Object value) {
-        if (value == null) {
-            return null;
-        }
-        final String text = value.toString().trim();
-        return text.isEmpty() ? null : text;
     }
 }

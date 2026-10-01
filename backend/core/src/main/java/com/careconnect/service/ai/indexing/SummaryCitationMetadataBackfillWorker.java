@@ -15,7 +15,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 
-/** Bounded, idempotent replay worker for summary chunks with stale citation metadata. */
+/**
+ * Bounded, idempotent replay worker for summary chunks with stale citation metadata.
+ */
 @Service
 @ConditionalOnProperty(
         name = "careconnect.ai.citation.backfill.enabled",
@@ -36,12 +38,9 @@ public class SummaryCitationMetadataBackfillWorker {
             final RetrievalIndexChunkRepository chunkRepository,
             final RetrievalIndexService retrievalIndexService,
             @Value("${careconnect.ai.citation.backfill.batch-size:25}") final int batchSize,
-            @Value("${careconnect.ai.citation.backfill.failure-backoff-ms:300000}")
-                    final long failureBackoffMs,
-            @Value("${careconnect.ai.citation.backfill.claim-lease-ms:300000}")
-                    final long claimLeaseMs,
-            @Value("${careconnect.ai.citation.backfill.max-attempts:8}")
-                    final int maxAttempts) {
+            @Value("${careconnect.ai.citation.backfill.failure-backoff-ms:300000}") final long failureBackoffMs,
+            @Value("${careconnect.ai.citation.backfill.claim-lease-ms:300000}") final long claimLeaseMs,
+            @Value("${careconnect.ai.citation.backfill.max-attempts:8}") final int maxAttempts) {
         this.chunkRepository = chunkRepository;
         this.retrievalIndexService = retrievalIndexService;
         this.batchSize = Math.max(1, batchSize);

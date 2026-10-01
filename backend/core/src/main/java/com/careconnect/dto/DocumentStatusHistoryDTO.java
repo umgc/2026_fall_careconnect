@@ -5,7 +5,9 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** One audit-trail entry: who changed a document's status, when and why. */
+/**
+ * One audit-trail entry: who changed a document's status, when and why.
+ */
 @Data
 @Builder
 public class DocumentStatusHistoryDTO {

@@ -7,10 +7,11 @@ package com.careconnect.dto;
  * sync_completed event details. Returns null when the denominator is zero.
  */
 public record SyncMetricsDTO(
-    long started,
-    long completed,
-    long failedEvents,
-    long attempted,
-    long succeeded,
-    long failed,
-    Double successRate) {}
+        long started,
+        long completed,
+        long failedEvents,
+        long attempted,
+        long succeeded,
+        long failed,
+        Double successRate) {
+}

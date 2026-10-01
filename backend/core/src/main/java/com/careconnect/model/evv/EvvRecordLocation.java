@@ -21,45 +21,49 @@ import java.util.UUID;
 @Entity
 @Table(name = "evv_record_location")
 public class EvvRecordLocation {
-    
+
     @Id
     @Column(columnDefinition = "uuid")
     private UUID id;
-    
+
     @Column(name = "evv_record_id", nullable = false)
     private Long evvRecordId;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 20)
     private EvvLocationRole role;
-    
+
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private EvvLocationType type;
-    
+
     @Column(name = "latitude", precision = 9, scale = 6)
     private BigDecimal latitude;
-    
+
     @Column(name = "longitude", precision = 9, scale = 6)
     private BigDecimal longitude;
-    
+
     @Column(name = "accuracy_m", precision = 6, scale = 2)
     private BigDecimal accuracyM;
-    
+
     @Convert(disableConversion = true)
     @Column(name = "address_snapshot_json", columnDefinition = "jsonb")
     @JdbcTypeCode(SqlTypes.JSON)
     private Map<String, Object> addressSnapshotJson;
-    
-    /** Reason GPS could not be captured; required when type != GPS */
+
+    /**
+     * Reason GPS could not be captured; required when type != GPS
+     */
     @Enumerated(EnumType.STRING)
     @Column(name = "no_gps_reason", length = 50)
     private NoGpsReason noGpsReason;
 
-    /** Free-form address for MANUAL location type (e.g. community or facility visits) */
+    /**
+     * Free-form address for MANUAL location type (e.g. community or facility visits)
+     */
     @Column(name = "manual_address", length = 500)
     private String manualAddress;
-    
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -72,7 +76,7 @@ public class EvvRecordLocation {
             createdAt = OffsetDateTime.now();
         }
     }
-    
+
     /**
      * Validate the location data based on type.
      * Federal EVV regulations require a noGpsReason whenever GPS is not used.

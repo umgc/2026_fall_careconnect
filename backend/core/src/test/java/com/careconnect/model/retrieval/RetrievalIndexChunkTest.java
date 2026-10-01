@@ -12,6 +12,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RetrievalIndexChunkTest {
 
+    private static void assertColumn(Class<?> type, String fieldName, String expectedColumn) throws Exception {
+        var field = type.getDeclaredField(fieldName);
+        Column column = field.getAnnotation(Column.class);
+        assertThat(column).as("@Column on %s", fieldName).isNotNull();
+        assertThat(column.name()).isEqualTo(expectedColumn);
+    }
+
     @Test
     @DisplayName("entity table name aligns with schema constant")
     void tableNameMapping() {
@@ -84,12 +91,5 @@ class RetrievalIndexChunkTest {
         assertThat(chunk.getIndexedAt()).isBeforeOrEqualTo(OffsetDateTime.now());
         assertThat(chunk.getCitationReplayAttempts()).isZero();
         assertThat(chunk.getMigrationStatus()).isEqualTo("ACTIVE");
-    }
-
-    private static void assertColumn(Class<?> type, String fieldName, String expectedColumn) throws Exception {
-        var field = type.getDeclaredField(fieldName);
-        Column column = field.getAnnotation(Column.class);
-        assertThat(column).as("@Column on %s", fieldName).isNotNull();
-        assertThat(column.name()).isEqualTo(expectedColumn);
     }
 }

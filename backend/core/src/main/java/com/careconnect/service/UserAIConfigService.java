@@ -13,10 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class UserAIConfigService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserAIConfigService.class);
+    private final UserAIConfigRepository userAIConfigRepository;
+
     public UserAIConfig convertDTOToEntity(UserAIConfigDTO dto) {
         return convertToEntity(dto);
     }
-    private final UserAIConfigRepository userAIConfigRepository;
 
     // Add missing methods for controller compatibility
     public UserAIConfigDTO saveUserAIConfig(UserAIConfigDTO dto) {
@@ -67,6 +68,7 @@ public class UserAIConfigService {
         }
         return saved;
     }
+
     private UserAIConfig convertToEntity(UserAIConfigDTO dto) {
         UserAIConfig.AIProvider provider;
         try {
@@ -98,6 +100,7 @@ public class UserAIConfigService {
                 .isActive(dto.getIsActive())
                 .build();
     }
+
     public UserAIConfigDTO convertToDTO(UserAIConfig config) {
         if (config == null) return null;
         UserAIConfigDTO dto = new UserAIConfigDTO();

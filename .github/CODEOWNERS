@@ -1,2 +1,15 @@
-# Jessie, Sivakumar, Ian, Yoseph, Jonathan, Crystal
-*  @j_c8778 @sganesan0414 @ianscottard @yomt @Jonathanbarreto37 @cschel
+# CareConnect code owners for the Fall 2026 cohort
+#
+# Crystal Schelmety is the project manager; the remaining entries are the
+# Fall 2026 team leads. Pull requests into protected branches require two
+# approvals, and self-merges are not permitted.
+#
+# Crystal Schelmety  (PM)  @cschel
+# Beth Kraus               @b-kraus
+# Ian Ard                  @ianscottard
+# Jonathan Barreto         @jonathanbarreto37
+# Shayne McPherson         @shaynemcp
+# Sivakumar Ganesan        @sganesan0414
+# Sung Yoo                 @SungWook1207
+
+*  @cschel @b-kraus @ianscottard @jonathanbarreto37 @shaynemcp @sganesan0414 @SungWook1207

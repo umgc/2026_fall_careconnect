@@ -12,11 +12,11 @@ package com.careconnect.service.consent;
  *
  * <p>Mirrors the record contract David is shipping in WBS 3.15.5.
  *
- * @param status              relationship state; see
- *                            {@link CaregiverVisibilityStatus}
- * @param canViewSummaries    {@code true} when the caregiver is
- *                            currently authorized to read summaries
- *                            for this patient
+ * @param status           relationship state; see
+ *                         {@link CaregiverVisibilityStatus}
+ * @param canViewSummaries {@code true} when the caregiver is
+ *                         currently authorized to read summaries
+ *                         for this patient
  */
 public record CaregiverVisibilityCheck(
         CaregiverVisibilityStatus status,

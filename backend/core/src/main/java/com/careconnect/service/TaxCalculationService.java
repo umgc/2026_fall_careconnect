@@ -1,6 +1,7 @@
 package com.careconnect.service;
 
 import org.springframework.stereotype.Service;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -72,6 +73,7 @@ public class TaxCalculationService {
 
     /**
      * Get tax rate for a given state
+     *
      * @param state 2-letter state code
      * @return tax rate as decimal (e.g., 0.0725 for 7.25%), or 0.0 if not found
      */
@@ -84,8 +86,9 @@ public class TaxCalculationService {
 
     /**
      * Calculate tax amount in cents
+     *
      * @param subtotalCents subtotal in cents
-     * @param taxRate tax rate as decimal (e.g., 0.0725)
+     * @param taxRate       tax rate as decimal (e.g., 0.0725)
      * @return tax amount in cents (rounded down)
      */
     public Long calculateTaxCents(Long subtotalCents, Double taxRate) {
@@ -97,8 +100,9 @@ public class TaxCalculationService {
 
     /**
      * Calculate complete billing breakdown
+     *
      * @param subtotalCents subscription price in cents
-     * @param state 2-letter state code
+     * @param state         2-letter state code
      * @return total in cents (subtotal + tax)
      */
     public Long calculateTotal(Long subtotalCents, String state) {

@@ -82,6 +82,130 @@ public class NaturalLanguageMailSearchService {
         this.mailpieceRepository = mailpieceRepository;
     }
 
+    /**
+     * Prefers a real cosine similarity when the vector API projects one; otherwise a
+     * conservative rank prior so weak hits do not dominate TABLE/FTS merges.
+     */
+    static double vectorScore(final int rank, final Double cosineSimilarity) {
+        if (cosineSimilarity != null && !cosineSimilarity.isNaN()) {
+            return Math.max(0.0d, Math.min(1.0d, cosineSimilarity));
+        }
+        return rankBasedVectorScore(rank);
+    }
+
+    /**
+     * Conservative prior when the vector API returns ordered chunks without similarity.
+     */
+    static double rankBasedVectorScore(final int rank) {
+        if (rank <= 0) {
+            return 0.35d;
+        }
+        return Math.max(0.30d, 0.72d - (0.05d * (rank - 1)));
+    }
+
+    static List<String> tokenize(final String query) {
+        if (query == null || query.isBlank()) {
+            return List.of();
+        }
+        final String[] parts = query.toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9\\s%.-]", " ")
+                .split("\\s+");
+        final Set<String> tokens = new LinkedHashSet<>();
+        for (final String part : parts) {
+            if (part == null || part.isBlank() || part.length() < 2) {
+                continue;
+            }
+            if (STOP_WORDS.contains(part)) {
+                continue;
+            }
+            tokens.add(part);
+        }
+        return List.copyOf(tokens);
+    }
+
+    private static ScoredMatch mergeScores(final ScoredMatch a, final ScoredMatch b) {
+        final UspsMailpiece piece = a.mailpiece() != null ? a.mailpiece() : b.mailpiece();
+        final Set<String> sources = new HashSet<>();
+        sources.addAll(a.sources());
+        sources.addAll(b.sources());
+        final double score = Math.min(1.0d, Math.max(a.score(), b.score()) + 0.08d);
+        final String snippet = a.snippet() != null && !a.snippet().isBlank() ? a.snippet() : b.snippet();
+        return new ScoredMatch(piece, score, sources, snippet);
+    }
+
+    private static double importanceBoost(final String level) {
+        if (level == null) {
+            return 0.0d;
+        }
+        return switch (level.trim().toUpperCase(Locale.ROOT)) {
+            case "HIGH" -> 0.20d;
+            case "MODERATE" -> 0.10d;
+            case "LOW" -> -0.02d;
+            default -> 0.0d;
+        };
+    }
+
+    private static boolean isElevated(final String level) {
+        if (level == null) {
+            return false;
+        }
+        final String value = level.trim().toUpperCase(Locale.ROOT);
+        return "HIGH".equals(value) || "MODERATE".equals(value);
+    }
+
+    private static String buildSnippet(final UspsMailpiece piece, final String chunkText) {
+        if (chunkText != null && !chunkText.isBlank()) {
+            return trimSnippet(chunkText);
+        }
+        final StringBuilder sb = new StringBuilder();
+        if (piece.getSender() != null && !piece.getSender().isBlank()) {
+            sb.append("From: ").append(piece.getSender().trim());
+        }
+        if (piece.getSummary() != null && !piece.getSummary().isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append(" — ");
+            }
+            sb.append(piece.getSummary().trim());
+        }
+        if (piece.getImportanceReasoning() != null && !piece.getImportanceReasoning().isBlank()) {
+            if (!sb.isEmpty()) {
+                sb.append(" | ");
+            }
+            sb.append(piece.getImportanceReasoning().trim());
+        }
+        return trimSnippet(sb.toString());
+    }
+
+    private static String trimSnippet(final String value) {
+        if (value == null) {
+            return "";
+        }
+        final String trimmed = value.trim().replaceAll("\\s+", " ");
+        return trimmed.length() <= 280 ? trimmed : trimmed.substring(0, 277) + "...";
+    }
+
+    private static Long parseLong(final String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (final NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static int clampLimit(final int limit) {
+        if (limit <= 0) {
+            return DEFAULT_LIMIT;
+        }
+        return Math.min(limit, MAX_LIMIT);
+    }
+
+    private static double round(final double value) {
+        return Math.round(value * 1000.0d) / 1000.0d;
+    }
+
     @Transactional(readOnly = true)
     public NaturalLanguageMailSearchResponse search(
             final User caller,
@@ -328,27 +452,6 @@ public class NaturalLanguageMailSearchService {
         }
     }
 
-    /**
-     * Prefers a real cosine similarity when the vector API projects one; otherwise a
-     * conservative rank prior so weak hits do not dominate TABLE/FTS merges.
-     */
-    static double vectorScore(final int rank, final Double cosineSimilarity) {
-        if (cosineSimilarity != null && !cosineSimilarity.isNaN()) {
-            return Math.max(0.0d, Math.min(1.0d, cosineSimilarity));
-        }
-        return rankBasedVectorScore(rank);
-    }
-
-    /**
-     * Conservative prior when the vector API returns ordered chunks without similarity.
-     */
-    static double rankBasedVectorScore(final int rank) {
-        if (rank <= 0) {
-            return 0.35d;
-        }
-        return Math.max(0.30d, 0.72d - (0.05d * (rank - 1)));
-    }
-
     private NaturalLanguageMailSearchMatch toDto(final ScoredMatch scored) {
         final UspsMailpiece piece = scored.mailpiece();
         if (piece == null) {
@@ -369,109 +472,6 @@ public class NaturalLanguageMailSearchService {
                 round(scored.score()),
                 scored.snippet(),
                 List.copyOf(scored.sources()));
-    }
-
-    static List<String> tokenize(final String query) {
-        if (query == null || query.isBlank()) {
-            return List.of();
-        }
-        final String[] parts = query.toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9\\s%.-]", " ")
-                .split("\\s+");
-        final Set<String> tokens = new LinkedHashSet<>();
-        for (final String part : parts) {
-            if (part == null || part.isBlank() || part.length() < 2) {
-                continue;
-            }
-            if (STOP_WORDS.contains(part)) {
-                continue;
-            }
-            tokens.add(part);
-        }
-        return List.copyOf(tokens);
-    }
-
-    private static ScoredMatch mergeScores(final ScoredMatch a, final ScoredMatch b) {
-        final UspsMailpiece piece = a.mailpiece() != null ? a.mailpiece() : b.mailpiece();
-        final Set<String> sources = new HashSet<>();
-        sources.addAll(a.sources());
-        sources.addAll(b.sources());
-        final double score = Math.min(1.0d, Math.max(a.score(), b.score()) + 0.08d);
-        final String snippet = a.snippet() != null && !a.snippet().isBlank() ? a.snippet() : b.snippet();
-        return new ScoredMatch(piece, score, sources, snippet);
-    }
-
-    private static double importanceBoost(final String level) {
-        if (level == null) {
-            return 0.0d;
-        }
-        return switch (level.trim().toUpperCase(Locale.ROOT)) {
-            case "HIGH" -> 0.20d;
-            case "MODERATE" -> 0.10d;
-            case "LOW" -> -0.02d;
-            default -> 0.0d;
-        };
-    }
-
-    private static boolean isElevated(final String level) {
-        if (level == null) {
-            return false;
-        }
-        final String value = level.trim().toUpperCase(Locale.ROOT);
-        return "HIGH".equals(value) || "MODERATE".equals(value);
-    }
-
-    private static String buildSnippet(final UspsMailpiece piece, final String chunkText) {
-        if (chunkText != null && !chunkText.isBlank()) {
-            return trimSnippet(chunkText);
-        }
-        final StringBuilder sb = new StringBuilder();
-        if (piece.getSender() != null && !piece.getSender().isBlank()) {
-            sb.append("From: ").append(piece.getSender().trim());
-        }
-        if (piece.getSummary() != null && !piece.getSummary().isBlank()) {
-            if (!sb.isEmpty()) {
-                sb.append(" — ");
-            }
-            sb.append(piece.getSummary().trim());
-        }
-        if (piece.getImportanceReasoning() != null && !piece.getImportanceReasoning().isBlank()) {
-            if (!sb.isEmpty()) {
-                sb.append(" | ");
-            }
-            sb.append(piece.getImportanceReasoning().trim());
-        }
-        return trimSnippet(sb.toString());
-    }
-
-    private static String trimSnippet(final String value) {
-        if (value == null) {
-            return "";
-        }
-        final String trimmed = value.trim().replaceAll("\\s+", " ");
-        return trimmed.length() <= 280 ? trimmed : trimmed.substring(0, 277) + "...";
-    }
-
-    private static Long parseLong(final String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (final NumberFormatException ex) {
-            return null;
-        }
-    }
-
-    private static int clampLimit(final int limit) {
-        if (limit <= 0) {
-            return DEFAULT_LIMIT;
-        }
-        return Math.min(limit, MAX_LIMIT);
-    }
-
-    private static double round(final double value) {
-        return Math.round(value * 1000.0d) / 1000.0d;
     }
 
     private record ScoredMatch(

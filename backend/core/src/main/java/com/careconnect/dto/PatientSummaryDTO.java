@@ -6,14 +6,15 @@ import lombok.Builder;
 
 @Builder
 public record PatientSummaryDTO(
-    Long id,
-    String firstName,
-    String lastName,
-    String email,
-    String phone,
-    String dob,
-    Gender gender,
-    Address address,
-    String relationship,
-    String maNumber
-) {}
+        Long id,
+        String firstName,
+        String lastName,
+        String email,
+        String phone,
+        String dob,
+        Gender gender,
+        Address address,
+        String relationship,
+        String maNumber
+) {
+}
