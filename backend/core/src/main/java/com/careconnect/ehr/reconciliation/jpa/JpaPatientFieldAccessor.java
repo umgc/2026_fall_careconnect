@@ -1,5 +1,6 @@
 package com.careconnect.ehr.reconciliation.jpa;
 
+import com.careconnect.ehr.StoredDateOfBirth;
 import com.careconnect.ehr.reconciliation.IdentityFieldNames;
 import com.careconnect.ehr.reconciliation.PatientFieldAccessor;
 import com.careconnect.model.Address;
@@ -11,9 +12,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.time.format.ResolverStyle;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -62,10 +61,6 @@ import java.util.function.Function;
  * would shift this baseline, because this particular value decides who wins a reconciliation.
  */
 public class JpaPatientFieldAccessor implements PatientFieldAccessor {
-
-    /** The onboarding registration screen's date shape; STRICT so 02/30/1950 is not silently rolled. */
-    private static final DateTimeFormatter US_DATE =
-            DateTimeFormatter.ofPattern("MM/dd/uuuu").withResolverStyle(ResolverStyle.STRICT);
 
     /**
      * One entry per field the library may reconcile. Held as an ordered map purely so the error
@@ -229,19 +224,7 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
      * genuinely different value is still a disagreement.
      */
     private static String storedDobAsIso(String stored) {
-        if (stored == null || stored.isBlank()) {
-            return stored;
-        }
-        String trimmed = stored.trim();
-        try {
-            return LocalDate.parse(trimmed).toString();
-        } catch (DateTimeParseException notIso) {
-            try {
-                return LocalDate.parse(trimmed, US_DATE).toString();
-            } catch (DateTimeParseException notUs) {
-                return stored;
-            }
-        }
+        return StoredDateOfBirth.parse(stored).map(LocalDate::toString).orElse(stored);
     }
 
     /**

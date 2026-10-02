@@ -11,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -108,7 +109,7 @@ class EhrRawPayloadPostgresJsonbTest {
     }
 
     @Test
-    @DisplayName("TC-EHR-RAW-007: the retention delete removes payloads retrieved before the cutoff and no others")
+    @DisplayName("TC-EHR-RAW-007: the retention queries find the patient and delete only their payloads before the cutoff")
     void retentionDeleteRemovesOnlyRowsBeforeCutoff() {
         final Long patientId = ((Number) entityManager
                 .createNativeQuery("select id from patient order by id limit 1")
@@ -124,7 +125,21 @@ class EhrRawPayloadPostgresJsonbTest {
         final Long kept = repository.save(payloadRetrievedAt(patientId, sourceId, cutoff.plusDays(1))).getId();
         entityManager.flush();
 
-        final int deleted = repository.deleteRetrievedBefore(cutoff);
+        // Step one of the purge: the patient is reported once, with patient.dob exactly as stored.
+        final Object storedDob = entityManager
+                .createNativeQuery("select dob from patient where id = :id")
+                .setParameter("id", patientId)
+                .getSingleResult();
+        assertThat(repository.findPatientsWithPayloadRetrievedBefore(cutoff))
+                .singleElement()
+                .satisfies(found -> {
+                    assertThat(found.getPatientId()).isEqualTo(patientId);
+                    assertThat(found.getDob()).isEqualTo(storedDob);
+                });
+
+        // Step two: a patient not in the list is left alone, then the listed one is purged.
+        assertThat(repository.deleteRetrievedBeforeForPatients(cutoff, List.of(-1L))).isZero();
+        final int deleted = repository.deleteRetrievedBeforeForPatients(cutoff, List.of(patientId));
         entityManager.clear();
 
         assertThat(deleted).isEqualTo(1);
