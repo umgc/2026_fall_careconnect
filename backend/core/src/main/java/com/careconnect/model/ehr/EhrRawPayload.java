@@ -28,7 +28,7 @@ import java.time.OffsetDateTime;
  * payload holds retrieved clinical content, so it is subject to the retention and deletion
  * rules that apply to patient data.
  * <p>
- * <strong>Retention.</strong> {@code EhrRawPayloadRetentionWorker} purges a payload once it was
+ * <strong>Retention.</strong> {@code EhrRetentionWorker} purges a payload once it was
  * retrieved more than 7 years ago and the patient has reached age 25, following Maryland
  * Health-General § 4-403 (decided 2026-10-02, issue #214; see that class for the reasoning). The
  * gap was raised by @SungWook1207 on PR #209, 2026-09-30, and again on PR #216. An earlier version of

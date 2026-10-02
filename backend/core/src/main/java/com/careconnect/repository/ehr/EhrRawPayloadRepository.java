@@ -21,23 +21,15 @@ public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Lo
     List<EhrRawPayload> findByPatientIdAndSourceIdOrderByRetrievedAtDesc(
             Long patientId, Long sourceId);
 
-    /** A patient with at least one payload past the cutoff, and their stored date of birth. */
-    interface PatientDateOfBirth {
-        Long getPatientId();
-
-        /** {@code patient.dob} as stored: free text, possibly null. */
-        String getDob();
-    }
-
     /**
      * Retention purge, step one: who has payloads the source answered before {@code cutoff}. The
      * date of birth comes back as stored because it is a varchar in two formats, which SQL cannot
-     * compare; {@code EhrRawPayloadRetentionWorker} parses it and decides who is old enough.
+     * compare; {@code EhrRetentionWorker} parses it and decides who is old enough.
      * One row per patient, not per payload.
      */
     @Query("select distinct p.patientId as patientId, pt.dob as dob "
-            + "from EhrRawPayload p, Patient pt "
-            + "where pt.id = p.patientId and p.retrievedAt < :cutoff")
+            + "from EhrRawPayload p left join Patient pt on pt.id = p.patientId "
+            + "where p.retrievedAt < :cutoff")
     List<PatientDateOfBirth> findPatientsWithPayloadRetrievedBefore(@Param("cutoff") OffsetDateTime cutoff);
 
     /**
