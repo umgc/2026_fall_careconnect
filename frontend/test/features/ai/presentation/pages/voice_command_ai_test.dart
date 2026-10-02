@@ -52,6 +52,20 @@ Widget _buildVoiceRouterApp({String localestring = 'en', bool singleShot = false
         path: '/medication',
         builder: (_, __) => const Scaffold(body: Text('Medication Page')),
       ),
+      GoRoute(
+        path: '/invoice-assistant',
+        builder: (_, __) =>
+            const Scaffold(body: Text('Invoice Assistant Page')),
+      ),
+      GoRoute(
+        path: '/file-management',
+        builder: (_, __) => const Scaffold(body: Text('File Management Page')),
+      ),
+      GoRoute(
+        path: '/informed-delivery',
+        builder: (_, __) =>
+            const Scaffold(body: Text('Informed Delivery Page')),
+      ),
     ],
   );
   return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale(localestring), routerConfig: router);
@@ -2832,13 +2846,46 @@ void main() {
 
   group('VoiceCommandAI final flow tests', () {
     setUp(() {
+      setupDefaultMocks();
       VoiceIntentService.testOverride = null;
     });
 
     tearDown(() {
       VoiceIntentService.testOverride = null;
+      clearMocks();
     });
+    testWidgets('happy path: keyword fallback through registry',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) {
+        return null;
+      };
 
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'take me to my tracker');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Keyword match resolves through registry -> confirming
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Symptom Tracker'), findsWidgets);
+
+      // Confirm navigates
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Symptoms Page'), findsOneWidget);
+
+      VoiceIntentService.testOverride = null;
+      await _tearDown(tester);
+    });
     testWidgets('happy path: AI intent through registry to navigation',
         (tester) async {
       VoiceIntentService.testOverride = ({
@@ -2882,40 +2929,6 @@ void main() {
       VoiceIntentService.testOverride = null;
       await _tearDown(tester);
     });
-
-    testWidgets('happy path: keyword fallback through registry',
-        (tester) async {
-      VoiceIntentService.testOverride = ({
-        required String utterance,
-        String locale = 'en',
-        String? screenId,
-      }) {
-        return null;
-      };
-
-      await tester.pumpWidget(_buildVoiceRouterApp());
-      await tester.pump(const Duration(milliseconds: 100));
-
-      await tester.tap(find.byType(FloatingActionButton));
-      await tester.pump(const Duration(milliseconds: 200));
-
-      await _sendSpeechResult(tester, 'take me to my tracker');
-      await tester.pump(const Duration(milliseconds: 200));
-
-      // Keyword match resolves through registry -> confirming
-      expect(find.textContaining('Confirm command'), findsOneWidget);
-      expect(find.textContaining('Symptom Tracker'), findsWidgets);
-
-      // Confirm navigates
-      await tester.tap(find.text('Confirm'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Symptoms Page'), findsOneWidget);
-
-      VoiceIntentService.testOverride = null;
-      await _tearDown(tester);
-    });
-
     testWidgets('failure path: unrecognized through full fallback',
         (tester) async {
       VoiceIntentService.testOverride = ({
@@ -2946,7 +2959,169 @@ void main() {
       VoiceIntentService.testOverride = null;
       await _tearDown(tester);
     });
+    testWidgets('WBS 5.2.71 opens invoice assistant through voice command',
+        (tester) async {
+      String? navigatedTo;
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) =>
+          null;
 
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: VoiceCommandAI(
+            onNavigateRequested: (destination) {
+              navigatedTo = destination;
+            },
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'open invoice assistant');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Invoice Assistant'), findsWidgets);
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(navigatedTo, '/invoice-assistant');
+
+      await _tearDown(tester);
+    });
+    testWidgets('WBS 5.2.72 opens file management through voice command',
+        (tester) async {
+      String? navigatedTo;
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) =>
+          null;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: VoiceCommandAI(
+            onNavigateRequested: (destination) {
+              navigatedTo = destination;
+            },
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'open file management');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('File Management'), findsWidgets);
+
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(navigatedTo, '/file-management');
+
+      await _tearDown(tester);
+    });
+    testWidgets('WBS 5.2.73 supports open information delivery (Issue #193)',
+        (tester) async {
+      String? navigatedTo;
+
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) =>
+          null;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: VoiceCommandAI(
+            onNavigateRequested: (destination) {
+              navigatedTo = destination;
+            },
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Test the exact phrase required for Issue #193.
+      await _sendSpeechResult(tester, 'open information delivery');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Informed Delivery'), findsWidgets);
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Both spoken phrases should request the same destination.
+      expect(navigatedTo, '/informed-delivery');
+
+      await _tearDown(tester);
+    });
+    testWidgets('WBS 5.2.73 opens informed delivery through voice command',
+        (tester) async {
+      String? navigatedTo;
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) =>
+          null;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: VoiceCommandAI(
+            onNavigateRequested: (destination) {
+              navigatedTo = destination;
+            },
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'open informed delivery');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Informed Delivery'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(navigatedTo, '/informed-delivery');
+
+      await _tearDown(tester);
+    });
     testWidgets('failure path: timeout to error to successful retry',
         (tester) async {
       VoiceIntentService.testOverride = ({
