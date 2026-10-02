@@ -21,7 +21,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.9'   # match `flutter --version` locally
+          flutter-version: '3.44.1'   # keep in sync with FLUTTER_VERSION in the other workflows; pubspec.lock needs >=3.44.0
           channel: 'stable'
 
       - run: flutter pub get

@@ -55,7 +55,9 @@ on:
       - develop
 
 env:
-  FLUTTER_VERSION: '3.x'
+  # Pinned (not '3.x'): a floating SDK pulled Flutter 3.47.6 into CI and broke
+  # chat_page tests. Keep in sync with the other workflows and local dev.
+  FLUTTER_VERSION: '3.44.1'
   JAVA_VERSION: '17'
   FLUTTER_TEST_CONCURRENCY: '4'
   # Number of parallel matrix runners the frontend test suite is split
