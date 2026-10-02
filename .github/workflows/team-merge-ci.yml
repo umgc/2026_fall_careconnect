@@ -103,7 +103,7 @@ jobs:
         continue-on-error: true
         run: |
           flutter analyze --no-pub 2>&1 | tail -5
-          echo "Note: analyze is informational — Team D's SAST pipeline enforces analysis."
+          echo "Note: analyze is informational — build-and-analyze.yml (quality-gate) reports SAST findings (report-only)."
 
       - name: Maven compile (skip tests)
         if: steps.mode.outputs.run_suite == 'true'

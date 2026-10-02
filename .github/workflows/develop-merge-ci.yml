@@ -13,8 +13,9 @@
 #   - Does NOT run E2E or integration tests -- those run one stage later,
 #     on develop -> staging.
 #   - Does NOT run SAST/SCA/secrets scanning, including `flutter analyze`
-#     -- Team D's build-and-analyze.yml already runs on every PR
-#     regardless of target branch (team-merge-ci.yml also already ran it
+#     -- build-and-analyze.yml (the `quality-gate` check) already runs
+#     on every PR regardless of target branch, currently report-only
+#     (quality/ci/gate/policy.yaml) (team-merge-ci.yml also already ran it
 #     for each individual feature); not duplicated here.
 #   - Source-branch legitimacy (PRs to develop must come from a
 #     team-*-develop branch) is enforced by branch-source-gate.yml, not
