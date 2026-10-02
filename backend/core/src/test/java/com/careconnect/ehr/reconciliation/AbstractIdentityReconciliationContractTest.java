@@ -455,6 +455,31 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-032 A date_of_birth the patient declined is not asked again on the next sync")
+    void declinedDateOfBirthIsNotRePromptedOnTheNextSync() {
+        Long patientId = freshPatientId();
+        Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
+        Instant t2 = t1.plus(1, ChronoUnit.DAYS);
+        Long epic = sourceId("EPIC");
+
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
+        reconciler().finalizePendingDateOfBirth(patientId, false);
+
+        // Next scheduled sync: the same source sends the same, unchanged record.
+        var resync = reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
+        assertEquals(ReconciliationOutcome.Decision.REJECTED_PREVIOUSLY_DECLINED, resync.get(0).decision());
+        assertTrue(auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).isEmpty(),
+                "the patient must not be asked again about a value they declined");
+        assertEquals(Optional.of("1950-05-04"), patientAccessor().getCurrentValue(patientId, DATE_OF_BIRTH));
+
+        // A genuinely different, newer value still prompts.
+        var different = reconciler().reconcile(
+                snapshot(patientId, epic, t2.plus(1, ChronoUnit.DAYS), DATE_OF_BIRTH, "1950-05-07"));
+        assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, different.get(0).decision());
+    }
+
+    @Test
     @DisplayName("TC-EHR-REC-028 Finalizing with no pending date_of_birth conflict throws IllegalStateException")
     void finalizingWithNoPendingConflictThrows() {
         Long patientId = freshPatientId();

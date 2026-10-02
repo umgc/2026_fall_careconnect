@@ -111,6 +111,14 @@ public interface IdentityConflictAuditWriter {
     Optional<PendingConflict> currentPendingConflict(Long patientId, String fieldName);
 
     /**
+     * Whether the patient has already declined {@code incomingValue} for this field: a finalized
+     * {@code REJECTED} row with {@code resolved_by = PATIENT}. {@code date_of_birth} only -- it lets
+     * {@link RecencyWinsIdentityReconciler} discard a re-sync of a value the patient already refused
+     * instead of opening the same prompt again on every sync.
+     */
+    boolean patientHasDeclined(Long patientId, String fieldName, String incomingValue);
+
+    /**
      * Finalizes the open {@code PENDING} conflict for {@code (patientId, fieldName)} — the write side
      * counterpart to {@link #currentPendingConflict}'s read, closed out with a final outcome.
      * Implementations should throw if none is open; {@link RecencyWinsIdentityReconciler} never calls

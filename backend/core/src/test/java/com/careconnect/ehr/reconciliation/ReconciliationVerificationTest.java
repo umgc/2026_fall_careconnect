@@ -244,11 +244,10 @@ class ReconciliationVerificationTest {
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
         reconciler.finalizePendingDateOfBirth(p, false);
 
-        var newer = sync(p, "EPIC", T1.plus(2, ChronoUnit.DAYS), DOB, "1950-05-06");
+        var newer = sync(p, "EPIC", T1.plus(2, ChronoUnit.DAYS), DOB, "1950-05-07");
 
-        // Declining leaves provenance at T1, so the same Epic value with a newer timestamp is a new
-        // candidate. Documented as open question Q3 in the verification report: product may want a
-        // declined value to stay declined.
+        // A different value still prompts. The value the patient declined (1950-05-06) does not:
+        // that was open question Q3 in the verification report, resolved by TC-EHR-REC-032.
         assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, newer.get(0).decision());
         assertEquals(Optional.of("1950-05-04"), value(p, DOB));
     }
