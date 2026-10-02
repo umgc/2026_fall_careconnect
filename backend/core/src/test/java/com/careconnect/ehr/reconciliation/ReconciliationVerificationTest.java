@@ -41,6 +41,8 @@ class ReconciliationVerificationTest {
     private InMemoryAuditWriter audit;
     private IdentityReconciler reconciler;
     private long nextPatientId = 1000;
+    /** Ids are Long as of PR #209; each source code gets a stable numeric id, as in InMemoryContractTest. */
+    private final Map<String, Long> sourceIds = new HashMap<>();
 
     @BeforeEach
     void setUp() {
@@ -50,15 +52,22 @@ class ReconciliationVerificationTest {
                 new InMemoryProvenanceStore(), patients, audit, new InMemoryTransactionRunner());
     }
 
-    private Object newPatient() {
+    private Long newPatient() {
         return nextPatientId++;
     }
 
-    private List<ReconciliationOutcome> sync(Object patientId, String source, Instant at, Map<String, String> fields) {
-        return reconciler.reconcile(new SourceIdentitySnapshot(patientId, source, at, fields));
+    private Long sourceId(String sourceCode) {
+        if (sourceCode == null) {
+            return null; // keeps the missing-source case (TC-EHR-REC-030) a missing source
+        }
+        return sourceIds.computeIfAbsent(sourceCode, code -> 500L + sourceIds.size());
     }
 
-    private List<ReconciliationOutcome> sync(Object patientId, String source, Instant at, String field, String value) {
+    private List<ReconciliationOutcome> sync(Long patientId, String source, Instant at, Map<String, String> fields) {
+        return reconciler.reconcile(new SourceIdentitySnapshot(patientId, sourceId(source), at, fields));
+    }
+
+    private List<ReconciliationOutcome> sync(Long patientId, String source, Instant at, String field, String value) {
         return sync(patientId, source, at, Map.of(field, value));
     }
 
@@ -67,14 +76,14 @@ class ReconciliationVerificationTest {
                 ReconciliationOutcome::decision, (a, b) -> a, LinkedHashMap::new));
     }
 
-    private Optional<String> value(Object patientId, String field) {
+    private Optional<String> value(Long patientId, String field) {
         return patients.getCurrentValue(patientId, field);
     }
 
     @Test
     @DisplayName("TC-EHR-REC-001 One snapshot with several fields decides each field independently")
     void multiFieldSnapshotDecidesEachFieldIndependently() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, Map.of("family_name", "Smith", "email", "a@example.com"));
 
         Map<String, String> epic = new HashMap<>();
@@ -100,7 +109,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-002 A pending date_of_birth does not hold back other fields in the same snapshot")
     void pendingDateOfBirthDoesNotBlockOtherFieldsInTheSameSnapshot() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, Map.of(DOB, "1950-05-04", "family_name", "Smith"));
 
         var outcomes = byField(sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS),
@@ -115,7 +124,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-003 Receiving the same newer snapshot twice changes the patient once and audits once")
     void repeatedIdenticalSnapshotIsIdempotent() {
-        Object p = newPatient();
+        Long p = newPatient();
         Instant t2 = T1.plus(1, ChronoUnit.DAYS);
         sync(p, "ATHENAHEALTH", T1, "family_name", "Smith");
 
@@ -131,7 +140,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-004 Three sources arriving out of timestamp order converge on the newest")
     void threeSourcesArrivingOutOfOrderConvergeOnTheNewest() {
-        Object p = newPatient();
+        Long p = newPatient();
         Instant t2 = T1.plus(2, ChronoUnit.DAYS);
         Instant t3 = T1.plus(3, ChronoUnit.DAYS);
 
@@ -154,8 +163,8 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-005 Reconciling one patient never changes another patient's values or baseline")
     void patientsAreIsolatedFromEachOther() {
-        Object alice = newPatient();
-        Object bob = newPatient();
+        Long alice = newPatient();
+        Long bob = newPatient();
         Instant later = T1.plus(10, ChronoUnit.DAYS);
 
         sync(alice, "ATHENAHEALTH", T1, "family_name", "Anders");
@@ -175,7 +184,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-006 A null field value is skipped the same way a blank one is")
     void nullIncomingValueIsSkipped() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, "phone", "555-0100");
 
         Map<String, String> withNull = new HashMap<>();
@@ -189,7 +198,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-007 A date_of_birth candidate with exactly the baseline timestamp is rejected, not pending")
     void dateOfBirthTieWithBaselineIsRejectedNotPending() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
 
         var tie = sync(p, "EPIC", T1, DOB, "1950-05-06");
@@ -202,7 +211,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-008 Confirming a date_of_birth twice fails the second time")
     void finalizingTheSameDateOfBirthTwiceThrows() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
 
@@ -216,7 +225,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-009 After an accepted date_of_birth, a sync with the same value does not reopen it")
     void acceptedDateOfBirthIsNotReopenedByAnAgreeingSync() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
         reconciler.finalizePendingDateOfBirth(p, true);
@@ -230,7 +239,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-010 After a patient declines, a newer different candidate prompts them again")
     void declinedDateOfBirthCanBeReopenedByANewerCandidate() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
         reconciler.finalizePendingDateOfBirth(p, false);
@@ -247,7 +256,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-011 Finding: values differing only in letter case are treated as a disagreement")
     void finding_caseOnlyDifferenceIsADisagreement() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, "family_name", "Smith");
 
         var outcome = sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), "family_name", "SMITH");
@@ -261,7 +270,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-012 Finding: surrounding whitespace is kept and counts as a disagreement")
     void finding_surroundingWhitespaceIsKept() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, "family_name", "Smith");
 
         var outcome = sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), "family_name", " Smith ");
@@ -277,7 +286,7 @@ class ReconciliationVerificationTest {
     @Test
     @DisplayName("TC-EHR-REC-029 A snapshot with no sourceUpdatedAt is rejected before anything is written")
     void snapshotWithoutSourceTimestampIsRejectedBeforeAnyWrite() {
-        Object p = newPatient();
+        Long p = newPatient();
 
         // The timestamp is what every recency decision hangs on (SourceIdentitySnapshot javadoc). An
         // undated snapshot must not fill a field and leave a provenance row with no timestamp behind.
@@ -293,20 +302,20 @@ class ReconciliationVerificationTest {
                 "a snapshot for no patient must be refused");
         assertTrue(value(null, "family_name").isEmpty(), "nothing may be written against a null patient");
 
-        Object p = newPatient();
+        Long p = newPatient();
         assertThrows(NullPointerException.class, () -> sync(p, null, T1, "family_name", "Smith"),
                 "a snapshot from no source must be refused: provenance and audit rows need a source");
         assertTrue(value(p, "family_name").isEmpty(), "nothing may be written from an unknown source");
 
         assertThrows(NullPointerException.class,
-                () -> reconciler.reconcile(new SourceIdentitySnapshot(p, "EPIC", T1, null)),
+                () -> reconciler.reconcile(new SourceIdentitySnapshot(p, sourceId("EPIC"), T1, null)),
                 "a snapshot with no field map must be refused");
     }
 
     @Test
     @DisplayName("TC-EHR-REC-031 Accepting a date_of_birth after a supersede applies the newest candidate and advances provenance to it")
     void acceptingAfterSupersedeAppliesTheNewestCandidate() {
-        Object p = newPatient();
+        Long p = newPatient();
         sync(p, "ATHENAHEALTH", T1, DOB, "1950-05-04");
         sync(p, "EPIC", T1.plus(1, ChronoUnit.DAYS), DOB, "1950-05-06");
         sync(p, "ORACLE_HEALTH", T1.plus(3, ChronoUnit.DAYS), DOB, "1950-05-09");
