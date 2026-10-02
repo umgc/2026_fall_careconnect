@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,6 +15,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
               body: AIChat(
                   role: 'patient',
@@ -36,6 +39,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
               body: AIChat(
                   role: 'caregiver',
@@ -56,6 +61,8 @@ void main() {
     testWidgets('Modal AI Chat shows Scaffold', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
               body: AIChat(
                   role: 'patient',
@@ -71,6 +78,8 @@ void main() {
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
               body: AIChat(
                   role: 'patient',
@@ -85,6 +94,8 @@ void main() {
     testWidgets('Modal AI Chat shows send icon', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
               body: AIChat(
                   role: 'patient',
@@ -99,6 +110,8 @@ void main() {
     testWidgets('Modal AI Chat shows Row layout', (WidgetTester tester) async {
       await tester.pumpWidget(
         const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
               body: AIChat(
                   role: 'caregiver',

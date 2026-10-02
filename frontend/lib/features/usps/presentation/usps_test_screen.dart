@@ -16,7 +16,8 @@ class UspsTestScreen extends StatefulWidget {
   State<UspsTestScreen> createState() => _UspsTestScreenState();
 }
 
-class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObserver {
+class _UspsTestScreenState extends State<UspsTestScreen>
+    with WidgetsBindingObserver {
   Map<String, dynamic>? digest;
   bool loading = false;
   String? error;
@@ -221,7 +222,7 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
     try {
       final dio = await _authenticatedDio();
       final resp = await dio.get(
-          '$base/v1/api/email-credentials/status?patientEmail=${Uri.encodeComponent(patientEmail)}');
+          '$base/v1/api/email-credentials/gmail/status?patientEmail=${Uri.encodeComponent(patientEmail)}');
       if (resp.statusCode == 200 && resp.data is Map<String, dynamic>) {
         final data = resp.data as Map<String, dynamic>;
         final connected = data['connected'] == true;
@@ -375,7 +376,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
         _awaitingOAuthReturn = false;
         if (!await launchUrl(uri, mode: LaunchMode.platformDefault)) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open Google authentication')),
+            const SnackBar(
+                content: Text('Could not open Google authentication')),
           );
         }
       }
@@ -736,7 +738,8 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                       gmailStatusMessage ??
                           (gmailState == _GmailConnectionState.connected
                               ? 'Google account connected. You can fetch USPS digests automatically.'
-                              : gmailState == _GmailConnectionState.needsReconnect
+                              : gmailState ==
+                                      _GmailConnectionState.needsReconnect
                                   ? 'Gmail access expired. Reconnect to continue syncing mail.'
                                   : 'Connect your Google account to automatically fetch USPS digests from Gmail.'),
                       style: TextStyle(
@@ -754,10 +757,10 @@ class _UspsTestScreenState extends State<UspsTestScreen> with WidgetsBindingObse
                         child: ElevatedButton.icon(
                           onPressed: _connectGoogleAccount,
                           icon: const Icon(Icons.link),
-                          label: Text(gmailState ==
-                                  _GmailConnectionState.needsReconnect
-                              ? 'Reconnect Google Account'
-                              : 'Connect Google Account'),
+                          label: Text(
+                              gmailState == _GmailConnectionState.needsReconnect
+                                  ? 'Reconnect Google Account'
+                                  : 'Connect Google Account'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
