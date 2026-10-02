@@ -23,6 +23,7 @@ import 'package:care_connect_app/features/summary/summary_confirmation_list.dart
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
 import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
+import 'package:care_connect_app/features/health/health_data/widgets/medicare_connect_tile.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
 import 'package:care_connect_app/features/tasks/presentation/assign_task_screen.dart';
@@ -202,6 +203,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
     GoRoute(path: '/health-data', builder: (_, __) => const HealthDataScreen()),
     GoRoute(path: '/dob-confirm', builder: (_, __) => const DobConfirmationScreen()),
+    GoRoute(path: '/medicare-connect', builder: (_, __) => Scaffold(body: SafeArea(child: Padding(padding: const EdgeInsets.all(16), child: MedicareConnectTile())))),
     GoRoute(
       path: '/ui-preview',
       builder: (_, __) => const UiPreviewScreen(),
