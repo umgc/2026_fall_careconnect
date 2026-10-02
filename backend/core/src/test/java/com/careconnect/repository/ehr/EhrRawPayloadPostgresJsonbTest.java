@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code patient} row: {@code SchemaPatchRunner} applies
  * {@code fk_ehr_raw_payload_patient}, so an arbitrary patient id will not insert.
  * <p>
- * Test ID TC-EHR-RAW-002 is permanent. Never renumber, never reuse.
+ * Test IDs TC-EHR-RAW-002 and TC-EHR-RAW-007 are permanent. Never renumber, never reuse.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -105,5 +105,41 @@ class EhrRawPayloadPostgresJsonbTest {
 
         // Only reachable if the column really holds an object: ->> on a JSON string returns null.
         assertThat(String.valueOf(resourceType)).isEqualTo("Patient");
+    }
+
+    @Test
+    @DisplayName("TC-EHR-RAW-007: the retention delete removes payloads retrieved before the cutoff and no others")
+    void retentionDeleteRemovesOnlyRowsBeforeCutoff() {
+        final Long patientId = ((Number) entityManager
+                .createNativeQuery("select id from patient order by id limit 1")
+                .getSingleResult()).longValue();
+        final Long sourceId = ((Number) entityManager
+                .createNativeQuery("select id from ehr_source where code = 'ATHENAHEALTH'")
+                .getSingleResult()).longValue();
+
+        // A cutoff older than anything a real sync could have stored, so the statement cannot
+        // touch rows this test did not create even if the target database is not empty.
+        final OffsetDateTime cutoff = OffsetDateTime.parse("2001-01-01T00:00:00Z");
+        final Long expired = repository.save(payloadRetrievedAt(patientId, sourceId, cutoff.minusDays(1))).getId();
+        final Long kept = repository.save(payloadRetrievedAt(patientId, sourceId, cutoff.plusDays(1))).getId();
+        entityManager.flush();
+
+        final int deleted = repository.deleteRetrievedBefore(cutoff);
+        entityManager.clear();
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(repository.existsById(expired)).isFalse();
+        assertThat(repository.existsById(kept)).isTrue();
+    }
+
+    private static EhrRawPayload payloadRetrievedAt(
+            final Long patientId, final Long sourceId, final OffsetDateTime retrievedAt) {
+        return EhrRawPayload.builder()
+                .patientId(patientId)
+                .sourceId(sourceId)
+                .resourceType("Patient")
+                .payload(PAYLOAD)
+                .retrievedAt(retrievedAt)
+                .build();
     }
 }
