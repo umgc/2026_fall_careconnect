@@ -10,6 +10,7 @@ import ca.uhn.fhir.rest.client.api.IHttpResponse;
 import ca.uhn.fhir.rest.client.interceptor.BearerTokenAuthInterceptor;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.DateRangeParam;
+import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.util.BundleUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -94,7 +95,9 @@ public class FHIRService {
         if (results == null) {
             throw new RuntimeException("No Patient Response!");
         }
-        if (results.getTotal() == 1) {
+        // Bundle.total is optional (0..1) in a searchset, so count the entries actually returned.
+        int quantity = results.getEntry().size();
+        if (quantity == 1) {
             String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
             if (bundleType.equals("Patient")) {
                 return (Patient) results.getEntry().get(0).getResource();
@@ -102,7 +105,7 @@ public class FHIRService {
 
             throw new RuntimeException("Invalid Patient response type: " + bundleType);
         }
-        throw new RuntimeException("Invalid Patient response quantity: " + results.getTotal());
+        throw new RuntimeException("Invalid Patient response quantity: " + quantity);
     }
 
     public String patientToJSON(Patient patient) {
@@ -164,10 +167,11 @@ public class FHIRService {
     /**
      * Searches {@code type} and follows every {@code next} link. Each request goes through the
      * retry policy (DEF-MCR-02). If a page after the first still fails, the records gathered so far
-     * are returned with the failure instead of being discarded (DEF-MCR-01).
+     * are returned with the failure instead of being discarded (DEF-MCR-01). A rejected token (401)
+     * is still thrown, because nothing more may be asked with it (FR-MCR-09, DEF-MCR-05).
      * <p>
-     * The empty-bundle check and the wrong-type message are unchanged from before; DEF-MCR-03 and
-     * DEF-MCR-04 are fixed separately.
+     * Emptiness is decided from the entries, not Bundle.total, which is optional (DEF-MCR-03), and a
+     * wrong resource type names the resource searched for (DEF-MCR-04).
      */
     private <T extends Resource> Paged<T> paged(String patientToken, Date lastUpdatedDate, Class<T> type,
                                                 String noResponseMessage) {
@@ -183,12 +187,13 @@ public class FHIRService {
         if (results == null) {
             throw new RuntimeException(noResponseMessage);
         }
-        if (results.getTotal() == 0) {
+        // Bundle.total is optional (0..1) in a searchset; decide emptiness from the entries.
+        if (!results.hasEntry()) {
             return new Paged<>(BlueButtonRetrieval.complete(new ArrayList<>(), 1), null);
         }
         String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
         if (!bundleType.equals(name)) {
-            throw new RuntimeException("Invalid EOB response type: " + bundleType);
+            throw new RuntimeException("Invalid " + name + " response type: " + bundleType);
         }
 
         List<T> records = new ArrayList<>();
@@ -200,6 +205,9 @@ public class FHIRService {
             try {
                 results = retryPolicy.execute(name + " page " + next,
                         () -> bluebuttonClient.loadPage().next(current).execute(), retryAfter::last);
+            } catch (AuthenticationException e) {
+                // Not a partial result: the caller must not carry on with this token (FR-MCR-09).
+                throw e;
             } catch (BaseServerResponseException e) {
                 log.warn("Blue Button: {} page {} failed with HTTP {}; keeping {} records from {} page(s)",
                         name, next, e.getStatusCode(), records.size(), pages);
