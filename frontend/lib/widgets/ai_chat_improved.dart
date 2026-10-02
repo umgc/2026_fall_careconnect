@@ -158,6 +158,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   String _conversationId = "";
   String? _askSessionId;
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _messageScrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   final List<UploadedFile> _uploadedFiles = [];
   bool _isLoading = false;
@@ -404,6 +405,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       unawaited(_ttsEngine.stop());
     }
     _controller.dispose();
+    _messageScrollController.dispose();
     _animationController.dispose();
     _inactivityTimer?.cancel();
     super.dispose();
@@ -1727,7 +1729,40 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
   }
 
   void _scrollToBottom() {
-    // Implement scroll logic if using a ScrollController
+    if (!mounted || !_messageScrollController.hasClients) return;
+    final position = _messageScrollController.position;
+    _messageScrollController.jumpTo(position.maxScrollExtent);
+  }
+
+  /// Leading list items before the messages: privacy notice + AI disclaimer.
+  static const int _kListNoticeCount = 2;
+
+  Widget _buildPrivacyNotice() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        border: Border.all(color: Colors.blue.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Chat logs are automatically deleted after 30 days for privacy protection.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.blue.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1833,46 +1868,24 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                   ),
               ],
             ),
-            // Privacy notification banner
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                border: Border.all(color: Colors.blue.shade200),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline,
-                      size: 16, color: Colors.blue.shade700),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Chat logs are automatically deleted after 30 days for privacy protection.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // AI disclaimer (WBS 3.15.4)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 4),
-              child: DisclaimerBanner.ai(),
-            ),
             Divider(color: colorScheme.outlineVariant),
-            // Message list
+            // Message list. The privacy notice and AI disclaimer lead the list
+            // so they scroll with it instead of eating the fixed-height modal.
             Expanded(
               child: ListView.builder(
+                controller: _messageScrollController,
                 reverse: false,
-                itemCount: _messages.length,
+                itemCount: _messages.length + _kListNoticeCount,
                 itemBuilder: (context, index) {
-                  final msg = _messages[index];
+                  if (index == 0) return _buildPrivacyNotice();
+                  if (index == 1) {
+                    // AI disclaimer (WBS 3.15.4)
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: DisclaimerBanner.ai(),
+                    );
+                  }
+                  final msg = _messages[index - _kListNoticeCount];
                   return Align(
                     alignment: msg.isUser
                         ? Alignment.centerRight

@@ -42,4 +42,6 @@ runs:
       working-directory: frontend
       run: |
         cp .env.example .env 2>/dev/null || touch .env
-        flutter pub get
+        # --enforce-lockfile: fail instead of silently re-resolving when
+        # pubspec.lock is missing or out of sync with pubspec.yaml.
+        flutter pub get --enforce-lockfile

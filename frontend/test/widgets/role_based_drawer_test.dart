@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/widgets/role_based_drawer.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
@@ -44,6 +45,34 @@ Widget _wrap({UserProvider? provider, GlobalKey<NavigatorState>? navKey}) {
         ),
       ),
     ),
+  );
+}
+
+// GoRouter variant for drawer items that navigate with context.go().
+Widget _wrapRouter({required UserProvider provider}) {
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, __) => Scaffold(
+          drawer: const RoleBasedDrawer(),
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/admin/users',
+        builder: (_, __) => const Scaffold(body: Text('User Mgmt Page')),
+      ),
+    ],
+  );
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: provider,
+    child: MaterialApp.router(routerConfig: router),
   );
 }
 
@@ -666,7 +695,8 @@ void main() {
       final provider = _SessionUserProvider(
         name: 'Admin', email: 'a@t.com', role: 'ADMIN',
       );
-      await tester.pumpWidget(_wrap(provider: provider));
+      // User Management navigates with context.go(), so it needs a GoRouter.
+      await tester.pumpWidget(_wrapRouter(provider: provider));
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
