@@ -759,6 +759,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.send));
       await tester.pump();
+      await tester.pump(); // post-frame auto-scroll
 
       // The user message should appear
       expect(find.text('Hello AI'), findsOneWidget);
@@ -775,6 +776,7 @@ void main() {
 
       await tester.tap(find.byIcon(Icons.send));
       await tester.pump();
+      await tester.pump(); // post-frame auto-scroll
 
       // The message should be displayed regardless of loading state
       expect(find.text('Test message'), findsOneWidget);
@@ -808,6 +810,8 @@ void main() {
         ChangeNotifierProvider<UserProvider>.value(
           value: provider,
           child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: AIChat(
                 role: 'PATIENT',
@@ -856,6 +860,7 @@ void main() {
       // Submit via keyboard
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
+      await tester.pump(); // post-frame auto-scroll
 
       expect(find.text('Submit test'), findsOneWidget);
     });
@@ -1239,6 +1244,7 @@ void main() {
         await tester.enterText(find.byType(TextField), 'What changed?');
         await tester.tap(find.byIcon(Icons.send));
         await tester.pump();
+        await tester.pump(); // post-frame auto-scroll
 
         expect(
           find.textContaining('without a selected patient'),
@@ -1468,7 +1474,7 @@ void main() {
 
       // Replace with empty container to trigger dispose
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: SizedBox())),
+        const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SizedBox())),
       );
       await tester.pump();
 
@@ -1531,7 +1537,7 @@ void main() {
         await tester.pump();
 
         await tester.pumpWidget(
-          const MaterialApp(home: Scaffold(body: SizedBox())),
+          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SizedBox())),
         );
         await tester.pump();
         release.complete();
@@ -2204,14 +2210,16 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
 
-        expect(find.text('Stable retry question'), findsOneWidget);
+        expect(find.text('Stable retry question', skipOffstage: false),
+            findsOneWidget);
         expect(find.byKey(const Key('ask-ai-retry')), findsOneWidget);
 
         await tester.tap(find.byKey(const Key('ask-ai-retry')));
         await tester.pump();
         await tester.pump(const Duration(seconds: 1));
 
-        expect(find.text('Stable retry question'), findsOneWidget);
+        expect(find.text('Stable retry question', skipOffstage: false),
+            findsOneWidget);
         expect(find.text('Retry succeeded'), findsWidgets);
         expect(askCount, 2);
       }, () => mockClient);

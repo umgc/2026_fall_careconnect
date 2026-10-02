@@ -30,8 +30,9 @@ CLAUDE.md
 .dart_tool/
 .packages
 build/
-# If you're building an application, you may want to check-in your pubspec.lock
-pubspec.lock
+# pubspec.lock is committed (application): CI and every dev resolve the
+# same package versions. Run `flutter pub get` and commit the lock when
+# pubspec.yaml changes.
 
 # Directory created by dartdoc
 # If you don't generate documentation locally you can remove this line.

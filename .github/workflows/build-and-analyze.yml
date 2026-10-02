@@ -309,7 +309,7 @@ jobs:
         if: env.FLUTTER_ROOT != ''
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: '3.44.1'   # keep in sync with FLUTTER_VERSION in the other workflows
           channel: stable
           cache: true
 
