@@ -1,5 +1,6 @@
 package com.careconnect.ehr.reconciliation.jpa;
 
+import com.careconnect.ehr.reconciliation.IdentityFieldNames;
 import com.careconnect.ehr.reconciliation.PatientFieldAccessor;
 import com.careconnect.model.Address;
 import com.careconnect.model.Patient;
@@ -91,6 +92,23 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
         return (value == null || value.isBlank()) ? Optional.empty() : Optional.of(value);
     }
 
+    /**
+     * {@code patient.updated_at} as an instant, read in {@link ZoneId#systemDefault()}.
+     *
+     * <p><b>The assumption, exactly:</b> the column holds a UTC wall-clock reading. That is what
+     * this application writes: {@code hibernate.jdbc.time_zone=UTC} shifts the JVM-zone
+     * {@code LocalDateTime} that {@code Auditable} stamps, and the pool's
+     * {@code SET TIME ZONE 'UTC'} makes the column default {@code now()} agree with it. Hibernate
+     * shifts the value back into the JVM's zone on read, and this method resolves it in that same
+     * zone, so the instant comes out right.
+     *
+     * <p>It comes out wrong, by the offset between the zones, for a row stamped by a writer that
+     * sets neither: a session left in another zone, or a second service without the Hibernate
+     * setting. Nothing here can detect that, because a zone-less column does not record who wrote
+     * it. The fix is the column type, not this method: {@code patient.created_at}/{@code updated_at}
+     * as {@code TIMESTAMPTZ}, as the {@code ehr_*} tables already are. That changes a shared table
+     * and is still an open decision (PR #209 and PR #216 reviews).
+     */
     @Override
     public Instant getPatientUpdatedAt(Long patientId) {
         Patient patient = require(patientId);
@@ -167,17 +185,17 @@ public class JpaPatientFieldAccessor implements PatientFieldAccessor {
 
     private static Map<String, FieldBinding> bindings() {
         Map<String, FieldBinding> map = new LinkedHashMap<>();
-        map.put("given_name", simple(Patient::getFirstName, Patient::setFirstName));
-        map.put("family_name", simple(Patient::getLastName, Patient::setLastName));
-        map.put("date_of_birth", new FieldBinding(
+        map.put(IdentityFieldNames.GIVEN_NAME, simple(Patient::getFirstName, Patient::setFirstName));
+        map.put(IdentityFieldNames.FAMILY_NAME, simple(Patient::getLastName, Patient::setLastName));
+        map.put(IdentityFieldNames.DATE_OF_BIRTH, new FieldBinding(
                 patient -> storedDobAsIso(patient.getDob()), Patient::setDob, JpaPatientFieldAccessor::requireIsoDate));
-        map.put("phone", simple(Patient::getPhone, Patient::setPhone));
-        map.put("email", simple(Patient::getEmail, Patient::setEmail));
-        map.put("address_line1", address(Address::getLine1, Address::setLine1));
-        map.put("address_line2", address(Address::getLine2, Address::setLine2));
-        map.put("city", address(Address::getCity, Address::setCity));
-        map.put("state", address(Address::getState, Address::setState));
-        map.put("postal_code", address(Address::getZip, Address::setZip));
+        map.put(IdentityFieldNames.PHONE, simple(Patient::getPhone, Patient::setPhone));
+        map.put(IdentityFieldNames.EMAIL, simple(Patient::getEmail, Patient::setEmail));
+        map.put(IdentityFieldNames.ADDRESS_LINE1, address(Address::getLine1, Address::setLine1));
+        map.put(IdentityFieldNames.ADDRESS_LINE2, address(Address::getLine2, Address::setLine2));
+        map.put(IdentityFieldNames.CITY, address(Address::getCity, Address::setCity));
+        map.put(IdentityFieldNames.STATE, address(Address::getState, Address::setState));
+        map.put(IdentityFieldNames.POSTAL_CODE, address(Address::getZip, Address::setZip));
         // Collections.unmodifiableMap, not Map.copyOf: the latter returns an unordered map, which
         // would quietly defeat the insertion order this map is built in and the stable listing the
         // unknown-field error message depends on.

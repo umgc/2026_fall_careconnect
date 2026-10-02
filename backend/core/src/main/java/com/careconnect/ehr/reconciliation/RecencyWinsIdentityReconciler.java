@@ -109,7 +109,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
     /** The one field this algorithm treats differently (2026-09-26 partial reversal). */
-    private static final String DATE_OF_BIRTH = "date_of_birth";
+    private static final String DATE_OF_BIRTH = IdentityFieldNames.DATE_OF_BIRTH;
 
     private final IdentityFieldProvenanceStore provenanceStore;
     private final PatientFieldAccessor patientAccessor;
