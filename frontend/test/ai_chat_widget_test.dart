@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
-import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // AIChat renders a DisclaimerBanner which reads AppLocalizations, so the test

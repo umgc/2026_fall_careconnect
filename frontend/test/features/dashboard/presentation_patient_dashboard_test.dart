@@ -21,6 +21,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -29,7 +30,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/dashboard/presentation/pages/patient_dashboard.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
-import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import '../../mock_user_provider.dart';
 
@@ -54,7 +54,8 @@ Widget _wrapNull() {
 
 Widget _wrapWithUser({int? userId}) {
   final provider = MockUserProvider(
-    mockUser: MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
+    mockUser:
+        MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
   );
   return MaterialApp(
     locale: const Locale('en'),
@@ -79,25 +80,27 @@ MockClient _createMockClient({
   List<Map<String, dynamic>>? familyMembersData,
   bool throwException = false,
 }) {
-  final patient = patientData ?? {
-    'id': 1,
-    'firstName': 'John',
-    'lastName': 'Doe',
-    'email': 'john@example.com',
-    'phone': '555-1234',
-    'dateOfBirth': '1990-01-01',
-  };
+  final patient = patientData ??
+      {
+        'id': 1,
+        'firstName': 'John',
+        'lastName': 'Doe',
+        'email': 'john@example.com',
+        'phone': '555-1234',
+        'dateOfBirth': '1990-01-01',
+      };
 
-  final caregivers = caregiversData ?? [
-    {
-      'id': 10,
-      'firstName': 'Jane',
-      'lastName': 'Smith',
-      'email': 'jane@example.com',
-      'phone': '555-5678',
-      'lastSeen': '2026-03-10',
-    },
-  ];
+  final caregivers = caregiversData ??
+      [
+        {
+          'id': 10,
+          'firstName': 'Jane',
+          'lastName': 'Smith',
+          'email': 'jane@example.com',
+          'phone': '555-5678',
+          'lastSeen': '2026-03-10',
+        },
+      ];
 
   final familyMembers = familyMembersData ?? [];
 
@@ -126,13 +129,17 @@ MockClient _createMockClient({
     }
 
     // Mood/pain log
-    if (path.contains('/mood') || path.contains('/pain') || path.contains('/log')) {
+    if (path.contains('/mood') ||
+        path.contains('/pain') ||
+        path.contains('/log')) {
       return http.Response(jsonEncode({'status': 'ok'}), moodPainStatusCode);
     }
 
     // Family members add
     if (request.method == 'POST' && path.contains('/family')) {
-      return http.Response(jsonEncode({'id': 99, 'firstName': 'New', 'lastName': 'Member'}), 201);
+      return http.Response(
+          jsonEncode({'id': 99, 'firstName': 'New', 'lastName': 'Member'}),
+          201);
     }
 
     // Default
@@ -255,14 +262,16 @@ void main() {
       expect(find.byType(FloatingActionButton), findsOneWidget);
     });
 
-    testWidgets('does not show caregivers section when user is null', (tester) async {
+    testWidgets('does not show caregivers section when user is null',
+        (tester) async {
       await tester.pumpWidget(_wrapNull());
       await tester.pump();
       // Without a logged-in user, no caregiver data is fetched
       expect(find.text('Jane Smith'), findsNothing);
     });
 
-    testWidgets('shows error state when user is null after loading', (tester) async {
+    testWidgets('shows error state when user is null after loading',
+        (tester) async {
       _setupMethodChannels();
       addTearDown(_teardownMethodChannels);
       final mockClient = _createMockClient();
@@ -382,7 +391,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('renders No family members added yet when list is empty', (tester) async {
+    testWidgets('renders No family members added yet when list is empty',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -391,7 +401,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('renders SOS Emergency button after data loads', (tester) async {
+    testWidgets('renders SOS Emergency button after data loads',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -482,7 +493,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('does not show caregivers when patient API returns non-200', (tester) async {
+    testWidgets('does not show caregivers when patient API returns non-200',
+        (tester) async {
       final mockClient = _createMockClient(patientStatusCode: 500);
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -492,7 +504,9 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('does not show caregiver names when caregivers API returns non-200', (tester) async {
+    testWidgets(
+        'does not show caregiver names when caregivers API returns non-200',
+        (tester) async {
       final mockClient = _createMockClient(caregiversStatusCode: 500);
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -539,7 +553,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('tapping SMS button with no caregiver phone shows snackbar', (tester) async {
+    testWidgets('tapping SMS button with no caregiver phone shows snackbar',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -559,7 +574,8 @@ void main() {
         await tester.ensureVisible(find.text('Send SMS Notification'));
         await tester.tap(find.text('Send SMS Notification'));
         await tester.pump();
-        expect(find.text('No caregiver with phone number found.'), findsOneWidget);
+        expect(
+            find.text('No caregiver with phone number found.'), findsOneWidget);
       }, () => mockClient);
     });
 
@@ -747,7 +763,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('mood selector is in a horizontal scrollable row', (tester) async {
+    testWidgets('mood selector is in a horizontal scrollable row',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -804,7 +821,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('tapping a different pain option changes selection', (tester) async {
+    testWidgets('tapping a different pain option changes selection',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -819,7 +837,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('pain selector is in a horizontal scrollable row', (tester) async {
+    testWidgets('pain selector is in a horizontal scrollable row',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -828,9 +847,11 @@ void main() {
           find.byType(SingleChildScrollView),
         );
         // There should be at least 2 horizontal scrollviews (mood + pain)
-        final horizontalCount = scrollViews.where(
-          (sv) => sv.scrollDirection == Axis.horizontal,
-        ).length;
+        final horizontalCount = scrollViews
+            .where(
+              (sv) => sv.scrollDirection == Axis.horizontal,
+            )
+            .length;
         expect(horizontalCount, greaterThanOrEqualTo(2));
       }, () => mockClient);
     });
@@ -845,7 +866,8 @@ void main() {
       _teardownMethodChannels();
     });
 
-    testWidgets('selecting both mood and pain triggers auto-save without crash', (tester) async {
+    testWidgets('selecting both mood and pain triggers auto-save without crash',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -864,7 +886,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('selecting only mood does not trigger save snackbar', (tester) async {
+    testWidgets('selecting only mood does not trigger save snackbar',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -876,7 +899,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('selecting only pain does not trigger save snackbar', (tester) async {
+    testWidgets('selecting only pain does not trigger save snackbar',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -913,7 +937,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('SOS bottom sheet shows SOS Emergency list tile', (tester) async {
+    testWidgets('SOS bottom sheet shows SOS Emergency list tile',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -924,11 +949,13 @@ void main() {
         await tester.ensureVisible(find.text('SOS Emergency'));
         await tester.tap(find.text('SOS Emergency'));
         await tester.pump();
-        expect(find.text('Select emergency type and send alert'), findsOneWidget);
+        expect(
+            find.text('Select emergency type and send alert'), findsOneWidget);
       }, () => mockClient);
     });
 
-    testWidgets('SOS bottom sheet shows Share My Location option', (tester) async {
+    testWidgets('SOS bottom sheet shows Share My Location option',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -1014,7 +1041,8 @@ void main() {
       _teardownMethodChannels();
     });
 
-    testWidgets('tapping SMS button with caregiver having phone shows dialog', (tester) async {
+    testWidgets('tapping SMS button with caregiver having phone shows dialog',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -1120,7 +1148,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('SMS dialog Send button sends message and shows snackbar', (tester) async {
+    testWidgets('SMS dialog Send button sends message and shows snackbar',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -1152,7 +1181,9 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('tapping SMS with empty phone caregiver shows no-phone snackbar', (tester) async {
+    testWidgets(
+        'tapping SMS with empty phone caregiver shows no-phone snackbar',
+        (tester) async {
       tester.view.physicalSize = const Size(800, 2000);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -1173,7 +1204,8 @@ void main() {
         await tester.ensureVisible(find.text('Send SMS Notification'));
         await tester.tap(find.text('Send SMS Notification'));
         await tester.pump();
-        expect(find.text('No caregiver with phone number found.'), findsOneWidget);
+        expect(
+            find.text('No caregiver with phone number found.'), findsOneWidget);
       }, () => mockClient);
     });
   });
@@ -1187,7 +1219,9 @@ void main() {
       _teardownMethodChannels();
     });
 
-    testWidgets('tapping popup menu shows Call, Video Call, Email, Send SMS options', (tester) async {
+    testWidgets(
+        'tapping popup menu shows Call, Video Call, Email, Send SMS options',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -1216,7 +1250,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('tapping Video Call option in popup does not crash', (tester) async {
+    testWidgets('tapping Video Call option in popup does not crash',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -1241,7 +1276,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('caregiver without phone does not show Phone text', (tester) async {
+    testWidgets('caregiver without phone does not show Phone text',
+        (tester) async {
       final mockClient = _createMockClient(
         caregiversData: [
           {
@@ -1381,7 +1417,8 @@ void main() {
       _teardownMethodChannels();
     });
 
-    testWidgets('View Today Task link has underline decoration', (tester) async {
+    testWidgets('View Today Task link has underline decoration',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());
@@ -1462,7 +1499,8 @@ void main() {
       _teardownMethodChannels();
     });
 
-    testWidgets('uses Patient as default name when firstName is null', (tester) async {
+    testWidgets('uses Patient as default name when firstName is null',
+        (tester) async {
       final mockClient = _createMockClient(
         patientData: {
           'id': 1,
@@ -1491,7 +1529,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('renders empty caregivers section when no caregivers', (tester) async {
+    testWidgets('renders empty caregivers section when no caregivers',
+        (tester) async {
       final mockClient = _createMockClient(
         caregiversData: [],
       );
@@ -1575,7 +1614,8 @@ void main() {
       }, () => mockClient);
     });
 
-    testWidgets('renders TextButton.icon for Add Family Member', (tester) async {
+    testWidgets('renders TextButton.icon for Add Family Member',
+        (tester) async {
       final mockClient = _createMockClient();
       await http.runWithClient(() async {
         await tester.pumpWidget(_wrapWithUser());

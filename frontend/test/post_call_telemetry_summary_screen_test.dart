@@ -381,7 +381,11 @@ void main() {
       expect(find.text('Call Again'), findsOneWidget);
       expect(find.text('Send Message'), findsOneWidget);
 
+      await tester.ensureVisible(find.text('Call Again'));
+      await tester.pump();
       await tester.tap(find.text('Call Again'));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Send Message'));
       await tester.pump();
       await tester.tap(find.text('Send Message'));
       await tester.pump();
@@ -460,6 +464,9 @@ void main() {
         findsOneWidget,
       );
 
+      await tester
+          .ensureVisible(find.widgetWithText(OutlinedButton, 'Approve'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
       await _pumpLoaded(tester);
 
@@ -468,8 +475,7 @@ void main() {
       expect(find.text('Items to confirm'), findsNothing);
     });
 
-    testWidgets(
-        'FR-SUM-4 shows clinician-review snackbar when item is held',
+    testWidgets('FR-SUM-4 shows clinician-review snackbar when item is held',
         (tester) async {
       ApiService.debugSetHttpClient(
         MockClient((request) async {
@@ -530,6 +536,9 @@ void main() {
         findsOneWidget,
       );
 
+      await tester
+          .ensureVisible(find.widgetWithText(OutlinedButton, 'Approve'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
       await _pumpLoaded(tester);
 
@@ -623,7 +632,8 @@ void main() {
       expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
     });
 
-    testWidgets('dismiss button hides sentiment clip panel and clears selection',
+    testWidgets(
+        'dismiss button hides sentiment clip panel and clears selection',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -747,7 +757,8 @@ void main() {
       expect(find.textContaining('Selected sample:'), findsNothing);
     });
 
-    testWidgets('SENT-CLIP-007 playback fetch failure shows SnackBar on dot tap',
+    testWidgets(
+        'SENT-CLIP-007 playback fetch failure shows SnackBar on dot tap',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -838,7 +849,8 @@ void main() {
             );
           }
           if (path.endsWith('/recording/playback-url')) {
-            fail('playback-url should not be fetched when playbackReady is false');
+            fail(
+                'playback-url should not be fetched when playbackReady is false');
           }
           return http.Response('', 404);
         }),
@@ -854,17 +866,20 @@ void main() {
       );
       await _pumpLoaded(tester);
 
-      expect(find.text(kSentimentClipRecordingStatusProcessing), findsOneWidget);
+      expect(
+          find.text(kSentimentClipRecordingStatusProcessing), findsOneWidget);
       expect(find.text(kSentimentChartDotTapHintProcessing), findsOneWidget);
 
       await _tapTimelineNearFirstVoiceSample(tester);
       await _pumpClipLoaded(tester);
 
       expect(find.byType(SentimentClipPlayerWidget), findsNothing);
-      expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsOneWidget);
+      expect(
+          find.text(kSentimentClipRecordingProcessingSnackBar), findsOneWidget);
     });
 
-    testWidgets('SENT-CLIP-005 system-only tap is silent with unavailable status',
+    testWidgets(
+        'SENT-CLIP-005 system-only tap is silent with unavailable status',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -896,7 +911,8 @@ void main() {
             );
           }
           if (path.contains('/recording/playback-url')) {
-            fail('playback-url should not be fetched for system-only recording');
+            fail(
+                'playback-url should not be fetched for system-only recording');
           }
           return http.Response('', 404);
         }),
@@ -912,14 +928,17 @@ void main() {
       );
       await _pumpLoaded(tester);
 
-      expect(find.text(kSentimentClipRecordingStatusUnavailable), findsOneWidget);
-      expect(find.text(kSentimentChartDotTapHintTranscriptOnly), findsOneWidget);
+      expect(
+          find.text(kSentimentClipRecordingStatusUnavailable), findsOneWidget);
+      expect(
+          find.text(kSentimentChartDotTapHintTranscriptOnly), findsOneWidget);
 
       await _tapTimelineNearFirstVoiceSample(tester);
       await _pumpClipLoaded(tester);
 
       expect(find.byType(SentimentClipPlayerWidget), findsNothing);
-      expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsNothing);
+      expect(
+          find.text(kSentimentClipRecordingProcessingSnackBar), findsNothing);
     });
   });
 }

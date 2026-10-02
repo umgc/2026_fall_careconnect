@@ -1143,7 +1143,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // The error is shown both in the body and via a SnackBar, so allow >= 1.
-      expect(find.text('Invalid note ID or missing patient context'), findsWidgets);
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
   });
 

@@ -17,13 +17,13 @@
 //     build — renders without crashing (delegates to PatientReportsScreen).
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/screens/tabs/patient_tabs.dart';
-import 'package:care_connect_app/l10n/app_localizations.dart';
 
 MaterialApp _app(Widget child) => MaterialApp(
       locale: const Locale('en'),
@@ -73,13 +73,18 @@ void main() {
       // Verifies the purely static UI renders without errors and displays
       // the expected title and text strings.
       await tester.pumpWidget(
-        const MaterialApp(home: PatientHealthTab()),
+        const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PatientHealthTab()),
       );
       await tester.pump();
 
       expect(find.text('Health'), findsOneWidget);
       expect(find.text('Health Tracking'), findsOneWidget);
-      expect(find.text('Monitor your health metrics, medications, and wellness goals.'),
+      expect(
+          find.text(
+              'Monitor your health metrics, medications, and wellness goals.'),
           findsOneWidget);
       expect(find.byIcon(Icons.health_and_safety), findsOneWidget);
     });

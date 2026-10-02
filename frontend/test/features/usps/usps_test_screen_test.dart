@@ -91,14 +91,14 @@ void main() {
       expect(find.text('Gmail Integration'), findsOneWidget);
     });
 
-    testWidgets('shows not-connected message when Google not linked',
+    testWidgets('shows log-in prompt in Gmail status when user is null',
         (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.resetPhysicalSize);
       await tester.pumpWidget(_wrap());
       await tester.pump();
       expect(
-        find.textContaining('Connect your Google account'),
+        find.text('Please log in to connect Gmail.'),
         findsOneWidget,
       );
     });
@@ -474,8 +474,8 @@ void main() {
       await tester.tap(find.text('Clear Cache'));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
-      // Dio call will fail; SnackBar with "Failed to clear cache" expected
-      expect(find.text('Failed to clear cache'), findsOneWidget);
+      // user == null => _clearCache returns early with "Please log in first"
+      expect(find.text('Please log in first'), findsOneWidget);
     });
 
     testWidgets('tapping Connect Google Account with null user shows snackbar',
@@ -603,7 +603,7 @@ void main() {
   // Group 10 – Google connection states
   // =========================================================================
   group('UspsTestScreen – Google connection display', () {
-    testWidgets('not connected state shows correct color (grey text)',
+    testWidgets('null-user status message is grey (disconnected state)',
         (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -611,7 +611,7 @@ void main() {
       await tester.pump();
 
       final textWidget = tester.widget<Text>(
-        find.textContaining('Connect your Google account'),
+        find.text('Please log in to connect Gmail.'),
       );
       expect(textWidget.style?.color, equals(Colors.grey));
     });
