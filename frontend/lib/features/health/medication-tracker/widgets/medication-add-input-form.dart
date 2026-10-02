@@ -76,6 +76,13 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
   bool _isLoading = false;
 
   bool _isReadingPhoto = false;
+
+  /// True while the camera picker is open, so a second tap cannot open it again.
+  bool _isPickingPhoto = false;
+
+  /// True once the user picks a type themselves; a scan that reads no type
+  /// then leaves their choice in place.
+  bool _typeChosenByUser = false;
   MedicationPhotoExtractionResult? _photoResult;
 
   /// Set when a rescan fails after a successful scan; the earlier review
@@ -181,9 +188,10 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                               'Take a photo of the medication label to fill in this form',
                           child: OutlinedButton.icon(
                             key: const Key('medication-photo-capture-button'),
-                            onPressed: _isReadingPhoto || _isLoading
-                                ? null
-                                : _captureLabelPhoto,
+                            onPressed:
+                                _isReadingPhoto || _isPickingPhoto || _isLoading
+                                    ? null
+                                    : _captureLabelPhoto,
                             icon: const Icon(Icons.camera_alt, size: 16),
                             label: const Text('Scan Label'),
                             style: OutlinedButton.styleFrom(
@@ -398,6 +406,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                       onChanged: (MedicationType? newValue) {
                         setState(() {
                           _selectedMedicationType = newValue!;
+                          _typeChosenByUser = true;
                         });
                         _markEditedByUser(MedicationPhotoFieldKey.medicationType);
                       },
@@ -781,17 +790,28 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
       return;
     }
 
+    setState(() {
+      _isPickingPhoto = true;
+    });
     XFile? photo;
     try {
       photo = await (widget.pickLabelPhoto ?? _pickPhotoFromCamera)();
     } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isPickingPhoto = false;
+      });
       _applyPhotoResult(MedicationPhotoExtractionResult.manualFallback(
         message:
             'The camera could not be opened. Please enter the medication manually.',
       ));
       return;
     }
-    if (photo == null || !mounted) return;
+    if (!mounted) return;
+    setState(() {
+      _isPickingPhoto = false;
+    });
+    if (photo == null) return;
 
     setState(() {
       _isReadingPhoto = true;
@@ -861,11 +881,18 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
         _machineGenerated.add(MedicationPhotoFieldKey.frequency);
       }
 
-      _selectedMedicationType = medicationTypeFromExtracted(
+      final type = medicationTypeFromExtracted(
         result.prefilledValue(MedicationPhotoFieldKey.medicationType),
       );
-      if (_selectedMedicationType != null) {
+      if (type != null) {
+        _selectedMedicationType = type;
+        _typeChosenByUser = false;
         _machineGenerated.add(MedicationPhotoFieldKey.medicationType);
+      } else if (_typeChosenByUser) {
+        _editedByUser.add(MedicationPhotoFieldKey.medicationType);
+      } else {
+        // Never guess: an unread type stays blank unless the user picked one.
+        _selectedMedicationType = null;
       }
 
       _prefillGeneration++;
@@ -891,7 +918,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
       describe('Medication name', _nameController.text),
       describe('Dosage', _dosageController.text),
       describe('Frequency', frequency),
-      describe('Medication type', _selectedMedicationType?.name ?? ''),
+      describe('Medication type', _selectedMedicationType?.label ?? ''),
     ].join(' ');
 
     _tts ??= widget.readAloud ?? MedicationPhotoTts();

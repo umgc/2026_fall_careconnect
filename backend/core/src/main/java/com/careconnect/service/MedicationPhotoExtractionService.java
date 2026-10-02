@@ -44,8 +44,6 @@ public class MedicationPhotoExtractionService {
     static final String FIELD_FREQUENCY = "frequency";
     static final String FIELD_MEDICATION_TYPE = "medicationType";
 
-    private static final int REJECTED_TYPE_LOG_LIMIT = 40;
-
     private static final Map<String, String> FIELD_LABELS = new LinkedHashMap<>();
 
     static {
@@ -161,7 +159,8 @@ public class MedicationPhotoExtractionService {
 
         for (Map.Entry<String, String> field : FIELD_LABELS.entrySet()) {
             JsonNode node = extracted.get(field.getKey());
-            String value = node != null && node.isValueNode() ? node.asText().trim() : "";
+            // A JSON null is a value node whose asText() is "null", so it counts as not read.
+            String value = node != null && node.isValueNode() && !node.isNull() ? node.asText().trim() : "";
             if (FIELD_MEDICATION_TYPE.equals(field.getKey())) {
                 value = toMedicationType(value);
             }
@@ -197,11 +196,8 @@ public class MedicationPhotoExtractionService {
         if (medicationTypeNames().contains(candidate)) {
             return candidate;
         }
-        String singleLine = value.replaceAll("[\\r\\n]+", " ");
-        String loggedValue = singleLine.length() > REJECTED_TYPE_LOG_LIMIT
-                ? singleLine.substring(0, REJECTED_TYPE_LOG_LIMIT) + "..."
-                : singleLine;
-        log.warn("Medication photo extraction rejected medicationType '{}': not a MedicationType value", loggedValue);
+        // The value is LLM output read from the label, so it is not logged.
+        log.warn("Medication photo extraction rejected medicationType: not a MedicationType value");
         return "";
     }
 

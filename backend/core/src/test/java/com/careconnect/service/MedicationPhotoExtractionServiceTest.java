@@ -39,7 +39,7 @@ import software.amazon.awssdk.services.textract.TextractClient;
 import software.amazon.awssdk.services.textract.model.DetectDocumentTextRequest;
 
 /**
- * F-01 Medication Photo Capture, service layer (TC-MED-PHOTO-001..019).
+ * F-01 Medication Photo Capture, service layer (TC-MED-PHOTO-001..020, 098).
  *
  * <p>
  * Validates MedicationPhotoExtractionService: in-memory Textract OCR, LLM
@@ -423,8 +423,8 @@ class MedicationPhotoExtractionServiceTest {
     }
 
     @Test
-    @DisplayName("TC-MED-PHOTO-020: invalid-type WARN carries only a short newline-free excerpt of label text")
-    void invalidMedicationType_warnExcerptIsShortAndSingleLine() {
+    @DisplayName("TC-MED-PHOTO-020: invalid-type WARN carries no part of the rejected value")
+    void invalidMedicationType_warnOmitsValue() {
         ocrOk();
         final String longMultiline = ("Take with food\nLISINOPRIL 10 MG " + "x".repeat(300));
         llmReturns(MedicationPhotoFixtures.llmJson("Lisinopril", "10 mg", "daily", longMultiline.replace("\n", "\\n")));
@@ -435,7 +435,24 @@ class MedicationPhotoExtractionServiceTest {
         assertThat(warns).hasSize(1);
         final String msg = warns.get(0).getFormattedMessage();
         assertThat(msg).contains("rejected medicationType");
-        assertThat(msg).doesNotContain("\n").doesNotContain("\r");
-        assertThat(msg.length()).as("bounded WARN length").isLessThan(200);
+        assertThat(msg).doesNotContain("Take with food").doesNotContain("LISINOPRIL").doesNotContain("xxx");
+        assertThat(warns.get(0).getArgumentArray()).as("no value passed as a log argument").isNullOrEmpty();
+    }
+
+    @Test
+    @DisplayName("TC-MED-PHOTO-098: JSON null values from the LLM stay blank, not the text \"null\"")
+    void llmJsonNull_blankNotNullText() {
+        ocrOk();
+        llmReturns("{\"medicationName\":\"Lisinopril\",\"dosage\":null,\"frequency\":null,\"medicationType\":null}");
+
+        final MedicationPhotoExtractionResponse r = service.extract(MedicationPhotoFixtures.imageBytes());
+
+        assertThat(field(r, "medicationName").value).isEqualTo("Lisinopril");
+        for (final String key : List.of("dosage", "frequency", "medicationType")) {
+            assertThat(field(r, key).value).as(key).isEmpty();
+            assertThat(field(r, key).machineGenerated).as(key).isFalse();
+        }
+        assertThat(r.message).startsWith("1 of 4 fields");
+        assertThat(logsAt(Level.WARN)).as("a null type is not a rejected type").isEmpty();
     }
 }

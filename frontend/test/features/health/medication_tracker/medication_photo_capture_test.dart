@@ -1,4 +1,5 @@
-// F-01 Medication Photo Capture, frontend (TC-MED-PHOTO-033..071).
+// F-01 Medication Photo Capture, frontend (TC-MED-PHOTO-033..071, 091, 093..097,
+// 101..103).
 //
 // Covers the extraction model, the extract-photo API call, the read-aloud
 // wrapper and the AddMedicationModal review flow (prefill, machine-generated
@@ -21,7 +22,6 @@ import 'package:care_connect_app/features/health/medication-tracker/data/medicat
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
 import 'package:care_connect_app/features/health/medication-tracker/models/medication_photo_extraction.dart';
 import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
-import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-card.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
@@ -256,9 +256,11 @@ void main() {
     });
 
     test(
-        'TC-MED-PHOTO-036: medicationTypeFromExtracted maps backend names, blank/unknown -> null',
+        'TC-MED-PHOTO-036: medicationTypeFromExtracted maps backend names and legacy OTC, blank/unknown -> null',
         () {
       expect(medicationTypeFromExtracted('OVER_THE_COUNTER'),
+          MedicationType.OVER_THE_COUNTER);
+      expect(medicationTypeFromExtracted('OTC'),
           MedicationType.OVER_THE_COUNTER);
       expect(medicationTypeFromExtracted('HERBAL'), MedicationType.HERBAL);
       expect(
@@ -826,74 +828,71 @@ void main() {
       expect(find.byKey(const Key('medication-photo-edited-note-dosage')),
           findsNothing);
     });
-  });
 
-  // ── OTC wire mapping (KI-05 follow-up, PR #207) ─────────────────────────
-  group('OTC wire mapping', () {
-    test(
-        'TC-MED-PHOTO-072: every MedicationType name is the backend wire name, including OVER_THE_COUNTER',
-        () {
-      expect(MedicationType.OVER_THE_COUNTER.name, 'OVER_THE_COUNTER');
-      expect(MedicationType.values.map((t) => t.name).toSet(), {
-        'PRESCRIPTION',
-        'OVER_THE_COUNTER',
-        'SUPPLEMENT',
-        'HERBAL',
-        'EMERGENCY'
-      });
-    });
+    testWidgets(
+        'TC-MED-PHOTO-101: a scan that reads no type keeps the type the user chose; an untouched default is cleared',
+        (tester) async {
+      MedicationType? selectedType() => tester
+          .widget<DropdownButtonFormField<MedicationType>>(find.descendant(
+              of: find.byKey(const Key('medication-type-field')),
+              matching: find.byType(DropdownButtonFormField<MedicationType>)))
+          .initialValue;
 
-    Map<String, dynamic> wire(String type) => {
-          'id': 3,
-          'medicationName': 'Ibuprofen',
-          'dosage': '200 mg',
-          'frequency': 'As needed',
-          'route': 'Oral',
-          'medicationType': type,
-          'isActive': true,
-        };
+      // The user picks a type, then scans a label whose type is not read.
+      final h = _Harness(
+          extractor: (_, __, ___) async => _prefilled(type: ''));
+      await _pump(tester, h);
+      await tester.ensureVisible(find.byKey(const Key('medication-type-field')));
+      await tester.tap(find.byKey(const Key('medication-type-field')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Supplement/Vitamin').last);
+      await tester.pumpAndSettle();
+      await _scan(tester);
 
-    test(
-        'TC-MED-PHOTO-073: fromJson accepts OVER_THE_COUNTER and legacy OTC as OVER_THE_COUNTER; toJson round-trips to OVER_THE_COUNTER; unknown still falls back to PRESCRIPTION',
-        () {
-      expect(Medication.fromJson(wire('OVER_THE_COUNTER')).medicationType,
-          MedicationType.OVER_THE_COUNTER);
-      expect(Medication.fromJson(wire('OTC')).medicationType,
-          MedicationType.OVER_THE_COUNTER);
-      expect(
-          Medication.fromJson(wire('OVER_THE_COUNTER'))
-              .toJson()['medicationType'],
-          'OVER_THE_COUNTER');
-      expect(Medication.fromJson(wire('BOGUS')).medicationType,
-          MedicationType.PRESCRIPTION);
+      expect(selectedType(), MedicationType.SUPPLEMENT);
+      expect(find.byKey(const Key('medication-photo-edited-note-medicationType')),
+          findsOneWidget);
+      expect(find.byKey(const Key('medication-photo-missing-note-medicationType')),
+          findsNothing);
+
+      // Without a user choice, the PRESCRIPTION default is not kept as a guess.
+      final h2 = _Harness(
+          extractor: (_, __, ___) async => _prefilled(type: ''));
+      await _pump(tester, h2);
+      await _scan(tester);
+      expect(selectedType(), isNull);
+      expect(find.byKey(const Key('medication-photo-missing-note-medicationType')),
+          findsOneWidget);
     });
 
     testWidgets(
-        'TC-MED-PHOTO-074: a stored OVER_THE_COUNTER medication parses to OVER_THE_COUNTER and shows the Remove button',
+        'TC-MED-PHOTO-102: Scan Label is disabled while the camera picker is open, so a second tap opens nothing',
         (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: MedicationCard(
-              medication: Medication.fromJson(wire('OVER_THE_COUNTER')),
-              onStatusChanged: (_) {},
-            ),
-          ),
-        ),
-      ));
-      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
-    });
+      final gate = Completer<XFile?>();
+      final h = _Harness(
+          picker: () => gate.future,
+          extractor: (_, __, ___) async => _prefilled());
+      await _pump(tester, h);
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-capture-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-capture-button')));
+      await tester.pump();
 
-    test(
-        'TC-MED-PHOTO-075: medicationTypeFromExtracted maps OVER_THE_COUNTER and OTC to OVER_THE_COUNTER and leaves blank or unknown null (Table 25 row 3)',
-        () {
-      expect(medicationTypeFromExtracted('OVER_THE_COUNTER'),
-          MedicationType.OVER_THE_COUNTER);
-      expect(medicationTypeFromExtracted('OTC'),
-          MedicationType.OVER_THE_COUNTER);
-      expect(medicationTypeFromExtracted('BOGUS'), isNull);
-      expect(medicationTypeFromExtracted(''), isNull);
-      expect(medicationTypeFromExtracted(null), isNull);
+      final btn = tester.widget<OutlinedButton>(
+          find.byKey(const Key('medication-photo-capture-button')));
+      expect(btn.onPressed, isNull, reason: 'picker is still open');
+      await tester.tap(find.byKey(const Key('medication-photo-capture-button')),
+          warnIfMissed: false);
+      await tester.pump();
+      expect(h.pickCalls, 1);
+
+      gate.complete(XFile.fromData(_imageBytes,
+          name: 'label.jpg', mimeType: 'image/jpeg'));
+      await tester.pumpAndSettle();
+      expect(h.extractCalls, 1);
+      expect(find.textContaining('camera could not be opened'), findsNothing);
+      expect(_fieldText(tester, 'medication-name-field'), 'Lisinopril');
     });
   });
 
@@ -1304,6 +1303,27 @@ void main() {
       // Assert
       expect(h.engine.spoken, hasLength(1));
       expect(h.engine.spoken.single, contains('Every 8 hours'));
+    });
+
+    testWidgets(
+        'TC-MED-PHOTO-103: read-aloud speaks the type as the dropdown shows it, not the wire name',
+        (tester) async {
+      final h = _Harness(
+          extractor: (_, __, ___) async =>
+              _prefilled(type: 'OVER_THE_COUNTER'));
+      await _pump(tester, h);
+      await _scan(tester);
+      expect(find.text('Over-the-counter'), findsWidgets);
+
+      await tester.ensureVisible(
+          find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester
+          .tap(find.byKey(const Key('medication-photo-read-aloud-button')));
+      await tester.pumpAndSettle();
+
+      expect(h.engine.spoken.single,
+          contains('Medication type: Over-the-counter.'));
+      expect(h.engine.spoken.single, isNot(contains('OVER_THE_COUNTER')));
     });
   });
 

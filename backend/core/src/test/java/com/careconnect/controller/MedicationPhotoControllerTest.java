@@ -26,10 +26,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.careconnect.dto.MedicationDTO;
 import com.careconnect.dto.MedicationPhotoExtractedField;
 import com.careconnect.dto.MedicationPhotoExtractionResponse;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.Permission;
+import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.MedicationPhotoExtractionService;
 import com.careconnect.service.MedicationService;
@@ -38,7 +41,7 @@ import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * F-01 extract-photo endpoint (TC-MED-PHOTO-021..032).
+ * F-01 extract-photo endpoint (TC-MED-PHOTO-021..032, 099, 100).
  *
  * <p>
  * Controller-level unit tests (same style as MedicationControllerTest): the
@@ -244,5 +247,36 @@ class MedicationPhotoControllerTest {
 
         assertThat(json).contains("\"status\":\"PREFILLED\"", "\"message\"", "\"fields\":[",
                 "\"key\":\"medicationName\"", "\"label\"", "\"value\":\"Lisinopril\"", "\"machineGenerated\":true");
+    }
+
+    @Test
+    @DisplayName("TC-MED-PHOTO-099: extract-photo requires CREATE_TASKS, the same permission as adding a medication")
+    void requiresSamePermissionAsAddMedication() throws Exception {
+        final RequirePermission extract = MedicationController.class
+                .getMethod("extractMedicationPhoto", Long.class, MultipartFile.class)
+                .getAnnotation(RequirePermission.class);
+        final RequirePermission add = MedicationController.class
+                .getMethod("addMedication", Long.class, MedicationDTO.class)
+                .getAnnotation(RequirePermission.class);
+
+        assertThat(extract).isNotNull();
+        assertThat(extract.value()).isEqualTo(Permission.CREATE_TASKS).isEqualTo(add.value());
+    }
+
+    @Test
+    @DisplayName("TC-MED-PHOTO-100: access is checked before the upload, so a denied caller gets no 400 for a bad file")
+    void accessDenied_beforeUploadValidation() throws Exception {
+        authorised();
+        doThrow(new UnauthorizedException("no access"))
+                .when(authorizationService).requirePatientAccess(user, PATIENT_ID);
+
+        assertThatThrownBy(() -> controller.extractMedicationPhoto(PATIENT_ID, image("image/jpeg", new byte[0])))
+                .isInstanceOf(UnauthorizedException.class);
+        assertThatThrownBy(() -> controller.extractMedicationPhoto(PATIENT_ID, image("image/gif", new byte[] {1})))
+                .isInstanceOf(UnauthorizedException.class);
+        assertThatThrownBy(() -> controller.extractMedicationPhoto(PATIENT_ID, null))
+                .isInstanceOf(UnauthorizedException.class);
+
+        verifyNoInteractions(photoService);
     }
 }
