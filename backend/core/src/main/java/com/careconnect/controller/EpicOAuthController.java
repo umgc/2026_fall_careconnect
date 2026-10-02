@@ -90,8 +90,11 @@ public class EpicOAuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
         try {
-            epic.exchangeAndStore(st.userId(), code, st.codeVerifier());
+            EhrCredential cred = epic.exchangeAndStore(st.userId(), code, st.codeVerifier());
             consentService.recordEhrImportConsent(st.userId());
+            // Link the Epic Patient.id to our canonical patient (brief S2) before the async sync.
+            // Fail-soft inside the service, so it never blocks the connect redirect.
+            syncService.linkPatientCrosswalk(st.userId(), cred.getPatientFhirId());
             syncService.enqueueInitialSync(st.userId());
             return redirect(returnBase + "?status=ok");
         } catch (RuntimeException ex) {

@@ -2,6 +2,9 @@ package com.careconnect.service.ehr;
 
 import com.careconnect.config.EpicProperties;
 import com.careconnect.indexing.IndexingEventEmitter;
+import com.careconnect.repository.PatientRepository;
+import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
+import com.careconnect.repository.ehr.EhrRawPayloadRepository;
 import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.service.ai.indexing.RetrievalIndexService;
 import com.careconnect.service.ai.indexing.chunker.EpicResourceChunker;
@@ -50,7 +53,11 @@ class EpicSyncServiceDeltaTest {
                 new ObjectMapper(),
                 mock(ObjectProvider.class),
                 oauth,
-                epicProperties);
+                epicProperties,
+                mock(PatientRepository.class),
+                mock(EhrSourceResolver.class),
+                mock(EhrPatientCrosswalkRepository.class),
+                mock(EhrRawPayloadRepository.class));
     }
 
     @Test

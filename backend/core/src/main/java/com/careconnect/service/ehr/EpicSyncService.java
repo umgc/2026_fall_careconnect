@@ -3,7 +3,13 @@ package com.careconnect.service.ehr;
 import com.careconnect.config.EpicProperties;
 import com.careconnect.indexing.EpicFhirIndexedPayload;
 import com.careconnect.indexing.IndexingEventEmitter;
+import com.careconnect.model.Patient;
+import com.careconnect.model.ehr.EhrPatientCrosswalk;
+import com.careconnect.model.ehr.EhrRawPayload;
 import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.repository.PatientRepository;
+import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
+import com.careconnect.repository.ehr.EhrRawPayloadRepository;
 import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.service.ai.indexing.RetrievalIndexService;
 import com.careconnect.service.ai.indexing.chunker.EpicResourceChunker;
@@ -11,6 +17,7 @@ import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.careconnect.util.ContentHashUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -111,6 +119,12 @@ public class EpicSyncService {
     private final ObjectProvider<EpicSyncService> selfProvider;
     private final EpicOAuthService oauth;
     private final EpicProperties epicProperties;
+    // Canonical dual-write (Team E brief S2/S3): crosswalk + raw payload, keyed on the canonical
+    // patient_id resolved from the connecting user. FK-backed, so a wrong id is rejected.
+    private final PatientRepository patientRepository;
+    private final EhrSourceResolver sourceResolver;
+    private final EhrPatientCrosswalkRepository crosswalkRepo;
+    private final EhrRawPayloadRepository rawPayloadRepo;
 
     public EpicSyncService(EpicFhirClient fhirClient,
                            EhrResourceRepository resourceRepo,
@@ -122,7 +136,11 @@ public class EpicSyncService {
                            ObjectMapper objectMapper,
                            ObjectProvider<EpicSyncService> selfProvider,
                            EpicOAuthService oauth,
-                           EpicProperties epicProperties) {
+                           EpicProperties epicProperties,
+                           PatientRepository patientRepository,
+                           EhrSourceResolver sourceResolver,
+                           EhrPatientCrosswalkRepository crosswalkRepo,
+                           EhrRawPayloadRepository rawPayloadRepo) {
         this.fhirClient = fhirClient;
         this.resourceRepo = resourceRepo;
         this.statusGate = statusGate;
@@ -134,6 +152,10 @@ public class EpicSyncService {
         this.selfProvider = selfProvider;
         this.oauth = oauth;
         this.epicProperties = epicProperties;
+        this.patientRepository = patientRepository;
+        this.sourceResolver = sourceResolver;
+        this.crosswalkRepo = crosswalkRepo;
+        this.rawPayloadRepo = rawPayloadRepo;
     }
 
     /** How much of the patient record a sync pass pulls. */
@@ -197,6 +219,20 @@ public class EpicSyncService {
         log.info("Epic sync mode={} (requested={}) for user {}{}", effectiveMode, mode, userId,
                 lastUpdatedFilter != null ? " since " + lastUpdatedFilter : "");
 
+        // Canonical dual-write targets (Team E brief S2/S3), resolved once per sync. Null when the
+        // user has no patient row (e.g. a caregiver) or the EPIC source is unseeded — the canonical
+        // writes (crosswalk + raw payload) are then skipped and only the interim ehr_resource mirror
+        // is written, so Ask AI still works and nothing in the existing flow breaks.
+        final Long patientId = patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        final Long sourceId = sourceResolver.idForCode(EpicProperties.SOURCE_EPIC);
+        if (patientId == null || sourceId == null) {
+            log.warn("Epic canonical dual-write disabled for user {} (patientId={}, sourceId={}); "
+                    + "writing interim ehr_resource only", userId, patientId, sourceId);
+        } else {
+            // Self-heal the crosswalk each sync (idempotent); the primary write is on connect.
+            upsertCrosswalk(patientId, sourceId, oauth.patientFhirId(userId));
+        }
+
         // Epic grants only the scopes enabled on the app registration, which can be a subset of
         // what we request. Attempting a resource type whose read scope was not granted returns a
         // guaranteed 403; skip those. And a failure on any single type (403 or transient) must not
@@ -221,7 +257,7 @@ public class EpicSyncService {
                     if (type == null || !MIRRORABLE_TYPES.contains(type)) {
                         continue; // OperationOutcome, Practitioner, Organization, … — not mirrored.
                     }
-                    mirror(userId, type, resource, seen, tally);
+                    mirror(userId, patientId, sourceId, type, resource, seen, tally);
                 }
             } catch (final RuntimeException ex) {
                 log.info("Epic $everything unavailable for user {}, falling back to typed fetch: {}",
@@ -237,10 +273,10 @@ public class EpicSyncService {
                 && !seenType(seen, PATIENT_TYPE)
                 && (grantedScopes.isEmpty() || grantedScopes.contains("patient/Patient.read"))) {
             try {
-                final String patientId = oauth.patientFhirId(userId);
-                if (patientId != null && !patientId.isBlank()) {
-                    for (final JsonNode resource : fhirClient.read(userId, PATIENT_TYPE, patientId)) {
-                        mirror(userId, PATIENT_TYPE, resource, seen, tally);
+                final String patientFhirId = oauth.patientFhirId(userId);
+                if (patientFhirId != null && !patientFhirId.isBlank()) {
+                    for (final JsonNode resource : fhirClient.read(userId, PATIENT_TYPE, patientFhirId)) {
+                        mirror(userId, patientId, sourceId, PATIENT_TYPE, resource, seen, tally);
                     }
                 }
             } catch (final RuntimeException ex) {
@@ -266,7 +302,7 @@ public class EpicSyncService {
                 final Map<String, String> params = withLastUpdated(baseParams, lastUpdatedFilter);
                 try {
                     for (final JsonNode resource : fhirClient.fetch(userId, resourceType, params)) {
-                        mirror(userId, resourceType, resource, seen, tally);
+                        mirror(userId, patientId, sourceId, resourceType, resource, seen, tally);
                     }
                 } catch (final RuntimeException ex) {
                     skipped++;
@@ -292,7 +328,8 @@ public class EpicSyncService {
      * Epic includes in search bundles (and any {@code _include}d resource), which otherwise slips
      * through with no {@code id} and stores nothing while masking the real result.
      */
-    private void mirror(final Long userId, final String expectedType, final JsonNode resource,
+    private void mirror(final Long userId, final Long patientId, final Long sourceId,
+                        final String expectedType, final JsonNode resource,
                         final Set<String> seen, final int[] tally) {
         final String actualType = resourceTypeOf(resource);
         if (actualType == null || !actualType.equals(expectedType)) {
@@ -311,7 +348,7 @@ public class EpicSyncService {
         try {
             // Persist each resource in its OWN transaction (routed through the Spring proxy) so a
             // single failing row does not poison the whole sync.
-            if (selfProvider.getObject().upsertAndEmit(userId, actualType, resource)) {
+            if (selfProvider.getObject().upsertAndEmit(userId, patientId, sourceId, actualType, resource)) {
                 tally[0]++;
             }
         } catch (final RuntimeException ex) {
@@ -353,7 +390,8 @@ public class EpicSyncService {
      * sync loop catches the exception and continues with the next resource.
      */
     @Transactional
-    public boolean upsertAndEmit(final Long userId, final String resourceType, final JsonNode resource) {
+    public boolean upsertAndEmit(final Long userId, final Long patientId, final Long sourceId,
+                                 final String resourceType, final JsonNode resource) {
         final String fhirId = resource.hasNonNull("id") ? resource.get("id").asText() : null;
         if (fhirId == null || fhirId.isBlank()) {
             return false;
@@ -376,12 +414,95 @@ public class EpicSyncService {
         entity.setPayloadJson(canonical);
         final EhrResource saved = resourceRepo.save(entity);
 
+        // Canonical raw-payload store (Team E brief S3): one row per resource fetched, written in
+        // the same per-resource transaction so it shares the fail-isolation. Skipped when the
+        // canonical ids could not be resolved (see syncNow).
+        if (patientId != null && sourceId != null) {
+            writeRawPayload(patientId, sourceId, resourceType, fhirId, resource);
+        }
+
         // Only emit for resource types the chunker can index (skip Patient/Practitioner, etc.).
         if (EpicResourceChunker.recordTypeFor(resourceType).isPresent()) {
             eventEmitter.emitEpicFhirIndexed(new EpicFhirIndexedPayload(
                     saved.getId(), userId, contentHash, null));
         }
         return true;
+    }
+
+    /**
+     * Append the verbatim FHIR body to {@code ehr_raw_payload} (Team E brief S3). Inline binary
+     * ({@code Patient.photo}) is stripped first and {@code photo_stripped} set so the row stays
+     * honest about not being byte-identical; {@code payload_size_bytes} is left to {@code @PrePersist}.
+     * The payload is handed to the {@code @JdbcTypeCode(JSON)} column as JSON text, never a Map and
+     * never double-encoded.
+     */
+    private void writeRawPayload(final Long patientId, final Long sourceId,
+                                 final String resourceType, final String fhirId,
+                                 final JsonNode resource) {
+        JsonNode body = resource;
+        boolean photoStripped = false;
+        if (resource.hasNonNull("photo") && resource instanceof ObjectNode) {
+            final ObjectNode copy = ((ObjectNode) resource).deepCopy();
+            copy.remove("photo");
+            body = copy;
+            photoStripped = true;
+        }
+        rawPayloadRepo.save(EhrRawPayload.builder()
+                .patientId(patientId)
+                .sourceId(sourceId)
+                .resourceType(resourceType)
+                .externalResourceId(fhirId)
+                .payload(canonicalJson(body))
+                .photoStripped(photoStripped)
+                .retrievedAt(OffsetDateTime.now())
+                .build());
+    }
+
+    /**
+     * Link the connecting user's CareConnect patient to their external Epic {@code Patient.id}
+     * (Team E brief S2). Resolves the canonical ids and upserts {@code ehr_patient_crosswalk}.
+     * Called on connect from the OAuth callback; idempotent, so a re-sync re-affirms it.
+     */
+    public void linkPatientCrosswalk(final Long userId, final String externalPatientId) {
+        final Long patientId = patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        final Long sourceId = sourceResolver.idForCode(EpicProperties.SOURCE_EPIC);
+        upsertCrosswalk(patientId, sourceId, externalPatientId);
+    }
+
+    /**
+     * Upsert one {@code (patient_id, source_id) -> external_patient_id} crosswalk row, honoring both
+     * unique constraints. A conflicting external id for an existing link is left in place and logged
+     * rather than overwritten — that is a schema conversation for Team E, not a connector workaround
+     * (brief S2). Fail-soft: a unique-constraint violation (external id already claimed by another
+     * patient) is logged, never thrown.
+     */
+    private void upsertCrosswalk(final Long patientId, final Long sourceId,
+                                 final String externalPatientId) {
+        if (patientId == null || sourceId == null
+                || externalPatientId == null || externalPatientId.isBlank()) {
+            return;
+        }
+        try {
+            final Optional<EhrPatientCrosswalk> existing =
+                    crosswalkRepo.findByPatientIdAndSourceId(patientId, sourceId);
+            if (existing.isPresent()) {
+                if (!externalPatientId.equals(existing.get().getExternalPatientId())) {
+                    log.warn("Epic crosswalk conflict for patient {} source {}: existing external id "
+                            + "differs from incoming — leaving existing in place (raise with Team E)",
+                            patientId, sourceId);
+                }
+                return;
+            }
+            crosswalkRepo.save(EhrPatientCrosswalk.builder()
+                    .patientId(patientId)
+                    .sourceId(sourceId)
+                    .externalPatientId(externalPatientId)
+                    .build());
+        } catch (final RuntimeException ex) {
+            // e.g. uq_ehr_crosswalk_source_external: this external id already maps to another patient.
+            log.warn("Epic crosswalk upsert failed for patient {} source {}: {}",
+                    patientId, sourceId, ex.getClass().getSimpleName());
+        }
     }
 
     /**

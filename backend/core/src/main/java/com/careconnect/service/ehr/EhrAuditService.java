@@ -1,8 +1,8 @@
 package com.careconnect.service.ehr;
 
-import com.careconnect.model.ehr.EhrAuditEvent;
+import com.careconnect.model.Patient;
 import com.careconnect.model.ehr.EhrRetrievalOutcome;
-import com.careconnect.repository.ehr.EhrAuditEventRepository;
+import com.careconnect.repository.PatientRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,17 +16,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Fail-soft, hashed-PHI audit of every EHR connect/fetch attempt (Findings R6).
+ * Fail-soft, hashed-PHI audit of every EHR connect/fetch attempt (Findings R6), writing the
+ * canonical {@code ehr_audit_event} through {@link EhrAuditLogger} (Team E brief S4 — the one
+ * blessed writer of that table).
  *
- * <p>Modeled on {@code AiAskAuditService}: writes run in a {@code REQUIRES_NEW} transaction and
- * swallow persistence errors so an audit failure never breaks the request path. Any PHI-bearing
- * detail (e.g. a FHIR resource id) is stored only as {@code SHA-256(detail|userId)}, never raw.
+ * <p>This is the userId-facing façade the Epic adapters call. It bridges a CareConnect
+ * {@code userId} to the canonical {@code patient_id} via {@link PatientRepository#findByUserId}
+ * (Epic self-connect: the connecting user is both patient and actor), maps the coarse string
+ * outcome onto {@link EhrRetrievalOutcome}, and carries the operation {@code eventType} plus a
+ * hashed detail — neither of which has a canonical column — in the non-PHI {@code details} map.
  *
- * <p>Persists the canonical {@link EhrAuditEvent} (ADR-08). For the Epic self-connect flow the
- * connecting user is also the patient, so {@code userId} maps to both {@code patientId} and
- * {@code actorUserId}. The operation {@code eventType} and the hashed detail have no dedicated
- * canonical column, so they are carried in the non-PHI {@code details} map; the coarse string
- * outcome is mapped onto {@link EhrRetrievalOutcome}.
+ * <p>Writes run in a {@code REQUIRES_NEW} transaction and swallow persistence errors so an audit
+ * failure never breaks the request path. Any PHI-bearing detail is stored only as
+ * {@code SHA-256(detail|userId)}, never raw.
  */
 @Slf4j
 @Service
@@ -38,13 +40,23 @@ public class EhrAuditService {
     public static final String OUTCOME_EMPTY = "EMPTY";
     public static final String OUTCOME_ERROR = "ERROR";
 
-    private final EhrAuditEventRepository repo;
+    private final EhrAuditLogger auditLogger;
+    private final PatientRepository patientRepository;
 
     /** Record a successful/empty/error attempt. {@code detail} is hashed if present. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(Long userId, String source, String eventType,
                        String resourceType, String detail, String outcome) {
         try {
+            final Long patientId = patientRepository.findByUserId(userId)
+                    .map(Patient::getId)
+                    .orElse(null);
+            if (patientId == null) {
+                // ehr_audit_event.patient_id is NOT NULL; a user with no patient row (e.g. a
+                // caregiver) cannot be audited against the canonical table. Skip, don't crash.
+                log.warn("EHR audit skipped: no patient row for user {} (event={})", userId, eventType);
+                return;
+            }
             final Map<String, Object> details = new LinkedHashMap<>();
             if (eventType != null) {
                 details.put("eventType", eventType);
@@ -52,17 +64,14 @@ public class EhrAuditService {
             if (detail != null) {
                 details.put("detailHash", hashText(detail, userId));
             }
-            EhrAuditEvent event = EhrAuditEvent.builder()
-                    // Epic self-connect: the connecting user is both the patient and the actor.
-                    .patientId(userId)
-                    .actorUserId(userId)
-                    .source(source)
-                    // resource_type is NOT NULL; fall back to the operation when no resource applies.
-                    .resourceType(resourceType != null ? resourceType : eventType)
-                    .outcome(mapOutcome(outcome))
-                    .details(details.isEmpty() ? null : details)
-                    .build();
-            repo.save(event);
+            auditLogger.log(
+                    patientId,
+                    source,
+                    resourceType != null ? resourceType : eventType,
+                    mapOutcome(outcome),
+                    userId,                       // actorUserId: the user who triggered the attempt
+                    null,                         // recordCount: not tracked at this call site
+                    details.isEmpty() ? null : details);
         } catch (RuntimeException ex) {
             // Fail-soft: never let auditing abort the request.
             log.warn("EHR audit write failed (userId={}, event={}): {}",

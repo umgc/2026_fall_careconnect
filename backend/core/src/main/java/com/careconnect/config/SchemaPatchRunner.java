@@ -1342,6 +1342,21 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyCatalogPatch("2607191400-summary-citation-replay");
         applyCatalogPatch("2607191500-summary-chunk-ownership-correction");
+        // Epic FHIR indexing: the ck_retrieval_source_kind check constraint created by the
+        // summary-citation-replay patch above only permits CALL_SUMMARY / VISIT_SUMMARY, so every
+        // EPIC_FHIR_INDEXED insert (source_kind='epic') is rejected on a fresh DB and Epic records
+        // never reach Ask AI. Widen it to admit the Epic discriminator. Both casings are allowed:
+        // the chunk writer stores lowercase 'epic' while EpicProperties.SOURCE_EPIC is 'EPIC', and
+        // existing rows must keep validating. Required (a missing allow-list value silently drops
+        // every Epic chunk); runs right after the constraint is created so the DROP/ADD is ordered.
+        applyRequiredPatch(
+                "V2609160100 – allow EPIC source_kind on retrieval_index_chunk",
+                "ALTER TABLE retrieval_index_chunk "
+                        + "  DROP CONSTRAINT IF EXISTS ck_retrieval_source_kind; "
+                        + "ALTER TABLE retrieval_index_chunk "
+                        + "  ADD CONSTRAINT ck_retrieval_source_kind "
+                        + "  CHECK (source_kind IS NULL OR source_kind IN ("
+                        + "    'CALL_SUMMARY', 'VISIT_SUMMARY', 'EPIC', 'epic'))");
         ensureIndex(
                 "V2607190100 – fair source replay claim index",
                 "idx_summary_replay_claim_fair",
