@@ -1,7 +1,6 @@
 package com.careconnect.service.ehr;
 
 import com.careconnect.config.EpicProperties;
-import com.careconnect.model.ehr.EhrAuditEvent;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -80,7 +79,7 @@ public class EpicFhirClient implements EhrApiClient {
                     ooText.isEmpty() ? "" : ", outcome=[" + ooText + "]");
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
                     resourceType, out.isEmpty()
-                            ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
+                            ? EhrAuditService.OUTCOME_EMPTY : EhrAuditService.OUTCOME_OK);
             return out;
         } catch (org.springframework.web.client.RestClientResponseException ex) {
             // Log Epic's actual OperationOutcome body (names the missing/invalid search parameter),
@@ -93,11 +92,11 @@ public class EpicFhirClient implements EhrApiClient {
             log.warn("Epic fetch {} params={} -> {} : body='{}' wwwAuthenticate={}", resourceType,
                     params, ex.getStatusCode().value(), ex.getResponseBodyAsString(), wwwAuth);
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
-                    resourceType, EhrAuditEvent.OUTCOME_ERROR);
+                    resourceType, EhrAuditService.OUTCOME_ERROR);
             throw ex;
         } catch (RuntimeException ex) {
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_FETCH", resourceType,
-                    resourceType, EhrAuditEvent.OUTCOME_ERROR);
+                    resourceType, EhrAuditService.OUTCOME_ERROR);
             throw ex;
         }
     }
@@ -153,11 +152,11 @@ public class EpicFhirClient implements EhrApiClient {
             extractEntries(resp.getBody(), out);
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_READ", resourceType,
                     resourceType, out.isEmpty()
-                            ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
+                            ? EhrAuditService.OUTCOME_EMPTY : EhrAuditService.OUTCOME_OK);
             return out;
         } catch (RuntimeException ex) {
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_READ", resourceType,
-                    resourceType, EhrAuditEvent.OUTCOME_ERROR);
+                    resourceType, EhrAuditService.OUTCOME_ERROR);
             throw ex;
         }
     }
@@ -183,11 +182,11 @@ public class EpicFhirClient implements EhrApiClient {
             }
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_EVERYTHING", "Patient",
                     "$everything", out.isEmpty()
-                            ? EhrAuditEvent.OUTCOME_EMPTY : EhrAuditEvent.OUTCOME_OK);
+                            ? EhrAuditService.OUTCOME_EMPTY : EhrAuditService.OUTCOME_OK);
             return out;
         } catch (RuntimeException ex) {
             audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_EVERYTHING", "Patient",
-                    "$everything", EhrAuditEvent.OUTCOME_ERROR);
+                    "$everything", EhrAuditService.OUTCOME_ERROR);
             throw ex;
         }
     }
