@@ -11,7 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/auth/presentation/pages/sign_up_screen.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -256,15 +255,6 @@ Future<void> _goToProfessionalCaregiverReview(WidgetTester tester) async {
 }
 
 void main() {
-  // RegistrationPage builds AppConfig.getGooglePlacesApiKey(), which reads
-  // dotenv.env. Without this, every build throws NotInitializedError.
-  setUpAll(() {
-    dotenv.loadFromString(
-      mergeWith: {'GOOGLE_PLACES_API_KEY': 'test_key'},
-      isOptional: true,
-    );
-  });
-
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
