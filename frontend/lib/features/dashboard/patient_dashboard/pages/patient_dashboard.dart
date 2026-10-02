@@ -897,6 +897,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
       return;
     }
 
+    final previousReminders = List<MedicationReminderItem>.from(
+      medicationReminders,
+    );
     final actionAt = DateTime.now().toUtc();
     if (taken) {
       _medicationReminderService.markTaken(
@@ -905,6 +908,21 @@ class _PatientDashboardState extends State<PatientDashboard> {
       );
     } else {
       _medicationReminderService.markMissed(medicationId: medicationId);
+    }
+
+    if (mounted) {
+      setState(() {
+        medicationReminders = _medicationReminderService.applyLocalOverrides(
+          reminders: medicationReminders,
+          t: t,
+        );
+        activeAlerts = _withMedicationReminderAlert(
+          activeAlerts,
+          hasPendingUntaken: _hasPendingMedicationReminders(
+            medicationReminders,
+          ),
+        );
+      });
     }
 
     final response = taken
@@ -923,6 +941,17 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
     if (!success) {
       _medicationReminderService.clearLocalOverride(medicationId: medicationId);
+      if (mounted) {
+        setState(() {
+          medicationReminders = previousReminders;
+          activeAlerts = _withMedicationReminderAlert(
+            activeAlerts,
+            hasPendingUntaken: _hasPendingMedicationReminders(
+              medicationReminders,
+            ),
+          );
+        });
+      }
     }
 
     if (mounted) {
@@ -963,7 +992,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
 
-    await _loadMedicationReminders();
+    if (success && !queuedOffline) {
+      await _loadMedicationReminders();
+    }
   }
 
   /// Handle contacting provider

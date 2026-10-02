@@ -237,8 +237,6 @@ class OfflineSyncService {
         headers['Authorization'] = authorization;
       }
     } catch (_) {}
-    headers[replayHeader] = 'true';
-
     final request = http.Request(row.method, uri);
     request.headers.addAll(headers);
     if (row.bodyJson != null && row.bodyJson!.isNotEmpty) {
