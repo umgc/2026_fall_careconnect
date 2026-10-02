@@ -75,6 +75,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     _CommandMatch(phrase: 'open file management', intent: 'navigate', entity: 'file management'),
     _CommandMatch(phrase: 'open my files', intent: 'navigate', entity: 'files'),
     _CommandMatch(phrase: 'open informed delivery', intent: 'navigate', entity: 'informed delivery'),
+    _CommandMatch(phrase: 'open information delivery', intent: 'navigate', entity: 'informed delivery'),
     _CommandMatch(phrase: 'check my mail', intent: 'navigate', entity: 'mail'),
     // Other features
     _CommandMatch(phrase: 'open gamification', intent: 'navigate', entity: 'gamification'),
