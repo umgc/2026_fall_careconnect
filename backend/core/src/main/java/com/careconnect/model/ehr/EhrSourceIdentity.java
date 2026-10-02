@@ -14,6 +14,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hl7.fhir.r4.model.ContactPoint;
+import org.hl7.fhir.r4.model.Patient;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -51,6 +53,39 @@ import java.time.LocalDate;
                 name = "idx_ehr_source_identity_patient",
                 columnList = "patient_id"))
 public class EhrSourceIdentity extends Auditable {
+
+    public EhrSourceIdentity(Long patientId, Patient patient, Long sourceId){
+        this.patientId = patientId;
+        this.sourceId = sourceId;
+        this.sourceUpdatedAt = patient.getMeta().getLastUpdated().toInstant();
+        this.givenName = patient.getNameFirstRep().getGivenAsSingleString();
+        this.familyName = patient.getNameFirstRep().getFamily();
+
+        this.gender = patient.getGender().getDisplay();
+        // Wow this is a stupid conversion method.
+        this.dateOfBirth = LocalDate.from(patient.getBirthDate().toInstant());
+
+
+        for(ContactPoint point: patient.getTelecom()){
+            if(point.getSystem().equals(ContactPoint.ContactPointSystem.PHONE)){
+                this.phone = point.getValue();
+            }else{
+                if(point.getSystem().equals(ContactPoint.ContactPointSystem.EMAIL)){
+                    this.email = point.getValue();
+                }
+            }
+        }
+
+        this.managingOrg = patient.getManagingOrganization().getDisplay();
+        this.language = patient.getCommunicationFirstRep().getLanguage().getText();
+        this.memberId = patient.getIdentifierFirstRep().getValue();
+        this.addressLine1 = patient.getAddressFirstRep().getLine().get(0).getValue();
+        this.addressLine2 = patient.getAddressFirstRep().getLine().get(1).getValue();
+        this.city = patient.getAddressFirstRep().getCity();
+        this.state = patient.getAddressFirstRep().getState();
+        this.postalCode = patient.getAddressFirstRep().getPostalCode();
+    }
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

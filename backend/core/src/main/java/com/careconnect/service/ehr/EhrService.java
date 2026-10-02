@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 @Slf4j
-public class EHRService {
+public class EhrService {
     @Autowired
     private UserRepository userRepository;
 

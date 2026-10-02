@@ -1,94 +1,134 @@
 package com.careconnect.model.ehr;
 
-import jakarta.persistence.*;
+import com.careconnect.model.Auditable;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.Date;
-
+import lombok.Setter;
 import org.hl7.fhir.r4.model.ExplanationOfBenefit;
 
-@Entity
-@Table(name = "ehr_visit_records")
-@Data
+import java.time.Instant;
+import java.time.LocalDateTime;
+
+/**
+ * One visit or claim as reported by a single source — a mapped FHIR
+ * {@code ExplanationOfBenefit} or equivalent.
+ * <p>
+ * Table renamed from {@code ehr_visit_records} to the singular {@code ehr_visit_record}: every
+ * other table in this schema is singular ({@code patient}, {@code caregiver},
+ * {@code ehr_source}, {@code ehr_audit_event}), and under {@code ddl-auto=update} a second
+ * spelling means a second table rather than a rename.
+ * <p>
+ * <strong>Single-source persistence only.</strong> Cross-source reconciliation of visits is
+ * explicitly out of scope here (§3.2): FR-XSRC-03/04 require two records to be flagged with a
+ * delta rather than merged unless they agree on provider, service date and patient identity,
+ * and nothing in this table or the identity-reconciliation design implements that. Rows from
+ * different sources describing the same real visit will sit side by side until that is
+ * designed.
+ */
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EHRVisitRecord{
-    public EHRVisitRecord(Long clientId, ExplanationOfBenefit eob, LocalDateTime lastUpdated, Long sourceId){
-        this.clientId = clientId;
-        this.lastUpdated = lastUpdated;
+@Entity
+@Table(
+        name = "ehr_visit_record",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uq_ehr_visit_record_source_external",
+                columnNames = {"patient_id", "source_id", "external_visit_id"}),
+        indexes = {
+                @Index(name = "idx_ehr_visit_record_patient", columnList = "patient_id"),
+                @Index(name = "idx_ehr_visit_record_service_date", columnList = "service_date")
+        })
+public class EhrVisitRecord extends Auditable {
+    public EhrVisitRecord(Long patientId, ExplanationOfBenefit eob, Long sourceId){
+        this.patientId = patientId;
+        this.sourceUpdatedAt = eob.getMeta().getLastUpdated().toInstant();
         this.sourceId = sourceId;
-        this.identifier = eob.getId();
+        this.externalVisitId = eob.getId();
         this.careTeam = eob.getCareTeamFirstRep().getProvider().getDisplay();
         this.accident = eob.getAccident().getType().getText();
-        this.created = eob.getCreated();
+        this.serviceDate = eob.getCreated().toInstant();
         this.diagnosis = eob.getDiagnosisFirstRep().getType().toString();
         this.disposition = eob.getDisposition();
         this.facility = eob.getFacility().getDisplay();
         this.prescription = eob.getPrescription().getDisplay();
-        this.procedure = eob.getProcedureFirstRep().toString();
+        this.procedurePerformed = eob.getProcedureFirstRep().toString();
         this.notes = eob.getProcessNoteFirstRep().getText();
         this.referral = eob.getReferral().getDisplay();
         this.status = eob.getStatus().getDisplay();
-        this.type = eob.getType().getText();
+        this.visitType = eob.getType().getText();
     }
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "client_id", nullable = false)
-    private Long clientId; // patient.id
+    /** Was {@code client_id}. */
+    @Column(name = "patient_id", nullable = false)
+    private Long patientId;
 
-    @Column(name = "last_updated", nullable = false)
-    private LocalDateTime lastUpdated;
+    /** References {@code ehr_source.id}; was a free-text source name. */
+    @Column(name = "source_id", nullable = false)
+    private Long sourceId;
 
-    @Column(name="source_id", nullable=false)
-    private Long sourceId; // Which EHR.source produced this.
+    /** The resource's own id within that source. */
+    @Column(name = "external_visit_id", length = 255)
+    private String externalVisitId;
 
-    @Column(name="identifier")
-    private String identifier;
+    /** Source's last-modified time. Instant, for cross-source comparison. */
+    @Column(name = "source_updated_at", nullable = false)
+    private Instant sourceUpdatedAt;
 
-    @Column(name="care_team")
-    private String careTeam;
+    /** When the care happened — the field FR-XSRC-04 matches on, alongside provider and
+     *  patient identity. Was named {@code created}, which read as a row-creation timestamp. */
+    @Column(name = "service_date")
+    private Instant serviceDate;
 
-    @Column(name="accident")
-    private String accident;
-
-
-    @Column(name="created")
-    private Date created;
-
-    @Column(name="diagnosis")
-    private String diagnosis;
-
-    @Column(name="disposition")
-    private String disposition;
-
-    @Column(name="facility")
+    @Column(name = "facility", length = 255)
     private String facility;
 
-    @Column(name="prescription")
+    @Column(name = "care_team", columnDefinition = "TEXT")
+    private String careTeam;
+
+    /**
+     * Diagnosis as coded by the source. Left as the source's own text/codes: translating codes
+     * to plain language is tracked separately (Draft 1 #2) and is not this table's job.
+     */
+    @Column(name = "diagnosis", columnDefinition = "TEXT")
+    private String diagnosis;
+
+    @Column(name = "procedure_performed", columnDefinition = "TEXT")
+    private String procedurePerformed;
+
+    @Column(name = "prescription", columnDefinition = "TEXT")
     private String prescription;
 
-    @Column(name="procedure")
-    private String procedure;
+    @Column(name = "disposition", length = 255)
+    private String disposition;
 
-    @Column(name="notes")
-    private String notes;
-
-    @Column(name="referral")
+    @Column(name = "referral", length = 255)
     private String referral;
 
-    @Column(name="status")
+    @Column(name = "accident", length = 255)
+    private String accident;
+
+    /** FHIR status, e.g. active, cancelled, entered-in-error. Same open question as Coverage. */
+    @Column(name = "status", length = 32)
     private String status;
 
-    @Column(name="type")
-    private String type;
+    @Column(name = "visit_type", length = 64)
+    private String visitType;
 
-
+    @Column(name = "notes", columnDefinition = "TEXT")
+    private String notes;
 }
