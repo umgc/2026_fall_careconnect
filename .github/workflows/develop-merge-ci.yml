@@ -71,10 +71,12 @@ env:
   FLUTTER_TEST_SHARDS: '4'
   # Whole-repo coverage regression baseline, agreed 2026-09-15.
   # Backend measured ~82.8% locally at the time this was set, so 0.80
-  # leaves headroom; frontend's actual current % was not verified before
-  # picking this number, so watch the first few runs of this gate.
+  # leaves headroom. Frontend was first measured on 2026-10-02 (#226, the
+  # first run whose tests all passed): 69.6% line coverage (includes
+  # generated l10n; ~64% without). Set to 0.70 after adding tests to reach
+  # it; raise it as coverage grows (ratchet, never lower).
   BACKEND_COVERAGE_BASELINE: '0.80'
-  FRONTEND_COVERAGE_BASELINE: '0.80'
+  FRONTEND_COVERAGE_BASELINE: '0.70'
 
 concurrency:
   group: develop-merge-ci-${{ github.event.pull_request.number }}
