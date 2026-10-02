@@ -53,6 +53,13 @@ void main() {
       const MethodChannel('dev.fluttercommunity.plus/connectivity'),
       (MethodCall methodCall) async => ['wifi'],
     );
+    // ...and the onConnectivityChanged event channel. Without this the
+    // stream's `listen` throws MissingPluginException on Linux CI.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      const EventChannel('dev.fluttercommunity.plus/connectivity_status'),
+      MockStreamHandler.inline(onListen: (arguments, events) {}),
+    );
   });
 
   group('TasksScreen – null user (no login)', () {
@@ -74,7 +81,8 @@ void main() {
       expect(find.text('Tasks Dashboard'), findsOneWidget);
     });
 
-    testWidgets('shows User not logged in error after settling', (tester) async {
+    testWidgets('shows User not logged in error after settling',
+        (tester) async {
       // With no user in UserProvider, _fetchTasks sets error = "User not logged in."
       // and loading = false; after pumpAndSettle the error text is visible.
       await tester.pumpWidget(_wrapNullUser(

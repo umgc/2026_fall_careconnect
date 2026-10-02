@@ -43,6 +43,13 @@ void main() {
       const MethodChannel('dev.fluttercommunity.plus/connectivity'),
       (MethodCall methodCall) async => ['wifi'],
     );
+    // ...and the onConnectivityChanged event channel. Without this the
+    // stream's `listen` throws MissingPluginException on Linux CI.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      const EventChannel('dev.fluttercommunity.plus/connectivity_status'),
+      MockStreamHandler.inline(onListen: (arguments, events) {}),
+    );
   });
 
   group('SelectPackagePage – initial loading state', () {
@@ -53,7 +60,8 @@ void main() {
       expect(find.byType(Scaffold), findsOneWidget);
     });
 
-    testWidgets('shows CircularProgressIndicator while loading', (tester) async {
+    testWidgets('shows CircularProgressIndicator while loading',
+        (tester) async {
       // pumpWidget renders the first frame with isLoading = true.
       // Do NOT call pump() again — real HTTP may complete between awaits
       // and update isLoading to false before we can check for the spinner.
