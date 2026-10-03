@@ -651,4 +651,21 @@ class FHIRServiceReliabilityVerificationTest {
 
         assertEquals("p1", service().requestMedicarePatientInfo(TOKEN).getIdElement().getIdPart());
     }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-033 An OperationOutcome entry on a later page is skipped, not fatal")
+    void unexpectedEntryOnLaterPageIsSkipped() {
+        String next = base + "Coverage?page=2";
+        routes.put("Coverage", ex -> new Reply(200, json(page(coverages("c", 2), null, next))));
+        org.hl7.fhir.r4.model.OperationOutcome warning = new org.hl7.fhir.r4.model.OperationOutcome();
+        warning.addIssue().setSeverity(org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity.WARNING)
+                .setCode(org.hl7.fhir.r4.model.OperationOutcome.IssueType.INFORMATIONAL);
+        List<Resource> mixed = new ArrayList<>(coverages("d", 1));
+        mixed.add(warning);
+        routes.put("Coverage?page=2", ex -> new Reply(200, json(page(mixed, null, null))));
+
+        List<Coverage> result = service().requestMedicareCoverageInfo(TOKEN);
+
+        assertEquals(List.of("c1", "c2", "d1"), ids(result));
+    }
 }

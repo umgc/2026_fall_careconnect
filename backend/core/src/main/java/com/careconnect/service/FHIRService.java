@@ -222,6 +222,13 @@ public class FHIRService {
 
     private static <T extends Resource> void addAll(List<T> into, Bundle page, Class<T> type) {
         for (IBaseResource resource : BundleUtil.toListOfResources(ctxR4, page)) {
+            // Skip anything else on the page, such as an OperationOutcome entry, rather than throwing
+            // a ClassCastException that would discard every record already retrieved (#223 review).
+            if (!type.isInstance(resource)) {
+                log.warn("Blue Button: skipping a {} entry in a {} page",
+                        resource.fhirType(), type.getSimpleName());
+                continue;
+            }
             into.add(type.cast(resource));
         }
     }
