@@ -577,3 +577,82 @@ JOIN patient p ON se.patient_id = p.id
 JOIN users u ON p.user_id = u.id
 WHERE u.email = 'patient2@careconnect.com'
 GROUP BY p.id;
+
+-- ============================================
+-- 17. ATHENAHEALTH SANDBOX PATIENT — Romilda Smith mirrors athenahealth preview
+-- patient a-195900.E-10037 (practice 195900), so EHR import can be exercised against
+-- real sandbox data rather than hand-written fixtures.
+--
+-- Why Romilda and not "John Smith": the sandbox holds at least ten Smiths sharing
+-- 1980-01-01, two of them both named John, plus two more Johns sharing 1994-12-13.
+-- Romilda is the only candidate that resolves to exactly ONE record through a search
+-- combination athena permits ([family,given]). She is therefore the happy path; the
+-- Smith collisions are the identity-conflict fixtures.
+--
+-- first_name / last_name / dob MUST match athena exactly: they are the match key, and
+-- FHIR string search is prefix-based (family=Smith also returns Smitham), so the
+-- resolver has to re-verify equality against these values rather than trust a
+-- single-result bundle.
+--
+-- The caregiver and family links below are NEGATIVE fixtures. EHR import is
+-- self-access only, so an ACTIVE care relationship must still not expose Romilda's
+-- imported records without an explicit consent grant. They exist to prove the denial.
+-- ============================================
+
+INSERT INTO users (email, email_verified, password, password_hash, role, status, last_login_date, created_at)
+SELECT 'romilda.smith@careconnect.com', true, 'password', '$2a$10$a5mrP5BJfagHEYTGsrgPGOYcC0X80L4RUSf2BcHlcccS.IdJgoANq', 'PATIENT', 'ACTIVE', '2026-10-01', '2026-10-01 09:00:00'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'romilda.smith@careconnect.com');
+
+INSERT INTO patient (user_id, first_name, last_name, dob, email, phone, line1, line2, city, state, zip, gender)
+SELECT
+    (SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com'),
+    'Romilda', 'Smith', '1976-02-28', 'romilda.smith@careconnect.com', '555-0199',
+    '14 Sandbox Way', NULL, 'Falls Church', 'VA', '22046', 'FEMALE'
+WHERE NOT EXISTS (
+    SELECT 1 FROM patient p JOIN users u ON p.user_id = u.id WHERE u.email = 'romilda.smith@careconnect.com'
+);
+
+INSERT INTO caregiver_patient_link (caregiver_user_id, patient_user_id, created_by, status, link_type, created_at)
+SELECT
+	(SELECT id FROM users WHERE email = 'caregiver@careconnect.com'),
+	(SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com'),
+	(SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com'),
+	'ACTIVE',
+	'PERMANENT',
+	'2026-10-01 09:30:00'
+WHERE NOT EXISTS (
+	SELECT 1 FROM caregiver_patient_link
+	WHERE caregiver_user_id = (SELECT id FROM users WHERE email = 'caregiver@careconnect.com')
+	  AND patient_user_id = (SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com')
+);
+
+INSERT INTO family_member_link (family_user_id, patient_user_id, granted_by, status, created_at)
+SELECT
+	(SELECT id FROM users WHERE email = 'family@careconnect.com'),
+	(SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com'),
+	(SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com'),
+	'ACTIVE',
+	'2026-10-01 09:30:00'
+WHERE NOT EXISTS (
+	SELECT 1 FROM family_member_link
+	WHERE family_user_id = (SELECT id FROM users WHERE email = 'family@careconnect.com')
+	  AND patient_user_id = (SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com')
+);
+
+-- Identity crosswalk, pinning the athena chart so demographic matching can be skipped
+-- while testing. Commented out until feature/b-ehr-identity-reconciliation-schema merges,
+-- because ehr_source and ehr_source_identity do not exist before then.
+--
+-- INSERT INTO ehr_source (code, display_name, fhir_version, active)
+-- SELECT 'ATHENA', 'athenahealth', 'R4', true
+-- WHERE NOT EXISTS (SELECT 1 FROM ehr_source WHERE code = 'ATHENA');
+--
+-- INSERT INTO ehr_source_identity
+--   (patient_id, source_id, source_patient_id, first_name, last_name, date_of_birth, fetched_at)
+-- SELECT p.id, s.id, 'a-195900.E-10037', 'Romilda', 'Smith', DATE '1976-02-28', now()
+-- FROM patient p
+-- JOIN users u ON u.id = p.user_id AND u.email = 'romilda.smith@careconnect.com'
+-- JOIN ehr_source s ON s.code = 'ATHENA'
+-- WHERE NOT EXISTS (
+--     SELECT 1 FROM ehr_source_identity i WHERE i.patient_id = p.id AND i.source_id = s.id
+-- );
