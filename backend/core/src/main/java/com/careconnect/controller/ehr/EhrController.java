@@ -126,7 +126,7 @@ public class EhrController{
             if (visits.isEmpty()){
                 List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(crosswalk.getToken());
                 for(ExplanationOfBenefit item: results){
-
+                    // Add/Update the resource
                     visits.add(ehrVisitRecordRepository.save(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId)));
                 }
 
@@ -134,10 +134,8 @@ public class EhrController{
                 List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(crosswalk.getToken(),
                         Date.from(visits.get(0).getSourceUpdatedAt().atZone(ZoneId.systemDefault()).toInstant()));
                 for(ExplanationOfBenefit item: results){
-                    // Delete any old copies of the same resource
-                    //ehrVisitRecordRepository.deleteBySourceIdAndIdentifier(medicareId, item.getId());
 
-                    // Add a new copy of the resource
+                    // Add/Update the resource
                     visits.add(ehrVisitRecordRepository.save(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId)));
                 }
             }

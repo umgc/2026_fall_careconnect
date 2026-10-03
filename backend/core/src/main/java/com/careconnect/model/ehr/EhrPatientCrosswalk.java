@@ -58,7 +58,10 @@ import java.time.LocalDateTime;
                         columnNames = {"source_id", "external_patient_id"}),
                 @UniqueConstraint(
                         name = "uq_ehr_crosswalk_patient_source",
-                        columnNames = {"patient_id", "source_id"})
+                        columnNames = {"patient_id", "source_id"}),
+                @UniqueConstraint(
+                        name = "uq_ehr_crosswalk_link_token",
+                        columnNames = {"link_token"})
         },
         indexes = @Index(
                 name = "idx_ehr_crosswalk_patient",
@@ -94,4 +97,7 @@ public class EhrPatientCrosswalk extends Auditable {
 
     @Column(name="last_refreshed")
     private LocalDateTime lastRefreshed;
+
+    @Column(name="link_token")
+    private String linkToken;
 }
