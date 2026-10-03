@@ -17,9 +17,9 @@ public interface EhrIdentityConflictRepository extends JpaRepository<EhrIdentity
     Optional<EhrIdentityConflict> findByPatientIdAndFieldNameAndStatus(
             Long patientId, String fieldName, EhrConflictStatus status);
 
-    /** Whether this exact candidate value was already finalized with this status and resolver. */
-    boolean existsByPatientIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
-            Long patientId, String fieldName, String incomingValue,
+    /** Whether this exact candidate value from this source was already finalized with this status and resolver. */
+    boolean existsByPatientIdAndSourceIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
+            Long patientId, Long sourceId, String fieldName, String incomingValue,
             EhrConflictStatus status, EhrConflictResolver resolvedBy);
 
     /** Everything awaiting this patient. Drives the confirmation prompt. */

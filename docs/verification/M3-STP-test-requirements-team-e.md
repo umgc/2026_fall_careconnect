@@ -70,8 +70,8 @@ the UI, A = accessibility review, P = performance/reliability, S = security/nega
 
 | ID | Test requirement | Level | Pass criterion | Status |
 |---|---|---|---|---|
-| STP-M3-E-17 | Identity fields: newest source wins, ties keep the existing value, DOB waits for patient confirmation | U/C | Contract suite + TC-EHR-REC-001..012 pass | **Passed 9/28 (28/28)** — see `3.2.4-reconciliation-verification.md` |
-| STP-M3-E-18 | Two adapters racing on one field converge on the newest value against the real database | C/I | Contract suite passes against PostgreSQL; fails with the row lock stubbed out | Blocked: needs a DB-backed subclass |
+| STP-M3-E-17 | Identity fields: newest source wins, ties keep the existing value, DOB waits for patient confirmation | U/C | Contract suite + TC-EHR-REC-001..012 pass | **Passed 10/2 (33/33: contract 18/18 incl. TC-EHR-REC-032/033, verification 15/15)** — see `3.2.4-reconciliation-verification.md` |
+| STP-M3-E-18 | Two adapters racing on one field converge on the newest value against the real database | C/I | Contract suite passes against PostgreSQL; fails with the row lock stubbed out | Runs locally only: `JpaContractPostgresTest` (#209) is opt-in via `EHR_IT_JDBC_URI` and CI skips it; not yet run on this branch, so no result recorded |
 | STP-M3-E-19 | Duplicate visit/claim records across sources are detected and merged per the agreed rules | U/I | Merged record matches the rule; audit trail kept | Blocked on 3.2.2 |
 | STP-M3-E-20 | Medication conflicts are flagged for caregiver review and never auto-resolved (FR-EHR-07) | U/E2E | Conflict appears for review; medication list unchanged until a caregiver acts | Blocked on 3.2.2/3.2.3 |
 | STP-M3-E-21 | The user review workflow lets the user accept or reject each flagged conflict | E2E | Each choice is applied and audited | Blocked on 3.2.3 |

@@ -58,9 +58,9 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     }
 
     @Override
-    public boolean patientHasDeclined(Long patientId, String fieldName, String incomingValue) {
+    public boolean patientHasDeclined(Long patientId, Long sourceId, String fieldName, String incomingValue) {
         return rows.stream().anyMatch(r -> r.status() == Status.REJECTED && r.resolvedBy() == ResolvedBy.PATIENT
-                && r.patientId().equals(patientId) && r.fieldName().equals(fieldName)
+                && r.patientId().equals(patientId) && r.sourceId().equals(sourceId) && r.fieldName().equals(fieldName)
                 && r.incomingValue().equals(incomingValue));
     }
 

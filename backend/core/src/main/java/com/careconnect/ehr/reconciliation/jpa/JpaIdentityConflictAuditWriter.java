@@ -143,9 +143,10 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
     }
 
     @Override
-    public boolean patientHasDeclined(Long patientId, String fieldName, String incomingValue) {
-        return repository.existsByPatientIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
+    public boolean patientHasDeclined(Long patientId, Long sourceId, String fieldName, String incomingValue) {
+        return repository.existsByPatientIdAndSourceIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
                 Objects.requireNonNull(patientId, "patientId"),
+                Objects.requireNonNull(sourceId, "sourceId"),
                 requireFieldName(fieldName),
                 Objects.requireNonNull(incomingValue, "incomingValue"),
                 EhrConflictStatus.REJECTED,
