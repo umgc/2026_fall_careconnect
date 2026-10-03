@@ -1,22 +1,29 @@
 package com.careconnect.controller.ehr;
 import com.careconnect.model.ehr.*;
+import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.ehr.*;
 import com.careconnect.service.ehr.EhrService;
 import com.careconnect.service.ehr.MedicareService;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Coverage;
 import org.hl7.fhir.r4.model.ExplanationOfBenefit;
 import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @RestController
 @Slf4j
@@ -35,8 +42,46 @@ public class EhrController{
     private EhrSourceIdentityRepository ehrIdentityRepository;
 
     @Autowired
-    private EHRVisitRecordRepository ehrVisitRecordRepository;
+    private EhrVisitRecordRepository ehrVisitRecordRepository;
 
+    @Autowired
+    private UserRepository userRepo;
+
+    @Autowired
+    private EhrPatientCrosswalkRepository  ehrPatientCrosswalkRepository;
+
+
+    @GetMapping("/oauth2/connect")
+    public void outgoing(@RequestParam("where") String where, Authentication authentication, HttpSession session, HttpServletResponse response) throws IOException, ServletException {
+        Long userId = 555L; /*userRepo.findByEmail(authentication.getName()).orElseThrow().getId();*/
+        if(where.equalsIgnoreCase("medicare")) {
+
+            Long medicareId = medicareService.getId();
+            if(medicareId == null){
+                medicareService.retrieveId();
+                medicareId = medicareService.getId();
+            }
+
+            Optional<EhrPatientCrosswalk> crosswalk = ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(userId, medicareId);
+
+            if(crosswalk.isEmpty()){
+
+                String linkToken =  UUID.randomUUID().toString();
+                log.info("Crosswalk currently empty! Building with user {} and Session {} Link token: {}",
+                        userId, session.getId(), linkToken);
+
+                EhrPatientCrosswalk toadd = new EhrPatientCrosswalk();
+                toadd.setLinkToken(linkToken);
+                toadd.setSourceId(medicareId);
+                toadd.setPatientId(userId);
+                toadd.setExternalPatientId("");
+                ehrPatientCrosswalkRepository.save(toadd);
+                session.setAttribute(where, linkToken);
+            }
+
+        }
+        response.sendRedirect("/oauth2/authorization/" + where);
+    }
 
 
 
@@ -57,13 +102,13 @@ public class EhrController{
             EhrSourceIdentity toreturn;
             if(identities.isEmpty() || ChronoUnit.DAYS.between(identities.orElseThrow().getSourceUpdatedAt(), LocalDateTime.now()) < 1){
                 Patient results = medicareService.requestMedicarePatientInfo(crosswalk.getToken());
-                // Remove the old copy
-                if(identities.isPresent()){
-                    ehrIdentityRepository.deleteById(identities.orElseThrow().getId());
-                }
+
                 // Add the new one.
-                toreturn = ehrIdentityRepository.save(new EhrSourceIdentity(crosswalk.getPatientId(), results,
-                        medicareId));
+                EhrSourceIdentity identity = new EhrSourceIdentity(crosswalk.getPatientId(), results, medicareId);
+                if(identities.isPresent()){
+                    identity.setId(identities.orElseThrow().getId());
+                }
+                toreturn = ehrIdentityRepository.save(identity);
             }else{
                 toreturn = identities.orElseThrow();
             }

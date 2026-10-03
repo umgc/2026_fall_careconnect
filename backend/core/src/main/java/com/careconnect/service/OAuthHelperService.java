@@ -15,6 +15,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.context.SecurityContextRepository;
@@ -41,47 +43,12 @@ public class OAuthHelperService implements AuthenticationSuccessHandler {
     private EhrPatientCrosswalkRepository ehrPatientCrosswalkRepository;
 
     @Autowired
-    private UserRepository userRepo;
-
-    @Autowired
-    private MedicareService medicareService;
-
-    @PostMapping("/oauth2/connect")
-    public void outgoing(String where, Authentication authentication, HttpSession session, HttpServletResponse response) throws IOException, ServletException {
-        Long userId = userRepo.findByEmail(authentication.getName()).orElseThrow().getId();
-        if(where.equalsIgnoreCase("medicare")) {
-
-            Long medicareId = medicareService.getId();
-            if(medicareId == null){
-                medicareService.retrieveId();
-                medicareId = medicareService.getId();
-            }
-
-            Optional<EhrPatientCrosswalk> crosswalk = ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(userId, medicareId);
-
-            if(crosswalk.isEmpty()){
-
-                String linkToken =  UUID.randomUUID().toString();
-                log.info("Crosswalk currently empty! Building with user {} and Session {} Link token: {}",
-                        userId, session.getId(), linkToken);
-
-                EhrPatientCrosswalk toadd = new EhrPatientCrosswalk();
-                toadd.setLinkToken(linkToken);
-                toadd.setSourceId(medicareId);
-                toadd.setPatientId(userId);
-                ehrPatientCrosswalkRepository.save(toadd);
-                session.setAttribute(where, linkToken);
-            }
-
-        }
-        response.sendRedirect("/oauth2/authorization/" + where);
-    }
-
+    private OAuth2AuthorizedClientService oAuth2AuthorizedClientService;
 
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException {
         OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
-        log.info("Oauth Success! {}, {}, {} On Session {}", oauthToken.getName(),
-                oauthToken.getAuthorizedClientRegistrationId(),
+        log.info("Oauth Success! {}, {}, {}, {} On Session {}", oauthToken.getName(),
+                oauthToken.getAuthorizedClientRegistrationId(), oauthToken.getCredentials().toString(),
                 oauthToken.getPrincipal().getName(),  request.getSession().getId());
 
         String source = oauthToken.getAuthorizedClientRegistrationId();
@@ -96,11 +63,13 @@ public class OAuthHelperService implements AuthenticationSuccessHandler {
             // Turns out they aren't real.
             if(crosswalkOpt.isEmpty()){response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); return;}
 
+            OAuth2AuthorizedClient client = oAuth2AuthorizedClientService.loadAuthorizedClient(oauthToken.getAuthorizedClientRegistrationId(), oauthToken.getPrincipal().getName());
             EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
             crosswalk.setExternalPatientId(oauthToken.getPrincipal().getName());
-            crosswalk.setRefreshToken("");
+            crosswalk.setRefreshToken(client.getRefreshToken().getTokenValue());
             crosswalk.setLastLoggedIn(LocalDateTime.now());
-            crosswalk.setToken("");
+            crosswalk.setLastRefreshed(LocalDateTime.now());
+            crosswalk.setToken(client.getAccessToken().getTokenValue());
             ehrPatientCrosswalkRepository.save(crosswalk);
             response.sendRedirect(frontendBaseUrl);
         }

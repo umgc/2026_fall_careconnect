@@ -118,6 +118,7 @@ public class SecurityConfig {
                                 "/v1/api/billing/pay/**",
                                 "/v1/api/address/**",
                                 "/oauth/**",
+                                "/oauth2/**",
                                 "/ws/**",
                                 "/api/notifications/demo/**",
                                 "/api/internal/chime/**"
