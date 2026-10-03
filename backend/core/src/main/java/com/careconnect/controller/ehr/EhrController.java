@@ -20,10 +20,8 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.random.RandomGenerator;
 
 @RestController
 @Slf4j
@@ -53,7 +51,9 @@ public class EhrController{
 
     @GetMapping("/oauth2/connect")
     public void outgoing(@RequestParam("where") String where, Authentication authentication, HttpSession session, HttpServletResponse response) throws IOException, ServletException {
-        Long userId = 555L; /*userRepo.findByEmail(authentication.getName()).orElseThrow().getId();*/
+        Long userId = RandomGenerator.getDefault().nextLong(); /*userRepo.findByEmail(authentication.getName()).orElseThrow().getId();*/
+
+
         if(where.equalsIgnoreCase("medicare")) {
 
             Long medicareId = medicareService.getId();
@@ -62,22 +62,34 @@ public class EhrController{
                 medicareId = medicareService.getId();
             }
 
-            Optional<EhrPatientCrosswalk> crosswalk = ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(userId, medicareId);
+            Optional<EhrPatientCrosswalk> crosswalkOpt = ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(userId, medicareId);
 
-            if(crosswalk.isEmpty()){
+            if(crosswalkOpt.isEmpty()){
 
                 String linkToken =  UUID.randomUUID().toString();
                 log.info("Crosswalk currently empty! Building with user {} and Session {} Link token: {}",
                         userId, session.getId(), linkToken);
 
                 EhrPatientCrosswalk toadd = new EhrPatientCrosswalk();
+
+                // Set up what we do know
                 toadd.setLinkToken(linkToken);
                 toadd.setSourceId(medicareId);
                 toadd.setPatientId(userId);
+
+                // We don't know this yet, but can't leave it null.
                 toadd.setExternalPatientId("");
                 ehrPatientCrosswalkRepository.save(toadd);
                 session.setAttribute(where, linkToken);
+            }else{
+                // Re-Authenticating to keep the long login up to date. Still needs a fresh linkToken
+                EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
+                String linkToken =  UUID.randomUUID().toString();
+                crosswalk.setLinkToken(linkToken);
+                ehrPatientCrosswalkRepository.save(crosswalk);
+                session.setAttribute(where, linkToken);
             }
+
 
         }
         response.sendRedirect("/oauth2/authorization/" + where);

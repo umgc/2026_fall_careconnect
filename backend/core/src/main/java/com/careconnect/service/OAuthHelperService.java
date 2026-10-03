@@ -1,33 +1,22 @@
 package com.careconnect.service;
-import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.service.ehr.MedicareService;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.UUID;
 
 
 @Service
@@ -65,11 +54,17 @@ public class OAuthHelperService implements AuthenticationSuccessHandler {
 
             OAuth2AuthorizedClient client = oAuth2AuthorizedClientService.loadAuthorizedClient(oauthToken.getAuthorizedClientRegistrationId(), oauthToken.getPrincipal().getName());
             EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
+
+            // Set a bunch of values up.
             crosswalk.setExternalPatientId(oauthToken.getPrincipal().getName());
             crosswalk.setRefreshToken(client.getRefreshToken().getTokenValue());
             crosswalk.setLastLoggedIn(LocalDateTime.now());
             crosswalk.setLastRefreshed(LocalDateTime.now());
             crosswalk.setToken(client.getAccessToken().getTokenValue());
+
+            // Linking complete, no more link token needed.
+            crosswalk.setLinkToken("");
+
             ehrPatientCrosswalkRepository.save(crosswalk);
             response.sendRedirect(frontendBaseUrl);
         }
