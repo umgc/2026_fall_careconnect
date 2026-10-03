@@ -157,7 +157,7 @@ public class AthenaClientCredentialsTokenService implements AthenaTokenProvider 
         final int status = ex.getStatusCode().value();
         log.warn("athenahealth token endpoint {} -> {} : {}", cfg.getTokenUrl(), status, responseBody);
 
-        if (responseBody != null && responseBody.contains("Invalid Scope")) {
+        if (responseBody.contains("Invalid Scope")) {
             return new IllegalStateException(
                     "athenahealth rejected the requested scopes. Every scope in athena.oauth.scopes "
                     + "must be configured on the portal app, and wildcards are not permitted. "

@@ -1,6 +1,7 @@
 package com.careconnect.service.ehr.athena;
 
 import com.careconnect.config.AthenaProperties;
+import com.careconnect.testsupport.fixtures.AthenaPropertiesFixtures;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.web.client.RestTemplate;
@@ -29,17 +30,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * assertion below is also what keeps this test cheap.
  */
 @EnabledIfEnvironmentVariable(named = "ATHENA_CLIENT_ID", matches = ".+")
+@EnabledIfEnvironmentVariable(named = "ATHENA_CLIENT_SECRET", matches = ".+")
 class AthenaTokenAcquisitionLiveIT {
 
     private static AthenaClientCredentialsTokenService service() {
-        final AthenaProperties cfg = new AthenaProperties();
-        cfg.setTokenUrl("https://api.preview.platform.athenahealth.com/oauth2/v1/token");
-        cfg.setClientId(System.getenv("ATHENA_CLIENT_ID"));
-        cfg.setClientSecret(System.getenv("ATHENA_CLIENT_SECRET"));
         // Only what the portal app currently grants. Adding an unconfigured scope fails the
         // whole request with 400 "Invalid Scope" rather than degrading to a subset.
         final String scopes = System.getenv("ATHENA_SCOPES");
-        cfg.setScopes(scopes != null && !scopes.isBlank() ? scopes : "system/Patient.read");
+        final AthenaProperties cfg = AthenaPropertiesFixtures.builder()
+                .tokenUrl("https://api.preview.platform.athenahealth.com/oauth2/v1/token")
+                .clientId(System.getenv("ATHENA_CLIENT_ID"))
+                .clientSecret(System.getenv("ATHENA_CLIENT_SECRET"))
+                .scopes(scopes != null && !scopes.isBlank() ? scopes : "system/Patient.read")
+                .build();
         return new AthenaClientCredentialsTokenService(new RestTemplate(), cfg);
     }
 

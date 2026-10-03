@@ -16,6 +16,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,14 +42,19 @@ import java.util.UUID;
  * {@link AthenaTokenProvider}, which only exists when athena is enabled, so requiring one flag
  * alone would fail context startup on a missing bean. Disabled means the route 404s, not 403s.
  *
- * <p>Deliberately returns no raw upstream error bodies: an athena {@code OperationOutcome} can
- * carry identifiers, so failures are reported as a code plus a correlation id and the detail
- * is logged server-side.
+ * <p>Returns no PHI: no name, date of birth or chart content, and never another patient's
+ * identifier, because a diagnostic response is exactly what ends up in proxy logs and browser
+ * tooling. It likewise returns no raw upstream error bodies: an athena {@code OperationOutcome}
+ * can carry identifiers, so failures are reported as a code plus a correlation id and the
+ * detail is logged server-side.
  */
+// TODO: REMOVE before merge to develop. The athena data branch replaces this probe with the
+// patient resolver and the /api/athena/status endpoint.
 @Slf4j
 @RestController
 @RequestMapping("/api/athena/diag")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('PATIENT')")
 @ConditionalOnProperty(
         name = {"careconnect.athena.enabled", "careconnect.athena.diagnostics-enabled"},
         havingValue = "true")
@@ -58,10 +64,12 @@ public class AthenaDiagnosticsController {
     private final PatientRepository patientRepository;
     private final AthenaTokenProvider tokens;
     private final AthenaProperties cfg;
+    // The shared bean from WebClientConfig, which carries the 10s connect / 60s response timeouts.
     private final RestTemplate http;
 
     /**
-     * Resolve the signed-in CareConnect patient to their athenahealth chart and return it.
+     * Resolve the signed-in CareConnect patient to their athenahealth chart and report the
+     * outcome: a state code, match counts and, on a unique match, the athena patient id.
      *
      * <p>Self-access only: the patient is taken from the JWT, never from a request parameter,
      * so this cannot be pointed at someone else's record.
@@ -84,10 +92,6 @@ public class AthenaDiagnosticsController {
         }
 
         final Map<String, Object> body = new HashMap<>();
-        body.put("careconnectUser", me.getEmail());
-        body.put("searchedFor", Map.of(
-                "family", p.getLastName(), "given", p.getFirstName(),
-                "dob", p.getDob() == null ? "" : p.getDob()));
         body.put("grantedScopes", tokens.grantedScopes());
 
         final JsonNode bundle;
@@ -134,14 +138,12 @@ public class AthenaDiagnosticsController {
         if (exact.isEmpty()) {
             body.putAll(state("NOT_MATCHED", "No athena chart matched this patient exactly."));
         } else if (exact.size() > 1) {
+            // The other candidates are different people's charts, so only the count is returned.
             body.putAll(state("AMBIGUOUS",
                     "More than one athena chart matched; needs identity reconciliation."));
-            body.put("athenaPatientIds", exact.stream().map(r -> text(r, "id")).toList());
         } else {
-            final JsonNode match = exact.get(0);
             body.putAll(state("MATCHED", "Resolved to a single athena chart."));
-            body.put("athenaPatientId", text(match, "id"));
-            body.put("resource", match);
+            body.put("athenaPatientId", text(exact.get(0), "id"));
         }
         return ResponseEntity.ok(body);
     }

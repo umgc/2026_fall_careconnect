@@ -1,6 +1,7 @@
 package com.careconnect.service.ehr.athena;
 
 import com.careconnect.config.AthenaProperties;
+import com.careconnect.testsupport.fixtures.AthenaPropertiesFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,12 @@ import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+
+import static com.careconnect.testsupport.fixtures.AthenaPropertiesFixtures.CLIENT_ID;
+import static com.careconnect.testsupport.fixtures.AthenaPropertiesFixtures.CLIENT_SECRET;
+import static com.careconnect.testsupport.fixtures.AthenaPropertiesFixtures.TOKEN_URL;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,13 +41,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class AthenaClientCredentialsTokenServiceTest {
 
-    private static final String TOKEN_URL = "https://athena.example/oauth2/v1/token";
-    private static final String CLIENT_ID = "test-id";
-    private static final String CLIENT_SECRET = "test-secret";
-
     private RestTemplate restTemplate;
     private MockRestServiceServer server;
-    private AthenaProperties cfg;
     private AthenaClientCredentialsTokenService service;
 
     @BeforeEach
@@ -48,13 +50,10 @@ class AthenaClientCredentialsTokenServiceTest {
         restTemplate = new RestTemplate();
         server = MockRestServiceServer.createServer(restTemplate);
 
-        // Spring is not involved, so @Value defaults do not apply; set what the service reads.
-        cfg = new AthenaProperties();
-        cfg.setTokenUrl(TOKEN_URL);
-        cfg.setClientId(CLIENT_ID);
-        cfg.setClientSecret(CLIENT_SECRET);
-        cfg.setScopes("system/Patient.read system/Condition.read");
-
+        // Two scopes requested so the granted-scope tests can show athena narrowing them.
+        final AthenaProperties cfg = AthenaPropertiesFixtures.builder()
+                .scopes("system/Patient.read system/Condition.read")
+                .build();
         service = new AthenaClientCredentialsTokenService(restTemplate, cfg);
     }
 
@@ -202,14 +201,61 @@ class AthenaClientCredentialsTokenServiceTest {
     }
 
     @Test
+    @DisplayName("concurrent callers share one in-flight acquisition instead of each requesting")
+    void concurrentCallersShareOneAcquisition() throws Exception {
+        // Arrange: exactly one expectation, so a second token request fails the test. The first
+        // response is held until the second caller is parked on the lock; otherwise the second
+        // caller could simply arrive after the cache is warm and never exercise the re-check
+        // inside the lock, which is the code that keeps concurrent callers off the 429 quota.
+        final FutureTask<String> firstCaller = new FutureTask<>(service::accessToken);
+        final FutureTask<String> secondCaller = new FutureTask<>(service::accessToken);
+        final Thread secondThread = new Thread(secondCaller, "athena-token-second-caller");
+        server.expect(requestTo(TOKEN_URL))
+                .andRespond(request -> {
+                    secondThread.start();
+                    awaitParked(secondThread);
+                    return withSuccess(tokenJson("tok-shared", 3600, "system/Patient.read"),
+                            MediaType.APPLICATION_JSON).createResponse(request);
+                });
+
+        // Act
+        new Thread(firstCaller, "athena-token-first-caller").start();
+        final String first = firstCaller.get(5, TimeUnit.SECONDS);
+        final String second = secondCaller.get(5, TimeUnit.SECONDS);
+
+        // Assert
+        assertEquals("tok-shared", first);
+        assertEquals("tok-shared", second);
+        server.verify();
+    }
+
+    /** Blocks until {@code thread} is parked, which on this path means waiting on the lock. */
+    private static void awaitParked(final Thread thread) {
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (thread.getState() != Thread.State.WAITING) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError(
+                        "second caller never blocked on the token lock; state " + thread.getState());
+            }
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted while waiting for the second caller", ex);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("missing credentials fail before any HTTP call")
     void missingCredentialsThrowBeforeRequest() {
         // Arrange: no expectations registered, so any request would fail the test.
-        cfg.setClientSecret("");
+        final AthenaClientCredentialsTokenService noSecret = new AthenaClientCredentialsTokenService(
+                restTemplate, AthenaPropertiesFixtures.builder().clientSecret("").build());
 
         // Act
         final IllegalStateException ex =
-                assertThrows(IllegalStateException.class, () -> service.accessToken());
+                assertThrows(IllegalStateException.class, noSecret::accessToken);
 
         // Assert
         assertTrue(ex.getMessage().contains("client id/secret"), ex.getMessage());
