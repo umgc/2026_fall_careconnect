@@ -28,7 +28,18 @@ public class FHIRService {
     private static final FhirContext ctxR4 = FhirContext.forR4();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
 
-    private static final String bluebuttonBase = "https://sandbox.bluebutton.cms.gov/v2/fhir/";
+    private static final String SANDBOX_BASE = "https://sandbox.bluebutton.cms.gov/v2/fhir/";
+
+    private final String bluebuttonBase;
+
+    public FHIRService() {
+        this(SANDBOX_BASE);
+    }
+
+    /** Test seam (WBS 3.6.4): point the client at a local stub server instead of the CMS sandbox. */
+    FHIRService(String bluebuttonBase) {
+        this.bluebuttonBase = bluebuttonBase;
+    }
 
     public Patient requestMedicarePatientInfo(String patientToken) throws RuntimeException {
         IGenericClient bluebuttonClient = ctxR4.newRestfulGenericClient(bluebuttonBase);
