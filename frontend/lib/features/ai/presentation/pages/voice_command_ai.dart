@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:porcupine_flutter/porcupine_manager.dart';
 import 'package:porcupine_flutter/porcupine_error.dart';
 import 'package:porcupine_flutter/porcupine.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import 'voice_command_web_speech.dart';
@@ -27,9 +28,12 @@ enum _VoiceStatus {
 
 enum VoiceCommandPresentation { page, flyout }
 
+enum VoiceCommandTheme { classic, futuristic }
+
 class VoiceCommandAI extends StatefulWidget {
   final bool singleShot;
   final VoiceCommandPresentation presentationMode;
+  final VoiceCommandTheme theme;
   final void Function(String destination)? onNavigateRequested;
   final void Function()? onCloseRequested;
 
@@ -37,6 +41,7 @@ class VoiceCommandAI extends StatefulWidget {
     super.key,
     this.singleShot = false,
     this.presentationMode = VoiceCommandPresentation.page,
+    this.theme = VoiceCommandTheme.classic,
     this.onNavigateRequested,
     this.onCloseRequested,
   });
@@ -45,15 +50,49 @@ class VoiceCommandAI extends StatefulWidget {
   State<VoiceCommandAI> createState() => _VoiceCommandAIState();
 }
 
-class _VoiceCommandAIState extends State<VoiceCommandAI> {
+class _VoiceCommandAIState extends State<VoiceCommandAI>
+    with SingleTickerProviderStateMixin {
+  static const String _flyoutThemePreferenceKey = 'voice_command_flyout_theme';
+  static const List<_VoiceThemeModel> _themeOptions = [
+    _VoiceThemeModel(
+      id: VoiceCommandTheme.classic,
+      label: 'Classic',
+      preferenceValue: 'classic',
+      primaryColor: Color(0xFF0D47A1),
+      cardColor: Colors.white,
+      accentColor: Color(0xFF1976D2),
+      mutedColor: Color(0xFF9E9E9E),
+      textColor: Color(0xDD000000),
+      useThemeSurface: true,
+      isFuturistic: false,
+    ),
+    _VoiceThemeModel(
+      id: VoiceCommandTheme.futuristic,
+      label: 'Futuristic',
+      preferenceValue: 'futuristic',
+      primaryColor: Color(0xFF071521),
+      cardColor: Color(0xFF102334),
+      accentColor: Color(0xFF67E8F9),
+      mutedColor: Color(0xFF8FB3C9),
+      textColor: Color(0xFFE6F7FF),
+      surfaceColor: Color(0xFF0D1B2A),
+      isFuturistic: true,
+    ),
+  ];
+
   PorcupineManager? _porcupine;
   late stt.SpeechToText _speech;
   final VoiceCommandWebSpeechController _webSpeech =
       VoiceCommandWebSpeechController();
 
+  late final AnimationController _micPulseController;
+  late VoiceCommandTheme _activeTheme;
+
   bool _isListening = false;
+  bool _audioInputDetected = false;
   bool _wakeDetected = false;
   Timer? _timeoutTimer;
+  Timer? _audioPulseTimer;
 
   String _buffer = '';
   bool _initialized = false;
@@ -71,16 +110,27 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     // Core navigation
     _CommandMatch(phrase: 'take me home', intent: 'navigate', entity: 'home'),
     _CommandMatch(phrase: 'home', intent: 'navigate', entity: 'home'),
-    _CommandMatch(phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
-    _CommandMatch(phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
-    _CommandMatch(phrase: 'take me to my tracker', intent: 'navigate', entity: 'symptoms'),
-    _CommandMatch(phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
-    _CommandMatch(phrase: 'open messages', intent: 'navigate', entity: 'messages'),
-    _CommandMatch(phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
-    _CommandMatch(phrase: 'open profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(
+        phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(
+        phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(
+        phrase: 'take me to my tracker',
+        intent: 'navigate',
+        entity: 'symptoms'),
+    _CommandMatch(
+        phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
+    _CommandMatch(
+        phrase: 'open messages', intent: 'navigate', entity: 'messages'),
+    _CommandMatch(
+        phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
+    _CommandMatch(
+        phrase: 'open profile', intent: 'navigate', entity: 'profile'),
     _CommandMatch(phrase: 'profile', intent: 'navigate', entity: 'profile'),
-    _CommandMatch(phrase: 'open my profile', intent: 'navigate', entity: 'profile'),
-    _CommandMatch(phrase: 'open settings', intent: 'navigate', entity: 'settings'),
+    _CommandMatch(
+        phrase: 'open my profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(
+        phrase: 'open settings', intent: 'navigate', entity: 'settings'),
     _CommandMatch(phrase: 'settings', intent: 'navigate', entity: 'settings'),
     _CommandMatch(phrase: 'open menu', intent: 'navigate', entity: 'menu'),
     _CommandMatch(phrase: 'menu', intent: 'navigate', entity: 'menu'),
@@ -171,7 +221,19 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   @override
   void initState() {
     super.initState();
+    _activeTheme = widget.presentationMode == VoiceCommandPresentation.flyout
+        ? VoiceCommandTheme.classic
+        : widget.theme;
     _speech = stt.SpeechToText();
+    _micPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 340),
+      lowerBound: 0,
+      upperBound: 1,
+    );
+    if (_isFlyout) {
+      unawaited(_restoreFlyoutThemePreference());
+    }
     registerDefaultVoiceIntents();
   }
 
@@ -181,6 +243,178 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
   bool get _isFlyout =>
       widget.presentationMode == VoiceCommandPresentation.flyout;
+
+  VoiceCommandTheme get _currentTheme => _activeTheme;
+  _VoiceThemeModel get _currentThemeModel => _themeModelFor(_currentTheme);
+
+  _VoiceThemeModel _themeModelFor(VoiceCommandTheme theme) {
+    return _themeOptions.firstWhere((option) => option.id == theme);
+  }
+
+  Future<void> _restoreFlyoutThemePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedTheme = prefs.getString(_flyoutThemePreferenceKey);
+    if (savedTheme == null || !mounted) return;
+
+    VoiceCommandTheme? restoredTheme;
+    for (final option in _themeOptions) {
+      if (option.preferenceValue == savedTheme) {
+        restoredTheme = option.id;
+        break;
+      }
+    }
+
+    if (restoredTheme == null || restoredTheme == _currentTheme) return;
+    setState(() {
+      _activeTheme = restoredTheme!;
+      _updateMicPulse(_audioInputDetected || _wakeDetected);
+    });
+  }
+
+  Future<void> _persistFlyoutThemePreference(VoiceCommandTheme theme) async {
+    if (!_isFlyout) return;
+    final prefs = await SharedPreferences.getInstance();
+    final option = _themeModelFor(theme);
+    await prefs.setString(_flyoutThemePreferenceKey, option.preferenceValue);
+  }
+
+  Color _primaryColor() {
+    return _currentThemeModel.primaryColor;
+  }
+
+  Color _surfaceColor() {
+    if (_currentThemeModel.useThemeSurface) {
+      return Theme.of(context).colorScheme.surface;
+    }
+    return _currentThemeModel.surfaceColor ?? Theme.of(context).colorScheme.surface;
+  }
+
+  Color _cardColor() {
+    return _currentThemeModel.cardColor;
+  }
+
+  Color _accentColor() {
+    return _currentThemeModel.accentColor;
+  }
+
+  Color _mutedColor() {
+    return _currentThemeModel.mutedColor;
+  }
+
+  Color _textColor() {
+    return _currentThemeModel.textColor;
+  }
+
+  void _updateMicPulse(bool isActive) {
+    if (!_currentThemeModel.isFuturistic) {
+      _micPulseController.stop();
+      _micPulseController.value = 0;
+      return;
+    }
+
+    if (isActive) {
+      _micPulseController.stop();
+      _micPulseController.forward(from: 0);
+      return;
+    }
+
+    _micPulseController.reverse();
+    if (_micPulseController.value <= 0.05) {
+      _micPulseController.stop();
+      _micPulseController.value = 0;
+    }
+  }
+
+  void _setAudioInputDetected(bool isActive) {
+    if (isActive) {
+      _audioPulseTimer?.cancel();
+      _audioInputDetected = true;
+      _updateMicPulse(true);
+      _audioPulseTimer = Timer(const Duration(milliseconds: 220), () {
+        if (!mounted) return;
+        _audioInputDetected = false;
+        _updateMicPulse(false);
+      });
+      return;
+    }
+
+    _audioPulseTimer?.cancel();
+    _audioInputDetected = false;
+    _updateMicPulse(false);
+  }
+
+  Widget _buildMicAura() {
+    final isAudioActive = _audioInputDetected || _wakeDetected;
+    final isFuturistic = _currentThemeModel.isFuturistic;
+
+    if (!isFuturistic) {
+      return Icon(
+        _wakeDetected ? Icons.mic : Icons.mic_none,
+        size: 64,
+        color: _wakeDetected ? _accentColor() : _mutedColor(),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _micPulseController,
+      builder: (context, child) {
+        final pulse =
+            isAudioActive ? 1.0 + (_micPulseController.value * 0.18) : 1.0;
+        final size = isAudioActive ? 124.0 : 112.0;
+
+        return Transform.scale(
+          scale: pulse,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubic,
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF72F1FF),
+                  Color(0xFFB38CFF),
+                  Color(0xFF7DE2A8),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _accentColor().withValues(alpha: 0.52),
+                  blurRadius: isAudioActive ? 30 : 18,
+                  spreadRadius: isAudioActive ? 8 : 3,
+                ),
+              ],
+            ),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 120),
+              scale: isAudioActive ? 1.08 : 0.96,
+              child: Container(
+                margin: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF08131D).withValues(alpha: 0.88),
+                  border: Border.all(
+                    color: const Color(0xFF9BE7FF).withValues(alpha: 0.7),
+                    width: 2,
+                  ),
+                ),
+                child: Center(
+                  child: Icon(
+                    _wakeDetected ? Icons.mic : Icons.mic_none,
+                    size: 42,
+                    color: _wakeDetected ? _accentColor() : _mutedColor(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void didChangeDependencies() {
@@ -229,6 +463,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   void _onWakeDetected(int _) {
     if (!mounted) return;
     setState(() => _wakeDetected = true);
+    _setAudioInputDetected(true);
     _startListening();
   }
 
@@ -451,6 +686,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       if (!mounted) return;
       setState(() {
         _isListening = true;
+        _audioInputDetected = false;
         _voiceStatus = _VoiceStatus.listening;
         _recognizedText = '';
         _statusDetail = '';
@@ -475,6 +711,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             }
 
             if (status == 'notListening') {
+              _setAudioInputDetected(false);
               Future<void>.delayed(const Duration(milliseconds: 250), () {
                 if (!mounted || !_isListening) return;
 
@@ -509,6 +746,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
           },
           onResult: (words, finalResult) {
             if (!mounted || words.trim().isEmpty) return;
+            _setAudioInputDetected(true);
             _buffer = words;
             setState(() {
               _recognizedText = words;
@@ -585,6 +823,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
           }
 
           if (status == 'done' || status == 'notListening') {
+            _setAudioInputDetected(false);
             Future<void>.delayed(const Duration(milliseconds: 250), () {
               if (!mounted || !_isListening) return;
 
@@ -657,6 +896,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     if (!mounted) return;
     setState(() {
       _isListening = true;
+      _audioInputDetected = false;
       _voiceStatus = _VoiceStatus.listening;
       _recognizedText = '';
       _statusDetail = '';
@@ -669,6 +909,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         localeId: Localizations.localeOf(context).languageCode,
         onResult: (r) {
           if (r.recognizedWords.isNotEmpty) {
+            _setAudioInputDetected(true);
             _buffer = r.recognizedWords;
             if (mounted) {
               setState(() {
@@ -711,13 +952,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   Future<void> _process(String words) async {
     if (!mounted) return;
 
-   // print to screen what you heard for debugging purposes 
+    // print to screen what you heard for debugging purposes
     final cmd = words.toLowerCase().trim();
     debugPrint('Heard: $cmd');
-  // end debug print
+    // end debug print
 
-  //Use voice to confirm or cancel the action if we are in the confirming popup/state
-  if (_voiceStatus == _VoiceStatus.confirming) {
+    //Use voice to confirm or cancel the action if we are in the confirming popup/state
+    if (_voiceStatus == _VoiceStatus.confirming) {
       if (cmd.contains('confirm') || cmd == 'yes' || cmd == 'proceed') {
         unawaited(_stopListeningBackend());
         await _onConfirm();
@@ -748,6 +989,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _statusDetail = '';
       _isListening = false;
     });
+    _updateMicPulse(false);
 
     try {
       if (widget.singleShot) {
@@ -779,8 +1021,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
       // Fall through to keyword matching
       final exactMatches = _commandTable
-          .where(
-              (c) => cmd == _commandPhraseToTranslatedString(c.phrase))
+          .where((c) => cmd == _commandPhraseToTranslatedString(c.phrase))
           .toList();
 
       if (exactMatches.length == 1) {
@@ -817,8 +1058,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
-          // call _startConfirmationListening to listen for verbal confirmation or cancellation 
-          // of the command with a handler 
+          // call _startConfirmationListening to listen for verbal confirmation or cancellation
+          // of the command with a handler
           _startConfirmationListening();
           return;
         }
@@ -881,7 +1122,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
-          
+
           // call _startConfirmationListening to listen for verbal confirmation or cancellation
           _startConfirmationListening();
           return;
@@ -1089,8 +1330,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
   void _reset() {
     _timeoutTimer?.cancel();
+    _audioPulseTimer?.cancel();
     unawaited(_stopListeningBackend());
     _buffer = '';
+    _setAudioInputDetected(false);
     if (mounted) {
       setState(() {
         _isListening = false;
@@ -1111,12 +1354,12 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     final intent = _pendingIntent ?? 'navigate';
     final intentDef = VoiceIntentRegistry().resolveIntent(intent);
 
-// Check if the intent is high-risk and requires explicit confirmation via voice 
+// Check if the intent is high-risk and requires explicit confirmation via voice
 // or touch input before proceeding
-// If the user cancels or dismisses the dialog, abort the action 
+// If the user cancels or dismisses the dialog, abort the action
 // and reset the state
 
-if (intentDef?.riskLevel == IntentRiskLevel.high) {
+    if (intentDef?.riskLevel == IntentRiskLevel.high) {
       final titleLabel = intentDef?.displayLabel ?? 'High-Risk Action';
       final localeTag = Localizations.localeOf(context).toLanguageTag();
 
@@ -1130,12 +1373,16 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
               final clean = spoken.toLowerCase().trim();
               debugPrint('Gate 2 Heard: $clean');
 
-              if (clean.contains('confirm') || clean == 'yes' || clean == 'proceed') {
+              if (clean.contains('confirm') ||
+                  clean == 'yes' ||
+                  clean == 'proceed') {
                 _stopListeningBackend();
                 if (Navigator.of(dialogContext).canPop()) {
                   Navigator.of(dialogContext).pop(true);
                 }
-              } else if (clean.contains('cancel') || clean == 'no' || clean == 'stop') {
+              } else if (clean.contains('cancel') ||
+                  clean == 'no' ||
+                  clean == 'stop') {
                 _stopListeningBackend();
                 if (Navigator.of(dialogContext).canPop()) {
                   Navigator.of(dialogContext).pop(false);
@@ -1158,7 +1405,8 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
                   listenFor: const Duration(seconds: 12),
                   pauseFor: const Duration(seconds: 2),
                   onResult: (r) {
-                    if (r.recognizedWords.isNotEmpty) handleGate2Voice(r.recognizedWords);
+                    if (r.recognizedWords.isNotEmpty)
+                      handleGate2Voice(r.recognizedWords);
                   },
                 );
               }
@@ -1195,27 +1443,27 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
       // Stop listening to the backend after the dialog is closed
       unawaited(_stopListeningBackend());
 
-    // If widget unmounted while waiting for user interaction, stop
-    if (!mounted) return;
+      // If widget unmounted while waiting for user interaction, stop
+      if (!mounted) return;
 
-    // Abort if cancelled or dismissed
-    if (userConfirmed != true) {
-      _setStatus(
-        status: _VoiceStatus.idle,
-        detail: '$titleLabel cancelled.',
-      );
-      _pendingDestination = null;
-      _pendingDetail = null;
-      _pendingIntent = null;
-      _ambiguousMatches = [];
-      _resetAfterDelay();
-      return; // Stops execution: handler will NOT run
+      // Abort if cancelled or dismissed
+      if (userConfirmed != true) {
+        _setStatus(
+          status: _VoiceStatus.idle,
+          detail: '$titleLabel cancelled.',
+        );
+        _pendingDestination = null;
+        _pendingDetail = null;
+        _pendingIntent = null;
+        _ambiguousMatches = [];
+        _resetAfterDelay();
+        return; // Stops execution: handler will NOT run
+      }
     }
-  }
 
-  //end High risk popup confirmation logic with voice listening
+    //end High risk popup confirmation logic with voice listening
 
-  if (!mounted) return;
+    if (!mounted) return;
 
     if (_pendingDestination != null) {
       final destination = _pendingDestination!;
@@ -1361,14 +1609,29 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
     _timeoutTimer?.cancel();
     _porcupine?.stop();
     _porcupine?.delete();
+    _micPulseController.stop();
+    _micPulseController.dispose();
     unawaited(_stopListeningBackend());
     super.dispose();
   }
 
   Widget _buildStatusArea() {
+    final isFuturistic = _currentThemeModel.isFuturistic;
+
     return Card(
       key: const Key('voice_status_area'),
+      color: _cardColor(),
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      elevation: isFuturistic ? 0 : 1,
+      shape: isFuturistic
+          ? RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: _accentColor().withOpacity(0.5),
+                width: 1.5,
+              ),
+            )
+          : null,
       child: Container(
         constraints: const BoxConstraints(minHeight: 96, minWidth: 280),
         padding: const EdgeInsets.all(16),
@@ -1381,8 +1644,8 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
               key: const Key('voice_status_phase'),
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: _statusColor(),
+                fontWeight: FontWeight.w700,
+                color: isFuturistic ? const Color(0xFFEAFBFF) : _statusColor(),
               ),
             ),
             if (_recognizedText.isNotEmpty) ...[
@@ -1390,7 +1653,11 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
               Text(
                 '${AppLocalizations.of(context)?.voicecommand_statusAreaHeard ?? 'Heard'}: "$_recognizedText"',
                 key: const Key('voice_status_heard'),
-                style: const TextStyle(fontSize: 15),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isFuturistic ? const Color(0xFFEAFBFF) : _textColor(),
+                ),
               ),
             ],
             if (_statusDetail.isNotEmpty) ...[
@@ -1398,10 +1665,80 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
               Text(
                 _statusDetail,
                 key: const Key('voice_status_detail'),
-                style: TextStyle(fontSize: 14, color: _statusColor()),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color:
+                      isFuturistic ? const Color(0xFFBFEAFF) : _statusColor(),
+                ),
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  String _themeLabel(VoiceCommandTheme theme) {
+    return _themeModelFor(theme).label;
+  }
+
+  Widget _buildThemeDropdown() {
+    final menuTextColor = _currentThemeModel.isFuturistic ? Colors.white : null;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<VoiceCommandTheme>(
+            key: const Key('voice_theme_dropdown'),
+            value: _currentTheme,
+            itemHeight: kMinInteractiveDimension,
+            dropdownColor: _currentThemeModel.isFuturistic ? _cardColor() : null,
+            iconEnabledColor: Colors.white,
+            style: TextStyle(
+              color: menuTextColor,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+            selectedItemBuilder: (context) {
+              return _themeOptions
+                  .map(
+                    (_) => const SizedBox(
+                      height: kMinInteractiveDimension,
+                      child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(
+                            'Themes',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList();
+            },
+            items: _themeOptions
+                .map(
+                  (option) => DropdownMenuItem<VoiceCommandTheme>(
+                    value: option.id,
+                    child: Text(option.label),
+                  ),
+                )
+                .toList(),
+            onChanged: (selected) {
+              if (selected == null || selected == _currentTheme) return;
+              setState(() {
+                _activeTheme = selected;
+                _updateMicPulse(_audioInputDetected || _wakeDetected);
+              });
+              unawaited(_persistFlyoutThemePreference(selected));
+            },
+          ),
         ),
       ),
     );
@@ -1411,51 +1748,97 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
     final title =
         AppLocalizations.of(context)?.voicecommand_voiceCommandTitle ??
             'Voice Commands';
+    final isFuturistic = _currentThemeModel.isFuturistic;
 
     return Scaffold(
+      backgroundColor: isFuturistic ? const Color(0xFF08131D) : null,
       appBar: AppBar(
-        title: Text(title),
-        backgroundColor: Colors.blue.shade900,
+        title: Text(
+          title,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.2,
+          ),
+        ),
+        backgroundColor:
+            isFuturistic ? const Color(0xFF0A1B2A) : _primaryColor(),
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        elevation: isFuturistic ? 0 : 4,
+        shape: isFuturistic
+            ? const RoundedRectangleBorder(
+                borderRadius:
+                    BorderRadius.vertical(bottom: Radius.circular(18)),
+              )
+            : null,
         actions: [
+          if (_isFlyout) _buildThemeDropdown(),
           if (showCloseAction)
             IconButton(
               tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
               onPressed: _closeRequested,
               icon: const Icon(Icons.close),
+              color: Colors.white,
             ),
         ],
       ),
-      body: Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(
-            _wakeDetected ? Icons.mic : Icons.mic_none,
-            size: 64,
-            color: _wakeDetected ? Colors.red : Colors.grey,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            !_wakeDetected
-                ? (kIsWeb
-                    ? AppLocalizations.of(context)
-                            ?.voicecommand_tapMicToStart ??
-                        'Tap mic to start'
-                    : AppLocalizations.of(context)
-                            ?.voicecommand_wakeWordToStart ??
-                        'Say wake word or tap mic')
-                : _isListening
-                    ? '${AppLocalizations.of(context)?.voicecommand_listeningState ?? 'Listening'}...'
-                    : '${AppLocalizations.of(context)?.voicecommand_processingState ?? 'Processing'}...',
-            style: const TextStyle(fontSize: 18),
-          ),
-          _buildStatusArea(),
-          if (_voiceStatus == _VoiceStatus.confirming) _buildConfirmActions(),
-          if (_voiceStatus == _VoiceStatus.clarifying) _buildClarifyActions(),
-        ]),
+      body: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        decoration: isFuturistic
+            ? const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Color(0xFF08131D),
+                    Color(0xFF0D1F2C),
+                    Color(0xFF0B1830),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              )
+            : null,
+        child: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const SizedBox(height: 8),
+            _buildMicAura(),
+            const SizedBox(height: 12),
+            Text(
+              !_wakeDetected
+                  ? (kIsWeb
+                      ? AppLocalizations.of(context)
+                              ?.voicecommand_tapMicToStart ??
+                          'Tap mic to start'
+                      : AppLocalizations.of(context)
+                              ?.voicecommand_wakeWordToStart ??
+                          'Say wake word or tap mic')
+                  : _isListening
+                      ? '${AppLocalizations.of(context)?.voicecommand_listeningState ?? 'Listening'}...'
+                      : '${AppLocalizations.of(context)?.voicecommand_processingState ?? 'Processing'}...',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: isFuturistic ? const Color(0xFFEAFBFF) : _textColor(),
+              ),
+            ),
+            _buildStatusArea(),
+            if (_voiceStatus == _VoiceStatus.confirming) _buildConfirmActions(),
+            if (_voiceStatus == _VoiceStatus.clarifying) _buildClarifyActions(),
+          ]),
+        ),
       ),
       floatingActionButton: Builder(
-        builder: (context) => FloatingActionButton(
-          onPressed: _onMicPressed,
-          child: Icon(_isListening ? Icons.mic_off : Icons.mic),
+        builder: (context) => AnimatedScale(
+          duration: const Duration(milliseconds: 220),
+          scale: isFuturistic && (_isListening || _wakeDetected) ? 1.08 : 1,
+          child: FloatingActionButton(
+            backgroundColor: _accentColor(),
+            foregroundColor: Colors.white,
+            onPressed: _onMicPressed,
+            child: Icon(_isListening ? Icons.mic_off : Icons.mic),
+          ),
         ),
       ),
     );
@@ -1464,6 +1847,7 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
   Widget _buildFlyoutSurface() {
     final media = MediaQuery.of(context);
     final maxWidth = media.size.width < 720 ? media.size.width - 24 : 560.0;
+    final isFuturistic = _currentThemeModel.isFuturistic;
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -1500,23 +1884,33 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
           onKeyEvent: _handleFlyoutKey,
           child: Align(
             alignment: Alignment.centerRight,
-            child: Container(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeInOutCubic,
               width: maxWidth,
               height: media.size.height,
               margin: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: const [
+                color: _surfaceColor(),
+                borderRadius: BorderRadius.circular(isFuturistic ? 28 : 24),
+                border: isFuturistic
+                    ? Border.all(
+                        color: _accentColor().withValues(alpha: 0.55),
+                        width: 1.5,
+                      )
+                    : null,
+                boxShadow: [
                   BoxShadow(
-                    color: Colors.black26,
+                    color: isFuturistic
+                        ? _accentColor().withValues(alpha: 0.22)
+                        : Colors.black26,
                     blurRadius: 24,
-                    offset: Offset(-4, 0),
+                    offset: const Offset(-4, 0),
                   ),
                 ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(isFuturistic ? 28 : 24),
                 child: _buildVoiceScaffold(showCloseAction: true),
               ),
             ),
@@ -1619,5 +2013,33 @@ class _CommandMatch {
     required this.phrase,
     required this.intent,
     required this.entity,
+  });
+}
+
+class _VoiceThemeModel {
+  final VoiceCommandTheme id;
+  final String label;
+  final String preferenceValue;
+  final Color primaryColor;
+  final Color? surfaceColor;
+  final Color cardColor;
+  final Color accentColor;
+  final Color mutedColor;
+  final Color textColor;
+  final bool useThemeSurface;
+  final bool isFuturistic;
+
+  const _VoiceThemeModel({
+    required this.id,
+    required this.label,
+    required this.preferenceValue,
+    required this.primaryColor,
+    required this.cardColor,
+    required this.accentColor,
+    required this.mutedColor,
+    required this.textColor,
+    this.surfaceColor,
+    this.useThemeSurface = false,
+    this.isFuturistic = false,
   });
 }
