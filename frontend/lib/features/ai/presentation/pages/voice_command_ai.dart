@@ -70,25 +70,20 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   static const _commandTable = [
     // Core navigation
     _CommandMatch(phrase: 'take me home', intent: 'navigate', entity: 'home'),
-    _CommandMatch(
-        phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
-    _CommandMatch(
-        phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
-    _CommandMatch(
-        phrase: 'take me to my tracker',
-        intent: 'navigate',
-        entity: 'symptoms'),
-    _CommandMatch(
-        phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
-    _CommandMatch(
-        phrase: 'open messages', intent: 'navigate', entity: 'messages'),
-    _CommandMatch(
-        phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
-    _CommandMatch(
-        phrase: 'open profile', intent: 'navigate', entity: 'profile'),
-    _CommandMatch(
-        phrase: 'open settings', intent: 'navigate', entity: 'settings'),
+    _CommandMatch(phrase: 'home', intent: 'navigate', entity: 'home'),
+    _CommandMatch(phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(phrase: 'take me to my tracker', intent: 'navigate', entity: 'symptoms'),
+    _CommandMatch(phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
+    _CommandMatch(phrase: 'open messages', intent: 'navigate', entity: 'messages'),
+    _CommandMatch(phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
+    _CommandMatch(phrase: 'open profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(phrase: 'profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(phrase: 'open my profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(phrase: 'open settings', intent: 'navigate', entity: 'settings'),
+    _CommandMatch(phrase: 'settings', intent: 'navigate', entity: 'settings'),
     _CommandMatch(phrase: 'open menu', intent: 'navigate', entity: 'menu'),
+    _CommandMatch(phrase: 'menu', intent: 'navigate', entity: 'menu'),
     // Health
     _CommandMatch(
         phrase: 'open medication tracker',
@@ -170,8 +165,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         intent: 'navigate',
         entity: 'ai configuration'),
     //emergency
-    _CommandMatch(phrase: 'help', intent: 'sos', entity: 'emergency'),
-    _CommandMatch(phrase: 'SOS', intent: 'sos', entity: 'emergency'),
+    _CommandMatch(phrase: 'emergency', intent: 'sos', entity: 'emergency'),
   ];
 
   @override
@@ -717,8 +711,33 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   Future<void> _process(String words) async {
     if (!mounted) return;
 
+   // print to screen what you heard for debugging purposes 
     final cmd = words.toLowerCase().trim();
     debugPrint('Heard: $cmd');
+  // end debug print
+
+  //Use voice to confirm or cancel the action if we are in the confirming popup/state
+  if (_voiceStatus == _VoiceStatus.confirming) {
+      if (cmd.contains('confirm') || cmd == 'yes' || cmd == 'proceed') {
+        unawaited(_stopListeningBackend());
+        await _onConfirm();
+        return;
+      } else if (cmd.contains('cancel') || cmd == 'no' || cmd == 'stop') {
+        unawaited(_stopListeningBackend());
+        _setStatus(
+          status: _VoiceStatus.idle,
+          detail: 'Action cancelled.',
+        );
+        _pendingDestination = null;
+        _pendingDetail = null;
+        _pendingIntent = null;
+        _ambiguousMatches = [];
+        _resetAfterDelay();
+        return;
+      }
+    }
+
+    //end voice confirm/cancel logic
 
     _timeoutTimer?.cancel();
 
@@ -759,14 +778,33 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       }
 
       // Fall through to keyword matching
-      final exactMatches = _commandTable
+      final phraseMatches = _commandTable
           .where(
-              (c) => cmd.contains(_commandPhraseToTranslatedString(c.phrase)))
+              (c) => _containsCommandPhrase(
+                    cmd,
+                    _commandPhraseToTranslatedString(c.phrase),
+                  ))
           .toList();
 
-      if (exactMatches.length == 1) {
+      // Keep deterministic commands usable in natural utterances while
+      // preferring the most-specific phrase. For example, "take me home"
+      // must resolve to that command rather than also matching the bare
+      // "home" alias.
+      final longestPhraseLength = phraseMatches.fold<int>(
+        0,
+        (longest, match) => match.phrase.length > longest
+            ? match.phrase.length
+            : longest,
+      );
+      final mostSpecificMatches = phraseMatches
+          .where((match) => match.phrase.length == longestPhraseLength)
+          .toList();
+
+      if (mostSpecificMatches.length == 1) {
+        //if there is an exact match, turn off mic
         unawaited(_stopListeningBackend());
-        final match = exactMatches.first;
+
+        final match = mostSpecificMatches.first;
         final registry = VoiceIntentRegistry(); //added variable for method
         final intentDef = registry.resolveIntent(match.intent);
 
@@ -796,14 +834,17 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
+          // call _startConfirmationListening to listen for verbal confirmation or cancellation 
+          // of the command with a handler 
+          _startConfirmationListening();
           return;
         }
       }
 
-      if (exactMatches.length > 1) {
+      if (mostSpecificMatches.length > 1) {
         unawaited(_stopListeningBackend());
         setState(() {
-          _ambiguousMatches = exactMatches;
+          _ambiguousMatches = mostSpecificMatches;
           _voiceStatus = _VoiceStatus.clarifying;
           _statusDetail =
               '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
@@ -857,6 +898,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
+          
+          // call _startConfirmationListening to listen for verbal confirmation or cancellation
+          _startConfirmationListening();
           return;
         }
       }
@@ -885,6 +929,68 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       _reset();
     }
   }
+
+  bool _containsCommandPhrase(String command, String phrase) {
+    final phrasePattern =
+        RegExp.escape(phrase.trim()).replaceAll(' ', r'\s+');
+    return RegExp(
+      '(^|\\W)$phrasePattern(?=\\W|\$)',
+      caseSensitive: false,
+    ).hasMatch(command);
+  }
+
+// Re-open listening specifically for first block verbal confirmation or cancellation
+  void _startConfirmationListening() async {
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted || _voiceStatus != _VoiceStatus.confirming) return;
+
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+
+    void onHeard(String raw) async {
+      final heard = raw.toLowerCase().trim();
+      debugPrint('Gate 1 Confirmation Heard: $heard');
+
+      if (heard.contains('confirm') || heard == 'yes' || heard == 'proceed') {
+        await _stopListeningBackend();
+        await _onConfirm();
+      } else if (heard.contains('cancel') || heard == 'no' || heard == 'stop') {
+        await _stopListeningBackend();
+        _setStatus(
+          status: _VoiceStatus.idle,
+          detail: 'Action cancelled.',
+        );
+        _pendingDestination = null;
+        _pendingDetail = null;
+        _pendingIntent = null;
+        _ambiguousMatches = [];
+        _resetAfterDelay();
+      }
+    }
+
+    if (kIsWeb) {
+      await _webSpeech.listen(
+        localeId: localeTag,
+        onStatus: (status) => debugPrint('Web Confirmation Status: $status'),
+        onError: (err) => debugPrint('Web Confirmation Error: $err'),
+        onResult: (words, finalResult) {
+          if (words.trim().isNotEmpty) {
+            onHeard(words);
+          }
+        },
+      );
+    } else {
+      await _speech.listen(
+        listenFor: const Duration(seconds: 10),
+        pauseFor: const Duration(seconds: 2),
+        onResult: (result) {
+          if (result.recognizedWords.isNotEmpty) {
+            onHeard(result.recognizedWords);
+          }
+        },
+      );
+    }
+  }
+  //end _startConfirmationListening
 
   void _handleAIResult(VoiceIntentResult result, String words) {
     if (!mounted) return;
@@ -1030,6 +1136,112 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
 
     final intent = _pendingIntent ?? 'navigate';
     final intentDef = VoiceIntentRegistry().resolveIntent(intent);
+
+// Check if the intent is high-risk and requires explicit confirmation via voice 
+// or touch input before proceeding
+// If the user cancels or dismisses the dialog, abort the action 
+// and reset the state
+
+if (intentDef?.riskLevel == IntentRiskLevel.high) {
+      final titleLabel = intentDef?.displayLabel ?? 'High-Risk Action';
+      final localeTag = Localizations.localeOf(context).toLanguageTag();
+
+      final bool? userConfirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          // Listen for confirmation vocal keywords on both Web and Mobile
+          Future.delayed(const Duration(milliseconds: 350), () async {
+            void handleGate2Voice(String spoken) {
+              final clean = spoken.toLowerCase().trim();
+              debugPrint('Gate 2 Heard: $clean');
+
+              if (clean.contains('confirm') || clean == 'yes' || clean == 'proceed') {
+                _stopListeningBackend();
+                if (Navigator.of(dialogContext).canPop()) {
+                  Navigator.of(dialogContext).pop(true);
+                }
+              } else if (clean.contains('cancel') || clean == 'no' || clean == 'stop') {
+                _stopListeningBackend();
+                if (Navigator.of(dialogContext).canPop()) {
+                  Navigator.of(dialogContext).pop(false);
+                }
+              }
+            }
+
+            if (kIsWeb) {
+              await _webSpeech.listen(
+                localeId: localeTag,
+                onStatus: (s) => debugPrint('Gate 2 Web Status: $s'),
+                onError: (e) => debugPrint('Gate 2 Web Error: $e'),
+                onResult: (words, _) {
+                  if (words.trim().isNotEmpty) handleGate2Voice(words);
+                },
+              );
+            } else {
+              if (!_speech.isListening) {
+                await _speech.listen(
+                  listenFor: const Duration(seconds: 12),
+                  pauseFor: const Duration(seconds: 2),
+                  onResult: (r) {
+                    if (r.recognizedWords.isNotEmpty) handleGate2Voice(r.recognizedWords);
+                  },
+                );
+              }
+            }
+          });
+
+          return AlertDialog(
+            title: Text('Confirm $titleLabel'),
+            content: Text(
+              'Are you sure you want to trigger "$titleLabel"? '
+              'Say "confirm" or "cancel", or tap a button below.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  _stopListeningBackend();
+                  Navigator.of(dialogContext).pop(false);
+                },
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () {
+                  _stopListeningBackend();
+                  Navigator.of(dialogContext).pop(true);
+                },
+                child: Text('Confirm $titleLabel'),
+              ),
+            ],
+          );
+        },
+      );
+
+      // Stop listening to the backend after the dialog is closed
+      unawaited(_stopListeningBackend());
+
+    // If widget unmounted while waiting for user interaction, stop
+    if (!mounted) return;
+
+    // Abort if cancelled or dismissed
+    if (userConfirmed != true) {
+      _setStatus(
+        status: _VoiceStatus.idle,
+        detail: '$titleLabel cancelled.',
+      );
+      _pendingDestination = null;
+      _pendingDetail = null;
+      _pendingIntent = null;
+      _ambiguousMatches = [];
+      _resetAfterDelay();
+      return; // Stops execution: handler will NOT run
+    }
+  }
+
+  //end High risk popup confirmation logic with voice listening
+
+  if (!mounted) return;
 
     if (_pendingDestination != null) {
       final destination = _pendingDestination!;
@@ -1399,7 +1611,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
               final destination =
                   VoiceIntentRegistry().resolveDestination(match.entity);
               return ActionChip(
-                key: Key('voice_clarify_${destination?.route ?? match.entity}'),
+                key: Key(
+                  'voice_clarify_${destination?.route ?? match.entity}_${match.phrase}',
+                ),
                 avatar: const Icon(Icons.arrow_forward, size: 18),
                 label: Text(_commandLabelToDisplayText(
                     destination?.displayLabel ?? match.entity)),
