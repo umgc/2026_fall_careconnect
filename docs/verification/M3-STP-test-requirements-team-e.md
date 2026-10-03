@@ -1,6 +1,6 @@
 # Milestone 3 — Software Test Plan Input: Team E (Echo) Test Requirements
 
-**Prepared by:** Quinton Coleman (Requirements Traceability Owner) · **Date:** 2026-09-28 · **Status:** Draft for team review
+**Prepared by:** Quinton Coleman (Requirements Traceability Owner) · **Date:** 2026-09-28 · **Status:** Draft for team review · **Updated 2026-10-03:** STP-M3-E-14 now states the agreed unlink rule; added STP-M3-E-31 (connect flow). Both close gaps found by WBS 6.4.31 (Blue Button requirements-to-screen traceability)
 
 **Purpose.** Kris relayed a request (9/27) for Team E's M3 test requirements for the Software Test
 Plan. This lists, for each Team E M3 feature, what must be tested, at which level, by which
@@ -55,7 +55,7 @@ the UI, A = accessibility review, P = performance/reliability, S = security/nega
 |---|---|---|---|
 | STP-M3-E-12 | Refresh renews the token without re-consent while consent is valid | I | New token stored, no user prompt |
 | STP-M3-E-13 | Revoke stops all further retrieval immediately | I/S | Next sync makes no Blue Button call |
-| STP-M3-E-14 | Disconnect applies the defined data-handling rule (delete or retain) | I | Stored data matches the documented rule |
+| STP-M3-E-14 | Disconnect (unlink) applies the agreed data rule (Rich, 10/3; SRS v1.4 Addendum A, A1-Q1). Deleted before the confirmation: the Medicare token and connection, the Medicare crosswalk row, Medicare rows in the raw payload, source identity, coverage and visit tables, and identity conflicts that came from Medicare. Kept: the CareConnect account and all non-Medicare data, demographic values reconciliation already applied to the patient record, and the retrieval audit log (7-year / age-25 rule). A patient who stays linked follows the #214 retention rule | I | After unlink, each deleted table has no Medicare rows for the patient, the kept data is unchanged, and the confirmation appears only after the deletes commit. Until the 6.2.39 disconnect endpoint exists, everything stays under #214 (TD-030) |
 
 ### 6.2.40 Accessible Medicare Data Views (build: 3.1.6 Crystal · verify: 3.6.3 Rich, **3.6.1 Quinton**)
 *Criteria: "Medicare data views are implemented and pass an accessibility review."*
@@ -64,6 +64,7 @@ the UI, A = accessibility review, P = performance/reliability, S = security/nega
 |---|---|---|---|
 | STP-M3-E-15 | Views meet WCAG 2.2 AA: screen-reader labels, 4.5:1 contrast, 200% text, no colour-only meaning | A | Review checklist passes with TalkBack/VoiceOver evidence |
 | STP-M3-E-16 | A patient can sign in, open their Medicare data and read a claim/visit end to end | E2E | Flow completes on Android and web |
+| STP-M3-E-31 | A patient can connect Medicare end to end: Connect Medicare Account → sandbox consent → callback → Linked confirmation. Cancelling at Medicare or a token-exchange error leaves the account Unlinked with no stored token (FR-MCR-01, 02, 04, 05, 08) | E2E/I | Linked state and confirmation shown on success; on cancel and on error no token is stored and the account stays Unlinked |
 
 ### 6.2.41 Cross-Source Reconciliation & Deduplication (build: 3.2.1 Max, 3.2.2 Kris, 3.2.3 Camilla · verify: **3.2.4 Quinton**)
 *Criteria: "Duplicate records across sources are reconciled per the agreed rules with test evidence."*
@@ -106,7 +107,7 @@ and test cases are in *Team_Echo_Handoff_1.10_Requirements_and_Test_Cases.docx* 
 
 ## 2. End-to-end suite (3.6.1, Quinton)
 
-Built from STP-M3-E-16, 22, 27 and the reconciliation review flow (21) once their features land. Order
+Built from STP-M3-E-16, 22, 27, 31 (connect flow) and the reconciliation review flow (21) once their features land. Order
 of work follows predecessor completion: 3.1.6 → 3.2.3 → 3.3.3 → 3.4.3.
 
 ## 3. Entry and exit criteria (proposed)
