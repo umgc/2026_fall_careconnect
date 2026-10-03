@@ -1,9 +1,10 @@
 package com.careconnect.security;
 
-import com.careconnect.exception.NotFoundException;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.ConsentGrantRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -33,7 +34,9 @@ import java.util.Objects;
  *
  * <p><b>Every refusal is a 404 with the same message</b> (FR-MCR-17, NFR-DEG-03). A 403 would
  * confirm that the patient exists and has Medicare data, which is itself disclosure; a refusal
- * that reads the same whatever the reason gives a caller nothing to probe with.
+ * that reads the same whatever the reason gives a caller nothing to probe with. The refusal is an
+ * {@link AppException} carrying 404, because {@code GlobalExceptionHandler} maps that to its status;
+ * a plain {@code NotFoundException} would reach its catch-all handler and leave as a 500.
  */
 @Component
 public class MedicareAccessPolicy {
@@ -64,11 +67,11 @@ public class MedicareAccessPolicy {
      *
      * @param caller        the signed-in user, from the JWT; never a value the client supplied
      * @param patientUserId the user id of the patient whose data is requested
-     * @throws NotFoundException for every refusal, with the same message
+     * @throws AppException with status 404 for every refusal, with the same message
      */
     public void requireMedicareAccess(final User caller, final Long patientUserId) {
         if (!mayAccess(caller, patientUserId)) {
-            throw new NotFoundException(NOT_FOUND_MESSAGE);
+            throw new AppException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
         }
     }
 

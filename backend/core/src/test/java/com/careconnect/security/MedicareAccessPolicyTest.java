@@ -1,6 +1,6 @@
 package com.careconnect.security;
 
-import com.careconnect.exception.NotFoundException;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.ConsentGrantRepository;
@@ -8,13 +8,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +27,10 @@ import static org.mockito.Mockito.when;
  * Patient-level isolation for Medicare data (WBS 6.2.37; SRS FR-MCR-16, FR-MCR-17, BR-02,
  * NFR-DEG-03): only the patient, or an assigned caregiver holding the patient's MEDICARE_VIEW
  * consent, and every refusal is the same 404.
+ * <p>
+ * Test IDs: TC-MCR-AUTHZ-001 to 013, Software Test Plan §3.15. What a refusal looks like over HTTP is
+ * {@link MedicareAccessPolicyHttpTest}; the same rules against real repository rows are
+ * {@link MedicareAccessPolicyJpaTest}.
  * <p>
  * Most cases here are negative on purpose. The criterion asks for isolation "demonstrated through
  * negative tests", and a guard is only as good as the requests it turns away.
@@ -74,8 +76,10 @@ class MedicareAccessPolicyTest {
 
     private void assertRefused(final User caller, final Long patientUserId) {
         assertThatThrownBy(() -> policy.requireMedicareAccess(caller, patientUserId))
-                .isInstanceOf(NotFoundException.class)
-                .hasMessage(MedicareAccessPolicy.NOT_FOUND_MESSAGE);
+                .isInstanceOf(AppException.class)
+                .hasMessage(MedicareAccessPolicy.NOT_FOUND_MESSAGE)
+                .extracting(e -> ((AppException) e).getStatus())
+                .isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Nested
@@ -83,13 +87,13 @@ class MedicareAccessPolicyTest {
     class Refused {
 
         @Test
-        @DisplayName("a patient asking for another patient's Medicare data")
+        @DisplayName("TC-MCR-AUTHZ-001 a patient asking for another patient's Medicare data")
         void otherPatient() {
             assertRefused(user(PATIENT, Role.PATIENT), OTHER_PATIENT);
         }
 
         @Test
-        @DisplayName("a caregiver with no link to the patient, without querying consent")
+        @DisplayName("TC-MCR-AUTHZ-002 a caregiver with no link to the patient, without querying consent")
         void caregiverNotAssigned() {
             linked(PATIENT, false);
 
@@ -98,16 +102,7 @@ class MedicareAccessPolicyTest {
         }
 
         @Test
-        @DisplayName("a caregiver linked to a different patient")
-        void caregiverAssignedElsewhere() {
-            linked(OTHER_PATIENT, true);
-            linked(PATIENT, false);
-
-            assertRefused(caregiverWithPermission(true), PATIENT);
-        }
-
-        @Test
-        @DisplayName("an assigned caregiver the patient has not given MEDICARE_VIEW consent")
+        @DisplayName("TC-MCR-AUTHZ-003 an assigned caregiver the patient has not given MEDICARE_VIEW consent")
         void caregiverWithoutConsent() {
             linked(PATIENT, true);
             consented(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW, false);
@@ -116,7 +111,7 @@ class MedicareAccessPolicyTest {
         }
 
         @Test
-        @DisplayName("an assigned caregiver holding only another scope's consent, such as Ask AI's AI_RETRIEVAL")
+        @DisplayName("TC-MCR-AUTHZ-004 an assigned caregiver holding only another scope's consent, such as Ask AI's AI_RETRIEVAL")
         void caregiverWithOtherScopeConsentOnly() {
             linked(PATIENT, true);
             consented("AI_RETRIEVAL", true);
@@ -126,7 +121,7 @@ class MedicareAccessPolicyTest {
         }
 
         @Test
-        @DisplayName("a caregiver with MEDICARE_VIEW consent but no active link, for example after it expired")
+        @DisplayName("TC-MCR-AUTHZ-005 a caregiver with MEDICARE_VIEW consent but no active link, for example after it expired")
         void caregiverWithConsentButNoLink() {
             linked(PATIENT, false);
             consented(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW, true);
@@ -135,61 +130,42 @@ class MedicareAccessPolicyTest {
         }
 
         @Test
-        @DisplayName("a linked caregiver whose account lacks VIEW_ASSIGNED_PATIENTS, without querying the link")
+        @DisplayName("TC-MCR-AUTHZ-006 a linked caregiver whose account lacks VIEW_ASSIGNED_PATIENTS, without querying the link")
         void caregiverWithoutPermission() {
             assertRefused(caregiverWithPermission(false), PATIENT);
             verify(links, never()).existsActiveNonExpiredLinkByUserIds(anyLong(), anyLong(), any());
         }
 
         @Test
-        @DisplayName("an administrator, although requirePatientAccess would let one through")
+        @DisplayName("TC-MCR-AUTHZ-007 an administrator, although requirePatientAccess would let one through")
         void administrator() {
             assertRefused(user(1L, Role.ADMIN), PATIENT);
         }
 
         @Test
-        @DisplayName("a linked family member, although requirePatientAccess would let one through")
+        @DisplayName("TC-MCR-AUTHZ-008 a linked family member, although requirePatientAccess would let one through")
         void familyMember() {
             assertRefused(user(400L, Role.FAMILY_MEMBER), PATIENT);
             verify(links, never()).existsActiveNonExpiredLinkByUserIds(anyLong(), anyLong(), any());
         }
 
         @Test
-        @DisplayName("no signed-in user")
+        @DisplayName("TC-MCR-AUTHZ-009 no signed-in user")
         void noCaller() {
             assertRefused(null, PATIENT);
         }
 
         @Test
-        @DisplayName("a caller whose account has no id")
+        @DisplayName("TC-MCR-AUTHZ-010 a caller whose account has no id")
         void callerWithoutId() {
             assertRefused(User.builder().role(Role.PATIENT).build(), PATIENT);
         }
 
         @Test
-        @DisplayName("no patient named")
+        @DisplayName("TC-MCR-AUTHZ-011 no patient named")
         void noPatient() {
             assertRefused(user(PATIENT, Role.PATIENT), null);
         }
-    }
-
-    @Test
-    @DisplayName("every refusal reads the same, so a caller cannot tell which rule refused it")
-    void refusalsAreIndistinguishable() {
-        when(links.existsActiveNonExpiredLinkByUserIds(anyLong(), anyLong(), any())).thenReturn(false);
-        final List<String> messages = new ArrayList<>();
-        for (final Runnable refused : List.<Runnable>of(
-                () -> policy.requireMedicareAccess(user(PATIENT, Role.PATIENT), OTHER_PATIENT),
-                () -> policy.requireMedicareAccess(caregiverWithPermission(true), PATIENT),
-                () -> policy.requireMedicareAccess(user(1L, Role.ADMIN), PATIENT),
-                () -> policy.requireMedicareAccess(null, PATIENT))) {
-            try {
-                refused.run();
-            } catch (NotFoundException e) {
-                messages.add(e.getMessage());
-            }
-        }
-        assertThat(messages).hasSize(4).containsOnly(MedicareAccessPolicy.NOT_FOUND_MESSAGE);
     }
 
     @Nested
@@ -197,14 +173,14 @@ class MedicareAccessPolicyTest {
     class Allowed {
 
         @Test
-        @DisplayName("the patient reading their own Medicare data")
+        @DisplayName("TC-MCR-AUTHZ-012 the patient reading their own Medicare data")
         void patientSelf() {
             assertThatCode(() -> policy.requireMedicareAccess(user(PATIENT, Role.PATIENT), PATIENT))
                     .doesNotThrowAnyException();
         }
 
         @Test
-        @DisplayName("an assigned caregiver with an active link, the permission and the patient's MEDICARE_VIEW consent")
+        @DisplayName("TC-MCR-AUTHZ-013 an assigned caregiver with an active link, the permission and the patient's MEDICARE_VIEW consent")
         void assignedCaregiverWithConsent() {
             linked(PATIENT, true);
             consented(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW, true);
