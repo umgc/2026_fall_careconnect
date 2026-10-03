@@ -264,4 +264,17 @@ class MedicareServiceTest {
         assertEquals("https://sandbox.bluebutton.cms.gov/v3/fhir/", MedicareService.SANDBOX_BASE);
         assertEquals("https://sandbox.bluebutton.cms.gov/v3/o/revoke", MedicareService.SANDBOX_REVOKE);
     }
+
+    @Test
+    @DisplayName("An OperationOutcome entry on a later page is skipped, not fatal")
+    void unexpectedEntryOnLaterPageIsSkipped() {
+        String next = base + "Coverage?page=2";
+        routes.put("Coverage", ex -> new Reply(200, json(page(List.of(coverage("c1")), null, next))));
+        org.hl7.fhir.r4.model.OperationOutcome warning = new org.hl7.fhir.r4.model.OperationOutcome();
+        warning.addIssue().setSeverity(org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity.WARNING)
+                .setCode(org.hl7.fhir.r4.model.OperationOutcome.IssueType.INFORMATIONAL);
+        routes.put("Coverage?page=2", ex -> new Reply(200, json(page(List.of(coverage("c2"), warning), null, null))));
+        List<Coverage> all = service.requestMedicareCoverageInfo(TOKEN);
+        assertEquals(List.of("c1", "c2"), all.stream().map(c -> c.getIdElement().getIdPart()).toList());
+    }
 }
