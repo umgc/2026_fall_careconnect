@@ -34,7 +34,7 @@ public class FHIRService {
     private static final FhirContext ctxR4 = FhirContext.forR4();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
 
-    private static final String SANDBOX_BASE = "https://sandbox.bluebutton.cms.gov/v2/fhir/";
+    private static final String SANDBOX_BASE = "https://sandbox.bluebutton.cms.gov/v3/fhir/";
 
     private final String bluebuttonBase;
     private final BlueButtonRetryPolicy retryPolicy;

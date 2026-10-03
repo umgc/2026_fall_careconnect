@@ -303,7 +303,7 @@ class FHIRServiceReliabilityVerificationTest {
         // keep the sandbox URL.
         java.lang.reflect.Field f = FHIRService.class.getDeclaredField("bluebuttonBase");
         f.setAccessible(true);
-        assertEquals("https://sandbox.bluebutton.cms.gov/v2/fhir/", f.get(new FHIRService()));
+        assertEquals("https://sandbox.bluebutton.cms.gov/v3/fhir/", f.get(new FHIRService()));
     }
 
     // ---- Partial failure and retry (WBS 6.2.35; FR-MCR-23): DEF-MCR-01 and DEF-MCR-02, fixed ------
