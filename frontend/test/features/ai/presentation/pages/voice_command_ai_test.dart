@@ -48,6 +48,19 @@ Widget _buildVoiceRouterApp({String localestring = 'en', bool singleShot = false
         path: '/symptoms',
         builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
       ),
+      GoRoute(
+      path: '/invoice-assistant',
+      builder: (_, __) => const Scaffold(body: Text('Invoice Assistant Page')),
+      ),
+      GoRoute(
+      path: '/file-management',
+      builder: (_, __) => const Scaffold(body: Text('File Management Page')),
+      ),
+      GoRoute(
+      path: '/informed-delivery',
+      builder: (_, __) => const Scaffold(body: Text('Informed Delivery Page')),
+      ),
+
     ],
   );
   return MaterialApp.router(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale(localestring), routerConfig: router);
@@ -2915,7 +2928,6 @@ void main() {
     });
     testWidgets('WBS 5.2.71 opens invoice assistant through voice command',
         (tester) async {
-      String? navigatedTo;
       VoiceIntentService.testOverride = ({
         required String utterance,
         String locale = 'en',
@@ -2923,17 +2935,7 @@ void main() {
       }) =>
           null;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: VoiceCommandAI(
-            onNavigateRequested: (destination) {
-              navigatedTo = destination;
-            },
-          ),
-        ),
-      );
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -2947,15 +2949,14 @@ void main() {
       expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('voice_confirm_btn')));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
-      expect(navigatedTo, '/invoice-assistant');
+      expect(find.text('Invoice Assistant Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
     testWidgets('WBS 5.2.72 opens file management through voice command',
         (tester) async {
-      String? navigatedTo;
       VoiceIntentService.testOverride = ({
         required String utterance,
         String locale = 'en',
@@ -2963,17 +2964,7 @@ void main() {
       }) =>
           null;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: VoiceCommandAI(
-            onNavigateRequested: (destination) {
-              navigatedTo = destination;
-            },
-          ),
-        ),
-      );
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -2988,15 +2979,14 @@ void main() {
       expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('voice_confirm_btn')));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
-      expect(navigatedTo, '/file-management');
+      expect(find.text('File Management Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
     testWidgets('WBS 5.2.73 supports open information delivery (Issue #193)',
         (tester) async {
-      String? navigatedTo;
 
       VoiceIntentService.testOverride = ({
         required String utterance,
@@ -3005,17 +2995,7 @@ void main() {
       }) =>
           null;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: VoiceCommandAI(
-            onNavigateRequested: (destination) {
-              navigatedTo = destination;
-            },
-          ),
-        ),
-      );
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -3030,16 +3010,15 @@ void main() {
       expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
 
       await tester.tap(find.byKey(const Key('voice_confirm_btn')));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
       // Both spoken phrases should request the same destination.
-      expect(navigatedTo, '/informed-delivery');
+      expect(find.text('Informed Delivery Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
     testWidgets('WBS 5.2.73 opens informed delivery through voice command',
         (tester) async {
-      String? navigatedTo;
       VoiceIntentService.testOverride = ({
         required String utterance,
         String locale = 'en',
@@ -3047,17 +3026,7 @@ void main() {
       }) =>
           null;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: VoiceCommandAI(
-            onNavigateRequested: (destination) {
-              navigatedTo = destination;
-            },
-          ),
-        ),
-      );
+      await tester.pumpWidget(_buildVoiceRouterApp());
       await tester.pump(const Duration(milliseconds: 100));
 
       await tester.tap(find.byType(FloatingActionButton));
@@ -3070,9 +3039,9 @@ void main() {
       expect(find.textContaining('Informed Delivery'), findsWidgets);
 
       await tester.tap(find.byKey(const Key('voice_confirm_btn')));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
-      expect(navigatedTo, '/informed-delivery');
+      expect(find.text('Informed Delivery Page'), findsOneWidget);
 
       await _tearDown(tester);
     });
