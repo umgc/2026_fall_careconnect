@@ -35,12 +35,18 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
 
-      // Load env from committed .env.example so clean checkouts can build
-      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      // Load env config. Prefer a bundled .env when a build provides one, else
+      // fall back to the committed .env.example so clean checkouts and CI (which
+      // have no gitignored .env/.env.local) still build and run. Real config is
+      // supplied via --dart-define; dotenv is best-effort.
       try {
         await dotenv.load(fileName: ".env");
       } catch (_) {
-        await dotenv.load(fileName: ".env.local");
+        try {
+          await dotenv.load(fileName: ".env.example");
+        } catch (_) {
+          // No env asset bundled; rely on --dart-define values.
+        }
       }
 
       // Performance optimization: Set preferred orientations
