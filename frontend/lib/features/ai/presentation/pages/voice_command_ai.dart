@@ -778,16 +778,33 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       }
 
       // Fall through to keyword matching
-      final exactMatches = _commandTable
+      final phraseMatches = _commandTable
           .where(
-              (c) => cmd == _commandPhraseToTranslatedString(c.phrase))
+              (c) => _containsCommandPhrase(
+                    cmd,
+                    _commandPhraseToTranslatedString(c.phrase),
+                  ))
           .toList();
 
-      if (exactMatches.length == 1) {
+      // Keep deterministic commands usable in natural utterances while
+      // preferring the most-specific phrase. For example, "take me home"
+      // must resolve to that command rather than also matching the bare
+      // "home" alias.
+      final longestPhraseLength = phraseMatches.fold<int>(
+        0,
+        (longest, match) => match.phrase.length > longest
+            ? match.phrase.length
+            : longest,
+      );
+      final mostSpecificMatches = phraseMatches
+          .where((match) => match.phrase.length == longestPhraseLength)
+          .toList();
+
+      if (mostSpecificMatches.length == 1) {
         //if there is an exact match, turn off mic
         unawaited(_stopListeningBackend());
 
-        final match = exactMatches.first;
+        final match = mostSpecificMatches.first;
         final registry = VoiceIntentRegistry(); //added variable for method
         final intentDef = registry.resolveIntent(match.intent);
 
@@ -824,10 +841,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         }
       }
 
-      if (exactMatches.length > 1) {
+      if (mostSpecificMatches.length > 1) {
         unawaited(_stopListeningBackend());
         setState(() {
-          _ambiguousMatches = exactMatches;
+          _ambiguousMatches = mostSpecificMatches;
           _voiceStatus = _VoiceStatus.clarifying;
           _statusDetail =
               '${AppLocalizations.of(context)?.voicecommand_multipleMatchesCommand ?? 'Multiple matches'} \u2014 ${AppLocalizations.of(context)?.voicecommand_selectOneOptionCommand ?? 'please choose one'}';
@@ -911,6 +928,15 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
       );
       _reset();
     }
+  }
+
+  bool _containsCommandPhrase(String command, String phrase) {
+    final phrasePattern =
+        RegExp.escape(phrase.trim()).replaceAll(' ', r'\s+');
+    return RegExp(
+      '(^|\\W)$phrasePattern(?=\\W|\$)',
+      caseSensitive: false,
+    ).hasMatch(command);
   }
 
 // Re-open listening specifically for first block verbal confirmation or cancellation
