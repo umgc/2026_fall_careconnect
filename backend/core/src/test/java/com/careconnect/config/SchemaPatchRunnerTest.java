@@ -19,6 +19,32 @@ import static org.mockito.Mockito.when;
 class SchemaPatchRunnerTest {
 
     @Test
+    void requireSafeIdentifier_acceptsPlainIdentifiers() {
+        assertThat(SchemaPatchRunner.requireSafeIdentifier("ehr_raw_payload")).isEqualTo("ehr_raw_payload");
+        assertThat(SchemaPatchRunner.requireSafeIdentifier("fk_ehr_crosswalk_patient"))
+                .isEqualTo("fk_ehr_crosswalk_patient");
+        assertThat(SchemaPatchRunner.requireSafeIdentifier("_t1")).isEqualTo("_t1");
+    }
+
+    @Test
+    void requireSafeIdentifier_rejectsAnythingThatCouldChangeTheStatement() {
+        for (final String hostile : new String[]{
+                "patient; DROP TABLE patient",
+                "patient'::regclass) THEN DROP TABLE patient; --",
+                "public.patient",
+                "\"patient\"",
+                "patient id",
+                "1patient",
+                ""}) {
+            assertThatThrownBy(() -> SchemaPatchRunner.requireSafeIdentifier(hostile))
+                    .as("identifier <%s>", hostile)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> SchemaPatchRunner.requireSafeIdentifier(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void normalizeIndexDefinition_acceptsPostgresCanonicalPredicateCasts() {
         final String requested = """
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_summary_replay_claim_fair
