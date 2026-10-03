@@ -1,5 +1,6 @@
 package com.careconnect.ehr.reconciliation;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -72,6 +73,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-013 Filling an empty field applies the value directly and writes no audit row")
     void fillsEmptyFieldDirectlyWithNoAuditRow() {
         Long patientId = freshPatientId();
         Long athena = sourceId("ATHENAHEALTH");
@@ -88,6 +90,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-014 A blank incoming value is skipped, not applied as blank")
     void blankIncomingValueIsIgnoredEntirely() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -99,6 +102,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-015 An agreeing value writes no audit row but still advances the provenance baseline")
     void agreeingValuesWriteNoAuditRowButStillAdvanceProvenanceBaseline() {
         Long patientId = freshPatientId();
         Long athena = sourceId("ATHENAHEALTH");
@@ -125,6 +129,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-016 A disagreement newer than the baseline is applied and audited ACCEPTED by SYSTEM")
     void acceptsAndAppliesADisagreementThatIsNewerThanTheBaseline() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -145,6 +150,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-017 A disagreement older than the baseline is discarded but still audited REJECTED")
     void rejectsAndDiscardsADisagreementThatIsOlderThanTheBaselineButStillAudits() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -163,6 +169,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-018 An exactly equal timestamp keeps the existing value (Assumption A2)")
     void exactlyEqualTimestampsFavorTheExistingValueDeterministically() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -176,6 +183,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-019 With no provenance yet, a disagreement is judged against patient.updated_at (Assumption A1)")
     void firstDisagreementWithNoPriorProvenanceFallsBackToPatientUpdatedAt() {
         // Uses "email" rather than date_of_birth (which this scenario used before the DOB reversal):
         // this test is about Assumption A1's baseline fallback for an ordinary field, and asserts
@@ -231,6 +239,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
      * first thread's already-applied result, not the stale original baseline.
      */
     @Test
+    @DisplayName("TC-EHR-REC-020 Two adapters racing on one field converge on the newest value")
     void concurrentRacingAdaptersConvergeOnTheNewerValueRegardlessOfArrivalOrder() throws InterruptedException {
         Long patientId = freshPatientId();
         Instant baseline = Instant.parse("2026-01-01T00:00:00Z");
@@ -268,6 +277,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     // ---- date_of_birth-specific tests (2026-09-26 partial reversal) ----
 
     @Test
+    @DisplayName("TC-EHR-REC-021 date_of_birth with no provenance is also judged against patient.updated_at (Assumption A1)")
     void dateOfBirthFirstDisagreementWithNoPriorProvenanceAlsoFallsBackToPatientUpdatedAt() {
         Long patientId = freshPatientId();
         Instant patientEditedAt = Instant.parse("2026-06-01T00:00:00Z");
@@ -292,6 +302,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-022 A newer date_of_birth disagreement opens a PENDING confirmation instead of applying")
     void dateOfBirthDisagreementOpensPendingConfirmationInsteadOfAutoApplying() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -318,6 +329,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-023 A date_of_birth candidate older than the baseline is rejected and never prompts the patient")
     void dateOfBirthCandidateNotNewerThanConfirmedBaselineNeverInterruptsThePatient() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -338,6 +350,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-024 A newer date_of_birth candidate supersedes the pending one (Assumption A3)")
     void dateOfBirthPendingConflictIsSupersededByAGenuinelyNewerCandidate() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -366,6 +379,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-025 A date_of_birth candidate older than the pending one is rejected (Assumption A3)")
     void dateOfBirthCandidateNotNewerThanTheOpenPendingOneIsIgnored() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -386,6 +400,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-026 Accepting a pending date_of_birth applies it, audits PATIENT, and advances provenance")
     void finalizingPendingDateOfBirthAsAcceptedAppliesTheValueAndClearsThePending() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -415,6 +430,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-027 Declining a pending date_of_birth leaves the patient unchanged and audits PATIENT")
     void finalizingPendingDateOfBirthAsRejectedLeavesPatientUnchangedAndClearsThePending() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -439,6 +455,55 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-REC-032 A date_of_birth the patient declined is not asked again on the next sync")
+    void declinedDateOfBirthIsNotRePromptedOnTheNextSync() {
+        Long patientId = freshPatientId();
+        Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
+        Instant t2 = t1.plus(1, ChronoUnit.DAYS);
+        Long epic = sourceId("EPIC");
+
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
+        reconciler().finalizePendingDateOfBirth(patientId, false);
+
+        // Next scheduled sync: the same source sends the same, unchanged record.
+        var resync = reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
+        assertEquals(ReconciliationOutcome.Decision.REJECTED_PREVIOUSLY_DECLINED, resync.get(0).decision());
+        assertTrue(auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).isEmpty(),
+                "the patient must not be asked again about a value they declined");
+        assertEquals(Optional.of("1950-05-04"), patientAccessor().getCurrentValue(patientId, DATE_OF_BIRTH));
+
+        // A genuinely different, newer value still prompts.
+        var different = reconciler().reconcile(
+                snapshot(patientId, epic, t2.plus(1, ChronoUnit.DAYS), DATE_OF_BIRTH, "1950-05-07"));
+        assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, different.get(0).decision());
+    }
+
+    @Test
+    @DisplayName("TC-EHR-REC-033 A value declined from one source still prompts when another source sends it")
+    void valueDeclinedFromOneSourceStillPromptsFromAnother() {
+        Long patientId = freshPatientId();
+        Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
+        Instant t2 = t1.plus(1, ChronoUnit.DAYS);
+        Long epic = sourceId("EPIC");
+        Long cerner = sourceId("CERNER");
+
+        reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
+        reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
+        reconciler().finalizePendingDateOfBirth(patientId, false);
+
+        // A second, independent source sends the same date: corroboration, so the patient is asked.
+        var fromCerner = reconciler().reconcile(
+                snapshot(patientId, cerner, t2.plus(1, ChronoUnit.DAYS), DATE_OF_BIRTH, "1950-05-06"));
+        assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, fromCerner.get(0).decision());
+        assertEquals("1950-05-06",
+                auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).orElseThrow().incomingValue());
+        assertEquals(cerner,
+                auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).orElseThrow().sourceId());
+    }
+
+    @Test
+    @DisplayName("TC-EHR-REC-028 Finalizing with no pending date_of_birth conflict throws IllegalStateException")
     void finalizingWithNoPendingConflictThrows() {
         Long patientId = freshPatientId();
         assertThrows(IllegalStateException.class,

@@ -26,6 +26,12 @@ public record ReconciliationOutcome(String fieldName, Decision decision, String 
         /** incoming was older than the recorded/baseline provenance (or lost a tie); patient was left unchanged. */
         REJECTED_STALE,
         /**
+         * {@code date_of_birth} only: the incoming value is one the patient already declined, so it is
+         * discarded (audited REJECTED / SYSTEM) instead of prompting the patient again. A different
+         * newer value still opens a new prompt.
+         */
+        REJECTED_PREVIOUSLY_DECLINED,
+        /**
          * {@code date_of_birth} only (2026-09-26 partial reversal): a genuine disagreement, newer than
          * what's confirmed, was detected but NOT applied. {@code appliedValue} here is the candidate
          * awaiting the patient's decision, not something already written to {@code patient} — despite
