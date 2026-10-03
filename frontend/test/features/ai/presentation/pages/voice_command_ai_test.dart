@@ -715,6 +715,23 @@ void main() {
       await _tearDown(tester);
     });
 
+    testWidgets('bare command aliases do not match inside other words',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'open homework', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Command not recognized — please try again.'),
+          findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
     testWidgets('unrecognized command shows error snackbar - English', (tester) async {
       await tester.pumpWidget(const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, locale: Locale('en'), home: VoiceCommandAI()));
       await tester.pump(const Duration(milliseconds: 100));
@@ -1762,7 +1779,7 @@ void main() {
       await _sendSpeechResult(tester, 'take me to', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Calendar'));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Status: Confirm command'), findsOneWidget);
@@ -1783,7 +1800,7 @@ void main() {
       await _sendSpeechResult(tester, 'vaya al', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.tap(find.widgetWithText(ActionChip, 'el Calendario'));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Estado: Confirmar comando'), findsOneWidget);
@@ -1884,7 +1901,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Pick "Symptom Tracker" from clarification
-      await tester.tap(find.byKey(const Key('voice_clarify_/symptoms')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Symptom Tracker'));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Now confirm
@@ -2030,7 +2047,7 @@ void main() {
       await _sendSpeechResult(tester, 'take me to', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Calendar'));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Status: Confirm command'), findsOneWidget);
@@ -2111,7 +2128,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Pick "Symptom Tracker" from clarification
-      await tester.tap(find.byKey(const Key('voice_clarify_/symptoms')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Symptom Tracker'));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Now confirm
@@ -2592,6 +2609,13 @@ void main() {
       expect(find.text('Confirm'), findsOneWidget);
 
       await tester.tap(find.text('Confirm'));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(ElevatedButton, 'Confirm Call Contact'),
+      ));
       await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.textContaining('not yet available'), findsOneWidget);
