@@ -49,6 +49,10 @@ Widget _buildVoiceRouterApp({String localestring = 'en', bool singleShot = false
         builder: (_, __) => const Scaffold(body: Text('Symptoms Page')),
       ),
       GoRoute(
+        path: '/social-feed',
+        builder: (_, __) => const Scaffold(body: Text('Social Feed Page')),
+      ),
+      GoRoute(
         path: '/medication',
         builder: (_, __) => const Scaffold(body: Text('Medication Page')),
       ),
@@ -633,6 +637,36 @@ void main() {
       expect(find.text('Dashboard Page'), findsOneWidget);
 
       await _flush(tester);
+    });
+
+    testWidgets('"open social feed" confirms then navigates to /social-feed',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'open social feed', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Heard: "open social feed"'), findsOneWidget);
+      expect(find.text('Status: Confirm command'), findsOneWidget);
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      expect(find.text('Social Feed Page'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Social Feed Page'), findsOneWidget);
+      expect(
+        GoRouter.of(tester.element(find.text('Social Feed Page')))
+            .routeInformationProvider.value.uri.path,
+        '/social-feed',
+      );
+
+      await _tearDown(tester);
     });
 
     testWidgets('"take me to calendar" confirms then navigates to /calendar',
