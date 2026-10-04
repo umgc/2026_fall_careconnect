@@ -1,4 +1,5 @@
 // Exercise ID-based article navigation using a local catalog, without services.
+import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
@@ -37,6 +38,8 @@ Future<void> _pumpHelp(
   );
   addTearDown(router.dispose);
   await tester.pumpWidget(MaterialApp.router(
+    theme: AppTheme.lightTheme.copyWith(
+        textTheme: AppTheme.lightTheme.textTheme.apply(fontFamily: 'Roboto')),
     locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
@@ -64,6 +67,17 @@ void main() {
     expect(find.text('Something failed'), findsOneWidget);
     expect(find.text('Try this fix'), findsOneWidget);
     expect(find.text('Related articles'), findsOneWidget);
+    final textTheme =
+        Theme.of(tester.element(find.byType(HelpArticlePage))).textTheme;
+    final title = tester
+        .widgetList<Text>(find.text('First guide'))
+        .firstWhere((text) => text.style == textTheme.displayMedium);
+    expect(title.style!.fontFamily, 'Roboto');
+    expect(title.style!.fontWeight, FontWeight.bold);
+    expect(tester.widget<Text>(find.text('A helpful paragraph.')).style,
+        textTheme.bodyLarge);
+    expect(tester.widget<Text>(find.text('Related articles')).style,
+        textTheme.displaySmall);
   });
 
   testWidgets(

@@ -20,8 +20,10 @@ class HelpTopicTile extends StatelessWidget {
                 focusNode: focusNode,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                title: Text(category.title),
-                subtitle: Text(category.description),
+                title: Text(category.title,
+                    style: Theme.of(context).textTheme.titleMedium),
+                subtitle: Text(category.description,
+                    style: Theme.of(context).textTheme.bodyLarge),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: onTap,
               ),

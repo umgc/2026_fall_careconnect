@@ -34,7 +34,8 @@ class HelpTopicPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (category == null) ...[
-                    Text(t.helpTopicNotFoundDescription),
+                    Text(t.helpTopicNotFoundDescription,
+                        style: Theme.of(context).textTheme.bodyLarge),
                     const SizedBox(height: 16),
                     FilledButton(
                         onPressed: () => context.go(HelpRoutes.home),
@@ -43,7 +44,9 @@ class HelpTopicPage extends StatelessWidget {
                     Text(category.description,
                         style: Theme.of(context).textTheme.bodyLarge),
                     const SizedBox(height: 16),
-                    if (articles.isEmpty) Text(t.helpNoArticles),
+                    if (articles.isEmpty)
+                      Text(t.helpNoArticles,
+                          style: Theme.of(context).textTheme.bodyLarge),
                     for (final article in articles)
                       HelpArticleTile(
                           article: article,

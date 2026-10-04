@@ -1,3 +1,4 @@
+import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/help/data/help_content_ids.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
@@ -38,7 +39,15 @@ Future<void> _pumpHelp(WidgetTester tester,
   addTearDown(router.dispose);
   await tester.pumpWidget(MaterialApp.router(
     locale: locale,
-    theme: ThemeData(brightness: brightness),
+    theme: (brightness == Brightness.light
+            ? AppTheme.lightTheme
+            : AppTheme.darkTheme)
+        .copyWith(
+            textTheme: (brightness == Brightness.light
+                    ? AppTheme.lightTheme
+                    : AppTheme.darkTheme)
+                .textTheme
+                .apply(fontFamily: 'Roboto')),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     routerConfig: router,
@@ -146,6 +155,40 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
+    testWidgets(
+        'Help uses shared typography and readable colors in $brightness',
+        (tester) async {
+      await _pumpHelp(tester, brightness: brightness);
+      final theme = Theme.of(tester.element(find.byType(HelpCenterPage)));
+      final article = tester
+          .widget<HelpArticleTile>(find.byType(HelpArticleTile).first)
+          .article;
+      final topic = tester
+          .widget<HelpTopicTile>(find.byType(HelpTopicTile).first)
+          .category;
+      for (final title in [article.title, topic.title]) {
+        expect(tester.widget<Text>(find.text(title)).style,
+            theme.textTheme.titleMedium);
+      }
+      for (final description in [article.summary, topic.description]) {
+        final text = tester.widget<Text>(find.text(description));
+        expect(text.style, theme.textTheme.bodyLarge);
+        expect(text.style!.fontFamily, 'Roboto');
+        expect(text.style!.fontSize, 16);
+        final luminance = text.style!.color!.computeLuminance();
+        final background = theme.colorScheme.surface.computeLuminance();
+        final contrast = luminance > background
+            ? (luminance + 0.05) / (background + 0.05)
+            : (background + 0.05) / (luminance + 0.05);
+        expect(contrast, greaterThanOrEqualTo(4.5));
+      }
+      final heading = tester.widget<Text>(find.text('Popular Help'));
+      expect(heading.style, theme.textTheme.displaySmall);
+      expect(heading.style!.fontWeight, FontWeight.bold);
+      expect(tester.widget<TextField>(find.byType(TextField)).style,
+          theme.textTheme.bodyLarge);
+    });
+
     testWidgets(
         'empty results, topic browsing and articles support $brightness and large text',
         (tester) async {

@@ -31,7 +31,8 @@ class HelpArticlePage extends StatelessWidget {
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(t.helpArticleNotFoundDescription),
+                        Text(t.helpArticleNotFoundDescription,
+                            style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: 16),
                         FilledButton(
                           onPressed: () => context.go(HelpRoutes.home),

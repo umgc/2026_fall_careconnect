@@ -66,6 +66,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       TextField(
+                        style: Theme.of(context).textTheme.bodyLarge,
                         controller: _searchController,
                         textInputAction: TextInputAction.search,
                         onChanged: (_) => setState(() {}),
@@ -97,11 +98,12 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                                 searching
                                     ? t.helpSearchResults
                                     : t.helpPopularHelp,
-                                style: Theme.of(context).textTheme.titleLarge,
+                                style: Theme.of(context).textTheme.displaySmall,
                               ))),
                       const SizedBox(height: 12),
                       if (searching && articles.isEmpty) ...[
-                        Text(t.helpNoSearchResults),
+                        Text(t.helpNoSearchResults,
+                            style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: 12),
                         Align(
                           alignment: AlignmentDirectional.centerStart,
@@ -112,7 +114,8 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                           ),
                         ),
                       ] else if (articles.isEmpty)
-                        Text(t.helpNoArticles),
+                        Text(t.helpNoArticles,
+                            style: Theme.of(context).textTheme.bodyLarge),
                       for (final article in articles)
                         HelpArticleTile(
                           key: ValueKey(article.id),
@@ -126,7 +129,8 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                             key: _topicsHeadingKey,
                             header: true,
                             child: Text(t.helpBrowseTopics,
-                                style: Theme.of(context).textTheme.titleLarge)),
+                                style:
+                                    Theme.of(context).textTheme.displaySmall)),
                         const SizedBox(height: 12),
                         for (var i = 0; i < categories.length; i++)
                           HelpTopicTile(

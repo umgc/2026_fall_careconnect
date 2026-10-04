@@ -18,8 +18,10 @@ class HelpArticleTile extends StatelessWidget {
               child: ListTile(
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                title: Text(article.title),
-                subtitle: Text(article.summary),
+                title: Text(article.title,
+                    style: Theme.of(context).textTheme.titleMedium),
+                subtitle: Text(article.summary,
+                    style: Theme.of(context).textTheme.bodyLarge),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: onTap,
               ),

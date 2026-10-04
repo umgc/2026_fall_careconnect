@@ -25,7 +25,7 @@ class HelpArticleContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(article.title, style: textTheme.titleLarge),
+        Text(article.title, style: textTheme.displayMedium),
         const SizedBox(height: 8),
         Text(article.summary, style: textTheme.bodyLarge),
         const SizedBox(height: 16),
@@ -53,7 +53,7 @@ class HelpArticleContent extends StatelessWidget {
         if (heading != null) ...[
           Semantics(
             header: true,
-            child: Text(heading, style: textTheme.titleMedium),
+            child: Text(heading, style: textTheme.displaySmall),
           ),
           const SizedBox(height: 8),
         ],
@@ -80,7 +80,7 @@ class HelpArticleContent extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(tip.problem, style: textTheme.titleSmall),
+                          Text(tip.problem, style: textTheme.titleMedium),
                           const SizedBox(height: 8),
                           Text(tip.solution, style: textTheme.bodyLarge),
                         ],
@@ -97,7 +97,8 @@ class HelpArticleContent extends StatelessWidget {
                           button: true,
                           child: ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text(repository.findArticle(id)!.title),
+                            title: Text(repository.findArticle(id)!.title,
+                                style: textTheme.titleMedium),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => onArticleSelected(id),
                           ))),
