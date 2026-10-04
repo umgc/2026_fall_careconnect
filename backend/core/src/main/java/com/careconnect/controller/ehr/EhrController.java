@@ -13,14 +13,12 @@ import org.hl7.fhir.r4.model.Patient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @RestController
 @Slf4j
@@ -50,26 +48,38 @@ public class EhrController{
     private final MedicareResponseMapper mapper = new MedicareResponseMapper();
     private final ObjectMapper jsonmapper = new ObjectMapper();
 
-    @GetMapping("/v1/api/medicare/patient")
-    public ResponseEntity<Object> fetchIdentity(){
+    @GetMapping("/v1/api/{source}/patient")
+    public ResponseEntity<Object> fetchIdentity(@PathVariable String source){
+        // To any other teams, just put your Ehr code in an if block like this.
+        if(source.equalsIgnoreCase("medicare")){
 
-        /*if(source.equals("medicare")){*/
+            // Why on earth did we need a single database lookup for a single, unchanging numerical ID instead of hardcoding it?
+            // Cause you can't really do that lookup on Bean construction, so you just have to do it lazily, I guess.
             Long medicareId = medicareService.getId();
             if(medicareId == null){
                 medicareService.retrieveId();
                 medicareId = medicareService.getId();
             }
+
+
             Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareId);
             if(crosswalkOpt.isEmpty()){
+                // This person has somehow hit this page without actually being logged in and connected.
+                // I probably should commend their cunning, but instead I'll just 404 them.
                 return ResponseEntity.notFound().build();
             }
+
             EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
+
+            // See what data we have cached.
             Optional<EhrSourceIdentity> identities =
                     ehrIdentityRepository.findByPatientIdAndSourceId(
                             crosswalk.getPatientId(), medicareId);
 
             EhrSourceIdentity toreturn;
-            if(identities.isEmpty() || ChronoUnit.DAYS.between(identities.orElseThrow().getSourceUpdatedAt(), LocalDateTime.now()) < 1){
+            // Our data is either nonexistant or potentially outdated.
+            if(identities.isEmpty() ||
+                    ChronoUnit.DAYS.between(identities.orElseThrow().getSourceUpdatedAt(), LocalDateTime.now()) > 0){
                 Patient results = medicareService.requestMedicarePatientInfo(connections.requireAccessToken(crosswalk));
 
                 // Add the new one.
@@ -79,50 +89,77 @@ public class EhrController{
                 }
                 toreturn = ehrIdentityRepository.save(identity);
             }else{
+                // Our cached data is fine. Use it.
                 toreturn = identities.orElseThrow();
             }
 
-        return ResponseEntity.ok(MedicareEnvelope.ofSingle(properties.getMode(), properties.isMock(), mapper.toPatientView(jsonmapper.valueToTree(toreturn))));
-        /*}*/
+        return ResponseEntity.ok(MedicareEnvelope.ofSingle(
+                properties.getMode(),
+                properties.isMock(),
+                mapper.toPatientView(jsonmapper.valueToTree(toreturn))));
+        }
 
-        /*return ResponseEntity.notFound().build();*/
+        // An invalid source was requested. 404 them.
+        return ResponseEntity.notFound().build();
     }
 
-    @GetMapping("/v1/api/medicare/coverage")
-    public ResponseEntity<Object> fetchCoverage(String source){
+    @GetMapping("/v1/api/{source}/coverage")
+    public ResponseEntity<Object> fetchCoverage(@PathVariable String source){
 
-        /*if(source.equals("medicare")) {*/
+        // To any other teams, just put your Ehr code in an if block like this.
+        if(source.equalsIgnoreCase("medicare")) {
+
+            // Why on earth did we need a database lookup for a single numerical ID instead of hardcoding it?
+            // Cause you can't really do that on Bean construction, so you just have to do it lazily, I guess.
             Long medicareId = medicareService.getId();
             if(medicareId == null){
                 medicareService.retrieveId();
                 medicareId = medicareService.getId();
             }
+
+
             Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareId);
             if(crosswalkOpt.isEmpty()){
+                // This person has somehow hit this page without actually being logged in and connected.
+                // I probably should commend their cunning, but instead I'll just 404 them.
                 return ResponseEntity.notFound().build();
             }
+
             EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
             List<EhrCoverageRecord> coverages =
                     ehrCoverageRepository.findByPatientIdAndSourceId(
                             crosswalk.getPatientId(), medicareId);
+
+            // Has this user never retrieved this data?
             if (coverages.isEmpty()){
                 List<Coverage> results = medicareService.requestMedicareCoverageInfo(connections.requireAccessToken(crosswalk));
                 for(Coverage item: results){
-                    // TODO actual repalcement logic
                     coverages.add(ehrCoverageRepository.save(new EhrCoverageRecord(crosswalk.getPatientId(), item, medicareId)));
                 }
 
-            }else if(ChronoUnit.DAYS.between(coverages.get(0).getSourceUpdatedAt(), LocalDateTime.now()) < 1) {
+                // Is the data more than one day old?
+            }else if(ChronoUnit.DAYS.between(coverages.get(0).getSourceUpdatedAt(), LocalDateTime.now()) > 0) {
+
+                // Pull in any newer data than the last time we looked
                 List<Coverage> results = medicareService.requestMedicareCoverageInfo(connections.requireAccessToken(crosswalk),
                         Date.from(coverages.get(0).getSourceUpdatedAt().atZone(ZoneId.systemDefault()).toInstant()));
-                for(Coverage item: results){
-                    // TODO actual replacement logic
 
-                    // Add a new copy of the resource
-                    coverages.add(ehrCoverageRepository.save(new EhrCoverageRecord(crosswalk.getPatientId(), item,
-                            medicareId)));
+
+                for(Coverage item: results){
+                    // The tricky part is that some of this data might overwrite existing data in the database
+
+                    EhrCoverageRecord tosave =   new EhrCoverageRecord(crosswalk.getPatientId(), item, medicareId);
+                    for(EhrCoverageRecord record: coverages){
+                        // We're updating this entry instead of adding a new one, done by stealing its ID.
+                        if(record.getExternalCoverageId().equals(item.getContractFirstRep().getDisplay())){
+                            tosave.setId(record.getId());
+                            break;
+                        }
+                    }
+                    coverages.add(ehrCoverageRepository.save(tosave));
                 }
             }
+            // ELSE: The data is sufficiently fresh already, just proceed with what we have cached
 
         // For some reason the streaming interface really hates valueToTree, so this is my workaround.
         ArrayList<JsonNode> coveragesJson = new ArrayList<>();
@@ -130,14 +167,16 @@ public class EhrController{
                 coveragesJson.add(jsonmapper.valueToTree(record));
             }
         return ResponseEntity.ok(MedicareEnvelope.of(properties.getMode(), properties.isMock(), mapper.toCoverageView(coveragesJson)));
-        /*}
-        return ResponseEntity.notFound().build();*/
+        }
+        return ResponseEntity.notFound().build();
     }
 
-    // TODO: negotiate a better set of endpoints that allows most Ehr code to be in one place.
-    @GetMapping("/v1/api/medicare/visits")
-    public ResponseEntity<Object> fetchVisits(String source){
-        /*if(source.equals("medicare")){*/
+    @GetMapping("/v1/api/{source}/visits")
+    public ResponseEntity<Object> fetchVisits(@PathVariable String source){
+        // To any other teams, just put your Ehr code in an if block like this.
+        if(source.equalsIgnoreCase("medicare")){
+            // Why on earth did we need a database lookup for a single numerical ID instead of hardcoding it?
+            // Cause you can't really do that on Bean construction, so you just have to do it lazily, I guess.
             Long medicareId = medicareService.getId();
             if(medicareId == null){
                 medicareService.retrieveId();
@@ -145,6 +184,8 @@ public class EhrController{
             }
             Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareId);
             if(crosswalkOpt.isEmpty()){
+                // This person has somehow hit this page without actually being logged in and connected.
+                // I probably should commend their cunning, but instead I'll just 404 them.
                 return ResponseEntity.notFound().build();
             }
             EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
@@ -152,6 +193,8 @@ public class EhrController{
             List<EhrVisitRecord> visits =
                     ehrVisitRecordRepository.findByPatientIdAndSourceId(
                             crosswalk.getPatientId(), medicareId);
+
+            // Has this user never retrieved this data?
             if (visits.isEmpty()){
                 List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(connections.requireAccessToken(crosswalk));
                 for(ExplanationOfBenefit item: results){
@@ -159,15 +202,25 @@ public class EhrController{
                     visits.add(ehrVisitRecordRepository.save(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId)));
                 }
 
-            }else if(ChronoUnit.DAYS.between(visits.get(0).getSourceUpdatedAt(), LocalDateTime.now()) < 1) {
+                // Is the data more than one day old?
+            }else if(ChronoUnit.DAYS.between(visits.get(0).getSourceUpdatedAt(), LocalDateTime.now()) > 0) {
                 List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(connections.requireAccessToken(crosswalk),
                         Date.from(visits.get(0).getSourceUpdatedAt().atZone(ZoneId.systemDefault()).toInstant()));
                 for(ExplanationOfBenefit item: results){
 
+                    EhrVisitRecord tosave = new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId);
+                    for(EhrVisitRecord record: visits){
+                        // We're updating this entry instead of adding a new one, done by stealing its ID.
+                        if(record.getExternalVisitId().equals(tosave.getExternalVisitId())){
+                            tosave.setId(record.getId());
+                            break;
+                        }
+                    }
                     // Add/Update the resource
-                    visits.add(ehrVisitRecordRepository.save(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId)));
+                    visits.add(ehrVisitRecordRepository.save(tosave));
                 }
             }
+            // ELSE: The data is sufficiently fresh already, just proceed with what we have cached
 
         // For some reason the streaming interface really hates valueToTree, so this is my workaround.
         ArrayList<JsonNode> visitsJson = new ArrayList<>();
@@ -175,8 +228,8 @@ public class EhrController{
             visitsJson.add(jsonmapper.valueToTree(record));
         }
             return ResponseEntity.ok(MedicareEnvelope.of(properties.getMode(), properties.isMock(), mapper.toVisitView(visitsJson)));
-        /*}
-        return ResponseEntity.notFound().build();*/
+        }
+        return ResponseEntity.notFound().build();
     }
 
     /**

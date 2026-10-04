@@ -13,6 +13,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,8 +56,9 @@ public class MedicareConnectionController {
     }
 
     /** Step 1. Only a patient links their own Medicare account; nobody links one for them. */
-    @GetMapping("/v1/api/medicare/connect-url")
-    public ResponseEntity<Map<String, String>> connectUrl(final Authentication authentication) {
+    @GetMapping("/v1/api/{source}/connect-url")
+    public ResponseEntity<Map<String, String>> connectUrl(@PathVariable final String source, final Authentication authentication) {
+        requireMedicare(source);
         final Long patientId = currentPatientId(authentication)
                 .orElseThrow(() -> new AppException(HttpStatus.FORBIDDEN,
                         "Only a patient can connect their own Medicare account"));
@@ -90,8 +92,9 @@ public class MedicareConnectionController {
      * {@code { connected, status, connectedAt }}: always 200, so the app can read a not-linked
      * answer without treating it as an error. A user with no patient record is simply not linked.
      */
-    @GetMapping("/v1/api/medicare/status")
-    public ResponseEntity<ConnectionStatus> status(final Authentication authentication) {
+    @GetMapping("/v1/api/{source}/status")
+    public ResponseEntity<ConnectionStatus> status(@PathVariable final String source, final Authentication authentication) {
+        requireMedicare(source);
         return ResponseEntity.ok(currentPatientId(authentication)
                 .map(connections::status)
                 .orElseGet(() -> new ConnectionStatus(false, "UNLINKED", null)));
@@ -102,13 +105,24 @@ public class MedicareConnectionController {
      * the Medicare data has been deleted, as AC-MCR-11-1 requires. A POST: it deletes data, so it
      * must not be reachable by a link or an image tag. Idempotent: unlinking twice is not an error.
      */
-    @PostMapping("/v1/api/medicare/disconnect")
-    public ResponseEntity<ConnectionStatus> disconnect(final Authentication authentication) {
+    @PostMapping("/v1/api/{source}/disconnect")
+    public ResponseEntity<ConnectionStatus> disconnect(@PathVariable final String source, final Authentication authentication) {
+        requireMedicare(source);
         final Long patientId = currentPatientId(authentication)
                 .orElseThrow(() -> new AppException(HttpStatus.FORBIDDEN,
                         "Only a patient can disconnect their own Medicare account"));
         connections.disconnect(patientId);
         return ResponseEntity.ok(new ConnectionStatus(false, "UNLINKED", null));
+    }
+
+    /**
+     * The paths follow {@code EhrController}'s {@code /v1/api/{source}/...} shape. Medicare is the
+     * only source so far; any other is a 404, as it is there.
+     */
+    private static void requireMedicare(final String source) {
+        if (!MedicareConnectionService.REGISTRATION_ID.equalsIgnoreCase(source)) {
+            throw new AppException(HttpStatus.NOT_FOUND, "Unknown source");
+        }
     }
 
     private Optional<Long> currentPatientId(final Authentication authentication) {
