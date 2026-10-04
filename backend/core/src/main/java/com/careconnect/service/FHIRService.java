@@ -3,6 +3,7 @@ package com.careconnect.service;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
 import ca.uhn.fhir.rest.api.EncodingEnum;
+import ca.uhn.fhir.rest.client.apache.ApacheRestfulClientFactory;
 import ca.uhn.fhir.rest.client.api.IClientInterceptor;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.api.IHttpRequest;
@@ -14,6 +15,7 @@ import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.util.BundleUtil;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.hl7.fhir.instance.model.api.IBaseBundle;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.Bundle;
@@ -31,10 +33,26 @@ import java.util.List;
 @Slf4j
 public class FHIRService {
 
-    private static final FhirContext ctxR4 = FhirContext.forR4();
+    private static final FhirContext ctxR4 = blueButtonContext();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
 
     private static final String SANDBOX_BASE = "https://sandbox.bluebutton.cms.gov/v3/fhir/";
+
+    /**
+     * The R4 context, with Apache HttpClient's own retries turned off. BlueButtonRetryPolicy owns
+     * retrying; HttpClient would otherwise resend a dropped request up to 3 more times inside each
+     * attempt, 12 requests where NFR-DEG-02 allows 3 (DEF-MCR-06). HAPI's timeouts and pool stay.
+     */
+    private static FhirContext blueButtonContext() {
+        FhirContext ctx = FhirContext.forR4();
+        ctx.setRestfulClientFactory(new ApacheRestfulClientFactory(ctx) {
+            @Override
+            protected HttpClientBuilder getHttpClientBuilder() {
+                return super.getHttpClientBuilder().disableAutomaticRetries();
+            }
+        });
+        return ctx;
+    }
 
     private final String bluebuttonBase;
     private final BlueButtonRetryPolicy retryPolicy;
