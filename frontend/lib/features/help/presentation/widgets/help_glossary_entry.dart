@@ -53,10 +53,63 @@ class HelpGlossaryEntry extends StatelessWidget {
                             onPressed: onGlossarySelected,
                             child: Text(t.helpSeeInGlossary(term.term)))),
                   if (guides.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Text(t.helpRelatedArticles,
-                        style: theme.textTheme.titleMedium),
-                    ...guides,
+                    const SizedBox(height: 24),
+                    Container(
+                      key: ValueKey('help-glossary-articles-${term.id}'),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Color.alphaBlend(
+                            theme.colorScheme.primary.withValues(
+                                alpha: theme.brightness == Brightness.light
+                                    ? 0.06
+                                    : 0.12),
+                            theme.colorScheme.surface),
+                        border: Border.all(
+                            color: theme.colorScheme.primary, width: 2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Icon(Icons.menu_book_outlined,
+                              color: theme.colorScheme.primary,
+                              semanticLabel: null),
+                          const SizedBox(height: 8),
+                          Semantics(
+                            header: true,
+                            child: Text(t.helpArticlesAboutWord(term.term),
+                                style: theme.textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(t.helpGlossaryArticlesDescription,
+                              style: theme.textTheme.bodyLarge),
+                          const SizedBox(height: 12),
+                          Theme(
+                            data: theme.copyWith(
+                              cardTheme: theme.cardTheme.copyWith(
+                                margin: const EdgeInsets.symmetric(vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(
+                                      color: theme.colorScheme.primary,
+                                      width: 1.5),
+                                ),
+                              ),
+                              textTheme: theme.textTheme.copyWith(
+                                titleMedium: theme.textTheme.titleMedium
+                                    ?.copyWith(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: guides),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ]),
           ),

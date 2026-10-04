@@ -37,6 +37,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -80,6 +82,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -123,6 +127,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -160,6 +166,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -203,6 +211,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -246,6 +256,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -289,6 +301,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -332,6 +346,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -375,6 +391,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -418,6 +436,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -461,6 +481,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -504,6 +526,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"
@@ -547,6 +571,8 @@
     "helpTopicNotFoundDescription",
     "helpTroubleshooting",
     "helpRelatedArticles",
+    "helpArticlesAboutWord",
+    "helpGlossaryArticlesDescription",
     "helpArticleNotFoundTitle",
     "helpArticleNotFoundDescription",
     "helpBackToCenter"

@@ -158,6 +158,12 @@
   "helpTopicNotFoundDescription": "This help topic is unavailable. Return to the Help Center to browse other topics.",
   "helpTroubleshooting": "Troubleshooting",
   "helpRelatedArticles": "Related articles",
+  "helpArticlesAboutWord": "Articles about {term}",
+  "@helpArticlesAboutWord": {
+    "description": "Heading for articles related to a glossary word.",
+    "placeholders": {"term": {"type": "String"}}
+  },
+  "helpGlossaryArticlesDescription": "Read these articles to learn how this word is used in the app.",
   "helpArticleNotFoundTitle": "Article not found",
   "helpArticleNotFoundDescription": "This help article is unavailable. Return to the Help Center to browse other guides.",
   "helpBackToCenter": "Back to Help Center",
