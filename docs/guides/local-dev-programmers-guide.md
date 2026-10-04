@@ -22,7 +22,7 @@ Use these placeholders throughout this document:
 - Docker Desktop running
 - Java/JDK compatible with project
 - Flutter SDK + Chrome
-- For the Windows desktop build only: Visual Studio with the "Desktop development with C++" workload, and `nuget.exe` on `PATH` (see Section 4)
+- For the Windows desktop build only: Visual Studio with the "Desktop development with C++" workload plus the C++ ATL component, `nuget.exe` on `PATH`, and OpenSSL (see Section 4)
 - Repo checked out at:
   - `{{REPO_ROOT}}`
 
@@ -163,19 +163,31 @@ desktop app instead, `nuget.exe` must be on `PATH`. The `flutter_tts` plugin's
 Windows build (and `geolocator_windows`'s) calls NuGet to download
 `Microsoft.Windows.CppWinRT`, and stops with `nuget.exe not found. Please install it.`
 if it can't find it. A fresh NuGet install may have no package source, so add
-nuget.org. With CMake 4 (Visual Studio 2026 Build Tools), the `pdfx` plugin also needs
-`CMAKE_POLICY_VERSION_MINIMUM` set.
+nuget.org. Three other plugins need setup too:
 
-> **Known gap (TD-020):** after these steps the build still stops at
-> `sqlcipher_flutter_libs` with `Could NOT find OpenSSL`. The OpenSSL setup isn't
-> documented yet.
+- `sqlcipher_flutter_libs` needs OpenSSL (`Could NOT find OpenSSL`).
+- `flutter_secure_storage_windows` needs Visual Studio's C++ ATL component
+  (`Cannot open include file: 'atlstr.h'`).
+- With CMake 4 / MSVC 14.5x (Visual Studio 2026 Build Tools), `pdfx` needs
+  `CMAKE_POLICY_VERSION_MINIMUM`, and `permission_handler_windows` needs the
+  experimental-coroutine deprecation silenced (`error STL1011`).
+
+Checked on Windows 11 with Flutter 3.44.1 and Visual Studio 2026 Build Tools:
+`flutter build windows --debug` succeeds with the steps below, and the app starts.
 
 ```powershell
 winget install Microsoft.NuGet   # or download nuget.exe from https://www.nuget.org/downloads and add its folder to PATH
 nuget help | Select-Object -First 1   # open a new terminal first; should print the NuGet version
 nuget sources list                    # if it says "No sources found", add nuget.org:
 nuget sources add -Name nuget.org -Source https://api.nuget.org/v3/index.json
+winget install ShiningLight.OpenSSL.Dev   # installs to C:\Program Files\OpenSSL-Win64
+# Add the ATL component (run as administrator; or Visual Studio Installer > Modify > "C++ ATL for latest build tools")
+& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" modify --installPath "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools" --add Microsoft.VisualStudio.Component.VC.ATL --passive --norestart
+
+# In the terminal you build from (open a new one after the installs):
+$env:OPENSSL_ROOT_DIR = "C:\Program Files\OpenSSL-Win64"
 $env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"   # pdfx's pdfium download step needs this with CMake 4
+$env:CL = "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"   # permission_handler_windows with MSVC 14.5x
 
 Set-Location {{FRONTEND_DIR}}
 flutter run -d windows --dart-define=BACKEND_URL=http://localhost:8081
@@ -296,6 +308,15 @@ WHERE caregiver_user_id=2 AND patient_user_id=1;
 
 - `flutter run -d windows` fails in `pdfx` with `CMake step for pdfium failed` / `Compatibility with CMake < 3.5 has been removed`
   - Set `$env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"` in the same terminal before building.
+
+- `flutter run -d windows` fails in `sqlcipher_flutter_libs` with `Could NOT find OpenSSL`
+  - Install OpenSSL (`winget install ShiningLight.OpenSSL.Dev`) and set `$env:OPENSSL_ROOT_DIR = "C:\Program Files\OpenSSL-Win64"`.
+
+- `flutter run -d windows` fails with `Cannot open include file: 'atlstr.h'` (`flutter_secure_storage_windows`)
+  - Add the "C++ ATL for latest build tools" component in Visual Studio Installer (Section 4 has the command).
+
+- `flutter run -d windows` fails with `error STL1011` about `<experimental/coroutine>` (`permission_handler_windows`)
+  - Set `$env:CL = "/D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS"` in PowerShell before building. In Git Bash the leading `/` gets turned into a path, so use PowerShell.
 
 - `flutter build web` fails with `Avoid non-constant invocations of IconData`
   - Add `--no-tree-shake-icons` to the build command: `flutter build web --no-tree-shake-icons ...`
