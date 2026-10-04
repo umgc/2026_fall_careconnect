@@ -60,4 +60,13 @@ public interface EhrIdentityConflictRepository extends JpaRepository<EhrIdentity
             + "and c.resolvedAt < :cutoff and c.patientId in :patientIds")
     int deleteResolvedBeforeForPatients(
             @Param("cutoff") Instant cutoff, @Param("patientIds") List<Long> patientIds);
+
+    /**
+     * Unlink (FR-MCR-11, Addendum A1-Q1): removes every row this source holds for this patient.
+     * Called by {@code MedicareConnectionService.disconnect} inside its transaction.
+     */
+    @Modifying
+    @Transactional
+    @Query("delete from EhrIdentityConflict e where e.patientId = :patientId and e.sourceId = :sourceId")
+    int deleteAllForPatientAndSource(@Param("patientId") Long patientId, @Param("sourceId") Long sourceId);
 }

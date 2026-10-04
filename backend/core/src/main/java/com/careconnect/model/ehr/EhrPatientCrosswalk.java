@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
@@ -82,8 +83,13 @@ public class EhrPatientCrosswalk extends Auditable {
     /**
      * The patient's identifier within that source, e.g. a FHIR {@code Patient.id}. Stored
      * verbatim as the source reports it; never parsed for meaning.
+     * <p>
+     * Null while a link is pending: the row is created when the patient starts linking, and
+     * the source only tells us who they are once they have signed in there. Null, never
+     * {@code ""}: {@code uq_ehr_crosswalk_source_external} treats every {@code ""} as the same
+     * value, so two patients linking at once would collide, whereas nulls never do.
      */
-    @Column(name = "external_patient_id", nullable = false, length = 255)
+    @Column(name = "external_patient_id", length = 255)
     private String externalPatientId;
 
     @Column(name="token")
@@ -92,12 +98,31 @@ public class EhrPatientCrosswalk extends Auditable {
     @Column(name="refresh_token")
     private String refreshToken;
 
+    /** When {@link #token} stops working, as the source reported it at issue. Null if unknown. */
+    @Column(name = "token_expires_at")
+    private Instant tokenExpiresAt;
+
     @Column(name="last_logged_in")
     private LocalDateTime lastLoggedIn;
 
     @Column(name="last_refreshed")
     private LocalDateTime lastRefreshed;
 
+    /**
+     * One-time token that carries a pending link across the browser's trip to the source and
+     * back, so the callback knows which CareConnect patient started it. Null once the link
+     * completes or is abandoned: {@code uq_ehr_crosswalk_link_token} treats every {@code ""} as
+     * the same value, so clearing it to {@code ""} would let only one patient ever finish.
+     */
     @Column(name="link_token")
     private String linkToken;
+
+    /** After this, {@link #linkToken} is refused and the patient has to start again. */
+    @Column(name = "link_token_expires_at")
+    private Instant linkTokenExpiresAt;
+
+    /** Linked means the source's sign-in completed and a token is on file. */
+    public boolean isLinked() {
+        return token != null && !token.isBlank();
+    }
 }
