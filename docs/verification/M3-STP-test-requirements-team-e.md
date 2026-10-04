@@ -1,8 +1,8 @@
 # Milestone 3 — Software Test Plan Input: Team E (Echo) Test Requirements
 
 **Prepared by:** Quinton Coleman (Requirements Traceability Owner) · **Date:** 2026-09-28 · **Status:** Draft for team review
-**Revised by:** Kristopher Bickmore (Testing Lead) · **Dates:** 2026-09-30 and 2026-10-03 · read against the *WBS & Assignments*
-sheet of the Team Echo work plan (file dated 2026-09-30), the Software Test Plan (Team Echo sections) revision 0.22 and
+**Revised by:** Kristopher Bickmore (Testing Lead) · **Dates:** 2026-09-30, 2026-10-03 and 2026-10-04 · read against the *WBS & Assignments*
+sheet of the Team Echo work plan (file dated 2026-09-30), the Software Test Plan (Team Echo sections) revision 0.23 and
 SRS 1.4 Integrated. §9 lists what changed.
 
 **Purpose.** This document lists what has to be tested for each Team E Milestone 3 work package, at which level, and
@@ -15,7 +15,7 @@ acceptance criteria are quoted from the *WBS & Assignments* sheet.
   where one exists, and otherwise the WBS package, written as "WBS 6.2.nn, no SRS requirement".
 - A test case is identified by its permanent Test Plan identifier. SRS-issued cases (TC-20.n, TC-21.n, TC-22.n, TC-24.n)
   are referenced, never reissued. Repository cases use TC-<SUBSYSTEM>-nnn. The status shown is the case's planning
-  status in revision 0.22: Ready, Planned, Blocked or Deferred.
+  status in revision 0.23: Ready, Planned, Blocked or Deferred.
 - "None" means no case has been designed yet. The Testing Lead reserves an identifier in the Test Plan when the case is
   designed. Nobody coins one here, and no requirement ID is coined to close a trace gap.
 - Results (Pass / Fail / Blocked / Not Executed) are recorded only in the Test Report, with a named executor, date,
@@ -32,7 +32,7 @@ observable partial-failure behavior."*
 
 TC-MCR-FHIR-001…015 came with PR #208 (merged). 016…034 are on PR #223, which is still open.
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | FR-MCR-13, FR-MCR-14 (component level) | Retrieval follows every `next` link to the end, across at least 3 pages, for each approved resource type | I | All pages retrieved, no duplicates, count matches the fixture; a page that omits `Bundle.total` still yields its entries | TC-MCR-FHIR-001…005 Ready (§3.12, stand-in server). 010–012 Ready (DEF-MCR-03). 033 Ready: an OperationOutcome entry on a later page is skipped. Screen level: TC-21.1, TC-21.2 Blocked (§3.8.4). |
 | FR-MCR-15 | The approved resource type set is retrieved in full | I | Every resource type on the approved list is requested and returned | None. The approved set is unconfirmed (OQ-06), and FR-MCR-15 has no acceptance criterion. |
@@ -45,7 +45,7 @@ TC-MCR-FHIR-001…015 came with PR #208 (merged). 016…034 are on PR #223, whic
 *Criteria: "The mapping matrix covers every approved Blue Button resource and field, its normalized destination,
 provenance, display rule and associated test identifier; representative mappings are implemented and reviewed."*
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | FR-MCR-13, FR-MCR-14 | Each mapped field lands in its normalized destination as the matrix states | U/C | Every mapped field equals the expected value; an unmapped field is listed, not dropped silently | None. The criterion puts a test identifier on every matrix row. The Testing Lead issues those identifiers in the Test Plan once the matrix exists. |
 | WBS 6.2.36, no SRS requirement | Each normalized value records its provenance (source and retrieval time) | U/C | Provenance is present and correct for every mapped field | None. |
@@ -59,7 +59,7 @@ through negative tests."*
 scope for this increment, and it numbers no sharing requirement. The work plan schedules sharing in this package. The
 Requirements Owner has to settle this; until then the sharing rows trace only to the WBS (Test Plan question D14).
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | FR-MCR-19 | Retrieved records survive an app restart | I | Records present after restart | TC-21.3 Blocked (§3.8.4). |
 | FR-MCR-16, FR-MCR-17; NFR-SEC-05 | Another patient or an unassigned caregiver cannot read a patient's Medicare data. Each request goes to the API directly, bypassing the UI | S/I | Every request returns the baselined reject status (SRS 1.4 has "[PROPOSED: 404]", not yet baselined) and no record fields | TC-24.1…24.3 Blocked (§3.8.5). Component level, PR #238 (open), §3.15: TC-MCR-AUTHZ-001…013 Ready; 014…016 Planned (HTTP; DEF-MCR-07: a refusal returns 500, not 404); 017…026 Planned (persistence). 007 and 008 are characterization cases until OQ-11 is answered. |
@@ -72,7 +72,7 @@ Requirements Owner has to settle this; until then the sharing rows trace only to
 *Criteria: "Repeated synchronizations are idempotent; transient failures retry safely; duplicate writes and unrecoverable
 failures are observable."*
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | WBS 6.2.38, no SRS requirement | Running the same sync twice produces identical stored data | I | Row counts and checksums are equal after run 1 and run 2 | None. The sync code does not exist yet (§3.12.5). |
 | WBS 6.2.38, no SRS requirement | A sync interrupted mid-way and restarted completes without duplicates | I/P | No duplicate rows; the final state equals an uninterrupted run | None. |
@@ -85,25 +85,34 @@ retained-data behavior and passes security review."*
 
 **What unlink deletes is not settled.** SRS 1.4 FR-MCR-11 says unlink deletes the stored access token and *all* stored
 Medicare data before the confirmation, and its data dictionary and retention table mark every Medicare row "Deleted on
-unlink". SRS v1.4 Addendum A, A1-Q1 (Rich, 2026-10-03; draft under review, issue #239) proposes this instead:
+unlink". SRS v1.4 Addendum A, A1-Q1 (Rich, 2026-10-03; draft under review, issue #239) proposes this instead. The
+lists include the two additions Rich made on 2026-10-04, which are not yet in the addendum text:
 
-- **Deleted before the confirmation:** the Medicare token and connection; the Medicare crosswalk row; Medicare rows in
-  the raw payload, source identity, coverage and visit tables; identity conflicts that came from Medicare.
+- **Deleted before the confirmation:** the Medicare token and connection, wherever 6.2.39 stores them; the Medicare
+  crosswalk row; Medicare rows in the raw payload and source identity tables; Medicare coverage and visit records,
+  wherever the 6.2.37 ingest stores them; identity conflicts that came from Medicare.
 - **Kept:** the CareConnect account and all non-Medicare data; demographic values reconciliation already applied to
-  the patient record; the retrieval audit log, under the 7-year / age-25 rule. A patient who stays linked follows the
-  same retention rule (#214).
+  the patient record; the field provenance for those values (`ehr_identity_field_provenance`); the retrieval audit log,
+  under the 7-year / age-25 rule. A patient who stays linked follows the same retention rule (#214).
 
 Until the addendum is baselined, the SRS cases keep the SRS expected result, and the difference is Test Plan question
-D21. Two points need an answer before a pass criterion can be written against the addendum. First, it does not say what
-happens to `ehr_identity_field_provenance` rows whose winning source was Medicare. Second, the coverage and visit tables
-(`ehr_coverage_record`, `ehr_visit_record`) exist only on `feature/e-ehr-api-and-canonical-schema`, with no migration,
-and the token is held on the crosswalk row there. No unlink endpoint exists yet (6.2.39, TD-030).
+D21. On 2026-10-04 Rich answered the two points D21 had raised ([#239](https://github.com/umgc/2026_fall_careconnect/issues/239#issuecomment-5975818581),
+#241):
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+- **Field provenance is kept.** It holds no patient values, it records where the kept demographic values came from,
+  and it keeps the recency comparison correct if the patient relinks.
+- **The delete list names data, not tables.** The coverage and visit records have no table on `team-e-develop` (their
+  entities exist only on `feature/e-ehr-api-and-canonical-schema`, with no migration), and neither does the token.
+
+Rich has also asked for A1-Q1 to formally revise FR-MCR-11, its acceptance criteria AC-MCR-11-1/-2, the SRS Table 47
+Medicare row and TC-20.16/20.17. D21 closes when that revision is baselined. No unlink endpoint exists yet (6.2.39,
+TD-030).
+
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | FR-MCR-03, FR-MCR-12 | Refresh renews authorization without re-consent while it is valid, and not past the maximum token lifetime | I | A new token is stored with no user prompt; after the maximum lifetime the patient must re-authenticate | None. The maximum lifetime is unconfirmed (OQ-05), and FR-MCR-12 has no acceptance criterion. |
 | FR-MCR-09 | A revoked or rejected token stops all further retrieval | I/S | Link state reads Unlinked, ERR-MCR-05 offers re-link, and no further Blue Button call is made | TC-20.13, TC-20.14 Blocked (§3.8.3). Component level: TC-MCR-FHIR-013, 027, 031 Ready. |
-| FR-MCR-10, FR-MCR-11 | Unlink deletes the stored token and the stored Medicare data before confirming | I | Per SRS 1.4: no token record and no Medicare record exist when the unlink confirms, and reopening shows the unlinked state. If Addendum A1-Q1 is baselined (D21): each table on its delete list has no Medicare row for the patient, each item on its keep list is unchanged, and the confirmation appears only after the deletes commit | TC-20.15…20.17 Blocked (§3.8.3): no unlink endpoint exists. |
+| FR-MCR-10, FR-MCR-11 | Unlink deletes the stored token and the stored Medicare data before confirming | I | Per SRS 1.4: no token record and no Medicare record exist when the unlink confirms, and reopening shows the unlinked state. If Addendum A1-Q1 is baselined (D21): no data on its delete list remains for the patient, wherever it is stored; each item on its keep list, field provenance included, is unchanged; and the confirmation appears only after the deletes commit | TC-20.15…20.17 Blocked (§3.8.3): no unlink endpoint exists. |
 | BR-04; NFR-SEC-02 | A token is never returned to a client or written to a log, and it is encrypted at rest | S | Response and log scans find no token; the stored value is not plaintext | None. No custody mechanism has been selected (§3.8.6). |
 
 ## 2. Screens and accessibility
@@ -112,7 +121,7 @@ and the token is held on the crosswalk row there. No unlink endpoint exists yet 
 *Criteria: "Connect and consent, connection status, Medicare overview, resource-detail, reconciliation review, and
 revoke/disconnect screens are implemented against the shared contract and pass code review."*
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | FR-MCR-01…06 | Connect and consent: the flow goes to Medicare-hosted authentication, never asks for the Medicare password, and handles denial and cancel | W/I | As SRS 1.4 Table 27 states | TC-20.1…20.8 Blocked (§3.8.3). |
 | FR-MCR-07, FR-MCR-08 | A timeout at Medicare's authentication endpoint, or an error from the token exchange, ends linking | I (fault injection) | ERR-MCR-01 or ERR-MCR-02 is shown, the account stays Unlinked and no token is stored | TC-20.9…20.12 Blocked. |
@@ -128,7 +137,7 @@ The reconciliation review screen is covered under 6.2.41 and its states under 6.
 *Criteria: "The Medicare navigation entry, routes, screen containers, headings and mock-data placeholders compile and
 follow the approved component conventions; no OAuth, API, persistence or mapping logic is included."*
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | WBS 6.2.42, no SRS requirement | The navigation entry and each route open their screen container | W | Every route renders its container and heading | None. |
 | WBS 6.2.42, no SRS requirement | The shell makes no network, OAuth or persistence call | W | No HTTP client or repository is invoked while navigating the shell | None. |
@@ -141,7 +150,7 @@ implemented; each new screen has criterion-specific WCAG 2.1 A/AA evidence or a 
 Every shipped screen needs its loading, empty, error and offline states covered, and a backend failure that leaves a
 blank screen is a defect. This package's list has no offline state, so the offline row is added from the SRS.
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | FR-MCR-25, FR-MCR-27 | Loading state | W | Visible for the whole wait, on linking and on first retrieval | TC-20.18, TC-21.12 Blocked. |
 | FR-MCR-28 | No-data state | W | Explicit empty state when a linked account has no records | TC-21.13 Blocked. |
@@ -162,7 +171,7 @@ be confirmed, separated or deferred by the user without silent data loss."*
 1.4 Table 5 defers. The work plan schedules it here for Milestone 3. The Requirements Owner has to settle which one
 governs (Test Plan question D15).
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | WBS 6.2.41; reconciliation README decisions of 2026-09-26, no SRS requirement | Identity fields: the newest source wins, a tie keeps the existing value, and a date of birth waits for patient confirmation; a snapshot with a missing patient, source, timestamp or field map is refused | U/C | The cases below pass | TC-EHR-REC-001…031 Ready (§3.10). 029 and 030 need an independent re-run for DEF-EHR-REC-01. 010–012 are characterization cases until question D9 is answered. |
 | WBS 6.2.41, no SRS requirement | Two adapters racing on one field converge on the newest value against the real database | C/I | The contract suite passes against PostgreSQL and fails with the row lock removed | TC-EHR-REC-013…028 on PostgreSQL through JpaContractPostgresTest; TC-EHR-PROV-003, 004 Ready (§3.11). These are skipped in CI because no workflow sets `EHR_IT_JDBC_URI`. |
@@ -176,7 +185,7 @@ governs (Test Plan question D15).
 *Criteria: "The M3 Blue Button vertical slice runs end to end in the test environment; failures are logged and monitorable;
 a draft runbook enables another team member to operate the flow."*
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | WBS 6.2.44; FR-MCR-01…05, FR-MCR-13, FR-MCR-14 | The vertical slice (link, retrieve, store, display) runs end to end in the test environment | E2E | The journey completes against the deployed test environment | TC-E2E-010 (link) and TC-E2E-001 (retrieve and display) Blocked. Both take their backend from BACKEND_URL; no run against the test environment is planned yet. |
 | NFR-AR-04 | The health check reports unhealthy when the database or Blue Button is unreachable, and recovers | P | Status flips within the configured interval and recovers | None. |
@@ -191,7 +200,7 @@ These have Test Plan cases in Milestone 3 but no row in the *WBS & Assignments* 
 KI-05 comes from the handoff analysis. It was a prerequisite for medication photo capture (handoff item 1.10), and SRS 1.4
 gives it no FEAT, FR or AC.
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | KI-05, no SRS requirement | The frontend MedicationType holds exactly the backend's five constant names | U/C | Names are identical on both sides | TC-MED-TYPE-001, 002, 007 Ready (§3.9). |
 | KI-05 | Every type survives the wire both ways, and a legacy OTC reads as OVER_THE_COUNTER | U | Round trip unchanged; a full backend row parses intact | TC-MED-TYPE-003…006, 014…016 Ready. |
@@ -205,7 +214,7 @@ gives it no FEAT, FR or AC.
 PR #209 cites internal WBS 1.4.3. The workbook gives that number to 6.2.12, Data Mapping & Provenance Options, which is a
 Milestone 1 package. SRS 1.4 numbers no canonical-schema requirement.
 
-| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.22) |
+| Traces to | What must be shown | Level | Pass criterion | Test cases (Test Plan rev 0.23) |
 |---|---|---|---|---|
 | WBS 6.2.12 (internal 1.4.3), no SRS requirement | The seven `ehr_` tables, their constraints and seed sources are built on a fresh boot, a repeat boot and an upgrade, without data loss | I/manual | Every required patch applies; existing patients keep their data | TC-EHR-SCH-001, 009…011 Planned (§3.11). |
 | WBS 6.2.12 | Constraints reject invalid rows | I | Each invalid insert fails | TC-EHR-CONF-001…005 Ready, 006 Planned; TC-EHR-SCH-002…005 Planned. |
@@ -272,6 +281,12 @@ roles, and the mapping-matrix identifiers. No Test Plan identifier was added, re
 2. Question D21 records that Addendum A1-Q1 differs from FR-MCR-11 on what unlink deletes. TC-20.16 and TC-20.17 keep
    the SRS expected result until the addendum is baselined.
 
+**Revision 0.23 (2026-10-04, PR #241)**
+
+1. Question D21 records Rich's answers to its two points: field provenance is kept, and the delete list names data,
+   not tables. It also records that D21 closes when A1-Q1 formally revises FR-MCR-11 and the addendum is baselined.
+   No Test Plan identifier was added, renumbered, reused or retired.
+
 ## 9. Revision notes
 
 **2026-09-30 (Testing Lead)**
@@ -313,3 +328,10 @@ roles, and the mapping-matrix identifiers. No Test Plan identifier was added, re
   - The merged state of PRs #207 and #209.
 - **Question numbers.** The 6.2.37 sharing conflict is D14 and the 6.2.41 conflict is D15. The earlier text gave D13 for
   sharing.
+
+**2026-10-04 (Testing Lead, PR #241)**
+
+- **Unlink (6.2.39).** Recorded Rich's answers to the two A1-Q1 points: field provenance is kept, and the delete list
+  names data, not tables. The keep and delete lists and the FR-MCR-11 pass criterion now say so. D21 stays open until
+  the addendum that revises FR-MCR-11 is baselined.
+- **Statuses.** Every case cell reads as of Test Plan revision 0.23. No status changed from revision 0.22.
