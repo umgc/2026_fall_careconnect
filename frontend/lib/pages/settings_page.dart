@@ -793,6 +793,21 @@ class _SettingsPageState extends State<SettingsPage> {
                   // General
                   _buildSectionHeader(context, t.settingsGeneral),
 
+                  _buildSettingsCard(
+                    context,
+                    icon: Icons.help_outline,
+                    title: t.settingsHelp,
+                    subtitle: t.settingsHelpDesc,
+                    onTap: () {
+                      Telemetry.event('button_tap', {
+                        'screen': 'settings',
+                        'target': 'help',
+                        'route': '/help',
+                      });
+                      context.push('/help');
+                    },
+                  ),
+
                   // User-Controlled Persistence Toggle (BNS 5)
                   _buildToggleCard(
                     context,
