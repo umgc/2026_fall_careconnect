@@ -16,16 +16,19 @@
 #
 # Usage:
 #   $env:ATHENA_CLIENT_ID='...'; $env:ATHENA_CLIENT_SECRET='...'
+#   $env:ATHENA_PRACTICE_ID='a-1.Practice-195900'   # the preview sandbox practice
 #   .\scripts\athena-discover.ps1
 
 $ErrorActionPreference = 'Stop'
 
 if (-not $env:ATHENA_CLIENT_ID)     { Write-Error 'set $env:ATHENA_CLIENT_ID' }
 if (-not $env:ATHENA_CLIENT_SECRET) { Write-Error 'set $env:ATHENA_CLIENT_SECRET' }
+# No default: ATHENA_ENV=production is allowed, and a sandbox fallback would then be sent there silently.
+if (-not $env:ATHENA_PRACTICE_ID)   { Write-Error 'set $env:ATHENA_PRACTICE_ID (preview sandbox: a-1.Practice-195900)' }
 
 $clientId     = $env:ATHENA_CLIENT_ID
 $clientSecret = $env:ATHENA_CLIENT_SECRET
-$practice     = if ($env:ATHENA_PRACTICE_ID) { $env:ATHENA_PRACTICE_ID } else { 'a-1.Practice-195900' }
+$practice     = $env:ATHENA_PRACTICE_ID
 $scopes       = if ($env:ATHENA_SCOPES)      { $env:ATHENA_SCOPES }      else { 'system/Patient.read' }
 $envName      = if ($env:ATHENA_ENV)         { $env:ATHENA_ENV }         else { 'preview' }
 
