@@ -1,0 +1,73 @@
+{
+  "resourceType": "Bundle",
+  "id": "bundle-text-only-substance",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/r4/AllergyIntolerance?_id=synthetic-text-only-allergy"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://example.test/fhir/r4/AllergyIntolerance/synthetic-text-only-allergy",
+      "resource": {
+        "resourceType": "AllergyIntolerance",
+        "id": "synthetic-text-only-allergy",
+        "meta": {
+          "versionId": "synthetic-version-1",
+          "lastUpdated": "2026-07-24T16:44:26Z"
+        },
+        "clinicalStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
+              "code": "active",
+              "display": "Active"
+            }
+          ],
+          "text": "Proposed"
+        },
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-verification",
+              "code": "unconfirmed",
+              "display": "Unconfirmed"
+            }
+          ],
+          "text": "Proposed"
+        },
+        "category": [
+          "medication"
+        ],
+        "criticality": "unable-to-assess",
+        "code": {
+          "text": "Sulfamethoxazole"
+        },
+        "patient": {
+          "reference": "Patient/synthetic-patient-1",
+          "display": "Synthetic Patient"
+        },
+        "recordedDate": "2026-07-24T16:44:26Z",
+        "recorder": {
+          "reference": "Practitioner/synthetic-practitioner-1",
+          "display": "Synthetic Practitioner"
+        },
+        "reaction": [
+          {
+            "id": "synthetic-reaction-1",
+            "manifestation": [
+              {
+                "text": "Rash"
+              }
+            ]
+          }
+        ]
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

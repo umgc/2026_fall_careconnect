@@ -1,0 +1,11 @@
+{
+  "resourceType": "Bundle",
+  "id": "bundle-empty-allergy-search",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/r4/AllergyIntolerance?_id=synthetic-missing-allergy"
+    }
+  ]
+}

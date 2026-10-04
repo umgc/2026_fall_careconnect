@@ -1,0 +1,28 @@
+requirements:
+  - M3-REQ-02
+  - M3-REQ-04
+scenarios:
+  - M3-SC-MAP-011
+origin: hand-edited-sanitized-capture
+sandbox: oracle-health-open-fhir-r4
+capturedAt: "2026-10-02"
+capturedBy: Tiffany Obi
+captureRequest: AllergyIntolerance?patient=<synthetic-patient-id>
+httpStatus: 200
+bundleEntryCount: 1
+derivedFrom: patient-allergy-search-2026-10-02
+purpose: >-
+  Verify that an AllergyIntolerance whose substance has text but no coding keeps
+  the source text and does not invent a terminology code.
+sanitizationChanges:
+  - Selected one source record whose code element naturally contained text without coding.
+  - Replaced all Bundle, allergy, version, patient, practitioner, and reaction identifiers.
+  - Replaced Oracle Health sandbox and resource URLs with example.test URLs.
+  - Removed the generated XHTML narrative and replaced display values with synthetic labels.
+expectedBehaviorSummary: >-
+  Preserve the Sulfamethoxazole source text, leave the approved code field empty,
+  and retain the unconfirmed status and text-only reaction without inventing codes.
+expectedOutputStatus: pending-canonical-model-and-openapi-1.0
+reviewedBy: TBD
+consumers:
+  - TBD AllergyIntolerance mapper text-only-substance test
