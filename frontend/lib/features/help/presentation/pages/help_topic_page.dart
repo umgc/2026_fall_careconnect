@@ -6,6 +6,7 @@ import '../../data/help_repository.dart';
 import '../../help_routes.dart';
 import '../../models/help_role.dart';
 import '../widgets/help_article_tile.dart';
+import '../widgets/help_app_bar.dart';
 
 /// A Browse Topics destination, resolved by permanent category ID.
 class HelpTopicPage extends StatelessWidget {
@@ -23,7 +24,8 @@ class HelpTopicPage extends StatelessWidget {
         catalog.articlesForCategory(categoryId, role: HelpRole.patient);
 
     return Scaffold(
-      appBar: AppBar(title: Text(category?.title ?? t.helpTopicNotFound)),
+      appBar:
+          helpAppBar(context, title: category?.title ?? t.helpTopicNotFound),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

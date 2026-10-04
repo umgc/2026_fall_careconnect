@@ -6,6 +6,7 @@ import '../../data/help_repository.dart';
 import '../../help_routes.dart';
 import '../../models/help_role.dart';
 import '../widgets/help_article_tile.dart';
+import '../widgets/help_app_bar.dart';
 import '../widgets/help_topic_tile.dart';
 
 /// Patient-focused home with bundled guides and local search.
@@ -54,7 +55,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
     return FocusTraversalGroup(
         policy: ReadingOrderTraversalPolicy(),
         child: Scaffold(
-          appBar: AppBar(title: Text(t.helpCenterTitle)),
+          appBar: helpAppBar(context, title: t.helpCenterTitle),
           body: SafeArea(
             child: SingleChildScrollView(
               key: const PageStorageKey('help-center-home'),

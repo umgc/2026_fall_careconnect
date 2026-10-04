@@ -119,6 +119,52 @@ void main() {
   });
 
   testWidgets(
+      'Back to top appears after scrolling, hides near the top, and returns to the beginning',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await _pumpHelp(tester,
+        location: HelpRoutes.article(firstHelpTestId),
+        repository: createHelpTestCatalog(
+            paragraph:
+                List.filled(60, 'A long paragraph with helpful instructions.')
+                    .join(' ')),
+        textScaler: const TextScaler.linear(2));
+    final scrollView = find.byType(SingleChildScrollView);
+    final controller =
+        tester.widget<SingleChildScrollView>(scrollView).controller!;
+    expect(find.text('Back to top'), findsNothing);
+    await tester.drag(scrollView, const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(find.text('Back to top').hitTestable(), findsOneWidget);
+    final button = find.byType(FloatingActionButton);
+    expect(tester.getRect(button).left, lessThan(30));
+    expect(tester.getRect(button).bottom, greaterThan(500));
+    controller.jumpTo(100);
+    await tester.pumpAndSettle();
+    expect(find.text('Back to top'), findsNothing);
+    controller.jumpTo(600);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Back to top'));
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+    expect(find.text('Back to top'), findsNothing);
+    expect(find.text('Getting Started').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('short articles do not show Back to top', (tester) async {
+    await _pumpHelp(tester, location: HelpRoutes.article(secondHelpTestId));
+    await tester.drag(
+        find.byType(SingleChildScrollView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(find.text('Back to top'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'long content remains scrollable with large text on a narrow screen',
       (tester) async {
     tester.view.physicalSize = const Size(320, 568);

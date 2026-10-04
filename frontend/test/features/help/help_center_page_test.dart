@@ -88,6 +88,8 @@ void main() {
     addTearDown(
         () => FocusManager.instance.highlightStrategy = previousStrategy);
     await _pumpHelp(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // Help Center Home.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // Back to Settings.
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
     final searchFocus =

@@ -111,6 +111,18 @@
   "settingsHelp": "Help",
   "settingsHelpDesc": "FAQs, how-to guides, and troubleshooting",
   "helpCenterTitle": "Help Center",
+  "helpCenterHome": "Help Center Home",
+  "helpBackToTop": "Back to top",
+  "@helpBackToTop": {
+    "description": "Floating button to scroll a long Help article back to its beginning."
+  },
+  "@helpCenterHome": {
+    "description": "Persistent Help navigation button returning directly to the Help Center home."
+  },
+  "helpBackToSettings": "Back to Settings",
+  "@helpBackToSettings": {
+    "description": "Persistent Help navigation button returning directly to Settings."
+  },
   "helpSearchArticles": "Search Help articles",
   "helpClearSearch": "Clear search",
   "helpPopularHelp": "Popular Help",

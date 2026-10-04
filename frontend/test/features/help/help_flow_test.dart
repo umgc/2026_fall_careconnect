@@ -277,6 +277,102 @@ void main() {
   });
 
   testWidgets(
+      'Help shortcuts stay visible on every screen with large text and direct entry',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      final router = await _pumpProductionRoutes(tester,
+          location: HelpRoutes.home,
+          size: const Size(320, 568),
+          textScaler: const TextScaler.linear(2));
+      for (final location in [
+        HelpRoutes.home,
+        HelpRoutes.topic(HelpCategoryIds.gettingStarted),
+        HelpRoutes.article(HelpArticleIds.gettingStarted),
+        HelpRoutes.topic('missing-topic'),
+        HelpRoutes.article('missing-article'),
+      ]) {
+        for (final shortcut in {
+          'Help Center Home': HelpRoutes.home,
+          'Back to Settings': '/settings',
+        }.entries) {
+          router.go(location);
+          await tester.pumpAndSettle();
+          expect(find.text('Help Center Home').hitTestable(), findsOneWidget);
+          expect(find.text('Back to Settings').hitTestable(), findsOneWidget);
+          for (final label in ['Help Center Home', 'Back to Settings']) {
+            expect(
+                find.descendant(
+                    of: find.byType(AppBar), matching: find.text(label)),
+                findsOneWidget);
+          }
+          final scrollable = find.byType(Scrollable).first;
+          await tester.drag(scrollable, const Offset(0, -400));
+          await tester.pumpAndSettle();
+          expect(find.text(shortcut.key).hitTestable(), findsOneWidget);
+          expect(tester.takeException(), isNull);
+          await tester.tap(find.text(shortcut.key));
+          await tester.pumpAndSettle();
+          expect(
+              router.routeInformationProvider.value.uri.path, shortcut.value);
+          expect(router.canPop(), isFalse);
+          expect(tester.takeException(), isNull);
+        }
+      }
+    });
+  });
+
+  for (final shortcut in {
+    'Help Center Home': HelpRoutes.home,
+    'Back to Settings': '/settings',
+  }.entries) {
+    testWidgets('${shortcut.key} exits a chain of related articles in one tap',
+        (tester) async {
+      await _withoutNetwork((_) async {
+        final catalog = HelpRepository.bundled();
+        final router = await _pumpProductionRoutes(tester);
+        await tester.ensureVisible(find.text('Help'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Help'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Getting Started'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Getting Started'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Getting started with CareConnect'));
+        await tester.pumpAndSettle();
+        for (final id in [
+          HelpArticleIds.readingHelp,
+          HelpArticleIds.openingHelp,
+          HelpArticleIds.readingHelp,
+        ]) {
+          final link = find.text(catalog.findArticle(id)!.title).last;
+          await tester.ensureVisible(link);
+          await tester.pumpAndSettle();
+          await tester.tap(link);
+          await tester.pumpAndSettle();
+        }
+        // Ordinary Back still returns to the previous article.
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(
+            tester
+                .widget<HelpArticlePage>(find.byType(HelpArticlePage))
+                .articleId,
+            HelpArticleIds.openingHelp);
+        expect(router.canPop(), isTrue);
+        await tester.tap(find.text(shortcut.key));
+        await tester.pumpAndSettle();
+        expect(router.routeInformationProvider.value.uri.path, shortcut.value);
+        expect(router.canPop(), isFalse,
+            reason: 'Shortcuts clear the accumulated Help navigation stack.');
+        expect(find.byType(HelpArticlePage), findsNothing);
+        expect(find.byType(HelpTopicPage), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    });
+  }
+
+  testWidgets(
       'all bundled IDs and related links render disconnected at double text on a narrow screen',
       (tester) async {
     await _withoutNetwork((attempts) async {
@@ -303,8 +399,12 @@ void main() {
             in article.sections.whereType<HelpRelatedArticles>()) {
           for (final relatedId in section.articleIds) {
             final target = catalog.findArticle(relatedId)!;
-            await tester.ensureVisible(find.text(target.title).last);
-            await tester.tap(find.text(target.title).last);
+            final link = find.text(target.title).last;
+            await tester.ensureVisible(link);
+            await tester.pumpAndSettle();
+            // At doubled text a long link can exceed the remaining viewport;
+            // activate its visible first line rather than its offscreen center.
+            await tester.tapAt(tester.getTopLeft(link) + const Offset(10, 10));
             await tester.pumpAndSettle();
             expect(
                 tester
