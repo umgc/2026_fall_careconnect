@@ -1,7 +1,9 @@
 import '../models/help_article.dart';
 import '../models/help_category.dart';
+import '../models/help_role.dart';
 import '../models/help_section.dart';
 import 'bundled_help_content.dart';
+import 'help_home_config.dart';
 
 /// Immutable local catalog shared by Help screens.
 ///
@@ -11,8 +13,10 @@ class HelpRepository {
   HelpRepository({
     required Iterable<HelpCategory> categories,
     required Iterable<HelpArticle> articles,
+    Iterable<String> popularArticleIds = const [],
   })  : categories = List.unmodifiable(categories),
-        articles = List.unmodifiable(articles) {
+        articles = List.unmodifiable(articles),
+        popularArticleIds = List.unmodifiable(popularArticleIds) {
     for (final category in this.categories) {
       _validateId(category.id);
       if (_categoriesById.containsKey(category.id)) {
@@ -39,6 +43,14 @@ class HelpRepository {
     }
 
     // Resolve related links after indexing all articles, including forward links.
+    final seenPopularIds = <String>{};
+    for (final id in this.popularArticleIds) {
+      if (!_articlesById.containsKey(id) || !seenPopularIds.add(id)) {
+        throw ArgumentError(
+            'Missing or duplicate popular Help article ID: $id');
+      }
+    }
+
     for (final article in this.articles) {
       for (final section in article.sections.whereType<HelpRelatedArticles>()) {
         for (final relatedId in section.articleIds) {
@@ -55,10 +67,12 @@ class HelpRepository {
   factory HelpRepository.bundled() => HelpRepository(
         categories: bundledHelpCategories,
         articles: bundledHelpArticles,
+        popularArticleIds: patientPopularHelpArticleIds,
       );
 
   final List<HelpCategory> categories;
   final List<HelpArticle> articles;
+  final List<String> popularArticleIds;
   final Map<String, HelpCategory> _categoriesById = {};
   final Map<String, HelpArticle> _articlesById = {};
 
@@ -66,9 +80,50 @@ class HelpRepository {
 
   HelpArticle? findArticle(String id) => _articlesById[id];
 
-  List<HelpArticle> articlesForCategory(String categoryId) => List.unmodifiable(
-        articles.where((article) => article.categoryId == categoryId),
+  List<HelpArticle> articlesForCategory(String categoryId, {HelpRole? role}) =>
+      List.unmodifiable(
+        articles.where((article) =>
+            article.categoryId == categoryId &&
+            (role == null || article.roles.contains(role))),
       );
+
+  List<HelpArticle> popularArticlesForRole(HelpRole role) => List.unmodifiable(
+        popularArticleIds
+            .map((id) => _articlesById[id]!)
+            .where((article) => article.roles.contains(role)),
+      );
+
+  List<HelpCategory> categoriesForRole(HelpRole role) => List.unmodifiable(
+        categories.where((category) =>
+            articlesForCategory(category.id, role: role).isNotEmpty),
+      );
+
+  /// Local, case-insensitive matching of all query words, in catalog order.
+  /// Searches titles, summaries, topics, and section text without any services.
+  List<HelpArticle> searchArticles(String query, {required HelpRole role}) {
+    final words = query.trim().toLowerCase().split(RegExp(r'\s+'));
+    if (words.first.isEmpty) return const [];
+    return List.unmodifiable(articles.where((article) {
+      if (!article.roles.contains(role)) return false;
+      final text = [
+        article.title,
+        article.summary,
+        findCategory(article.categoryId)!.title,
+        for (final section in article.sections) ...[
+          section.heading ?? '',
+          switch (section) {
+            HelpParagraph() => section.text,
+            HelpSteps() => section.steps.join(' '),
+            HelpTroubleshooting() => section.tips
+                .map((tip) => '${tip.problem} ${tip.solution}')
+                .join(' '),
+            HelpRelatedArticles() => '',
+          },
+        ],
+      ].join(' ').toLowerCase();
+      return words.every(text.contains);
+    }));
+  }
 
   static void _validateId(String id) {
     if (!RegExp(r'^[a-z0-9]+(?:-[a-z0-9]+)*$').hasMatch(id)) {

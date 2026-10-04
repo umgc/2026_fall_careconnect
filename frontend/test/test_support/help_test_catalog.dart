@@ -12,6 +12,7 @@ const secondHelpTestId = 'second-guide';
 HelpRepository createHelpTestCatalog(
     {String paragraph = 'A helpful paragraph.'}) {
   return HelpRepository(
+    popularArticleIds: const [firstHelpTestId, secondHelpTestId],
     categories: const [
       HelpCategory(
           id: 'getting-started', title: 'Getting Started', description: ''),

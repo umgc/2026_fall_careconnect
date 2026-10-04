@@ -33,6 +33,7 @@ import 'package:care_connect_app/pages/profile_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
 import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
@@ -1032,6 +1033,12 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: HelpRoutes.home,
       builder: (_, __) => const HelpCenterPage(),
       routes: [
+        GoRoute(
+          path: HelpRoutes.topicPattern,
+          builder: (_, state) => HelpTopicPage(
+            categoryId: state.pathParameters['categoryId']!,
+          ),
+        ),
         GoRoute(
           path: HelpRoutes.articlePattern,
           builder: (_, state) => HelpArticlePage(
