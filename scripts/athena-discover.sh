@@ -19,17 +19,21 @@
 #
 # Usage:
 #   export ATHENA_CLIENT_ID=... ATHENA_CLIENT_SECRET=...
+#   export ATHENA_PRACTICE_ID=a-1.Practice-195900   # the preview sandbox practice
 #   sh scripts/athena-discover.sh
 #
-# Optional: ATHENA_PRACTICE_ID (default a-1.Practice-195900), ATHENA_SCOPES, ATHENA_ENV.
+# ATHENA_PRACTICE_ID has no default: ATHENA_ENV=production is allowed, and a sandbox
+# fallback would then be sent to production silently.
+# Optional: ATHENA_SCOPES, ATHENA_ENV.
 
 set -euo pipefail
 
 : "${ATHENA_CLIENT_ID:?set ATHENA_CLIENT_ID}"
 : "${ATHENA_CLIENT_SECRET:?set ATHENA_CLIENT_SECRET}"
+: "${ATHENA_PRACTICE_ID:?set ATHENA_PRACTICE_ID (preview sandbox: a-1.Practice-195900)}"
 
 ENVNAME="${ATHENA_ENV:-preview}"
-PRACTICE="${ATHENA_PRACTICE_ID:-a-1.Practice-195900}"
+PRACTICE="$ATHENA_PRACTICE_ID"
 SCOPES="${ATHENA_SCOPES:-system/Patient.read}"
 
 if [ "$ENVNAME" = "production" ]; then
