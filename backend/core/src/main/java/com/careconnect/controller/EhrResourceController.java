@@ -9,6 +9,15 @@ import com.careconnect.service.ehr.EhrResourceCategory;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.headers.Header;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -41,6 +50,9 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/ehr")
 @RequiredArgsConstructor
+@Tag(name = "Unified Health Data",
+        description = "Source-generic read surface over the mirrored EHR records, scoped to the "
+                + "authenticated caller. Backs the Unified Health Data screen.")
 public class EhrResourceController {
 
     private static final String PATIENT_TYPE = "Patient";
@@ -58,10 +70,39 @@ public class EhrResourceController {
      * {@code X-Last-Synced-At} header (the screen's "Last updated").
      */
     @GetMapping("/resources")
+    @Operation(
+            summary = "List the caller's mirrored EHR records",
+            description = "Returns the authenticated caller's mirrored records (the Patient "
+                    + "demographics row is excluded; see GET /api/ehr/patient). All query params are "
+                    + "optional. The newest sync time is returned in the X-Last-Synced-At response "
+                    + "header (the screen's \"Last updated\").")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Records returned (empty list when the caller has no mirrored rows)",
+                    headers = @Header(
+                            name = "X-Last-Synced-At",
+                            description = "ISO-8601 instant of the newest sync for the source; "
+                                    + "omitted when the caller has no mirrored rows",
+                            schema = @Schema(type = "string", format = "date-time")),
+                    content = @Content(
+                            mediaType = "application/json",
+                            array = @ArraySchema(schema = @Schema(implementation = EhrResourceListItem.class)))),
+            @ApiResponse(responseCode = "401", description = "No authenticated caller", content = @Content)
+    })
     public ResponseEntity<List<EhrResourceListItem>> resources(
+            @Parameter(description = "Source system; defaults to EPIC (the only live source). "
+                    + "Case-insensitive — normalized to the stored casing.", example = "EPIC")
             @RequestParam(value = "source", required = false) final String source,
+            @Parameter(description = "Filter to a single UI category (e.g. Conditions, Medications). "
+                    + "Omit for all categories.", example = "Conditions")
             @RequestParam(value = "category", required = false) final String category,
+            @Parameter(description = "Free-text search matched against the record title and "
+                    + "resourceType (case-insensitive).")
             @RequestParam(value = "q", required = false) final String q,
+            @Parameter(description = "Sort order: latest | earliest | az | za.",
+                    schema = @Schema(allowableValues = {"latest", "earliest", "az", "za"},
+                            defaultValue = "latest"))
             @RequestParam(value = "sort", required = false, defaultValue = "latest") final String sort) {
         final User me = securityUtil.resolveCurrentUser();
         if (me == null) {
@@ -96,7 +137,26 @@ public class EhrResourceController {
      * source.
      */
     @GetMapping("/patient")
+    @Operation(
+            summary = "Patient demographics for the info card",
+            description = "Returns name, birthDate and gender parsed from the caller's mirrored "
+                    + "Patient resource, plus the resolved source.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Demographics returned",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(
+                                    example = "{\"name\":\"Jane Doe\",\"birthDate\":\"1948-07-21\","
+                                            + "\"gender\":\"female\",\"source\":\"EPIC\"}"))),
+            @ApiResponse(responseCode = "401", description = "No authenticated caller", content = @Content),
+            @ApiResponse(responseCode = "404",
+                    description = "No Patient row mirrored for the source", content = @Content)
+    })
     public ResponseEntity<Map<String, Object>> patient(
+            @Parameter(description = "Source system; defaults to EPIC (the only live source). "
+                    + "Case-insensitive — normalized to the stored casing.", example = "EPIC")
             @RequestParam(value = "source", required = false) final String source) {
         final User me = securityUtil.resolveCurrentUser();
         if (me == null) {
