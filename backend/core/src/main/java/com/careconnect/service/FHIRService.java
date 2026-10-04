@@ -209,8 +209,14 @@ public class FHIRService {
         if (!results.hasEntry()) {
             return new Paged<>(BlueButtonRetrieval.complete(new ArrayList<>(), 1), null);
         }
-        String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
-        if (!bundleType.equals(name)) {
+        // Check the type against the entries of the searched type, not entry 0: an OperationOutcome
+        // listed first (e.g. a server warning) shouldn't fail a page that also has records, the same
+        // way addAll skips it on later pages (TC-MCR-FHIR-033/035). Only a page with no entry of the
+        // searched type at all is the wrong response type (DEF-MCR-04).
+        boolean hasSearchedType = results.getEntry().stream()
+                .anyMatch(e -> type.isInstance(e.getResource()));
+        if (!hasSearchedType) {
+            String bundleType = results.getEntry().get(0).getResource().getResourceType().toString();
             throw new RuntimeException("Invalid " + name + " response type: " + bundleType);
         }
 

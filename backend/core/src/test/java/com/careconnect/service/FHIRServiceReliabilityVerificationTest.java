@@ -686,4 +686,20 @@ class FHIRServiceReliabilityVerificationTest {
         assertEquals(3, hits.get("Coverage"), "NFR-DEG-02: up to 3 attempts");
         assertEquals(List.of(Duration.ofSeconds(2), Duration.ofSeconds(4)), waits);
     }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-035 An OperationOutcome listed first on page 1 is skipped when the page also has records")
+    void unexpectedFirstEntryOnFirstPageIsSkipped() {
+        org.hl7.fhir.r4.model.OperationOutcome warning = new org.hl7.fhir.r4.model.OperationOutcome();
+        warning.addIssue().setSeverity(org.hl7.fhir.r4.model.OperationOutcome.IssueSeverity.WARNING)
+                .setCode(org.hl7.fhir.r4.model.OperationOutcome.IssueType.INFORMATIONAL);
+        List<Resource> mixed = new ArrayList<>();
+        mixed.add(warning);
+        mixed.addAll(coverages("c", 2));
+        routes.put("Coverage", ex -> new Reply(200, json(page(mixed, null, null))));
+
+        List<Coverage> result = service().requestMedicareCoverageInfo(TOKEN);
+
+        assertEquals(List.of("c1", "c2"), ids(result));
+    }
 }
