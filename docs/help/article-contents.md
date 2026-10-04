@@ -1,5 +1,8 @@
 # Article contents menus
 
+The [developer maintenance handbook](maintenance.md#sections-and-article-contents)
+covers section edits and their effects on generated navigation.
+
 Help articles with at least two named sections show an expanded **On this page**
 menu beneath the title and summary. The toggle collapses only the menu links;
 the article remains visible. Selecting a link scrolls its heading beneath the

@@ -1,5 +1,8 @@
 # Help glossary: implementation and maintenance
 
+For step-by-step catalog changes, reference cleanup, restoration, and preview
+instructions, use the [developer maintenance handbook](maintenance.md#glossary).
+
 The glossary contains the 75 approved terms with short, plain-language meanings.
 The approved alias map includes 551 everyday phrases, questions, abbreviations,
 and alternative names. Redundant aliases are removed after normalization.

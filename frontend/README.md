@@ -20,6 +20,12 @@ care_connect_app/
 
 ## Prerequisites
 
+Developer documentation for feature maintenance:
+
+- [Help Center maintenance handbook](../docs/help/maintenance.md): adding,
+  editing, removing, restoring, and verifying articles, topics, glossary terms,
+  links, search phrases, and shared Help controls.
+
 Please install the following before starting:
 
 ### Required for All Platforms
