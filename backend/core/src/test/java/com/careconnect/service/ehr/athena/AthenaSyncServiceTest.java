@@ -11,6 +11,7 @@ import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.service.ehr.EhrSourceResolver;
 import com.careconnect.service.ehr.EhrStatusGate;
 import com.careconnect.testsupport.fixtures.AthenaPropertiesFixtures;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -68,6 +69,9 @@ class AthenaSyncServiceTest {
     private EhrResourceRepository resources;
     private EhrResourceQueryRepository resourceQueries;
     private EhrRawPayloadRepository rawPayloads;
+    private PatientRepository patients;
+    private EhrSourceResolver sources;
+    private ObjectProvider<AthenaSyncService> self;
     private AthenaSyncService service;
 
     @BeforeEach
@@ -78,12 +82,10 @@ class AthenaSyncServiceTest {
         resources = mock(EhrResourceRepository.class);
         resourceQueries = mock(EhrResourceQueryRepository.class);
         rawPayloads = mock(EhrRawPayloadRepository.class);
-        final PatientRepository patients = mock(PatientRepository.class);
-        final EhrSourceResolver sources = mock(EhrSourceResolver.class);
-        final ObjectProvider<AthenaSyncService> self = mock(ObjectProvider.class);
-        service = new AthenaSyncService(fhir, tokens, resources, resourceQueries, rawPayloads,
-                new EhrStatusGate(), patients, sources, new ObjectMapper(), self);
-        when(self.getObject()).thenReturn(service);
+        patients = mock(PatientRepository.class);
+        sources = mock(EhrSourceResolver.class);
+        self = mock(ObjectProvider.class);
+        service = serviceWith(new ObjectMapper());
 
         when(patients.findByUserId(USER_ID)).thenReturn(Optional.of(Patient.builder().id(PATIENT_ID).build()));
         when(sources.idForCode(SOURCE)).thenReturn(SOURCE_ID);
@@ -93,6 +95,14 @@ class AthenaSyncServiceTest {
                 .thenReturn(Optional.empty());
         when(resources.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(resourceQueries.findByUserIdAndSourceAndResourceType(any(), any(), any())).thenReturn(List.of());
+    }
+
+    /** The service under test, with the self-proxy returning it so records mirror inline. */
+    private AthenaSyncService serviceWith(final ObjectMapper objectMapper) {
+        final AthenaSyncService built = new AthenaSyncService(fhir, tokens, resources, resourceQueries, rawPayloads,
+                new EhrStatusGate(), patients, sources, objectMapper, self);
+        when(self.getObject()).thenReturn(built);
+        return built;
     }
 
     private void granted(final String... types) {
@@ -414,5 +424,23 @@ class AthenaSyncServiceTest {
         verify(fhir, never()).search(any(), any(), any(), any());
         verify(fhir, never()).read(any(), any(), any(), any());
         verify(tokens, never()).grantedScopes();
+    }
+
+    @Test
+    @DisplayName("a record that cannot be serialized is skipped, and the type reports FAILED")
+    void serializationFailureIsFailed() throws Exception {
+        // Arrange: no real JsonNode fails to serialize, so the mapper is made to.
+        final ObjectMapper failing = mock(ObjectMapper.class);
+        when(failing.writeValueAsString(any())).thenThrow(new JsonProcessingException("cannot serialize") { });
+        service = serviceWith(failing);
+        granted("Condition");
+        athenaHas("Condition", condition("c-1", "active", "Asthma", null));
+
+        // Act
+        final Map<String, AthenaSyncResult.TypeResult> types = byType(service.sync(USER_ID));
+
+        // Assert
+        assertEquals(AthenaSyncResult.Outcome.FAILED, types.get("Condition").outcome());
+        verify(resources, never()).save(any());
     }
 }

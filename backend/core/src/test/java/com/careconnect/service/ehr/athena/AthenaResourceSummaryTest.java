@@ -52,6 +52,20 @@ class AthenaResourceSummaryTest {
     }
 
     @Test
+    @DisplayName("a bare Coding falls back to its display, and a concept with no words leaves the type alone")
+    void conceptFallbacks() {
+        // Encounter.class is a bare Coding, not a CodeableConcept.
+        final ObjectNode encounter = resource("Encounter");
+        encounter.putObject("class").put("code", "AMB").put("display", "ambulatory");
+        assertEquals("Encounter: ambulatory", AthenaResourceSummary.title("Encounter", encounter));
+
+        // A code with neither text nor a display has nothing readable to add.
+        final ObjectNode coded = resource("Condition");
+        coded.putObject("code").putArray("coding").addObject().put("code", "44054006");
+        assertEquals("Condition", AthenaResourceSummary.title("Condition", coded));
+    }
+
+    @Test
     @DisplayName("a Patient is titled by type alone, so no name reaches the title column")
     void patientTitleCarriesNoName() {
         assertEquals("Patient", AthenaResourceSummary.title("Patient", romilda()));

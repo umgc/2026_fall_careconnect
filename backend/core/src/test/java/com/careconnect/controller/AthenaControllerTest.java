@@ -32,6 +32,7 @@ import java.util.Optional;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -287,6 +288,58 @@ class AthenaControllerTest {
                 .andExpect(jsonPath("$.resourceId", is("c-1")))
                 .andExpect(jsonPath("$.resource.id", is("c-1")));
         verify(resources).findByUserIdAndSourceAndResourceTypeAndResourceFhirId(USER_ID, SOURCE, "Condition", "c-1");
+    }
+
+    @Test
+    @DisplayName("every endpoint answers 401 when no user can be resolved, and changes nothing")
+    void everyEndpointRequiresAUser() throws Exception {
+        // Arrange
+        when(securityUtil.resolveCurrentUser()).thenReturn(null);
+
+        // Act / Assert
+        mockMvc.perform(post("/api/athena/connect").contentType(MediaType.APPLICATION_JSON).content("{\"consent\":true}"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/athena/sync")).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/athena/disconnect")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/athena/resources")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/athena/resources/Condition/c-1")).andExpect(status().isUnauthorized());
+        verify(connections, never()).connect(any());
+        verify(connections, never()).disconnect(any());
+        verify(syncService, never()).sync(any());
+    }
+
+    @Test
+    @DisplayName("GET /resources/{type}/{id} when not connected is 409 and reads nothing")
+    void detailWhenNotConnected() throws Exception {
+        when(connections.isConnected(USER_ID)).thenReturn(false);
+
+        mockMvc.perform(get("/api/athena/resources/Condition/c-1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code", is("NOT_CONNECTED")));
+        verify(resources, never()).findByUserIdAndSourceAndResourceTypeAndResourceFhirId(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a stored payload that is missing or unreadable comes back as a null resource, not an error")
+    void unreadableStoredPayloadIsNull() throws Exception {
+        // Arrange
+        final EhrResource missing = row("Condition", "c-1", "2024-06-01");
+        missing.setPayloadJson(null);
+        final EhrResource corrupt = row("Condition", "c-2", "2024-06-01");
+        corrupt.setPayloadJson("{not json");
+        when(resources.findByUserIdAndSourceAndResourceTypeAndResourceFhirId(USER_ID, SOURCE, "Condition", "c-1"))
+                .thenReturn(Optional.of(missing));
+        when(resources.findByUserIdAndSourceAndResourceTypeAndResourceFhirId(USER_ID, SOURCE, "Condition", "c-2"))
+                .thenReturn(Optional.of(corrupt));
+
+        // Act / Assert: the flattened fields still render.
+        mockMvc.perform(get("/api/athena/resources/Condition/c-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title", is("Condition: x")))
+                .andExpect(jsonPath("$.resource").value(nullValue()));
+        mockMvc.perform(get("/api/athena/resources/Condition/c-2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resource").value(nullValue()));
     }
 
     @Test

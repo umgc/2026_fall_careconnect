@@ -9,6 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,6 +71,15 @@ class AthenaPropertiesTest {
 
         // Assert
         assertEquals(List.of("a-1.Practice-195900", "a-1.Practice-80000"), cfg.getPracticeIds());
+    }
+
+    @Test
+    @DisplayName("requested scopes split on any whitespace, and none configured is an empty set")
+    void requestedScopes() {
+        assertEquals(Set.of("system/Patient.read", "system/Condition.read"),
+                AthenaPropertiesFixtures.builder().scopes(" system/Patient.read   system/Condition.read ").build()
+                        .requestedScopes());
+        assertTrue(AthenaPropertiesFixtures.builder().scopes(" ").build().requestedScopes().isEmpty());
     }
 
     @Test

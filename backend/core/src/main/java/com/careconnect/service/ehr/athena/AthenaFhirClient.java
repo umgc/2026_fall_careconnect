@@ -272,25 +272,28 @@ public class AthenaFhirClient implements EhrApiClient {
             return null;
         }
         for (final JsonNode link : bundle.path("link")) {
-            if (!"next".equals(link.path("relation").asText()) || !link.path("url").isTextual()) {
-                continue;
+            if ("next".equals(link.path("relation").asText()) && link.path("url").isTextual()) {
+                return checkedNextLink(link.path("url").asText());
             }
-            final URI next;
-            try {
-                next = URI.create(link.path("url").asText());
-            } catch (IllegalArgumentException ex) {
-                throw new AthenaFhirException(AthenaFhirException.Kind.REJECTED,
-                        "athena returned an unparseable next link", ex);
-            }
-            final URI base = URI.create(cfg.getFhirBaseUrl());
-            if (!Objects.equals(base.getScheme(), next.getScheme())
-                    || !Objects.equals(base.getHost(), next.getHost())
-                    || base.getPort() != next.getPort()) {
-                throw new AthenaFhirException(AthenaFhirException.Kind.REJECTED,
-                        "athena returned a next link to a different host");
-            }
-            return next;
         }
         return null;
+    }
+
+    private URI checkedNextLink(final String url) {
+        final URI next;
+        try {
+            next = URI.create(url);
+        } catch (IllegalArgumentException ex) {
+            throw new AthenaFhirException(AthenaFhirException.Kind.REJECTED,
+                    "athena returned an unparseable next link", ex);
+        }
+        final URI base = URI.create(cfg.getFhirBaseUrl());
+        if (!Objects.equals(base.getScheme(), next.getScheme())
+                || !Objects.equals(base.getHost(), next.getHost())
+                || base.getPort() != next.getPort()) {
+            throw new AthenaFhirException(AthenaFhirException.Kind.REJECTED,
+                    "athena returned a next link to a different host");
+        }
+        return next;
     }
 }

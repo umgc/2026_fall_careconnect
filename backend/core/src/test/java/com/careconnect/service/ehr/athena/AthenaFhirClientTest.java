@@ -21,6 +21,7 @@ import org.springframework.test.web.client.ExpectedCount;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -403,6 +406,90 @@ class AthenaFhirClientTest {
 
         // Act / Assert
         assertThrows(IllegalStateException.class, () -> client.fetch(USER_ID, "Condition", Map.of()));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("with the athena source unregistered there is no link, and the crosswalk is not read")
+    void unregisteredSourceHasNoLink() {
+        when(sources.idForCode(AthenaProperties.SOURCE_ATHENA)).thenReturn(null);
+
+        assertEquals(Optional.empty(), client.linkedPatientId(USER_ID));
+        verify(crosswalks, never()).findByPatientIdAndSourceId(any(), any());
+    }
+
+    @Test
+    @DisplayName("a network failure during a search is UNAVAILABLE")
+    void networkFailureIsUnavailable() {
+        // Arrange: DNS and connection failures reach RestTemplate as an IOException, with no status.
+        server.expect(requestTo(startsWith(BASE + "/Condition?"))).andRespond(request -> {
+            throw new IOException("connection reset");
+        });
+
+        // Act
+        final AthenaFhirException ex = assertThrows(AthenaFhirException.class,
+                () -> client.search(USER_ID, PRACTICE, "Condition", params("patient", ROMILDA_ID)));
+
+        // Assert
+        assertEquals(AthenaFhirException.Kind.UNAVAILABLE, ex.getKind());
+    }
+
+    @Test
+    @DisplayName("a response that is not JSON, such as a maintenance page, is UNAVAILABLE")
+    void unreadableResponseIsUnavailable() {
+        server.expect(requestTo(startsWith(BASE + "/Condition?")))
+                .andRespond(withSuccess("<html>down for maintenance</html>", MediaType.TEXT_HTML));
+
+        final AthenaFhirException ex = assertThrows(AthenaFhirException.class,
+                () -> client.search(USER_ID, PRACTICE, "Condition", params("patient", ROMILDA_ID)));
+
+        assertEquals(AthenaFhirException.Kind.UNAVAILABLE, ex.getKind());
+    }
+
+    @Test
+    @DisplayName("an empty response body is an empty, complete result")
+    void emptyBodyIsAnEmptyResult() {
+        server.expect(requestTo(startsWith(BASE + "/Condition?"))).andRespond(withSuccess());
+
+        final AthenaFhirClient.SearchResult result =
+                client.search(USER_ID, PRACTICE, "Condition", params("patient", ROMILDA_ID));
+
+        assertTrue(result.resources().isEmpty());
+        assertTrue(result.complete());
+    }
+
+    @Test
+    @DisplayName("links other than next, such as self, never trigger another request")
+    void onlyTheNextLinkIsFollowed() {
+        // Arrange: exactly one expectation, so following the self link would fail the test.
+        final var page = JSON.createObjectNode().put("resourceType", "Bundle");
+        page.putArray("link").addObject().put("relation", "self").put("url", BASE + "/Condition?patient=x");
+        server.expect(ExpectedCount.once(), requestTo(startsWith(BASE + "/Condition?")))
+                .andRespond(withSuccess(page.toString(), MediaType.APPLICATION_JSON));
+
+        // Act
+        final AthenaFhirClient.SearchResult result =
+                client.search(USER_ID, PRACTICE, "Condition", params("patient", ROMILDA_ID));
+
+        // Assert
+        assertTrue(result.complete());
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("an unparseable next link fails the search as REJECTED rather than ending paging")
+    void unparseableNextLinkIsRejected() {
+        // Arrange: a space is not legal in a URI.
+        server.expect(ExpectedCount.once(), requestTo(startsWith(BASE + "/Condition?")))
+                .andRespond(withSuccess(bundleWithNext(BASE + "/Condition?cursor=a b",
+                        condition("c-1", "active", "Asthma", null)), MediaType.APPLICATION_JSON));
+
+        // Act
+        final AthenaFhirException ex = assertThrows(AthenaFhirException.class,
+                () -> client.search(USER_ID, PRACTICE, "Condition", params("patient", ROMILDA_ID)));
+
+        // Assert
+        assertEquals(AthenaFhirException.Kind.REJECTED, ex.getKind());
         server.verify();
     }
 

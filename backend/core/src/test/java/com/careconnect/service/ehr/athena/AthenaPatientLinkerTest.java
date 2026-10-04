@@ -160,6 +160,20 @@ class AthenaPatientLinkerTest {
     }
 
     @Test
+    @DisplayName("an exact match that carries no chart id links nothing")
+    void matchWithoutAnIdIsNotLinked() {
+        // Arrange
+        localPatient("Romilda", "Smith", "1976-02-28", Gender.FEMALE);
+        final ObjectNode chart = romilda();
+        chart.remove("id");
+        athenaReturns(chart);
+
+        // Act / Assert
+        assertEquals(AthenaLinkResult.State.NOT_MATCHED, linker.link(USER_ID).state());
+        verify(crosswalks, never()).save(any());
+    }
+
+    @Test
     @DisplayName("a middle name is not a first name: Testy Robert does not match a profile named Robert")
     void middleNameIsNotAFirstName() {
         // Arrange: athena's given=Robert search returns this chart, whose first name is Testy.
