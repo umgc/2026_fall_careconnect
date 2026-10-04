@@ -11,12 +11,18 @@ import java.util.Set;
  */
 public interface AthenaTokenProvider {
 
-    /** A valid bearer token, acquiring or renewing as needed. */
+    /**
+     * A valid bearer token, acquiring or renewing as needed.
+     *
+     * @throws IllegalStateException when no token can be obtained, whatever the reason
+     */
     String accessToken();
 
     /**
      * Scopes athena actually granted. May be narrower than those requested, so callers must
      * check this before attempting a resource type rather than assuming the configured list.
+     *
+     * @throws IllegalStateException when no token can be obtained, whatever the reason
      */
     Set<String> grantedScopes();
 }

@@ -9,8 +9,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.concurrent.FutureTask;
@@ -260,6 +262,22 @@ class AthenaClientCredentialsTokenServiceTest {
         // Assert
         assertTrue(ex.getMessage().contains("client id/secret"), ex.getMessage());
         server.verify();
+    }
+
+    @Test
+    @DisplayName("an unreachable token endpoint is an IllegalStateException, like every other token failure")
+    void unreachableEndpointIsIllegalState() {
+        // Arrange: a DNS or connection failure reaches RestTemplate as an IOException, with no status.
+        server.expect(requestTo(TOKEN_URL)).andRespond(request -> {
+            throw new IOException("athena.example: nodename nor servname provided, or not known");
+        });
+
+        // Act
+        final IllegalStateException ex = assertThrows(IllegalStateException.class, () -> service.accessToken());
+
+        // Assert
+        assertTrue(ex.getMessage().contains("could not be reached"), ex.getMessage());
+        assertTrue(ex.getCause() instanceof ResourceAccessException, String.valueOf(ex.getCause()));
     }
 
     @Test
