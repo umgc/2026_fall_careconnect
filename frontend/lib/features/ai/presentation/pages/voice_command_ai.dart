@@ -156,6 +156,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
         phrase: 'open informed delivery',
         intent: 'navigate',
         entity: 'informed delivery'),
+        _CommandMatch(
+        phrase: 'open information delivery',
+        intent: 'navigate',
+        entity: 'informed delivery'),
     _CommandMatch(phrase: 'check my mail', intent: 'navigate', entity: 'mail'),
     // Other features
     _CommandMatch(
