@@ -8,6 +8,7 @@ import '../../models/help_role.dart';
 import '../widgets/help_app_bar.dart';
 import '../widgets/help_article_tile.dart';
 import '../widgets/help_glossary_entry.dart';
+import '../widgets/help_glossary_theme.dart';
 
 /// Eager entries let direct links reach variable-height definitions reliably.
 class HelpGlossaryPage extends StatefulWidget {
@@ -83,7 +84,11 @@ class _HelpGlossaryPageState extends State<HelpGlossaryPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Theme(
+      data: helpGlossaryTheme(Theme.of(context)),
+      child: Builder(builder: _buildContent));
+
+  Widget _buildContent(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final catalog = widget.repository ?? _bundled;
     final terms = catalog.searchGlossary(_search.text);

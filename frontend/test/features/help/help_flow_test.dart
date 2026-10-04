@@ -68,12 +68,18 @@ Future<GoRouter> _pumpProductionRoutes(
   if (_fontDirectory.isNotEmpty) {
     await tester.runAsync(() async {
       for (final font in {
-        'Roboto': 'roboto-regular.ttf',
-        'MaterialIcons': 'materialicons-regular.otf',
+        'Roboto': [
+          'roboto-regular.ttf',
+          'roboto-medium.ttf',
+          'roboto-bold.ttf'
+        ],
+        'MaterialIcons': ['materialicons-regular.otf'],
       }.entries) {
-        final bytes = await File('$_fontDirectory/${font.value}').readAsBytes();
-        final loader = FontLoader(font.key)
-          ..addFont(Future.value(ByteData.sublistView(bytes)));
+        final loader = FontLoader(font.key);
+        for (final file in font.value) {
+          final bytes = await File('$_fontDirectory/$file').readAsBytes();
+          loader.addFont(Future.value(ByteData.sublistView(bytes)));
+        }
         await loader.load();
       }
     });
@@ -596,14 +602,37 @@ void main() {
             .findGlossaryTerm('gamification')!
             .definition;
         final text = tester.widget<Text>(find.text(definition));
-        final theme = Theme.of(tester.element(find.byType(HelpGlossaryPage)));
+        final theme = Theme.of(tester.element(find.text(definition)));
         expect(text.style, theme.textTheme.bodyLarge);
+        expect(text.style!.fontWeight, FontWeight.w500);
+        expect(tester.widget<Text>(find.text('Gamification')).style!.fontWeight,
+            FontWeight.w700);
         final luminance = text.style!.color!.computeLuminance();
         final background = theme.colorScheme.surface.computeLuminance();
         final contrast = luminance > background
             ? (luminance + 0.05) / (background + 0.05)
             : (background + 0.05) / (luminance + 0.05);
         expect(contrast, greaterThanOrEqualTo(4.5));
+        for (final foreground in [
+          theme.colorScheme.primary,
+          theme.inputDecorationTheme.labelStyle!.color!,
+          theme.inputDecorationTheme.floatingLabelStyle!.color!,
+          theme.textButtonTheme.style!.foregroundColor!.resolve({})!,
+        ]) {
+          final luminance = foreground.computeLuminance();
+          final contrast = luminance > background
+              ? (luminance + 0.05) / (background + 0.05)
+              : (background + 0.05) / (luminance + 0.05);
+          expect(contrast, greaterThanOrEqualTo(4.5));
+        }
+        final outline = theme
+            .inputDecorationTheme.enabledBorder!.borderSide.color
+            .computeLuminance();
+        expect(
+            (outline > background
+                ? (outline + 0.05) / (background + 0.05)
+                : (background + 0.05) / (outline + 0.05)),
+            greaterThanOrEqualTo(3));
         await tester.ensureVisible(find.text('Gamification'));
         await tester.pumpAndSettle();
         await _capture(tester, 'phone-glossary-${brightness.name}-large-text');

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../l10n/app_localizations.dart';
 import '../../models/help_glossary_term.dart';
+import 'help_glossary_theme.dart';
 
 /// A shared meaning using the app's typography and colors.
 class HelpGlossaryEntry extends StatelessWidget {
@@ -17,7 +18,11 @@ class HelpGlossaryEntry extends StatelessWidget {
   final List<Widget> guides;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Theme(
+      data: helpGlossaryTheme(Theme.of(context)),
+      child: Builder(builder: _buildContent));
+
+  Widget _buildContent(BuildContext context) {
     final theme = Theme.of(context);
     final t = AppLocalizations.of(context)!;
     return Semantics(
@@ -72,9 +77,12 @@ class HelpGlossaryResultTile extends StatelessWidget {
             child: ListTile(
               contentPadding: const EdgeInsets.symmetric(vertical: 8),
               title: Text(term.term,
-                  style: Theme.of(context).textTheme.titleMedium),
+                  style: helpGlossaryTheme(Theme.of(context))
+                      .textTheme
+                      .titleMedium),
               subtitle: Text(term.definition,
-                  style: Theme.of(context).textTheme.bodyLarge),
+                  style:
+                      helpGlossaryTheme(Theme.of(context)).textTheme.bodyLarge),
               trailing: const Icon(Icons.chevron_right),
               onTap: onTap,
             )),
