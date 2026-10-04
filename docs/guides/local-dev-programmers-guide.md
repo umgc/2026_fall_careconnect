@@ -160,12 +160,22 @@ If UI seems stale, do hard refresh in browser: `Ctrl+Shift+R`.
 
 The web run above is the normal local setup. To run the Flutter app as a Windows
 desktop app instead, `nuget.exe` must be on `PATH`. The `flutter_tts` plugin's
-Windows build calls NuGet to download `Microsoft.Windows.CppWinRT`, and stops with
-`nuget.exe not found. Please install it.` if it can't find it.
+Windows build (and `geolocator_windows`'s) calls NuGet to download
+`Microsoft.Windows.CppWinRT`, and stops with `nuget.exe not found. Please install it.`
+if it can't find it. A fresh NuGet install may have no package source, so add
+nuget.org. With CMake 4 (Visual Studio 2026 Build Tools), the `pdfx` plugin also needs
+`CMAKE_POLICY_VERSION_MINIMUM` set.
+
+> **Known gap (TD-020):** after these steps the build still stops at
+> `sqlcipher_flutter_libs` with `Could NOT find OpenSSL`. The OpenSSL setup isn't
+> documented yet.
 
 ```powershell
 winget install Microsoft.NuGet   # or download nuget.exe from https://www.nuget.org/downloads and add its folder to PATH
 nuget help | Select-Object -First 1   # open a new terminal first; should print the NuGet version
+nuget sources list                    # if it says "No sources found", add nuget.org:
+nuget sources add -Name nuget.org -Source https://api.nuget.org/v3/index.json
+$env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"   # pdfx's pdfium download step needs this with CMake 4
 
 Set-Location {{FRONTEND_DIR}}
 flutter run -d windows --dart-define=BACKEND_URL=http://localhost:8081
@@ -280,6 +290,12 @@ WHERE caregiver_user_id=2 AND patient_user_id=1;
 
 - `flutter run -d windows` fails with `nuget.exe not found. Please install it.`
   - Install NuGet and put it on `PATH` (Section 4, Windows desktop build), then open a new terminal and run `flutter clean` before trying again.
+
+- `flutter run -d windows` fails with `Failed to install nuget package Microsoft.Windows.CppWinRT` and `Argument cannot be null or empty` / `Parameter name: primarySources`
+  - NuGet has no package source. Run `nuget sources add -Name nuget.org -Source https://api.nuget.org/v3/index.json`, then `flutter clean` and try again.
+
+- `flutter run -d windows` fails in `pdfx` with `CMake step for pdfium failed` / `Compatibility with CMake < 3.5 has been removed`
+  - Set `$env:CMAKE_POLICY_VERSION_MINIMUM = "3.5"` in the same terminal before building.
 
 - `flutter build web` fails with `Avoid non-constant invocations of IconData`
   - Add `--no-tree-shake-icons` to the build command: `flutter build web --no-tree-shake-icons ...`
