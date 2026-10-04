@@ -177,6 +177,25 @@ their default is the bundled catalog. For custom catalogs, pass
 `popularArticleIds` to the repository to select home entries explicitly.
 Future screens should use the same repository API.
 
+## Complete-flow verification
+
+`test/features/help/help_flow_test.dart` uses the production route definitions
+and real Settings/Help screens with test providers and disconnected platform
+channels. It refuses HTTP, checks Help's placement, taps the full navigation
+sequence, verifies search/fallback recovery, and opens every bundled ID and
+related link. Run it with the rest of the focused suite:
+
+```powershell
+flutter test test/features/help --no-pub
+dart analyze lib/features/help test/features/help test/test_support/help_test_catalog.dart
+```
+
+The [Step 9 verification report](../../../../docs/help/verification-step-9.md)
+records results, optional readable screenshot capture commands, live Windows
+preview checks, and outstanding physical-device/browser/screen-reader checks.
+Widget viewport sizes and refused HTTP are automated evidence, not proof of
+physical-device disconnection or real assistive-technology behavior.
+
 The starter article content is English. Screen labels use the existing app
 localization system. Future translated catalogs should preserve the same IDs
 across locales; translation must not affect article links.

@@ -9,6 +9,11 @@ platform distinctions below. Automated Help widget checks are separate from
 testing dose updates, messages, check-in submission, or reset emails against a
 live backend. No physical mobile-device or browser workflow check was performed.
 
+The [Step 9 verification report](verification-step-9.md) records subsequent
+production-route tests with HTTP refused, desktop/phone layout checks, and live
+Windows preview route rendering. These checks do not replace the per-article
+server-workflow and physical-device checks listed below.
+
 ## Source material
 
 - [SUPPORT.md](../../SUPPORT.md): password-reset FAQ and support context.
@@ -56,8 +61,8 @@ All frontend paths below are relative to `frontend/lib/`.
 | `viewing-appointments` | User Guide 4.5.3/4.13.2 as context; `features/dashboard/patient_dashboard/pages/patient_dashboard.dart` upcoming EVV section and loading code. | Shared dashboard source inspected in Step 4. | Live scheduled visits, date/time presentation, refresh behavior and connection errors on Windows/mobile/web. |
 | `messaging-your-caregiver` | User Guide 4.8.1 as context; `features/social/presentation/pages/chat_inbox_screen.dart`, `my_friend_screen.dart`, and `chat_room_screen.dart`. | Shared inbox/contact/send/retry source inspected in Step 4. | Caregiver linking, messaging availability, successful delivery, failed-send/retry, and platform-specific keyboard behavior in actual conversations. |
 | `resetting-your-password` | SUPPORT password FAQ; User Guide 4.1.4 as context; `features/auth/presentation/pages/login_page.dart`, `reset_password_screen.dart`, and password-reset flow source. | Shared sign-in/reset-request source inspected in Step 4. | Email delivery, expired/replaced reset links, password change, and subsequent login on Windows/mobile/web. SMS delivery or a specific expiry duration is not promised by this article. |
-| `opening-help` | `pages/settings_page.dart`, `config/router/app_router.dart`, and bundled Help content. User Guide 4.4.3 is historical navigation context. | Settings placement source checked; Help home/article navigation covered by local widget tests. | Full Settings-to-Help navigation on each platform with actual account/provider state; reserved for Step 9. |
-| `reading-help` | Bundled Help catalog/screens, Windows preview instructions/launcher, native/web check-in sources; User Guide 5.2 as offline context. | Local article rendering, related navigation, and large-text layouts covered by widgets; preview/plugin differences source checked. | Physically disconnected Windows/mobile access, browser first-load/reload behavior, and real assistive-technology checks on each platform. |
+| `opening-help` | `pages/settings_page.dart`, `config/router/app_router.dart`, and bundled Help content. User Guide 4.4.3 is historical navigation context. | Step 9 tests tap Settings → Help → Topic → Article and return with real screens/routes and test providers at desktop/phone sizes. Windows preview rendering/back stack checked through debugger router invocation. | Physical input and Settings-to-Help navigation on mobile/web with actual account/provider state; physical Windows input was not exercised. |
+| `reading-help` | Bundled Help catalog/screens, Windows preview instructions/launcher, native/web check-in sources; User Guide 5.2 as offline context. | Step 9 opens all articles/topics and taps all related links with HTTP refused, disconnected channel responses, narrow layout, and double text. Live Windows home/topic/dose-article rendering checked; preview/plugin differences source checked. | Physically disconnected Windows/mobile access, browser first-load/reload behavior, and real assistive-technology checks on each platform. |
 
 ## Verification boundaries and future updates
 
@@ -65,7 +70,7 @@ All frontend paths below are relative to `frontend/lib/`.
   is evidence for Help rendering/navigation, not a disconnected-device test.
 - Tests check keyboard traversal and activation, semantic labels/button roles,
   live result announcements, light/dark themes, and narrow layouts. A real
-  screen-reader session remains a Step 9 device check.
+  screen-reader session remains an outstanding device check in the Step 9 report.
 - Screen labels use app localization. Article/category content is English;
   untranslated UI labels currently fall back to English. Preserve stable IDs
   when implementing translated catalogs.
