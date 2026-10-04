@@ -6,7 +6,11 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * athenahealth connection configuration.
@@ -25,8 +29,14 @@ import java.util.Set;
 @Getter
 public class AthenaProperties {
 
-    /** Discriminator stored on mirrored resources and audit rows. */
-    public static final String SOURCE_ATHENA = "ATHENA";
+    /**
+     * Discriminator stored on mirrored resources and audit rows. It is also the {@code ehr_source}
+     * code SchemaPatchRunner seeds, so one value names athena in every EHR table.
+     */
+    public static final String SOURCE_ATHENA = "ATHENAHEALTH";
+
+    /** athena's {@code ah-practice} form; group 1 is the practice number. */
+    private static final Pattern PRACTICE_ID = Pattern.compile("a-\\d+\\.Practice-(\\d+)");
 
     private final boolean enabled;
 
@@ -54,11 +64,14 @@ public class AthenaProperties {
     private final String fhirBaseUrl;
 
     /**
-     * Practice context, required as the {@code ah-practice} SEARCH PARAMETER on every FHIR call
-     * (not a path segment, not a header). Format is athena's prefixed id, e.g.
-     * {@code a-1.Practice-195900}; the bare numeric id is rejected.
+     * The athena practices this deployment may search, each in athena's {@code ah-practice} form,
+     * e.g. {@code a-1.Practice-195900} (the bare numeric id is rejected), from ATHENA_PRACTICE_ID:
+     * one practice, or several separated by commas. athena is one database per practice and every
+     * search must name one. With 2-legged OAuth the app can read only practices that have enabled
+     * it, so this is that list. Linking searches each; a linked patient's own practice comes from
+     * their chart id and must also be on the list.
      */
-    private final String practiceId;
+    private final List<String> practiceIds;
 
     public AthenaProperties(
             @Value("${careconnect.athena.enabled:false}") final boolean enabled,
@@ -75,14 +88,23 @@ public class AthenaProperties {
             @Value("${athena.oauth.scopes:system/Patient.read}") final String scopes,
             @Value("${athena.fhir.base-url:https://api.preview.platform.athenahealth.com/fhir/r4}")
             final String fhirBaseUrl,
-            @Value("${athena.fhir.practice-id:}") final String practiceId) {
-        // There is deliberately no default practice: a default would silently point every
-        // developer at whichever practice it named. Fail the boot instead of the first FHIR call.
-        if (enabled && (practiceId == null || practiceId.isBlank())) {
-            throw new IllegalStateException(
-                    "careconnect.athena.enabled is true but athena.fhir.practice-id is blank. "
-                    + "Set ATHENA_PRACTICE_ID to the practice to query, e.g. a-1.Practice-195900 "
-                    + "for the preview sandbox.");
+            @Value("${athena.fhir.practice-id:}") final String practiceIds) {
+        final List<String> parsed = parsePracticeIds(practiceIds);
+        if (enabled) {
+            // There is deliberately no default practice: a default would silently point every
+            // developer at whichever practice it named. Fail the boot instead of the first FHIR call.
+            if (parsed.isEmpty()) {
+                throw new IllegalStateException(
+                        "careconnect.athena.enabled is true but athena.fhir.practice-id is blank. "
+                        + "Set ATHENA_PRACTICE_ID to the practice the app may search, or several separated "
+                        + "by commas, e.g. a-1.Practice-195900 for the preview sandbox.");
+            }
+            for (final String practice : parsed) {
+                if (!PRACTICE_ID.matcher(practice).matches()) {
+                    throw new IllegalStateException("athena.fhir.practice-id entry '" + practice
+                            + "' is not in athena's ah-practice form, e.g. a-1.Practice-195900.");
+                }
+            }
         }
         this.enabled = enabled;
         this.tokenUrl = tokenUrl;
@@ -93,7 +115,32 @@ public class AthenaProperties {
         this.clientSecret = clientSecret;
         this.scopes = scopes;
         this.fhirBaseUrl = fhirBaseUrl;
-        this.practiceId = practiceId;
+        this.practiceIds = parsed;
+    }
+
+    /**
+     * The configured practice with this number, e.g. {@code 195900} gives {@code a-1.Practice-195900}.
+     * Empty when the practice is not one this deployment may search.
+     */
+    public Optional<String> practiceWithNumber(final String practiceNumber) {
+        for (final String practice : practiceIds) {
+            final Matcher matcher = PRACTICE_ID.matcher(practice);
+            if (matcher.matches() && matcher.group(1).equals(practiceNumber)) {
+                return Optional.of(practice);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static List<String> parsePracticeIds(final String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(entry -> !entry.isEmpty())
+                .distinct()
+                .toList();
     }
 
     public boolean hasCredentials() {

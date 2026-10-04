@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
@@ -116,6 +117,10 @@ public class AthenaClientCredentialsTokenService implements AthenaTokenProvider 
                 return onQuotaExceeded();
             }
             throw describe(ex);
+        } catch (RestClientException ex) {
+            // DNS, connection and timeout failures arrive here with no HTTP status. Callers treat a
+            // token failure as IllegalStateException, so this one must not escape as anything else.
+            throw new IllegalStateException("athenahealth token endpoint could not be reached", ex);
         }
 
         if (body == null || body.accessToken() == null || body.accessToken().isBlank()) {

@@ -17,14 +17,15 @@ public final class AthenaPropertiesFixtures {
     public static final String FHIR_BASE_URL = "https://athena.example/fhir/r4";
     public static final String CLIENT_ID = "test-id";
     public static final String CLIENT_SECRET = "test-secret";
-    public static final String PRACTICE_ID = "a-1.Practice-1";
+    /** The preview sandbox practice, so the sandbox-shaped ids in AthenaFhirFixtures map to it. */
+    public static final String PRACTICE_ID = "a-1.Practice-195900";
 
     private AthenaPropertiesFixtures() {
         // Utility class
     }
 
     /**
-     * Starts from an enabled configuration with credentials, one scope and a practice, pointing
+     * Starts from an enabled configuration with credentials, one scope and one practice, pointing
      * at a fake host so a missed mock can never reach the real athena sandbox.
      */
     public static Builder builder() {
@@ -40,7 +41,7 @@ public final class AthenaPropertiesFixtures {
         private String clientSecret = CLIENT_SECRET;
         private String scopes = "system/Patient.read";
         private String fhirBaseUrl = FHIR_BASE_URL;
-        private String practiceId = PRACTICE_ID;
+        private String practiceIds = PRACTICE_ID;
 
         private Builder() {
         }
@@ -75,8 +76,9 @@ public final class AthenaPropertiesFixtures {
             return this;
         }
 
-        public Builder practiceId(final String value) {
-            this.practiceId = value;
+        /** One practice, or several comma-separated, exactly as ATHENA_PRACTICE_ID is written. */
+        public Builder practiceIds(final String value) {
+            this.practiceIds = value;
             return this;
         }
 
@@ -91,7 +93,7 @@ public final class AthenaPropertiesFixtures {
                     clientSecret,
                     scopes,
                     fhirBaseUrl,
-                    practiceId);
+                    practiceIds);
         }
     }
 }
