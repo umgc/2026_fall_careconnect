@@ -5,6 +5,7 @@ import '../../data/help_repository.dart';
 import '../../models/help_article.dart';
 import '../../models/help_section.dart';
 import 'help_section_heading.dart';
+import 'help_glossary_entry.dart';
 
 /// Article presentation shared by the starter screen and future detail screens.
 class HelpArticleContent extends StatefulWidget {
@@ -13,11 +14,13 @@ class HelpArticleContent extends StatefulWidget {
     required this.article,
     required this.repository,
     required this.onArticleSelected,
+    this.onGlossarySelected,
   });
 
   final HelpArticle article;
   final HelpRepository repository;
   final ValueChanged<String> onArticleSelected;
+  final ValueChanged<String>? onGlossarySelected;
 
   @override
   State<HelpArticleContent> createState() => _HelpArticleContentState();
@@ -32,6 +35,7 @@ class _SectionTarget {
 
 class _HelpArticleContentState extends State<HelpArticleContent> {
   late List<_SectionTarget> _targets;
+  late List<HelpSection> _sections;
   bool _contentsExpanded = true;
 
   @override
@@ -41,14 +45,16 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
   }
 
   void _createTargets() {
-    _targets = [for (final _ in widget.article.sections) _SectionTarget()];
+    _sections = widget.repository.sectionsForArticle(widget.article);
+    _targets = [for (final _ in _sections) _SectionTarget()];
   }
 
   @override
   void didUpdateWidget(covariant HelpArticleContent oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.article.id != widget.article.id ||
-        !identical(oldWidget.article.sections, widget.article.sections)) {
+        !identical(oldWidget.article.sections, widget.article.sections) ||
+        oldWidget.repository != widget.repository) {
       for (final target in _targets) {
         target.dispose();
       }
@@ -85,8 +91,7 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
     final textTheme = Theme.of(context).textTheme;
     final t = AppLocalizations.of(context)!;
     final headings = [
-      for (final section in widget.article.sections)
-        helpSectionHeading(section, t),
+      for (final section in _sections) helpSectionHeading(section, t),
     ];
 
     return Column(
@@ -143,8 +148,8 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
           ),
           const SizedBox(height: 16),
         ],
-        for (var i = 0; i < widget.article.sections.length; i++) ...[
-          _buildSection(context, widget.article.sections[i], i, headings[i]),
+        for (var i = 0; i < _sections.length; i++) ...[
+          _buildSection(context, _sections[i], i, headings[i]),
           const SizedBox(height: 24),
         ],
       ],
@@ -171,6 +176,16 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
           const SizedBox(height: 8),
         ],
         switch (section) {
+          HelpGlossaryTerms(:final termIds) => Column(
+              children: [
+                for (final id in termIds)
+                  HelpGlossaryEntry(
+                      term: widget.repository.findGlossaryTerm(id)!,
+                      onGlossarySelected: widget.onGlossarySelected == null
+                          ? null
+                          : () => widget.onGlossarySelected!(id))
+              ],
+            ),
           HelpParagraph(:final text) => Text(text, style: textTheme.bodyLarge),
           HelpSteps(:final steps) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,

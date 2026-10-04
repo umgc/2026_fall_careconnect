@@ -148,6 +148,12 @@ configuration are separate from screen layout and remain bundled offline.
 
 ## Required checks when extending content
 
+The [glossary guide](../../../../docs/help/glossary.md) covers the shared 75-term
+catalog, plain-language aliases, article definitions, combined search, permanent
+term links, and the glossary validation/accessibility checks. Edit definitions
+once in `data/bundled_glossary_content.dart`; articles reference them through
+`glossaryTermIds`. Glossary guide backlinks are generated from those references.
+
 - Construct `HelpRepository.bundled()` and run `flutter test test/features/help --no-pub`.
   Validation rejects malformed/duplicate IDs, missing categories or related
   targets, missing/duplicate featured targets, and articles without roles or sections.
@@ -166,7 +172,7 @@ references, and articles with no roles or sections. Related links can point to
 articles declared later in the catalog. Missing ID lookups return null.
 Popular selections also reject missing or duplicate article IDs.
 
-Models defensively copy roles, sections, keywords, steps, tips, and related IDs
+Models defensively copy roles, sections, keywords, glossary IDs, aliases, steps, tips, and related IDs
 into unmodifiable collections. Callers cannot mutate published content after the
 catalog is validated.
 

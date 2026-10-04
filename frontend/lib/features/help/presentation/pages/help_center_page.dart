@@ -8,6 +8,7 @@ import '../../models/help_role.dart';
 import '../widgets/help_article_tile.dart';
 import '../widgets/help_app_bar.dart';
 import '../widgets/help_topic_tile.dart';
+import '../widgets/help_glossary_entry.dart';
 
 /// Patient-focused home with bundled guides and local search.
 class HelpCenterPage extends StatefulWidget {
@@ -51,6 +52,8 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
         ? catalog.searchArticles(_searchController.text, role: HelpRole.patient)
         : catalog.popularArticlesForRole(HelpRole.patient);
     final categories = catalog.categoriesForRole(HelpRole.patient);
+    final terms =
+        searching ? catalog.searchGlossary(_searchController.text) : const [];
 
     return FocusTraversalGroup(
         policy: ReadingOrderTraversalPolicy(),
@@ -86,12 +89,36 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      if (!searching) ...[
+                        Card(
+                            child: MergeSemantics(
+                                child: Semantics(
+                                    button: true,
+                                    child: ListTile(
+                                      key: const ValueKey('help-open-glossary'),
+                                      contentPadding: const EdgeInsets.all(16),
+                                      title: Text(t.helpGlossary,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge),
+                                      subtitle: Text(t.helpGlossaryDescription,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyLarge),
+                                      trailing: const Icon(Icons.chevron_right),
+                                      onTap: () =>
+                                          context.push(HelpRoutes.glossary),
+                                    )))),
+                        const SizedBox(height: 24),
+                      ],
                       Semantics(
                           key: const ValueKey('help-search-status'),
                           header: true,
                           liveRegion: searching,
                           label: searching
-                              ? t.helpSearchResultsCount(articles.length)
+                              ? t.helpCombinedResultsCount(
+                                  t.helpSearchResultsCount(articles.length),
+                                  t.helpGlossaryResultsCount(terms.length))
                               : null,
                           child: ExcludeSemantics(
                               excluding: searching,
@@ -102,7 +129,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                                 style: Theme.of(context).textTheme.displaySmall,
                               ))),
                       const SizedBox(height: 12),
-                      if (searching && articles.isEmpty) ...[
+                      if (searching && articles.isEmpty && terms.isEmpty) ...[
                         Text(t.helpNoSearchResults,
                             style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: 12),
@@ -114,9 +141,14 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                             label: Text(t.helpBrowseTopics),
                           ),
                         ),
-                      ] else if (articles.isEmpty)
+                      ] else if (!searching && articles.isEmpty)
                         Text(t.helpNoArticles,
                             style: Theme.of(context).textTheme.bodyLarge),
+                      if (searching && articles.isNotEmpty)
+                        Semantics(
+                            header: true,
+                            child: Text(t.helpArticles,
+                                style: Theme.of(context).textTheme.titleLarge)),
                       for (final article in articles)
                         HelpArticleTile(
                           key: ValueKey(article.id),
@@ -124,6 +156,19 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                           onTap: () =>
                               context.push(HelpRoutes.article(article.id)),
                         ),
+                      if (searching && terms.isNotEmpty) ...[
+                        const SizedBox(height: 24),
+                        Semantics(
+                            header: true,
+                            child: Text(t.helpWordsAndMeanings,
+                                style: Theme.of(context).textTheme.titleLarge)),
+                        for (final term in terms)
+                          HelpGlossaryResultTile(
+                              key: ValueKey('help-word-result-${term.id}'),
+                              term: term,
+                              onTap: () => context
+                                  .push(HelpRoutes.glossaryTerm(term.id))),
+                      ],
                       if (!searching) ...[
                         const SizedBox(height: 24),
                         Semantics(

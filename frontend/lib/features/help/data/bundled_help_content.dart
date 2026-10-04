@@ -37,6 +37,14 @@ const bundledHelpCategories = <HelpCategory>[
 final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   HelpArticle(
     id: HelpArticleIds.gettingStarted,
+    glossaryTermIds: [
+      'patient',
+      'caregiver',
+      'account',
+      'profile',
+      'medication-tracker',
+      'schedule'
+    ],
     keywords: ['welcome', 'setup', 'navigation', 'dashboard'],
     categoryId: HelpCategoryIds.gettingStarted,
     title: 'Getting started with CareConnect',
@@ -72,6 +80,14 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.recordingDose,
+    glossaryTermIds: [
+      'medication',
+      'dose',
+      'dosage',
+      'medication-tracker',
+      'medication-reminder',
+      'mark-taken'
+    ],
     keywords: ['medicine', 'meds', 'dose', 'taken', 'reminders'],
     categoryId: HelpCategoryIds.medications,
     title: 'Viewing medications and recording a dose',
@@ -104,6 +120,18 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.dailyCheckIn,
+    glossaryTermIds: [
+      'daily-check-in',
+      'virtual-check-in',
+      'questionnaire',
+      'assigned-questionnaire',
+      'mood',
+      'symptom',
+      'allergy',
+      'care-notes',
+      'camera-access',
+      'permissions'
+    ],
     keywords: ['checkin', 'mood', 'feelings', 'questionnaire'],
     categoryId: HelpCategoryIds.checkIns,
     title: 'Completing a daily check-in',
@@ -151,6 +179,13 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.viewingAppointments,
+    glossaryTermIds: [
+      'appointment',
+      'scheduled-visit',
+      'evv',
+      'calendar-assistant',
+      'refresh'
+    ],
     keywords: ['visits', 'schedule', 'calendar', 'evv'],
     categoryId: HelpCategoryIds.appointments,
     title: 'Viewing appointments',
@@ -178,6 +213,15 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.messagingCaregiver,
+    glossaryTermIds: [
+      'caregiver',
+      'conversation',
+      'contacts',
+      'message',
+      'attachment',
+      'retry',
+      'online'
+    ],
     keywords: ['chat', 'conversation', 'contact', 'send', 'retry'],
     categoryId: HelpCategoryIds.messaging,
     title: 'Messaging your caregiver',
@@ -205,6 +249,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.resettingPassword,
+    glossaryTermIds: ['account', 'sign-in', 'password', 'password-reset-link'],
     keywords: ['forgot password', 'login', 'sign in', 'account recovery'],
     categoryId: HelpCategoryIds.account,
     title: 'Resetting your password',
@@ -233,6 +278,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.openingHelp,
+    glossaryTermIds: ['browse-topics', 'related-articles'],
     keywords: ['faq', 'how to', 'support', 'settings'],
     categoryId: HelpCategoryIds.gettingStarted,
     title: 'Opening Help',
@@ -264,6 +310,22 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.readingHelp,
+    glossaryTermIds: [
+      'offline',
+      'online',
+      'offline-persistence',
+      'synchronization',
+      'permissions',
+      'text-to-speech',
+      'back-to-top',
+      'browse-topics',
+      'related-articles',
+      'light-mode',
+      'dark-mode',
+      'text-size',
+      'screen-reader',
+      'keyboard-navigation'
+    ],
     keywords: [
       'offline',
       'windows',

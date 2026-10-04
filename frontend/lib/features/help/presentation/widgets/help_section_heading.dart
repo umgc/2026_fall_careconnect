@@ -7,5 +7,6 @@ String? helpSectionHeading(HelpSection section, AppLocalizations t) =>
     switch (section) {
       HelpTroubleshooting() => t.helpTroubleshooting,
       HelpRelatedArticles() => t.helpRelatedArticles,
+      HelpGlossaryTerms() => t.helpTermsInArticle,
       _ => null,
     };

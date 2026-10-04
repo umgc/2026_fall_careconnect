@@ -11,7 +11,7 @@ article scroll view.
 
 - Add a concise `heading` to paragraphs and step groups readers may want to
   reach directly. Unnamed sections remain readable but do not get menu entries.
-- Troubleshooting and related-article sections already receive localized
+- Troubleshooting, related-article, and generated glossary sections receive localized
   default headings. An authored heading overrides that default.
 - Do not maintain a separate contents list. `helpSectionHeading` supplies both
   the menu label and the visible section heading.

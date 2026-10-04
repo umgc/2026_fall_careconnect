@@ -13,6 +13,9 @@ import 'package:care_connect_app/features/help/models/help_section.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_glossary_page.dart';
+import 'package:care_connect_app/features/help/presentation/widgets/help_glossary_entry.dart';
+import 'package:care_connect_app/features/help/presentation/widgets/help_article_content.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/providers/locale_provider.dart';
@@ -55,6 +58,8 @@ Future<GoRouter> _pumpProductionRoutes(
   String location = '/settings',
   Size size = const Size(1366, 900),
   TextScaler textScaler = TextScaler.noScaling,
+  Brightness brightness = Brightness.light,
+  bool disableAnimations = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -74,6 +79,8 @@ Future<GoRouter> _pumpProductionRoutes(
     });
   }
   final userProvider = MockUserProvider(mockUser: MockUser(role: 'PATIENT'));
+  final theme =
+      brightness == Brightness.light ? AppTheme.lightTheme : AppTheme.darkTheme;
   late final GoRouter router;
   router = GoRouter(
     initialLocation: location,
@@ -95,14 +102,14 @@ Future<GoRouter> _pumpProductionRoutes(
         key: _captureKey,
         child: MaterialApp.router(
           locale: const Locale('en'),
-          theme: AppTheme.lightTheme.copyWith(
-              textTheme:
-                  AppTheme.lightTheme.textTheme.apply(fontFamily: 'Roboto')),
+          theme: theme.copyWith(
+              textTheme: theme.textTheme.apply(fontFamily: 'Roboto')),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: router,
           builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+              data: MediaQuery.of(context).copyWith(
+                  textScaler: textScaler, disableAnimations: disableAnimations),
               child: child!),
         )),
   ));
@@ -253,7 +260,7 @@ void main() {
           'medicine');
       await tester.enterText(find.byType(TextField), 'zzzz-no-match');
       await tester.pumpAndSettle();
-      expect(find.text('No matching articles. Try another search.'),
+      expect(find.text('No matching articles or words. Try another search.'),
           findsOneWidget);
       await tester.tap(find.widgetWithText(OutlinedButton, 'Browse Topics'));
       await tester.pumpAndSettle();
@@ -292,6 +299,9 @@ void main() {
         HelpRoutes.article(HelpArticleIds.gettingStarted),
         HelpRoutes.topic('missing-topic'),
         HelpRoutes.article('missing-article'),
+        HelpRoutes.glossary,
+        HelpRoutes.glossaryTerm('evv'),
+        HelpRoutes.glossaryTerm('missing-word'),
       ]) {
         for (final shortcut in {
           'Help Center Home': HelpRoutes.home,
@@ -369,6 +379,244 @@ void main() {
             reason: 'Shortcuts clear the accumulated Help navigation stack.');
         expect(find.byType(HelpArticlePage), findsNothing);
         expect(find.byType(HelpTopicPage), findsNothing);
+        expect(tester.takeException(), isNull);
+      });
+    });
+  }
+
+  testWidgets(
+      'glossary entry, search, missing links and Back keep navigation predictable offline',
+      (tester) async {
+    await _withoutNetwork((attempts) async {
+      final router =
+          await _pumpProductionRoutes(tester, location: HelpRoutes.home);
+      final before = attempts.length;
+      await tester.tap(find.byKey(const ValueKey('help-open-glossary')));
+      await tester.pumpAndSettle();
+      expect(find.byType(HelpGlossaryEntry), findsNWidgets(75));
+      expect(
+          tester
+              .widget<HelpGlossaryEntry>(find.byType(HelpGlossaryEntry).first)
+              .term
+              .term,
+          'Account');
+      await tester.enterText(find.byType(TextField), 'what is evv?');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('help-glossary-evv')), findsOneWidget);
+      await _capture(tester, 'desktop-glossary-search');
+      await tester.enterText(find.byType(TextField), 'zzzz-no-match');
+      await tester.pumpAndSettle();
+      expect(find.byType(HelpGlossaryEntry), findsNothing);
+      await tester.tap(find.text('Show all words'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HelpGlossaryEntry), findsNWidgets(75));
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(HelpCenterPage), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'what is EVV?');
+      await tester.pumpAndSettle();
+      expect(find.text('Articles'), findsOneWidget);
+      expect(find.text('Words and meanings'), findsOneWidget);
+      final result = find.byKey(const ValueKey('help-word-result-evv'));
+      await tester.ensureVisible(result);
+      await tester.pumpAndSettle();
+      await tester.tap(result);
+      await tester.pumpAndSettle();
+      expect(
+          GoRouterState.of(tester.element(find.byType(HelpGlossaryPage)))
+              .uri
+              .queryParameters['term'],
+          'evv');
+      expect(find.byKey(const ValueKey('help-glossary-evv')).hitTestable(),
+          findsOneWidget);
+      expect(FocusManager.instance.primaryFocus!.debugLabel, 'EVV');
+      await _capture(tester, 'desktop-glossary-selected');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+          'what is EVV?');
+      await tester.enterText(
+          find.byType(TextField), 'what does gamification mean');
+      await tester.pumpAndSettle();
+      expect(find.text('Articles'), findsNothing);
+      expect(find.text('Words and meanings'), findsOneWidget);
+      expect(find.text('No matching articles or words. Try another search.'),
+          findsNothing);
+      router.go(HelpRoutes.glossaryTerm('missing-word'));
+      await tester.pumpAndSettle();
+      expect(
+          find.text(
+              'That word could not be found. You can search or browse all words below.'),
+          findsOneWidget);
+      expect(find.byType(HelpGlossaryEntry), findsNWidgets(75));
+      expect(attempts.length, before);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets('word results announce both counts and open by keyboard',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await _withoutNetwork((attempts) async {
+        await _pumpProductionRoutes(tester, location: HelpRoutes.home);
+        await tester.enterText(find.byType(TextField), 'points and rewards');
+        await tester.pumpAndSettle();
+        final status = tester
+            .getSemantics(find.byKey(const ValueKey('help-search-status')))
+            .getSemanticsData();
+        expect(status.flagsCollection.isLiveRegion, isTrue);
+        expect(status.label, 'No Help articles found. 1 glossary word found.');
+        final result = tester
+            .getSemantics(
+                find.byKey(const ValueKey('help-word-result-gamification')))
+            .getSemanticsData();
+        expect(result.flagsCollection.isButton, isTrue);
+        expect(result.label, contains('Gamification'));
+        expect(result.label, contains('points or rewards'));
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pumpAndSettle();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
+        expect(
+            tester
+                .widget<HelpGlossaryPage>(find.byType(HelpGlossaryPage))
+                .termId,
+            'gamification');
+        expect(FocusManager.instance.primaryFocus!.debugLabel, 'Gamification');
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(
+            tester.widget<TextField>(find.byType(TextField)).controller!.text,
+            'points and rewards');
+        expect(attempts, isEmpty);
+      });
+    } finally {
+      semantics.dispose();
+    }
+  });
+
+  testWidgets(
+      'article meanings join contents navigation and open a focused glossary definition',
+      (tester) async {
+    await _withoutNetwork((attempts) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        await _pumpProductionRoutes(tester,
+            location: HelpRoutes.article(HelpArticleIds.viewingAppointments));
+        final content =
+            tester.widget<HelpArticleContent>(find.byType(HelpArticleContent));
+        final sectionIndex = content.article.sections.length;
+        final menu = find.byKey(ValueKey('help-contents-entry-$sectionIndex'));
+        await tester.ensureVisible(menu);
+        await tester.pumpAndSettle();
+        await tester.tap(menu);
+        await tester.pumpAndSettle();
+        final heading =
+            find.byKey(ValueKey('help-section-heading-$sectionIndex'));
+        expect(Focus.of(tester.element(heading)).hasFocus, isTrue);
+        expect(
+            tester
+                .getSemantics(heading)
+                .getSemanticsData()
+                .flagsCollection
+                .isHeader,
+            isTrue);
+        final link = find.text('See EVV in glossary');
+        await tester.ensureVisible(link);
+        await tester.pumpAndSettle();
+        await tester.tap(link);
+        await tester.pumpAndSettle();
+        expect(
+            GoRouterState.of(tester.element(find.byType(HelpGlossaryPage)))
+                .uri
+                .toString(),
+            HelpRoutes.glossaryTerm('evv'));
+        expect(FocusManager.instance.primaryFocus!.debugLabel, 'EVV');
+        final entry = find.byKey(const ValueKey('help-glossary-evv'));
+        expect(tester.widget<HelpGlossaryEntry>(entry).selected, isTrue);
+        final guide = find.descendant(
+            of: entry, matching: find.text('Viewing appointments'));
+        await tester.ensureVisible(guide);
+        await tester.pumpAndSettle();
+        await tester.tap(guide);
+        await tester.pumpAndSettle();
+        expect(find.byType(HelpArticlePage), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(find.byType(HelpGlossaryPage), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(find.byType(HelpArticlePage), findsOneWidget);
+        expect(attempts, isEmpty);
+        expect(tester.takeException(), isNull);
+      } finally {
+        semantics.dispose();
+      }
+    });
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+        'glossary handles $brightness, double text, reduced motion and keyboard search at 320px',
+        (tester) async {
+      await _withoutNetwork((attempts) async {
+        final router = await _pumpProductionRoutes(tester,
+            location: HelpRoutes.glossaryTerm('text-to-speech'),
+            size: const Size(320, 568),
+            textScaler: const TextScaler.linear(2),
+            brightness: brightness,
+            disableAnimations: true);
+        expect(
+            FocusManager.instance.primaryFocus!.debugLabel, 'Text-to-speech');
+        expect(find.text('Help Center Home').hitTestable(), findsOneWidget);
+        expect(find.text('Back to Settings').hitTestable(), findsOneWidget);
+        expect(find.widgetWithText(FloatingActionButton, 'Back to top'),
+            findsOneWidget);
+        await tester
+            .tap(find.widgetWithText(FloatingActionButton, 'Back to top'));
+        await tester.pumpAndSettle();
+        expect(find.widgetWithText(FloatingActionButton, 'Back to top'),
+            findsNothing);
+        expect(
+            tester
+                .widget<SingleChildScrollView>(
+                    find.byType(SingleChildScrollView))
+                .controller!
+                .offset,
+            0);
+        await tester.ensureVisible(find.byType(TextField));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'points and rewards');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('help-glossary-gamification')),
+            findsOneWidget);
+        final definition = HelpRepository.bundled()
+            .findGlossaryTerm('gamification')!
+            .definition;
+        final text = tester.widget<Text>(find.text(definition));
+        final theme = Theme.of(tester.element(find.byType(HelpGlossaryPage)));
+        expect(text.style, theme.textTheme.bodyLarge);
+        final luminance = text.style!.color!.computeLuminance();
+        final background = theme.colorScheme.surface.computeLuminance();
+        final contrast = luminance > background
+            ? (luminance + 0.05) / (background + 0.05)
+            : (background + 0.05) / (luminance + 0.05);
+        expect(contrast, greaterThanOrEqualTo(4.5));
+        await tester.ensureVisible(find.text('Gamification'));
+        await tester.pumpAndSettle();
+        await _capture(tester, 'phone-glossary-${brightness.name}-large-text');
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
+        expect(
+            tester.widget<TextField>(find.byType(TextField)).controller!.text,
+            isEmpty);
+        router.go(HelpRoutes.glossaryTerm('evv'));
+        await tester.pumpAndSettle();
+        expect(FocusManager.instance.primaryFocus!.debugLabel, 'EVV');
+        expect(attempts, isEmpty);
         expect(tester.takeException(), isNull);
       });
     });

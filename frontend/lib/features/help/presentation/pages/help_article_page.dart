@@ -20,6 +20,7 @@ class HelpArticlePage extends StatefulWidget {
 
 class _HelpArticlePageState extends State<HelpArticlePage> {
   final _scrollController = ScrollController();
+  late final _bundledCatalog = HelpRepository.bundled();
   bool _showBackToTop = false;
 
   @override
@@ -51,7 +52,7 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final catalog = widget.repository ?? HelpRepository.bundled();
+    final catalog = widget.repository ?? _bundledCatalog;
     final article = catalog.findArticle(widget.articleId);
 
     return Scaffold(
@@ -97,6 +98,8 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
                         HelpArticleContent(
                           article: article,
                           repository: catalog,
+                          onGlossarySelected: (id) =>
+                              context.push(HelpRoutes.glossaryTerm(id)),
                           onArticleSelected: (id) =>
                               context.push(HelpRoutes.article(id)),
                         ),

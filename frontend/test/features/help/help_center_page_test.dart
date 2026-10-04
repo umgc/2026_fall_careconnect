@@ -2,6 +2,7 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/help/data/help_content_ids.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
+import 'package:care_connect_app/features/help/models/help_role.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
@@ -95,7 +96,7 @@ void main() {
     final searchFocus =
         tester.widget<EditableText>(find.byType(EditableText)).focusNode;
     expect(searchFocus.hasFocus, isTrue);
-    await tester.enterText(find.byType(TextField), 'meds');
+    await tester.enterText(find.byType(TextField), 'recording a dose');
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     expect(searchFocus.hasFocus, isFalse);
@@ -142,7 +143,17 @@ void main() {
           .getSemanticsData();
       expect(resultData.flagsCollection.isLiveRegion, isTrue);
       expect(resultData.flagsCollection.isHeader, isTrue);
-      expect(resultData.label, '1 Help article found');
+      final catalog = HelpRepository.bundled();
+      final t =
+          AppLocalizations.of(tester.element(find.byType(HelpCenterPage)))!;
+      expect(
+          resultData.label,
+          t.helpCombinedResultsCount(
+              t.helpSearchResultsCount(catalog
+                  .searchArticles('meds', role: HelpRole.patient)
+                  .length),
+              t.helpGlossaryResultsCount(
+                  catalog.searchGlossary('meds').length)));
       await tester.enterText(find.byType(TextField), 'zzzz-no-match');
       await tester.pumpAndSettle();
       expect(
@@ -150,7 +161,7 @@ void main() {
               .getSemantics(find.byKey(const ValueKey('help-search-status')))
               .getSemanticsData()
               .label,
-          'No Help articles found');
+          'No Help articles found. No glossary words found.');
     } finally {
       semantics.dispose();
     }
@@ -239,8 +250,7 @@ void main() {
       (tester) async {
     await _pumpHelp(tester);
     expect(find.text('Help Center'), findsOneWidget);
-    expect(
-        find.widgetWithText(TextField, 'Search Help articles'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Search Help'), findsOneWidget);
     expect(find.text('Popular Help'), findsOneWidget);
     expect(find.text('Browse Topics'), findsOneWidget);
     expect(
@@ -278,8 +288,8 @@ void main() {
         '  DOSE  ');
     await tester.enterText(find.byType(TextField), 'zzzz-no-match');
     await tester.pumpAndSettle();
-    expect(
-        find.text('No matching articles. Try another search.'), findsOneWidget);
+    expect(find.text('No matching articles or words. Try another search.'),
+        findsOneWidget);
     await tester.tap(find.byTooltip('Clear search'));
     await tester.pumpAndSettle();
     expect(find.text('Popular Help'), findsOneWidget);

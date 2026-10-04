@@ -33,6 +33,7 @@ import 'package:care_connect_app/pages/profile_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_glossary_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
 import 'package:care_connect_app/pages/ai_configuration_page.dart';
@@ -1044,6 +1045,11 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
           builder: (_, state) => HelpArticlePage(
             articleId: state.pathParameters['articleId']!,
           ),
+        ),
+        GoRoute(
+          path: HelpRoutes.glossaryPattern,
+          builder: (_, state) =>
+              HelpGlossaryPage(termId: state.uri.queryParameters['term']),
         ),
       ],
     ),

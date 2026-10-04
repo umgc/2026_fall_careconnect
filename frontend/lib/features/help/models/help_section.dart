@@ -39,3 +39,11 @@ final class HelpRelatedArticles extends HelpSection {
 
   final List<String> articleIds;
 }
+
+/// Generated from an article's glossary references by the renderer.
+final class HelpGlossaryTerms extends HelpSection {
+  HelpGlossaryTerms({required Iterable<String> termIds, super.heading})
+      : termIds = List.unmodifiable(termIds);
+
+  final List<String> termIds;
+}
