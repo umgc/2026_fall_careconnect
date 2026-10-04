@@ -99,7 +99,7 @@ class HelpRepository {
       );
 
   /// Local, case-insensitive matching of all query words, in catalog order.
-  /// Searches titles, summaries, topics, and section text without any services.
+  /// Searches titles, summaries, keywords, topics, and section text locally.
   List<HelpArticle> searchArticles(String query, {required HelpRole role}) {
     final words = query.trim().toLowerCase().split(RegExp(r'\s+'));
     if (words.first.isEmpty) return const [];
@@ -108,6 +108,7 @@ class HelpRepository {
       final text = [
         article.title,
         article.summary,
+        ...article.keywords,
         findCategory(article.categoryId)!.title,
         for (final section in article.sections) ...[
           section.heading ?? '',

@@ -10,8 +10,10 @@ class HelpArticle {
     required this.summary,
     required Iterable<HelpRole> roles,
     required Iterable<HelpSection> sections,
+    Iterable<String> keywords = const [],
   })  : roles = Set.unmodifiable(roles),
-        sections = List.unmodifiable(sections);
+        sections = List.unmodifiable(sections),
+        keywords = List.unmodifiable(keywords);
 
   final String id;
   final String categoryId;
@@ -19,4 +21,7 @@ class HelpArticle {
   final String summary;
   final Set<HelpRole> roles;
   final List<HelpSection> sections;
+
+  /// Search synonyms, stored with content rather than screen layout.
+  final List<String> keywords;
 }

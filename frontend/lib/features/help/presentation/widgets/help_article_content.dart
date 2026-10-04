@@ -92,12 +92,15 @@ class HelpArticleContent extends StatelessWidget {
           HelpRelatedArticles(:final articleIds) => Column(
               children: [
                 for (final id in articleIds)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(repository.findArticle(id)!.title),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => onArticleSelected(id),
-                  ),
+                  MergeSemantics(
+                      child: Semantics(
+                          button: true,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(repository.findArticle(id)!.title),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => onArticleSelected(id),
+                          ))),
               ],
             ),
         },

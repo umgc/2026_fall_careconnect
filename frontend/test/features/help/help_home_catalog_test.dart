@@ -52,6 +52,48 @@ HelpRepository _catalog(
     );
 
 void main() {
+  test('keyword synonyms match locally and are defensively copied', () {
+    final keywords = ['rx', 'prescription refill'];
+    final article = HelpArticle(
+      id: 'medicine-guide',
+      categoryId: 'shared',
+      title: 'A guide',
+      summary: 'A description',
+      roles: [HelpRole.patient],
+      sections: const [HelpParagraph(text: 'Instructions')],
+      keywords: keywords,
+    );
+    keywords.clear();
+    final catalog = HelpRepository(categories: const [
+      HelpCategory(id: 'shared', title: 'Shared', description: ''),
+    ], articles: [
+      article
+    ]);
+    expect(catalog.searchArticles('  RX  ', role: HelpRole.patient), [article]);
+    expect(
+        catalog.searchArticles('refill prescription', role: HelpRole.patient),
+        [article]);
+    expect(catalog.searchArticles('rx', role: HelpRole.caregiver), isEmpty);
+    expect(() => article.keywords.clear(), throwsUnsupportedError);
+  });
+
+  test('bundled synonyms find the intended Patient guide', () {
+    final catalog = HelpRepository.bundled();
+    expect(
+        catalog
+            .searchArticles('medicine', role: HelpRole.patient)
+            .map((a) => a.id),
+        contains(HelpArticleIds.recordingDose));
+    expect(
+        catalog.searchArticles('chat', role: HelpRole.patient).map((a) => a.id),
+        contains(HelpArticleIds.messagingCaregiver));
+    expect(
+        catalog
+            .searchArticles('forgot password', role: HelpRole.patient)
+            .map((a) => a.id),
+        contains(HelpArticleIds.resettingPassword));
+  });
+
   test('bundled Patient popular guides have the requested fixed order', () {
     final articles =
         HelpRepository.bundled().popularArticlesForRole(HelpRole.patient);

@@ -6,6 +6,7 @@ import '../../data/help_repository.dart';
 import '../../help_routes.dart';
 import '../../models/help_role.dart';
 import '../widgets/help_article_tile.dart';
+import '../widgets/help_topic_tile.dart';
 
 /// Patient-focused home with bundled guides and local search.
 class HelpCenterPage extends StatefulWidget {
@@ -19,12 +20,25 @@ class HelpCenterPage extends StatefulWidget {
 
 class _HelpCenterPageState extends State<HelpCenterPage> {
   final _searchController = TextEditingController();
+  final _topicsHeadingKey = GlobalKey();
+  final _firstTopicFocusNode = FocusNode(debugLabel: 'First Help topic');
   late final _bundledCatalog = HelpRepository.bundled();
 
   @override
   void dispose() {
     _searchController.dispose();
+    _firstTopicFocusNode.dispose();
     super.dispose();
+  }
+
+  void _browseTopics() {
+    setState(_searchController.clear);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _firstTopicFocusNode.requestFocus();
+      final headingContext = _topicsHeadingKey.currentContext;
+      if (headingContext != null) Scrollable.ensureVisible(headingContext);
+    });
   }
 
   @override
@@ -35,80 +49,99 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
     final articles = searching
         ? catalog.searchArticles(_searchController.text, role: HelpRole.patient)
         : catalog.popularArticlesForRole(HelpRole.patient);
+    final categories = catalog.categoriesForRole(HelpRole.patient);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(t.helpCenterTitle)),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          key: const PageStorageKey('help-center-home'),
-          padding: const EdgeInsets.all(24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: _searchController,
-                    textInputAction: TextInputAction.search,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      labelText: t.helpSearchArticles,
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: _searchController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: t.helpClearSearch,
-                              icon: const Icon(Icons.clear),
-                              onPressed: () =>
-                                  setState(_searchController.clear),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Semantics(
-                      header: true,
-                      child: Text(
-                        searching ? t.helpSearchResults : t.helpPopularHelp,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      )),
-                  const SizedBox(height: 12),
-                  if (articles.isEmpty)
-                    Text(searching ? t.helpNoSearchResults : t.helpNoArticles),
-                  for (final article in articles)
-                    HelpArticleTile(
-                      key: ValueKey(article.id),
-                      article: article,
-                      onTap: () => context.push(HelpRoutes.article(article.id)),
-                    ),
-                  if (!searching) ...[
-                    const SizedBox(height: 24),
-                    Semantics(
-                        header: true,
-                        child: Text(t.helpBrowseTopics,
-                            style: Theme.of(context).textTheme.titleLarge)),
-                    const SizedBox(height: 12),
-                    for (final category
-                        in catalog.categoriesForRole(HelpRole.patient))
-                      Card(
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          title: Text(category.title),
-                          subtitle: Text(category.description),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () =>
-                              context.push(HelpRoutes.topic(category.id)),
+    return FocusTraversalGroup(
+        policy: ReadingOrderTraversalPolicy(),
+        child: Scaffold(
+          appBar: AppBar(title: Text(t.helpCenterTitle)),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              key: const PageStorageKey('help-center-home'),
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _searchController,
+                        textInputAction: TextInputAction.search,
+                        onChanged: (_) => setState(() {}),
+                        decoration: InputDecoration(
+                          labelText: t.helpSearchArticles,
+                          prefixIcon: const Icon(Icons.search),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: _searchController.text.isEmpty
+                              ? null
+                              : IconButton(
+                                  tooltip: t.helpClearSearch,
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () =>
+                                      setState(_searchController.clear),
+                                ),
                         ),
                       ),
-                  ],
-                ],
+                      const SizedBox(height: 24),
+                      Semantics(
+                          key: const ValueKey('help-search-status'),
+                          header: true,
+                          liveRegion: searching,
+                          label: searching
+                              ? t.helpSearchResultsCount(articles.length)
+                              : null,
+                          child: ExcludeSemantics(
+                              excluding: searching,
+                              child: Text(
+                                searching
+                                    ? t.helpSearchResults
+                                    : t.helpPopularHelp,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ))),
+                      const SizedBox(height: 12),
+                      if (searching && articles.isEmpty) ...[
+                        Text(t.helpNoSearchResults),
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: OutlinedButton.icon(
+                            onPressed: _browseTopics,
+                            icon: const Icon(Icons.topic_outlined),
+                            label: Text(t.helpBrowseTopics),
+                          ),
+                        ),
+                      ] else if (articles.isEmpty)
+                        Text(t.helpNoArticles),
+                      for (final article in articles)
+                        HelpArticleTile(
+                          key: ValueKey(article.id),
+                          article: article,
+                          onTap: () =>
+                              context.push(HelpRoutes.article(article.id)),
+                        ),
+                      if (!searching) ...[
+                        const SizedBox(height: 24),
+                        Semantics(
+                            key: _topicsHeadingKey,
+                            header: true,
+                            child: Text(t.helpBrowseTopics,
+                                style: Theme.of(context).textTheme.titleLarge)),
+                        const SizedBox(height: 12),
+                        for (var i = 0; i < categories.length; i++)
+                          HelpTopicTile(
+                            category: categories[i],
+                            focusNode: i == 0 ? _firstTopicFocusNode : null,
+                            onTap: () => context
+                                .push(HelpRoutes.topic(categories[i].id)),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }

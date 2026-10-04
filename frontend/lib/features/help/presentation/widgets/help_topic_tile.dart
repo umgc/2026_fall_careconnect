@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../../models/help_article.dart';
+import '../../models/help_category.dart';
 
-/// Shared article entry used by popular articles, search, and topic screens.
-class HelpArticleTile extends StatelessWidget {
-  const HelpArticleTile(
-      {super.key, required this.article, required this.onTap});
+/// Topic navigation with one accessible title/description/button node.
+class HelpTopicTile extends StatelessWidget {
+  const HelpTopicTile(
+      {super.key, required this.category, required this.onTap, this.focusNode});
 
-  final HelpArticle article;
+  final HelpCategory category;
   final VoidCallback onTap;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) => MergeSemantics(
@@ -16,10 +17,11 @@ class HelpArticleTile extends StatelessWidget {
             button: true,
             child: Card(
               child: ListTile(
+                focusNode: focusNode,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                title: Text(article.title),
-                subtitle: Text(article.summary),
+                title: Text(category.title),
+                subtitle: Text(category.description),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: onTap,
               ),

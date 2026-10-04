@@ -116,6 +116,11 @@
   "helpPopularHelp": "Popular Help",
   "helpBrowseTopics": "Browse Topics",
   "helpSearchResults": "Search results",
+  "helpSearchResultsCount": "{count, plural, =0{No Help articles found} =1{1 Help article found} other{{count} Help articles found}}",
+  "@helpSearchResultsCount": {
+    "description": "Screen reader announcement when local Help search results change.",
+    "placeholders": {"count": {"type": "int"}}
+  },
   "helpNoSearchResults": "No matching articles. Try another search.",
   "helpNoArticles": "No articles are available yet.",
   "helpTopicNotFound": "Topic not found",

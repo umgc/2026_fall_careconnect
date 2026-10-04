@@ -37,6 +37,7 @@ const bundledHelpCategories = <HelpCategory>[
 final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   HelpArticle(
     id: HelpArticleIds.gettingStarted,
+    keywords: ['welcome', 'setup', 'navigation', 'dashboard'],
     categoryId: HelpCategoryIds.gettingStarted,
     title: 'Getting started with CareConnect',
     summary: 'Learn where to find your care information and everyday tools.',
@@ -63,12 +64,14 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
       HelpRelatedArticles(articleIds: [
         HelpArticleIds.recordingDose,
         HelpArticleIds.dailyCheckIn,
-        HelpArticleIds.messagingCaregiver
+        HelpArticleIds.messagingCaregiver,
+        HelpArticleIds.readingHelp,
       ]),
     ],
   ),
   HelpArticle(
     id: HelpArticleIds.recordingDose,
+    keywords: ['medicine', 'meds', 'dose', 'taken', 'reminders'],
     categoryId: HelpCategoryIds.medications,
     title: 'Viewing medications and recording a dose',
     summary:
@@ -81,6 +84,10 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
         'Locate the reminder for the dose you have taken and select Mark Taken.',
         'Check that the reminder shows Taken. If an error appears, the update may not have been saved.',
       ]),
+      const HelpParagraph(
+          heading: 'Windows preview',
+          text: 'Recording a dose needs a connection in the Windows preview. '
+              'Offline saving and later replay are unavailable. Reading this guide still works offline.'),
       HelpTroubleshooting(tips: [
         const HelpTroubleshootingTip(
             problem: 'There is no medication or reminder listed.',
@@ -96,6 +103,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.dailyCheckIn,
+    keywords: ['checkin', 'mood', 'feelings', 'questionnaire'],
     categoryId: HelpCategoryIds.checkIns,
     title: 'Completing a daily check-in',
     summary:
@@ -103,16 +111,27 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     roles: [HelpRole.patient],
     sections: [
       const HelpParagraph(
-          text: 'Daily Check-In lets you choose a mood and enter notes. '
-              'In this version, Submit Check-In displays a mock confirmation; it does not '
+          heading: 'Windows and mobile apps',
+          text:
+              'The native Daily Check-In screen lets you choose a mood and enter notes. '
+              'On that screen, Submit Check-In displays a mock confirmation; it does not '
               'save or send those responses to your caregiver. Use Messages if you need to share them.'),
       HelpSteps(steps: [
+        // These steps describe the native screen, not the web questionnaire.
         'Select Health in the Patient navigation to open Daily Check-In.',
         'Review any Assigned Check-In Questionnaire shown on the screen.',
         'Select your mood under How are you feeling today?',
         'Enter any notes under Any symptoms or notes?',
         'Select Submit Check-In to see the current demo confirmation. Send your update in Messages if your caregiver needs to receive it.',
       ]),
+      const HelpParagraph(
+          heading: 'Web',
+          text:
+              'The web Virtual Check-In route can open Check-In Questions for an assigned, '
+              'pending questionnaire. That answer form sends responses to the server and '
+              'requires a connection. It is different from the native mood-and-notes demo. '
+              'The Patient Health tab may still show the native-style screen; follow the '
+              'screen you actually see. The web questionnaire flow does not include native video recording.'),
       HelpTroubleshooting(tips: [
         const HelpTroubleshootingTip(
             problem: 'Submit Check-In is disabled.',
@@ -131,6 +150,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.viewingAppointments,
+    keywords: ['visits', 'schedule', 'calendar', 'evv'],
     categoryId: HelpCategoryIds.appointments,
     title: 'Viewing appointments',
     summary: 'Find upcoming care visits and their scheduled date and time.',
@@ -156,6 +176,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.messagingCaregiver,
+    keywords: ['chat', 'conversation', 'contact', 'send', 'retry'],
     categoryId: HelpCategoryIds.messaging,
     title: 'Messaging your caregiver',
     summary: 'Open a conversation, send a message, and retry a failed message.',
@@ -182,6 +203,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.resettingPassword,
+    keywords: ['forgot password', 'login', 'sign in', 'account recovery'],
     categoryId: HelpCategoryIds.account,
     title: 'Resetting your password',
     summary: 'Request an email reset link when you cannot sign in.',
@@ -209,6 +231,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.openingHelp,
+    keywords: ['faq', 'how to', 'support', 'settings'],
     categoryId: HelpCategoryIds.gettingStarted,
     title: 'Opening Help',
     summary: 'Find the Help Center from Settings.',
@@ -238,6 +261,15 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
   ),
   HelpArticle(
     id: HelpArticleIds.readingHelp,
+    keywords: [
+      'offline',
+      'windows',
+      'mobile',
+      'web',
+      'gps',
+      'permissions',
+      'text to speech'
+    ],
     categoryId: HelpCategoryIds.gettingStarted,
     title: 'Reading Help articles',
     summary: 'Open a guide and follow links to other useful articles.',
@@ -247,6 +279,27 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
         text: 'You can read Help articles without an internet connection. '
             'Some app features described in a guide may still require a connection.',
       ),
+      const HelpParagraph(
+          heading: 'Windows preview',
+          text:
+              'Help articles, topic browsing, and Help search remain available offline. '
+              'The Windows preview cannot save changes offline or replay them later. '
+              'Text-to-speech, GPS, and native permission integrations are also unavailable '
+              'in that preview. Features that depend on them may not work. '
+              'Sign-in, messages, dose updates, and password reset requests still need a connection.'),
+      const HelpParagraph(
+          heading: 'Mobile apps',
+          text:
+              'The Windows preview restrictions do not describe all mobile features. '
+              'Camera, location, and other device features depend on device support and permissions. '
+              'An article being readable offline does not mean the activity it describes can be completed offline.'),
+      const HelpParagraph(
+          heading: 'Web',
+          text:
+              'Help works in the browser without fetching its content from the server '
+              'once the app is loaded. Loading or reloading the website may still require a connection. '
+              'Browser and native device features can differ. The web questionnaire route '
+              'differs from the native Daily Check-In mood-and-notes screen.'),
       HelpSteps(
         steps: [
           'Select an article on the Help Center home screen.',
