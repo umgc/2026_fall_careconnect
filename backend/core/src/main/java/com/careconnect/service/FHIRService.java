@@ -36,7 +36,7 @@ public class FHIRService {
     private static final FhirContext ctxR4 = blueButtonContext();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
 
-    private static final String SANDBOX_BASE = "https://sandbox.bluebutton.cms.gov/v3/fhir/";
+    private static final String SANDBOX_BASE = "https://sandbox.bluebutton.cms.gov/v2/fhir/";
 
     /**
      * The R4 context, with Apache HttpClient's own retries turned off. BlueButtonRetryPolicy owns
