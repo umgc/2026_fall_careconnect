@@ -1,6 +1,6 @@
 // WBS 3.6.1 (Team E, Milestone 3): end-to-end workflow suite.
 //
-// One test per end-to-end case in Software Test Plan §3.13 (TC-E2E-001..004);
+// One test per end-to-end case in Software Test Plan §3.13 (TC-E2E-001..004, 010);
 // the flows and their dependencies are listed in team_e_m3/flows.dart.
 //
 // The suite is opt-in so it never runs in another team's emulator job by
