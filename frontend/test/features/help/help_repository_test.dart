@@ -3,6 +3,8 @@ import 'package:care_connect_app/features/help/data/help_content_ids.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/models/help_article.dart';
 import 'package:care_connect_app/features/help/models/help_category.dart';
+import 'package:care_connect_app/features/help/models/help_role.dart';
+import 'package:care_connect_app/features/help/models/help_section.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _category = HelpCategory(
@@ -12,15 +14,21 @@ const _category = HelpCategory(
 );
 
 HelpArticle _article({
+  String id = HelpArticleIds.openingHelp,
   String title = 'Opening Help',
   String categoryId = HelpCategoryIds.gettingStarted,
+  Iterable<HelpRole> roles = const [HelpRole.patient],
+  Iterable<HelpSection> sections = const [
+    HelpParagraph(text: 'Open Settings > General > Help.'),
+  ],
 }) =>
     HelpArticle(
-      id: HelpArticleIds.openingHelp,
+      id: id,
       categoryId: categoryId,
       title: title,
       summary: 'Find Help',
-      body: 'Open Settings > General > Help.',
+      roles: roles,
+      sections: sections,
     );
 
 void main() {
@@ -29,7 +37,9 @@ void main() {
 
     expect(catalog.findCategory(HelpCategoryIds.gettingStarted), isNotNull);
     final article = catalog.findArticle(HelpArticleIds.openingHelp)!;
-    expect(article.body, contains('Scroll down to General'));
+    expect(article.sections.whereType<HelpSteps>().first.steps,
+        contains('Scroll down to General.'));
+    expect(article.roles, contains(HelpRole.patient));
     expect(catalog.articlesForCategory(article.categoryId), contains(article));
     expect(catalog.findArticle('unknown'), isNull);
     expect(catalog.findCategory('unknown'), isNull);
@@ -106,5 +116,74 @@ void main() {
       () => catalog.articlesForCategory(_category.id).clear(),
       throwsUnsupportedError,
     );
+  });
+
+  test('related links can point forward but must resolve to an existing ID',
+      () {
+    final first = _article(sections: [
+      HelpRelatedArticles(articleIds: [HelpArticleIds.readingHelp]),
+    ]);
+    final second = _article(id: HelpArticleIds.readingHelp);
+
+    expect(
+      HelpRepository(categories: const [_category], articles: [first, second])
+          .findArticle(HelpArticleIds.readingHelp),
+      same(second),
+    );
+    expect(
+      () => HelpRepository(categories: const [_category], articles: [first]),
+      throwsArgumentError,
+    );
+  });
+
+  test('articles declare an audience and at least one content section', () {
+    expect(
+      () => HelpRepository(
+        categories: const [_category],
+        articles: [_article(roles: [])],
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => HelpRepository(
+        categories: const [_category],
+        articles: [_article(sections: [])],
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('article and section collections cannot be changed by callers', () {
+    // Arrange mutable inputs to ensure models take defensive copies.
+    final roles = [HelpRole.patient];
+    final steps = ['First action'];
+    final links = [HelpArticleIds.readingHelp];
+    final tips = [
+      const HelpTroubleshootingTip(problem: 'Problem', solution: 'Fix')
+    ];
+    final stepSection = HelpSteps(steps: steps);
+    final linkSection = HelpRelatedArticles(articleIds: links);
+    final tipSection = HelpTroubleshooting(tips: tips);
+    final sections = <HelpSection>[stepSection, linkSection, tipSection];
+    final article = _article(roles: roles, sections: sections);
+
+    // Act: mutate the inputs after constructing the article.
+    roles.clear();
+    steps.clear();
+    links.clear();
+    tips.clear();
+    sections.clear();
+
+    // Assert: published content and links retain their values.
+    expect(article.roles, contains(HelpRole.patient));
+    expect(article.sections, hasLength(3));
+    expect(stepSection.steps, ['First action']);
+    expect(linkSection.articleIds, [HelpArticleIds.readingHelp]);
+    expect(tipSection.tips, hasLength(1));
+    expect(() => article.roles.clear(), throwsUnsupportedError);
+    expect(() => article.sections.clear(), throwsUnsupportedError);
+    expect(() => stepSection.steps.clear(), throwsUnsupportedError);
+    expect(() => linkSection.articleIds.clear(), throwsUnsupportedError);
+    expect(() => tipSection.tips.clear(), throwsUnsupportedError);
   });
 }

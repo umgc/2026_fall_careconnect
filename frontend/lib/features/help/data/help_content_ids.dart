@@ -6,4 +6,5 @@ abstract final class HelpCategoryIds {
 
 abstract final class HelpArticleIds {
   static const openingHelp = 'opening-help';
+  static const readingHelp = 'reading-help';
 }

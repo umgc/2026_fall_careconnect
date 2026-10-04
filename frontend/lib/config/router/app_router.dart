@@ -32,6 +32,8 @@ import 'package:care_connect_app/pages/notetaker_configuration_page.dart';
 import 'package:care_connect_app/pages/profile_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
+import 'package:care_connect_app/features/help/help_routes.dart';
 import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
@@ -1026,7 +1028,18 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     ),
     GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
-    GoRoute(path: '/help', builder: (_, __) => const HelpCenterPage()),
+    GoRoute(
+      path: HelpRoutes.home,
+      builder: (_, __) => const HelpCenterPage(),
+      routes: [
+        GoRoute(
+          path: HelpRoutes.articlePattern,
+          builder: (_, state) => HelpArticlePage(
+            articleId: state.pathParameters['articleId']!,
+          ),
+        ),
+      ],
+    ),
     GoRoute(
       path: '/file-management',
       builder: (context, state) => FileManagementPage(

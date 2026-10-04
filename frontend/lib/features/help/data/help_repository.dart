@@ -1,5 +1,6 @@
 import '../models/help_article.dart';
 import '../models/help_category.dart';
+import '../models/help_section.dart';
 import 'bundled_help_content.dart';
 
 /// Immutable local catalog shared by Help screens.
@@ -30,7 +31,24 @@ class HelpRepository {
           'Help article ${article.id} has unknown category ${article.categoryId}',
         );
       }
+      if (article.roles.isEmpty || article.sections.isEmpty) {
+        throw ArgumentError(
+            'Help article ${article.id} needs roles and sections');
+      }
       _articlesById[article.id] = article;
+    }
+
+    // Resolve related links after indexing all articles, including forward links.
+    for (final article in this.articles) {
+      for (final section in article.sections.whereType<HelpRelatedArticles>()) {
+        for (final relatedId in section.articleIds) {
+          if (!_articlesById.containsKey(relatedId)) {
+            throw ArgumentError(
+              'Help article ${article.id} links to missing article $relatedId',
+            );
+          }
+        }
+      }
     }
   }
 

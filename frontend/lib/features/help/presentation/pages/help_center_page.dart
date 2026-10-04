@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../l10n/app_localizations.dart';
-import '../../data/help_content_ids.dart';
 import '../../data/help_repository.dart';
-import '../widgets/help_article_content.dart';
+import '../../help_routes.dart';
 
 /// Entry screen backed by the local, bundled Help catalog.
 class HelpCenterPage extends StatelessWidget {
@@ -15,7 +15,6 @@ class HelpCenterPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final catalog = repository ?? HelpRepository.bundled();
-    final introduction = catalog.findArticle(HelpArticleIds.openingHelp);
 
     return Scaffold(
       appBar: AppBar(title: Text(t.helpCenterTitle)),
@@ -28,10 +27,17 @@ class HelpCenterPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (introduction != null) ...[
-                    HelpArticleContent(article: introduction),
-                    const SizedBox(height: 24),
-                  ],
+                  for (final article in catalog.articles)
+                    Card(
+                      child: ListTile(
+                        title: Text(article.title),
+                        subtitle: Text(article.summary),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () =>
+                            context.push(HelpRoutes.article(article.id)),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
                   Text(
                     t.helpCenterPlaceholder,
                     style: Theme.of(context).textTheme.bodyLarge,

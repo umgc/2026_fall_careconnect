@@ -9,7 +9,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "ar": [
@@ -22,7 +27,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "bn": [
@@ -35,14 +45,24 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "es": [
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "fa": [
@@ -55,7 +75,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "fr": [
@@ -68,7 +93,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "hi": [
@@ -81,7 +111,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "ja": [
@@ -94,7 +129,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "ne": [
@@ -107,7 +147,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "pt": [
@@ -120,7 +165,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "ru": [
@@ -133,7 +183,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "ur": [
@@ -146,7 +201,12 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ],
 
   "zh": [
@@ -159,6 +219,11 @@
     "settingsHelp",
     "settingsHelpDesc",
     "helpCenterTitle",
-    "helpCenterPlaceholder"
+    "helpCenterPlaceholder",
+    "helpTroubleshooting",
+    "helpRelatedArticles",
+    "helpArticleNotFoundTitle",
+    "helpArticleNotFoundDescription",
+    "helpBackToCenter"
   ]
 }
