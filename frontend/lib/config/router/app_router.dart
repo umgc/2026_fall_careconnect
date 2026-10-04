@@ -33,6 +33,8 @@ import 'package:care_connect_app/pages/profile_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
+import 'package:care_connect_app/pages/epic_resource_detail_page.dart';
+import 'package:care_connect_app/pages/epic_linked_return_page.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/widgets/menu/menu_page.dart';
 import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
@@ -753,6 +755,24 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         final error = state.uri.queryParameters['error'];
         return OAuthCallbackPage(token: token, user: user, error: error);
       },
+    ),
+    // Epic connect web return target (Epic Phase 0). The backend callback redirects the browser
+    // here (?status=ok|error) when the connect flow was started on web with returnMode=web; mobile
+    // uses the careconnect://epic/linked deep link instead. See EpicOAuthController.callback.
+    GoRoute(
+      path: '/epic-linked',
+      builder: (context, state) => EpicLinkedReturnPage(
+        status: state.uri.queryParameters['status'],
+      ),
+    ),
+    // Epic citation deep-link target: /epic/{resourceType}/{id}?patientId=... (Epic Phase 2).
+    GoRoute(
+      path: '/epic/:type/:id',
+      builder: (context, state) => EpicResourceDetailPage(
+        resourceType: state.pathParameters['type'] ?? '',
+        resourceId: state.pathParameters['id'] ?? '',
+        patientId: state.uri.queryParameters['patientId'],
+      ),
     ),
     GoRoute(path: '/wearables', builder: (_, __) => const WearablesScreen()),
     GoRoute(

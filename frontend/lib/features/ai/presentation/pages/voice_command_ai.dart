@@ -71,16 +71,27 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     // Core navigation
     _CommandMatch(phrase: 'take me home', intent: 'navigate', entity: 'home'),
     _CommandMatch(phrase: 'home', intent: 'navigate', entity: 'home'),
-    _CommandMatch(phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
-    _CommandMatch(phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
-    _CommandMatch(phrase: 'take me to my tracker', intent: 'navigate', entity: 'symptoms'),
-    _CommandMatch(phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
-    _CommandMatch(phrase: 'open messages', intent: 'navigate', entity: 'messages'),
-    _CommandMatch(phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
-    _CommandMatch(phrase: 'open profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(
+        phrase: 'take me to calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(
+        phrase: 'open calendar', intent: 'navigate', entity: 'calendar'),
+    _CommandMatch(
+        phrase: 'take me to my tracker',
+        intent: 'navigate',
+        entity: 'symptoms'),
+    _CommandMatch(
+        phrase: 'open symptoms', intent: 'navigate', entity: 'symptoms'),
+    _CommandMatch(
+        phrase: 'open messages', intent: 'navigate', entity: 'messages'),
+    _CommandMatch(
+        phrase: 'take me to messages', intent: 'navigate', entity: 'messages'),
+    _CommandMatch(
+        phrase: 'open profile', intent: 'navigate', entity: 'profile'),
     _CommandMatch(phrase: 'profile', intent: 'navigate', entity: 'profile'),
-    _CommandMatch(phrase: 'open my profile', intent: 'navigate', entity: 'profile'),
-    _CommandMatch(phrase: 'open settings', intent: 'navigate', entity: 'settings'),
+    _CommandMatch(
+        phrase: 'open my profile', intent: 'navigate', entity: 'profile'),
+    _CommandMatch(
+        phrase: 'open settings', intent: 'navigate', entity: 'settings'),
     _CommandMatch(phrase: 'settings', intent: 'navigate', entity: 'settings'),
     _CommandMatch(phrase: 'open menu', intent: 'navigate', entity: 'menu'),
     _CommandMatch(phrase: 'menu', intent: 'navigate', entity: 'menu'),
@@ -711,13 +722,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
   Future<void> _process(String words) async {
     if (!mounted) return;
 
-   // print to screen what you heard for debugging purposes 
+    // print to screen what you heard for debugging purposes
     final cmd = words.toLowerCase().trim();
     debugPrint('Heard: $cmd');
-  // end debug print
+    // end debug print
 
-  //Use voice to confirm or cancel the action if we are in the confirming popup/state
-  if (_voiceStatus == _VoiceStatus.confirming) {
+    //Use voice to confirm or cancel the action if we are in the confirming popup/state
+    if (_voiceStatus == _VoiceStatus.confirming) {
       if (cmd.contains('confirm') || cmd == 'yes' || cmd == 'proceed') {
         unawaited(_stopListeningBackend());
         await _onConfirm();
@@ -834,8 +845,8 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
-          // call _startConfirmationListening to listen for verbal confirmation or cancellation 
-          // of the command with a handler 
+          // call _startConfirmationListening to listen for verbal confirmation or cancellation
+          // of the command with a handler
           _startConfirmationListening();
           return;
         }
@@ -898,7 +909,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
             _voiceStatus = _VoiceStatus.confirming;
             _statusDetail = _pendingDetail!;
           });
-          
+
           // call _startConfirmationListening to listen for verbal confirmation or cancellation
           _startConfirmationListening();
           return;
@@ -1137,12 +1148,12 @@ class _VoiceCommandAIState extends State<VoiceCommandAI> {
     final intent = _pendingIntent ?? 'navigate';
     final intentDef = VoiceIntentRegistry().resolveIntent(intent);
 
-// Check if the intent is high-risk and requires explicit confirmation via voice 
+// Check if the intent is high-risk and requires explicit confirmation via voice
 // or touch input before proceeding
-// If the user cancels or dismisses the dialog, abort the action 
+// If the user cancels or dismisses the dialog, abort the action
 // and reset the state
 
-if (intentDef?.riskLevel == IntentRiskLevel.high) {
+    if (intentDef?.riskLevel == IntentRiskLevel.high) {
       final titleLabel = intentDef?.displayLabel ?? 'High-Risk Action';
       final localeTag = Localizations.localeOf(context).toLanguageTag();
 
@@ -1156,12 +1167,16 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
               final clean = spoken.toLowerCase().trim();
               debugPrint('Gate 2 Heard: $clean');
 
-              if (clean.contains('confirm') || clean == 'yes' || clean == 'proceed') {
+              if (clean.contains('confirm') ||
+                  clean == 'yes' ||
+                  clean == 'proceed') {
                 _stopListeningBackend();
                 if (Navigator.of(dialogContext).canPop()) {
                   Navigator.of(dialogContext).pop(true);
                 }
-              } else if (clean.contains('cancel') || clean == 'no' || clean == 'stop') {
+              } else if (clean.contains('cancel') ||
+                  clean == 'no' ||
+                  clean == 'stop') {
                 _stopListeningBackend();
                 if (Navigator.of(dialogContext).canPop()) {
                   Navigator.of(dialogContext).pop(false);
@@ -1184,7 +1199,8 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
                   listenFor: const Duration(seconds: 12),
                   pauseFor: const Duration(seconds: 2),
                   onResult: (r) {
-                    if (r.recognizedWords.isNotEmpty) handleGate2Voice(r.recognizedWords);
+                    if (r.recognizedWords.isNotEmpty)
+                      handleGate2Voice(r.recognizedWords);
                   },
                 );
               }
@@ -1221,27 +1237,27 @@ if (intentDef?.riskLevel == IntentRiskLevel.high) {
       // Stop listening to the backend after the dialog is closed
       unawaited(_stopListeningBackend());
 
-    // If widget unmounted while waiting for user interaction, stop
-    if (!mounted) return;
+      // If widget unmounted while waiting for user interaction, stop
+      if (!mounted) return;
 
-    // Abort if cancelled or dismissed
-    if (userConfirmed != true) {
-      _setStatus(
-        status: _VoiceStatus.idle,
-        detail: '$titleLabel cancelled.',
-      );
-      _pendingDestination = null;
-      _pendingDetail = null;
-      _pendingIntent = null;
-      _ambiguousMatches = [];
-      _resetAfterDelay();
-      return; // Stops execution: handler will NOT run
+      // Abort if cancelled or dismissed
+      if (userConfirmed != true) {
+        _setStatus(
+          status: _VoiceStatus.idle,
+          detail: '$titleLabel cancelled.',
+        );
+        _pendingDestination = null;
+        _pendingDetail = null;
+        _pendingIntent = null;
+        _ambiguousMatches = [];
+        _resetAfterDelay();
+        return; // Stops execution: handler will NOT run
+      }
     }
-  }
 
-  //end High risk popup confirmation logic with voice listening
+    //end High risk popup confirmation logic with voice listening
 
-  if (!mounted) return;
+    if (!mounted) return;
 
     if (_pendingDestination != null) {
       final destination = _pendingDestination!;

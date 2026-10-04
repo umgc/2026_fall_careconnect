@@ -506,6 +506,9 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                         physics: const NeverScrollableScrollPhysics(),
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
+                        // Cells taller than wide so the emoji + label fit without
+                        // a bottom overflow (emoji glyphs render taller than 28px).
+                        childAspectRatio: 0.8,
                         children: moodOptions.map((mood) {
                           final isSelected = selectedMood == mood["value"];
                           return GestureDetector(

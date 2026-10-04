@@ -31,8 +31,12 @@ void _ignoreOverflowErrors(FlutterErrorDetails details) {
   }
 }
 
-Widget _wrap({int patientId = 0}) =>
-    MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: AnalyticsPage(patientId: patientId));
+Widget _wrap({int patientId = 0}) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: AnalyticsPage(patientId: patientId),
+    );
 
 void _setupMocks() {
   SharedPreferences.setMockInitialValues({});

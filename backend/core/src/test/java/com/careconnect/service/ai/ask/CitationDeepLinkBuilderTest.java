@@ -100,6 +100,17 @@ class CitationDeepLinkBuilderTest {
     }
 
     @Test
+    @DisplayName("Epic encounter emits the /epic/{type}/{id} detail route")
+    void build_epicEncounter_emitsEpicDetailRoute() {
+        assertThat(build(
+                RetrievalRecordType.EPIC_ENCOUNTER,
+                "epic",
+                "epic-enc-1",
+                "{\"fhirResourceType\":\"Encounter\",\"fhirResourceId\":\"enc-1\"}"))
+                .isEqualTo("/epic/Encounter/enc-1?patientId=42");
+    }
+
+    @Test
     void build_nullChunk_returnsNull() {
         assertThat(builder.build(null)).isNull();
     }

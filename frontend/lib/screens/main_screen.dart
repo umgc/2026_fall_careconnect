@@ -165,6 +165,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return;
     }
     _isOfflineSyncInProgress = true;
+    var anySucceeded = false;
 
     try {
       while (mounted && _pendingSyncQueue.isNotEmpty) {
@@ -188,6 +189,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         setState(() {
           _currentlySyncingRequestId = null;
           if (synced) {
+            anySucceeded = true;
             _pendingSyncQueue = _pendingSyncQueue
                 .where((queued) => queued.id != item.id)
                 .toList();
@@ -204,8 +206,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           }
         });
 
+        // Drop items the backend can never accept. Once a request exhausts its
+        // replay attempts it is marked terminal ('dead') in the DB and excluded
+        // from getOfflineSyncQueue(), so reconciling here lets a permanently
+        // unreachable backend stop pinning the sync banner open forever.
+        final live = await ApiService.getOfflineSyncQueue();
+        if (!mounted) {
+          break;
+        }
+        final liveIds = live.map((queued) => queued.id).toSet();
+        setState(() {
+          _pendingSyncQueue = _pendingSyncQueue
+              .where((queued) => liveIds.contains(queued.id))
+              .toList();
+        });
+
         if (_pendingSyncQueue.isEmpty) {
-          _showSyncCompleteToastBanner();
+          // Only celebrate a genuine sync; if every item was abandoned we clear
+          // the banner silently rather than falsely reporting completion.
+          if (anySucceeded) {
+            _showSyncCompleteToastBanner();
+          }
           break;
         }
 
