@@ -15,4 +15,7 @@ public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Lo
     /** Retrieval history for one patient and source, newest first. */
     List<EhrRawPayload> findByPatientIdAndSourceIdOrderByRetrievedAtDesc(
             Long patientId, Long sourceId);
+
+    /** Delete the raw-payload history for one patient and source (disconnect cleanup). */
+    int deleteByPatientIdAndSourceId(Long patientId, Long sourceId);
 }

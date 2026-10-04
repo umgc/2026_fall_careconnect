@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -16,6 +15,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -79,8 +80,8 @@ public class EhrResource {
     @Column(name = "content_hash", length = 128)
     private String contentHash;
 
-    @Lob
-    @Column(name = "payload_json")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "payload_json", columnDefinition = "jsonb")
     private String payloadJson;
 
     @Column(name = "last_synced_at", nullable = false)

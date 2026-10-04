@@ -525,6 +525,24 @@ public class EpicSyncService {
             }
         }
         resourceRepo.deleteByUserIdAndSource(userId, EpicProperties.SOURCE_EPIC);
+
+        // Canonical cleanup on disconnect (EPIC Status.md §2 / Q2; Cononical_0 v1.2 §7): also delete
+        // the raw-payload history and the patient crosswalk for this (patient_id, source_id) so no
+        // canonical rows are orphaned on unlink. Scoped to the EPIC source id, so other connectors'
+        // rows are untouched. Fail-soft on an unresolved patient/source — the interim mirror is
+        // already gone, and a missing canonical id just means there was nothing canonical to clean.
+        final Long patientId = patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        final Long sourceId = sourceResolver.idForCode(EpicProperties.SOURCE_EPIC);
+        if (patientId != null && sourceId != null) {
+            final int rawDeleted = rawPayloadRepo.deleteByPatientIdAndSourceId(patientId, sourceId);
+            final int crosswalkDeleted = crosswalkRepo.deleteByPatientIdAndSourceId(patientId, sourceId);
+            log.info("Epic disconnect canonical cleanup for user {} (patient {}): {} raw-payload row(s), "
+                    + "{} crosswalk row(s) removed", userId, patientId, rawDeleted, crosswalkDeleted);
+        } else {
+            log.warn("Epic disconnect canonical cleanup skipped for user {}: patientId or sourceId "
+                    + "unresolved (patientId={}, sourceId={})", userId, patientId, sourceId);
+        }
+
         audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_PURGE", null,
                 String.valueOf(removed), EhrResourceOutcome.OK);
         return removed;

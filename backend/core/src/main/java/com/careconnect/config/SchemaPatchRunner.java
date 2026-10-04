@@ -368,6 +368,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
         applyEhrCanonicalSchemaPatches();
+        applyEhrResourceJsonbPatch();
         applyEhrIdentityReconciliationPatches();
         applyEhrAuditTimestampZonePatches();
         seedDemoScheduledVisits();
@@ -572,6 +573,34 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 );
             }
         }
+    }
+
+    /**
+     * Convert the interim mirror's {@code ehr_resource.payload_json} from the legacy {@code @Lob}
+     * large-object ({@code oid}) mapping to native {@code jsonb}, aligning it with
+     * {@code ehr_raw_payload.payload} (Team E canonical standardization; EPIC Status.md §2 / Q3).
+     * <p>
+     * The guard fires only when the column is still {@code oid}: on a fresh database the entity's
+     * {@code @JdbcTypeCode(JSON)} mapping already creates it as {@code jsonb}, so this is a no-op.
+     * {@code ehr_resource} is a rebuildable mirror — the verbatim bodies are retained in
+     * {@code ehr_raw_payload} — so the conversion drops and recreates the column rather than reading
+     * each large object back; existing rows get a NULL payload until the next Epic re-sync
+     * repopulates them. The large objects orphaned in {@code pg_largeobject} are harmless and can be
+     * reclaimed later with {@code vacuumlo}.
+     */
+    private void applyEhrResourceJsonbPatch() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL ehr_resource jsonb patch for non-PostgreSQL datasource");
+            return;
+        }
+        applyRequiredPatch(
+                "V2610041200 - ehr_resource.payload_json is jsonb (was @Lob oid)",
+                "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns "
+                        + "WHERE table_schema = current_schema() AND table_name = 'ehr_resource' "
+                        + "AND column_name = 'payload_json' AND data_type = 'oid') THEN "
+                        + "ALTER TABLE ehr_resource DROP COLUMN payload_json; "
+                        + "ALTER TABLE ehr_resource ADD COLUMN payload_json jsonb; END IF; END $$;"
+        );
     }
 
     /**
