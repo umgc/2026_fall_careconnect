@@ -15,6 +15,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 @Slf4j
 public class EhrService {
@@ -36,11 +38,11 @@ public class EhrService {
         return parser.encodeResourceToString(eob);
     }
 
-    public EhrPatientCrosswalk getCrosswalk(Long id){
+    public Optional<EhrPatientCrosswalk> getCrosswalk(Long id){
         Authentication currentUserAuth = SecurityContextHolder.getContext().getAuthentication();
         log.info(currentUserAuth.getName());
         User currentUser = userRepository.findByEmail(currentUserAuth.getName()).orElseThrow();
-        return ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(currentUser.getId(), id).orElseThrow();
+        return ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(currentUser.getId(), id);
     }
 
 }

@@ -13,6 +13,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
@@ -58,7 +59,7 @@ public class SecurityConfig {
                 .headers(headers -> headers
                         .contentTypeOptions(contentType -> {
                         })
-                        .frameOptions(frame -> frame.deny())
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(TimeUnit.DAYS.toSeconds(365)))
@@ -113,7 +114,6 @@ public class SecurityConfig {
                                 "/v1/api/billing/pay/**",
                                 "/v1/api/address/**",
                                 "/oauth/**",
-                                "/oauth2/**",
                                 "/ws/**",
                                 "/api/notifications/demo/**",
                                 "/api/internal/chime/**"
@@ -175,7 +175,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/v1/api/**", "/v2/api/**", "/v3/api/**",
                                 "/api/**",
-                                "/login/oauth2/code/medicare"
+                                "/login/oauth2/code/**",
+                                "/oauth2/**"
                                 ).authenticated()
 
                         /* ---------- Everything else: deny --------------------- */

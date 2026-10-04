@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS ehr_patient_crosswalk (
     external_patient_id VARCHAR(255) NOT NULL,
     created_at          TIMESTAMPTZ,
     updated_at          TIMESTAMPTZ,
+    link_token          VARCHAR(255),
     CONSTRAINT uq_ehr_crosswalk_source_external UNIQUE (source_id, external_patient_id),
     CONSTRAINT uq_ehr_crosswalk_patient_source  UNIQUE (patient_id, source_id)
 );
