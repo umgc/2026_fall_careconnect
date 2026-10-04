@@ -50,10 +50,10 @@ public class MedicareService {
     private final String bluebuttonRevoke;
     private final BlueButtonRetryPolicy retryPolicy;
 
-    @Value("${spring.security.oauth2.client.registration.medicare.client-id}")
+    @Value("${spring.security.oauth2.client.registration.medicare.client-id:}")
     private String clientId;
 
-    @Value("${spring.security.oauth2.client.registration.medicare.client-secret}")
+    @Value("${spring.security.oauth2.client.registration.medicare.client-secret:}")
     private String clientSecret;
 
     @Autowired
