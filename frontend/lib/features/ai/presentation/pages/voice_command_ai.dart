@@ -1421,6 +1421,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
             ),
             actions: [
               TextButton(
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                ),
                 onPressed: () {
                   _stopListeningBackend();
                   Navigator.of(dialogContext).pop(false);
@@ -1428,7 +1431,10 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  minimumSize: const Size.fromHeight(48),
+                ),
                 onPressed: () {
                   _stopListeningBackend();
                   Navigator.of(dialogContext).pop(true);
