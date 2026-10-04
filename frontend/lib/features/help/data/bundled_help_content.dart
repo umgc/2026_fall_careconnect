@@ -9,29 +9,29 @@ const bundledHelpCategories = <HelpCategory>[
   HelpCategory(
     id: HelpCategoryIds.gettingStarted,
     title: 'Getting Started',
-    description: 'Find your way around CareConnect and the Help Center.',
+    description: 'Find your way around CareConnect and the Help Center',
   ),
   HelpCategory(
       id: HelpCategoryIds.medications,
       title: 'Medications',
-      description: 'View medication details and record a dose.'),
+      description: 'View medication details and record a dose'),
   HelpCategory(
       id: HelpCategoryIds.checkIns,
       title: 'Daily Check-Ins',
       description:
-          'Share how you are feeling and understand check-in options.'),
+          'Share how you are feeling and understand check-in options'),
   HelpCategory(
       id: HelpCategoryIds.appointments,
       title: 'Appointments',
-      description: 'Find scheduled care visits.'),
+      description: 'Find scheduled care visits'),
   HelpCategory(
       id: HelpCategoryIds.messaging,
       title: 'Messaging',
-      description: 'Connect with your caregiver.'),
+      description: 'Connect with your caregiver'),
   HelpCategory(
       id: HelpCategoryIds.account,
       title: 'Account and Settings',
-      description: 'Get help signing in and resetting your password.'),
+      description: 'Get help signing in and resetting your password'),
 ];
 
 final bundledHelpArticles = List<HelpArticle>.unmodifiable([
@@ -48,7 +48,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     keywords: ['welcome', 'setup', 'navigation', 'dashboard'],
     categoryId: HelpCategoryIds.gettingStarted,
     title: 'Getting started with CareConnect',
-    summary: 'Learn where to find your care information and everyday tools.',
+    summary: 'Learn where to find your care information and everyday tools',
     roles: [HelpRole.patient],
     sections: [
       const HelpParagraph(
@@ -92,7 +92,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     categoryId: HelpCategoryIds.medications,
     title: 'Viewing medications and recording a dose',
     summary:
-        'Find your medication list and use a Home reminder to mark a dose taken.',
+        'Find your medication list and use a Home reminder to mark a dose taken',
     roles: [HelpRole.patient],
     sections: [
       HelpSteps(heading: 'View medications and record a dose', steps: [
@@ -136,7 +136,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     categoryId: HelpCategoryIds.checkIns,
     title: 'Completing a daily check-in',
     summary:
-        'Choose your mood, add notes, and understand the current submission limit.',
+        'Choose your mood, add notes, and understand the current submission limit',
     roles: [HelpRole.patient],
     sections: [
       const HelpParagraph(
@@ -189,7 +189,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     keywords: ['visits', 'schedule', 'calendar', 'evv'],
     categoryId: HelpCategoryIds.appointments,
     title: 'Viewing appointments',
-    summary: 'Find upcoming care visits and their scheduled date and time.',
+    summary: 'Find upcoming care visits and their scheduled date and time',
     roles: [HelpRole.patient],
     sections: [
       const HelpParagraph(
@@ -225,7 +225,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     keywords: ['chat', 'conversation', 'contact', 'send', 'retry'],
     categoryId: HelpCategoryIds.messaging,
     title: 'Messaging your caregiver',
-    summary: 'Open a conversation, send a message, and retry a failed message.',
+    summary: 'Open a conversation, send a message, and retry a failed message',
     roles: [HelpRole.patient],
     sections: [
       HelpSteps(heading: 'Open and send a message', steps: [
@@ -253,7 +253,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     keywords: ['forgot password', 'login', 'sign in', 'account recovery'],
     categoryId: HelpCategoryIds.account,
     title: 'Resetting your password',
-    summary: 'Request an email reset link when you cannot sign in.',
+    summary: 'Request an email reset link when you cannot sign in',
     roles: HelpRole.values,
     sections: [
       HelpSteps(heading: 'Request a reset link', steps: [
