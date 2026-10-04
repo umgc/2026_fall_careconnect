@@ -2,6 +2,7 @@ package com.careconnect.ehr.reconciliation;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * One adapter's demographic snapshot for one patient, as it would be upserted into
@@ -18,16 +19,31 @@ import java.util.Map;
  *                        entire recency-wins decision hangs on; if an adapter can't populate it
  *                        faithfully from the source system, do not fall back to "now" — that silently
  *                        turns every sync into a guaranteed win regardless of actual freshness.
- * @param fields          field name (matching {@code ehr_identity_conflict.field_name} convention,
- *                        e.g. {@code "first_name"}, {@code "address_line1"}, {@code "date_of_birth"})
- *                        to the mapped value as a string. A field this adapter has no value for should
- *                        be omitted from the map entirely, not included as {@code null} or {@code ""}
- *                        — this library never treats a blank incoming value as authoritative (see
- *                        {@link RecencyWinsIdentityReconciler}).
+ * @param fields          field name to the mapped value as a string. The names are the constants in
+ *                        {@link IdentityFieldNames} ({@code given_name}, {@code address_line1},
+ *                        {@code date_of_birth}, ...), which are the {@code ehr_source_identity}
+ *                        column names; build the map from those constants, not from literals. An
+ *                        unrecognised name is rejected, not skipped, but only when the reconciler
+ *                        reaches it, by which point earlier fields have already committed. A field
+ *                        this adapter has no value for should be omitted from the map entirely, not
+ *                        included as {@code null} or {@code ""} -- this library never treats a blank
+ *                        incoming value as authoritative (see {@link RecencyWinsIdentityReconciler}).
  */
 public record SourceIdentitySnapshot(
         Long patientId,
         Long sourceId,
         Instant sourceUpdatedAt,
         Map<String, String> fields) {
+
+    /**
+     * Every component is required. An undated snapshot in particular must be refused here: accepted,
+     * it would fill an empty field and leave a provenance row with no timestamp, and the next
+     * agreeing or newer sync for that field would throw (DEF-EHR-REC-01).
+     */
+    public SourceIdentitySnapshot {
+        Objects.requireNonNull(patientId, "patientId");
+        Objects.requireNonNull(sourceId, "sourceId");
+        Objects.requireNonNull(sourceUpdatedAt, "sourceUpdatedAt");
+        Objects.requireNonNull(fields, "fields");
+    }
 }

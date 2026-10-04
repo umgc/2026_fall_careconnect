@@ -37,6 +37,10 @@ import java.time.LocalDate;
  * Carries no organization column — see the 2026-09-26 org-scoping reversal. Stores bare
  * {@code patientId}/{@code sourceId} rather than {@code @ManyToOne}, matching the rest of this
  * package; the foreign keys are applied by {@code SchemaPatchRunner}.
+ * <p>
+ * <strong>Retention.</strong> A demographic mirror, so PHI. {@code EhrRetentionWorker} deletes a
+ * row this application last stored more than 7 years ago once the patient is 25 (issue #214). For
+ * a patient who is still syncing, the next sync writes it again.
  */
 @Getter
 @Setter

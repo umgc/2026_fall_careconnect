@@ -92,6 +92,18 @@ void main() {
       expect(find.byIcon(Icons.delete_outline), findsNothing);
     });
 
+    testWidgets('shows delete icon for active OVER_THE_COUNTER medication',
+        (tester) async {
+      await tester.pumpWidget(_wrap(MedicationCard(
+        medication: _med(
+          isActive: true,
+          medicationType: MedicationType.OVER_THE_COUNTER,
+        ),
+        onStatusChanged: (_) {},
+      )));
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
+
     testWidgets('shows pending notice when inactive', (tester) async {
       await tester.pumpWidget(_wrap(MedicationCard(
         medication: _med(isActive: false),

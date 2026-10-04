@@ -109,7 +109,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
 
     /** The one field this algorithm treats differently (2026-09-26 partial reversal). */
-    private static final String DATE_OF_BIRTH = "date_of_birth";
+    private static final String DATE_OF_BIRTH = IdentityFieldNames.DATE_OF_BIRTH;
 
     private final IdentityFieldProvenanceStore provenanceStore;
     private final PatientFieldAccessor patientAccessor;
@@ -268,6 +268,20 @@ public final class RecencyWinsIdentityReconciler implements IdentityReconciler {
                     incomingTimestamp, IdentityConflictAuditWriter.Outcome.REJECTED,
                     IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
             return new ReconciliationOutcome(DATE_OF_BIRTH, ReconciliationOutcome.Decision.REJECTED_STALE, currentValue);
+        }
+
+        if (auditWriter.patientHasDeclined(patientId, sourceId, DATE_OF_BIRTH, incomingValue)) {
+            // The patient already refused this exact value from this source. Without this check the
+            // next sync of the same source record is still "newer than the confirmed baseline"
+            // (declining leaves provenance untouched), so it would reopen the same prompt on every
+            // sync. Checked before the pending logic so a declined value can never supersede a
+            // different open candidate. Only the same source is suppressed: another source sending
+            // the same date is independent corroboration and is prompted (PR #206 review, Q3).
+            auditWriter.recordDecision(patientId, sourceId, DATE_OF_BIRTH, currentValue, incomingValue,
+                    incomingTimestamp, IdentityConflictAuditWriter.Outcome.REJECTED,
+                    IdentityConflictAuditWriter.ResolvedBy.SYSTEM, decidedAt);
+            return new ReconciliationOutcome(DATE_OF_BIRTH,
+                    ReconciliationOutcome.Decision.REJECTED_PREVIOUSLY_DECLINED, currentValue);
         }
 
         Optional<IdentityConflictAuditWriter.PendingConflict> openPending =

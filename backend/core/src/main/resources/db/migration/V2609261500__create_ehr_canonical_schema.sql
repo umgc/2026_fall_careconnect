@@ -1,9 +1,12 @@
 -- Phase 1 of the EHR canonical schema (WBS 1.4.3): source registry, patient crosswalk,
 -- raw payload store.
 --
--- Flyway is disabled in every profile; this file is the canonical reference and
--- SchemaPatchRunner.applyEhrCanonicalSchemaPatches() mirrors it for dev and prod, the same
--- way the usps_mailpiece and ai_audit_ledger patch methods mirror theirs.
+-- NOTHING EXECUTES THIS FILE. Flyway is disabled in every profile, so there is one DDL path, not
+-- two: Hibernate ddl-auto=update creates the tables from the entities, and
+-- SchemaPatchRunner.applyEhrCanonicalSchemaPatches() adds the seeds, indexes and foreign keys on
+-- every boot. This file is the readable statement of the intended schema, kept the same way the
+-- usps_mailpiece and ai_audit_ledger references are. If it ever disagrees with the entities or
+-- the runner, the running database follows them, and this file is the one that is wrong.
 --
 -- created_at/updated_at come from the shared Auditable @MappedSuperclass, which maps them as
 -- nullable LocalDateTime and populates them in @PrePersist. Hibernate ddl-auto creates those as
@@ -13,8 +16,8 @@
 --
 -- Deliberately carries no organization/tenant column. FR-EHR-10 instructs reuse of an
 -- existing organization-identifier isolation pattern, and no such column exists anywhere in
--- this schema; the gap is filed for the Requirements Owner and DE-02 rather than closed with
--- a placeholder column that no query could filter on.
+-- this schema; the gap is left for the tech leads to route rather than closed with a
+-- placeholder column that no query could filter on.
 
 CREATE TABLE IF NOT EXISTS ehr_source (
     id           BIGSERIAL    PRIMARY KEY,
