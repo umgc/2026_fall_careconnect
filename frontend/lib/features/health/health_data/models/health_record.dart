@@ -44,7 +44,7 @@ enum RecordType {
       case RecordType.allergy:
         return 'Allergy';
       case RecordType.appointment:
-        return 'Appointment';
+        return 'Visit';
       case RecordType.clinicalRecord:
         return 'Clinical Record';
       case RecordType.claimService:

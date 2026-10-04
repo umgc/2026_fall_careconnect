@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/health_record.dart';
 import '../services/medicare_data_service.dart';
+import '../services/ehr_data_service.dart';
+
+import 'health_event_details_screen.dart';
 
 class HealthDataScreen extends StatefulWidget {
   const HealthDataScreen({super.key});
@@ -21,6 +24,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   bool _loading = true;
   bool _synthetic = false;
+  List<HealthRecord> _ehr = [];
   List<HealthRecord> _medicare = [];
   String _searchQuery = '';
   final Set<RecordType> _selectedTypes = {};
@@ -53,30 +57,25 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   Future<void> _load() async {
     try {
-      final result = await MedicareDataService().fetchRecords();
+      final ehrRecords = await EhrDataService().fetchRecords();
+      final medicareResult = await MedicareDataService().fetchRecords();
+
       if (!mounted) return;
+
       setState(() {
-        _medicare = result.records;
-        _synthetic = result.synthetic;
+        _ehr = ehrRecords;
+        _medicare = medicareResult.records;
+        _synthetic = medicareResult.synthetic;
         _loading = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() => _loading = false);
     }
   }
+}
 
   List<HealthRecord> get _samples => [
-        HealthRecord.single(
-          id: 'epic-med-1',
-          source: RecordSource.epic,
-          type: RecordType.medication,
-          title: 'Lisinopril 10 mg',
-          status: 'Active',
-          details: const [
-            RecordDetail('Route', 'Oral'),
-            RecordDetail('Prescriber', 'Dr. Sarah Mitchell'),
-          ],
-        ),
         HealthRecord.single(
           id: 'cerner-appt-1',
           source: RecordSource.cerner,
@@ -100,7 +99,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allRecords = [..._medicare, ..._samples];
+    final allRecords = [..._ehr, ..._medicare, ..._samples];
 
     final records = allRecords.where((record) {
       final matchesType =
@@ -194,202 +193,59 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               children: [
                 if (_synthetic) _syntheticBanner(),
                 const Text(
-                  'View your health information from connected sources.',
+                  'One searchable health history from all of your connected healthcare providers.',
                   style: TextStyle(color: _muted),
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    labelText: 'Search health data',
-                    hintText: 'Search visits, medications, providers...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).dividerColor,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Record Type',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _recordTypeChip(
-                      label: 'All',
-                      type: null,
-                    ),
-                    _recordTypeChip(
-                      label: 'Medications',
-                      type: RecordType.medication,
-                    ),
-                    _recordTypeChip(
-                      label: 'Conditions',
-                      type: RecordType.condition,
-                    ),
-                    _recordTypeChip(
-                      label: 'Allergies',
-                      type: RecordType.allergy,
-                    ),
-                    _recordTypeChip(
-                      label: 'Appointments',
-                      type: RecordType.appointment,
-                    ),
-                    _recordTypeChip(
-                      label: 'Clinical Records',
-                      type: RecordType.clinicalRecord,
-                    ),
-                    _recordTypeChip(
-                      label: 'Claims',
-                      type: RecordType.claimService,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow = constraints.maxWidth < 600;
-
-                    Widget dateFilter() {
-                      return DropdownButtonFormField<String>(
-                        initialValue: _selectedDateRange,
-                        decoration: InputDecoration(
-                          labelText: 'Date',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).dividerColor,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'any',
-                            child: Text('Any time'),
-                          ),
-                          DropdownMenuItem(
-                            value: '3months',
-                            child: Text('Past 3 months'),
-                          ),
-                          DropdownMenuItem(
-                            value: '6months',
-                            child: Text('Past 6 months'),
-                          ),
-                          DropdownMenuItem(
-                            value: '1year',
-                            child: Text('Past year'),
-                          ),
-                          DropdownMenuItem(
-                            value: '2years',
-                            child: Text('Past 2 years'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-
-                          setState(() {
-                            _selectedDateRange = value;
-                          });
-                        },
-                      );
-                    }
-
-                    Widget sortFilter() {
-                      return DropdownButtonFormField<bool>(
-                        initialValue: _sortNewestFirst,
-                        decoration: InputDecoration(
-                          labelText: 'Sort',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).dividerColor,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 1.5,
-                            ),
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: true,
-                            child: Text('Newest first'),
-                          ),
-                          DropdownMenuItem(
-                            value: false,
-                            child: Text('Oldest first'),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          if (value == null) return;
-
-                          setState(() {
-                            _sortNewestFirst = value;
-                          });
-                        },
-                      );
-                    }
-
-                    if (isNarrow) {
-                      return Column(
-                        children: [
-                          dateFilter(),
-                          const SizedBox(height: 12),
-                          sortFilter(),
-                        ],
-                      );
-                    }
-
-                    return Row(
+                Card(
+                  margin: EdgeInsets.zero,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: dateFilter()),
-                        const SizedBox(width: 12),
-                        Expanded(child: sortFilter()),
+                        Text(
+                          'Search',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search your health history',
+                            prefixIcon: const Icon(Icons.search),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: Theme.of(context).dividerColor,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _searchQuery = value;
+                            });
+                          },
+                        ),
                       ],
-                    );
-                  },
+                    ),
+                  ),
                 ),
+
+                const SizedBox(height: 12),
+
                 if (hasActiveFilters) ...[
                   const SizedBox(height: 4),
                   Align(
@@ -407,35 +263,244 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   builder: (context, constraints) {
                     final useTwoColumns = constraints.maxWidth >= 900;
 
-                    final healthRecords = Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    final sidebar = Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Row(
+                        Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Health Records',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
+                              'Patient Information',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 16),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Name',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Mary Johnson',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Date of Birth',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '05/14/1980',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
                             Text(
-                              '${records.length} ${records.length == 1 ? 'record' : 'records'}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                              'Gender',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Female',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                                ],
+    ),
+  ),
+),
+const SizedBox(height: 16),
+Card(
+  margin: EdgeInsets.zero,
+  child: Padding(
+    padding: const EdgeInsets.all(16),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.warning_amber_rounded,
+          color: Theme.of(context).colorScheme.tertiary,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '2 items need your confirmation',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'A newly connected provider has different information for you.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        TextButton(
+          onPressed: () {},
+          child: const Text('Review'),
+        ),
+      ],
+    ),
+  ),
+),
+    const SizedBox(height: 16),
+    Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Connected Providers',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.add),
+                label: const Text('Add a Provider'),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _providerCard(
+              name: 'Mercy Medical Center',
+              location: 'Baltimore, MD',
+            ),
+            const SizedBox(height: 10),
+            _providerCard(
+              name: 'Main Street Primary Care',
+              location: 'Baltimore, MD',
+            ),
+          ],
+        ),
+      ),
+    ),
+  ],
+);
+
+                    final healthHistory = Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              'Your health history',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            Text(
+                              '${records.length} events',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+
+                        Text(
+                          'Health Information',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _recordTypeChip(
+                              label: 'All',
+                              type: null,
+                            ),
+                            _recordTypeChip(
+                              label: 'Medications',
+                              type: RecordType.medication,
+                            ),
+                            _recordTypeChip(
+                              label: 'Conditions',
+                              type: RecordType.condition,
+                            ),
+                            _recordTypeChip(
+                              label: 'Allergies',
+                              type: RecordType.allergy,
+                            ),
+                            _recordTypeChip(
+                              label: 'Visits',
+                              type: RecordType.appointment,
+                            ),
+                            _recordTypeChip(
+                              label: 'Clinical Records',
+                              type: RecordType.clinicalRecord,
+                            ),
+                            _recordTypeChip(
+                              label: 'Claims',
+                              type: RecordType.claimService,
+                            ),
+                          ],
+                        ),
+
                         const SizedBox(height: 12),
+
                         if (records.isEmpty)
                           _emptyResults()
                         else
@@ -443,29 +508,27 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                       ],
                     );
 
-                    // Narrow layouts remain a single column.
                     if (!useTwoColumns) {
                       return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          healthRecords,
+                          sidebar,
                           const SizedBox(height: 24),
-                          _connectedSourcesCard(allRecords),
+                          healthHistory,
                         ],
                       );
                     }
 
-                    // Desktop/tablet landscape layout based on the Figma design.
                     return Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(
                           width: 280,
-                          child: _connectedSourcesCard(allRecords),
+                          child: sidebar,
                         ),
-                        const SizedBox(width: 24),
+                        const SizedBox(width: 20),
                         Expanded(
-                          child: healthRecords,
+                          child: healthHistory,
                         ),
                       ],
                     );
@@ -483,8 +546,12 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     final selected =
         type == null ? _selectedTypes.isEmpty : _selectedTypes.contains(type);
 
-    return FilterChip(
-      label: Text(label),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minHeight: 48,
+      ),
+      child: FilterChip(
+        label: Text(label),
       selected: selected,
       backgroundColor: Theme.of(context).colorScheme.surface,
       selectedColor: Theme.of(context).colorScheme.primary,
@@ -534,68 +601,56 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           }
         });
       },
-    );
+    )
+  );
   }
-
-  Widget _connectedSourcesCard(List<HealthRecord> records) {
-    final sourceCounts = <RecordSource, int>{
-      for (final source in RecordSource.values)
-        source:
-            records.where((record) => record.sources.contains(source)).length,
-    };
-
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Connected Sources',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 16),
-            ...RecordSource.values.map((source) {
-              final count = sourceCounts[source] ?? 0;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: _sourceColor(source),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        source.label,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ),
-                    Text(
-                      '$count ${count == 1 ? 'record' : 'records'}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
+Widget _providerCard({
+  required String name,
+  required String location,
+}) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      border: Border.all(
+        color: Theme.of(context).colorScheme.outlineVariant,
       ),
-    );
-  }
-
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.check_circle_outline,
+          size: 20,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                location,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
   Widget _syntheticBanner() {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -636,7 +691,6 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         return _teal;
     }
   }
-
   String _formatDate(DateTime date) {
     const months = [
       'January',
@@ -713,17 +767,27 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     for (final record in records) {
       final group = record.date != null
           ? _formatMonthYear(record.date!)
-          : 'Other health information';
+          : 'Health information without a date';
 
       if (group != currentGroup) {
         widgets.add(
           Padding(
-            padding: const EdgeInsets.only(top: 12, bottom: 10),
-            child: Text(
-              group,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+            padding: const EdgeInsets.only(top: 20, bottom: 12),
+            child: Row(
+              children: [
+                Text(
+                  group,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Divider(
+                    color: Theme.of(context).colorScheme.outlineVariant,
                   ),
+                ),
+              ],
             ),
           ),
         );
@@ -746,107 +810,113 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Expanded(
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
                     child: Text(
-                      r.title,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      r.type.label.toUpperCase(),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
                     ),
                   ),
-                  if (r.status != null) ...[
-                    const SizedBox(width: 8),
-                    _statusChip(r.status!),
-                  ],
+                  const Spacer(),
+                  if (r.status != null) _statusChip(r.status!),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 12),
               Text(
-                r.type.label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
+                r.title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
               ),
+
               if (r.date != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Date',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   _formatDate(r.date!),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
+              const SizedBox(height: 16),
+              ...r.details.map(
+                (d) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        d.label,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        d.value,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
               const SizedBox(height: 8),
-              ...r.details.map((d) => Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '${d.label}: ',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.color,
-                                ),
-                          ),
-                          TextSpan(
-                            text: d.value,
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ],
+              const Divider(),
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (context) => HealthEventDetailsScreen(
+                        record: r,
                       ),
                     ),
-                  )),
-              const SizedBox(height: 8),
-              _sourceBadges(r),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: [
+                      Text(
+                        'View details',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.chevron_right,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ));
-  }
-
-  Widget _sourceBadges(HealthRecord r) {
-    if (!r.isMultiSource) {
-      return Text(
-        'Source: ${r.primarySource.label}',
-        style: Theme.of(context).textTheme.bodySmall,
-      );
-    }
-    return Wrap(
-      children: [
-        if (r.isMultiSource)
-          Container(
-            margin: const EdgeInsets.only(right: 6, bottom: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _teal.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text('Found in ${r.sources.length} sources',
-                style: const TextStyle(
-                    fontSize: 12, color: _teal, fontWeight: FontWeight.w600)),
-          ),
-        ...r.sources.map((s) {
-          final c = _sourceColor(s);
-          return Container(
-            margin: const EdgeInsets.only(right: 6, bottom: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: c.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: c.withValues(alpha: 0.4)),
-            ),
-            child: Text(s.badge,
-                style: TextStyle(
-                    fontSize: 12, color: c, fontWeight: FontWeight.w600)),
-          );
-        }),
-      ],
-    );
   }
 
   Widget _statusChip(String status) {
