@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:care_connect_app/config/router/app_router.dart';
+import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/help/data/help_content_ids.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
@@ -94,8 +95,9 @@ Future<GoRouter> _pumpProductionRoutes(
         key: _captureKey,
         child: MaterialApp.router(
           locale: const Locale('en'),
-          theme:
-              ThemeData(fontFamily: _fontDirectory.isEmpty ? null : 'Roboto'),
+          theme: AppTheme.lightTheme.copyWith(
+              textTheme:
+                  AppTheme.lightTheme.textTheme.apply(fontFamily: 'Roboto')),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: router,
@@ -395,6 +397,30 @@ void main() {
         router.go(HelpRoutes.article(article.id));
         await tester.pumpAndSettle();
         expect(find.text(article.title), findsWidgets);
+        // Exercise the generated menu against every bundled article while
+        // network access is refused and text is enlarged.
+        final entries = tester
+            .widgetList<TextButton>(find.descendant(
+                of: find.byKey(const ValueKey('help-article-contents')),
+                matching: find.byType(TextButton)))
+            .where((button) =>
+                button.key != const ValueKey('help-contents-toggle'))
+            .toList();
+        expect(entries.length, greaterThanOrEqualTo(2));
+        for (final entry in entries) {
+          final entryFinder = find.byKey(entry.key!);
+          await tester.ensureVisible(entryFinder);
+          await tester.pumpAndSettle();
+          final label =
+              find.descendant(of: entryFinder, matching: find.byType(Text));
+          await tester.tapAt(tester.getTopLeft(label) + const Offset(10, 10));
+          await tester.pumpAndSettle();
+          final entryKey = entry.key! as ValueKey<String>;
+          final index = entryKey.value.replaceFirst('help-contents-entry-', '');
+          final heading = find.byKey(ValueKey('help-section-heading-$index'));
+          expect(Focus.of(tester.element(heading)).hasFocus, isTrue);
+          expect(tester.takeException(), isNull);
+        }
         for (final section
             in article.sections.whereType<HelpRelatedArticles>()) {
           for (final relatedId in section.articleIds) {

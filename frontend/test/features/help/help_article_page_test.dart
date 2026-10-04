@@ -66,7 +66,7 @@ void main() {
     expect(find.text('2. Second action'), findsOneWidget);
     expect(find.text('Something failed'), findsOneWidget);
     expect(find.text('Try this fix'), findsOneWidget);
-    expect(find.text('Related articles'), findsOneWidget);
+    expect(find.text('Related articles'), findsNWidgets(2));
     final textTheme =
         Theme.of(tester.element(find.byType(HelpArticlePage))).textTheme;
     final title = tester
@@ -76,7 +76,7 @@ void main() {
     expect(title.style!.fontWeight, FontWeight.bold);
     expect(tester.widget<Text>(find.text('A helpful paragraph.')).style,
         textTheme.bodyLarge);
-    expect(tester.widget<Text>(find.text('Related articles')).style,
+    expect(tester.widget<Text>(find.text('Related articles').last).style,
         textTheme.displaySmall);
   });
 

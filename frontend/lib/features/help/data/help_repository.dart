@@ -39,6 +39,10 @@ class HelpRepository {
         throw ArgumentError(
             'Help article ${article.id} needs roles and sections');
       }
+      if (article.sections.any((section) =>
+          section.heading != null && section.heading!.trim().isEmpty)) {
+        throw ArgumentError('Help article ${article.id} has an empty heading');
+      }
       _articlesById[article.id] = article;
     }
 

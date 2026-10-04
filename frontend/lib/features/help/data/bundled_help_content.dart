@@ -44,10 +44,11 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     roles: [HelpRole.patient],
     sections: [
       const HelpParagraph(
+          heading: 'Your Patient Home',
           text: 'Your Patient Home brings together care information, '
               'medication reminders, and scheduled visits. The information shown depends '
               'on what has been added to your account.'),
-      HelpSteps(steps: [
+      HelpSteps(heading: 'Find your care information', steps: [
         'Sign in with your CareConnect account and open Home.',
         'Use Health to open Daily Check-In, or Symptoms to view the symptom and allergy tracker.',
         'Use Messages to find your conversations.',
@@ -78,7 +79,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
         'Find your medication list and use a Home reminder to mark a dose taken.',
     roles: [HelpRole.patient],
     sections: [
-      HelpSteps(steps: [
+      HelpSteps(heading: 'View medications and record a dose', steps: [
         'Open Menu and select Medication Tracker to view medication names, dosages, and schedules.',
         'Return to Home and find Medication Reminders.',
         'Locate the reminder for the dose you have taken and select Mark Taken.',
@@ -116,7 +117,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
               'The native Daily Check-In screen lets you choose a mood and enter notes. '
               'On that screen, Submit Check-In displays a mock confirmation; it does not '
               'save or send those responses to your caregiver. Use Messages if you need to share them.'),
-      HelpSteps(steps: [
+      HelpSteps(heading: 'Complete a check-in', steps: [
         // These steps describe the native screen, not the web questionnaire.
         'Select Health in the Patient navigation to open Daily Check-In.',
         'Review any Assigned Check-In Questionnaire shown on the screen.',
@@ -157,9 +158,10 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     roles: [HelpRole.patient],
     sections: [
       const HelpParagraph(
+          heading: 'Upcoming care visits',
           text: 'Home lists upcoming scheduled care visits under '
               'Upcoming EVV Appointments. EVV refers to electronic visit verification.'),
-      HelpSteps(steps: [
+      HelpSteps(heading: 'Find your appointments', steps: [
         'Open Home and scroll to Upcoming EVV Appointments.',
         'Read the service, date, and time listed for each visit.',
         'Select the refresh icon in that section to reload the schedule.',
@@ -182,7 +184,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     summary: 'Open a conversation, send a message, and retry a failed message.',
     roles: [HelpRole.patient],
     sections: [
-      HelpSteps(steps: [
+      HelpSteps(heading: 'Open and send a message', steps: [
         'Select Messages in the Patient navigation.',
         'Open your caregiver conversation. To start a conversation, use Contacts and select your caregiver if they are listed.',
         'Type your message in the message field.',
@@ -209,7 +211,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     summary: 'Request an email reset link when you cannot sign in.',
     roles: HelpRole.values,
     sections: [
-      HelpSteps(steps: [
+      HelpSteps(heading: 'Request a reset link', steps: [
         'On the sign-in screen, select Forgot Password?.',
         'Enter the email address associated with your CareConnect account.',
         'Select Send Reset Link while connected to the internet.',
@@ -238,6 +240,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     roles: HelpRole.values,
     sections: [
       const HelpParagraph(
+        heading: 'About the Help Center',
         text: 'The Help Center provides guides for using CareConnect.',
       ),
       HelpSteps(
@@ -276,6 +279,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     roles: HelpRole.values,
     sections: [
       const HelpParagraph(
+        heading: 'Reading guides offline',
         text: 'You can read Help articles without an internet connection. '
             'Some app features described in a guide may still require a connection.',
       ),
@@ -301,6 +305,7 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
               'Browser and native device features can differ. The web questionnaire route '
               'differs from the native Daily Check-In mood-and-notes screen.'),
       HelpSteps(
+        heading: 'Read and follow a guide',
         steps: [
           'Select an article on the Help Center home screen.',
           'Follow the numbered steps in the article.',

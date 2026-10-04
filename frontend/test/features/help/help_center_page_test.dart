@@ -216,7 +216,7 @@ void main() {
       await tester.ensureVisible(find.text('Reading Help articles'));
       await tester.tap(find.text('Reading Help articles'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Web'));
+      await tester.ensureVisible(find.text('Web').last);
       expect(Theme.of(tester.element(find.byType(HelpArticlePage))).brightness,
           brightness);
       expect(tester.takeException(), isNull);

@@ -32,6 +32,28 @@ HelpArticle _article({
     );
 
 void main() {
+  test(
+      'authored section headings must be nonempty; repeated headings are valid',
+      () {
+    expect(
+        () => HelpRepository(categories: const [
+              _category
+            ], articles: [
+              _article(
+                  sections: const [HelpParagraph(heading: '  ', text: 'Text')]),
+            ]),
+        throwsArgumentError);
+    final catalog = HelpRepository(categories: const [
+      _category
+    ], articles: [
+      _article(sections: const [
+        HelpParagraph(heading: 'Details', text: 'First section'),
+        HelpParagraph(heading: 'Details', text: 'Second section'),
+      ]),
+    ]);
+    expect(catalog.articles.single.sections, hasLength(2));
+  });
+
   test('bundled content is readable through local IDs', () {
     final catalog = HelpRepository.bundled();
 

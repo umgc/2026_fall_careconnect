@@ -113,6 +113,10 @@
   "helpCenterTitle": "Help Center",
   "helpCenterHome": "Help Center Home",
   "helpBackToTop": "Back to top",
+  "helpOnThisPage": "On this page",
+  "@helpOnThisPage": {
+    "description": "Expandable article contents menu whose links scroll to section headings."
+  },
   "@helpBackToTop": {
     "description": "Floating button to scroll a long Help article back to its beginning."
   },
