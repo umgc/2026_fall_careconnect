@@ -5,6 +5,7 @@ import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.service.OAuthHelperService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +15,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
@@ -32,7 +34,65 @@ public class SecurityConfig {
     private static final String ROLE_ADMIN = "ADMIN";
 
     @Autowired
-    private OAuthHelperService oauthHelperService;
+    private ObjectProvider<OAuthHelperService> oauthHelperService;
+
+    /**
+     * The OAuth sign-in flows that link an external account, such as Medicare (Blue Button).
+     * <p>
+     * Separate from {@link #apiChain} because the two need opposite things. An OAuth sign-in has
+     * to keep state in a session across the browser's trip to the provider and back (the
+     * authorization request and our link token); the JWT API must not, or a session left behind by
+     * that sign-in would authenticate later API calls. So only these paths may create or read a
+     * session, and {@code apiChain} stays stateless. See CLAUDE.md: STATELESS and oauth2Login()
+     * cannot share a chain.
+     * <p>
+     * Every path here is reachable without a JWT, because the browser doing the sign-in cannot send
+     * one. Entry is guarded instead: {@code /oauth2/connect} requires a one-time link token issued
+     * to a signed-in patient, the redirect is protected by OAuth {@code state} and PKCE, and the
+     * success handler discards the session once the tokens are stored.
+     * <p>
+     * Where Spring's OAuth client auto-configuration is switched off, or a security test slice loads
+     * this config without the services behind it, there is nothing to sign in with, so the chain is built without
+     * {@code oauth2Login()}: the paths still exist and still cannot reach the API chain.
+     */
+    @Bean
+    @Order(-1)
+    SecurityFilterChain oauthLinkChain(
+            HttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource,
+            ObjectProvider<ClientRegistrationRepository> clientRegistrations) throws Exception {
+
+        http
+                .securityMatcher("/oauth2/**", "/login/oauth2/**")
+                // A browser redirect flow: state and PKCE protect it, and nothing here accepts a form post.
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .headers(headers -> headers
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(TimeUnit.DAYS.toSeconds(365))))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        final ClientRegistrationRepository clientRegistrationRepository = clientRegistrations.getIfAvailable();
+        final OAuthHelperService handler = oauthHelperService.getIfAvailable();
+        if (clientRegistrationRepository != null && handler != null) {
+            DefaultOAuth2AuthorizationRequestResolver resolver =
+                    new DefaultOAuth2AuthorizationRequestResolver(
+                            clientRegistrationRepository,
+                            "/oauth2/authorization"
+                    );
+            resolver.setAuthorizationRequestCustomizer(
+                    OAuth2AuthorizationRequestCustomizers.withPkce()
+            );
+            http.oauth2Login(oauth -> oauth
+                    .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(resolver))
+                    .successHandler(handler)
+                    .failureHandler(handler));
+        }
+        return http.build();
+    }
 
     @Bean
     @Order(0)
@@ -40,17 +100,8 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtTokenProvider jwt,
             UserDetailsService uds,
-            CorsConfigurationSource corsConfigurationSource,
-            ClientRegistrationRepository clientRegistrationRepository) throws Exception {
+            CorsConfigurationSource corsConfigurationSource) throws Exception {
 
-        DefaultOAuth2AuthorizationRequestResolver resolver =
-                new DefaultOAuth2AuthorizationRequestResolver(
-                        clientRegistrationRepository,
-                        "/oauth2/authorization"
-                );
-        resolver.setAuthorizationRequestCustomizer(
-                OAuth2AuthorizationRequestCustomizers.withPkce()
-        );
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwt, uds);
 
         return http
@@ -64,6 +115,7 @@ public class SecurityConfig {
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(TimeUnit.DAYS.toSeconds(365)))
                 )
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .httpBasic(basic -> basic.authenticationEntryPoint(
                         (req, res, e) -> res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Basic Authentication Required")))
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
@@ -139,6 +191,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
 
+                        // Kept from before the matcher list was collapsed: public on team-e-develop.
+                        .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
+
                         /* ---------- Telemetry: intentionally unauthenticated ----
                          * These two matchers are public in EVERY profile, prod
                          * included. That is deliberate, not an oversight:
@@ -172,20 +227,16 @@ public class SecurityConfig {
 
                         // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
                         // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.
+                        // /v1/checkins is not under /v1/api, so it needs its own matcher or it falls to denyAll.
+                        .requestMatchers("/v1/checkins/**").authenticated()
                         .requestMatchers(
                                 "/v1/api/**", "/v2/api/**", "/v3/api/**",
-                                "/api/**",
-                                "/login/oauth2/code/**",
-                                "/oauth2/**"
+                                "/api/**"
                                 ).authenticated()
 
                         /* ---------- Everything else: deny --------------------- */
                         .anyRequest().denyAll()
                 )
-                .oauth2Login(
-                        oauth -> oauth.authorizationEndpoint(
-                                endpoint -> endpoint.authorizationRequestResolver(resolver))
-                                .successHandler(oauthHelperService))
                 .build();
     }
 

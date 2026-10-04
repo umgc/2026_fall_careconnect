@@ -1,14 +1,11 @@
 package com.careconnect.controller.ehr;
 import com.careconnect.model.ehr.*;
-import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.ehr.*;
 import com.careconnect.service.ehr.EhrService;
+import com.careconnect.service.ehr.MedicareConnectionService;
 import com.careconnect.service.ehr.MedicareService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.hl7.fhir.r4.model.Coverage;
 import org.hl7.fhir.r4.model.ExplanationOfBenefit;
@@ -19,12 +16,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.random.RandomGenerator;
 import java.util.stream.Collectors;
 
 @RestController
@@ -46,98 +41,14 @@ public class EhrController{
     @Autowired
     private EhrVisitRecordRepository ehrVisitRecordRepository;
 
-    @Autowired
-    private UserRepository userRepo;
 
     @Autowired
-    private EhrPatientCrosswalkRepository  ehrPatientCrosswalkRepository;
+    private MedicareConnectionService connections;
 
 
     private final MedicareProperties properties = new MedicareProperties();
     private final MedicareResponseMapper mapper = new MedicareResponseMapper();
     private final ObjectMapper jsonmapper = new ObjectMapper();
-
-    @GetMapping("/oauth2/connect")
-    // Glues a linkId onto your session, builds a crosswalk to store it and your destination,
-    // then redirects you to the endpoint the framework manages.
-    public void outgoing(@RequestParam("where") String where, Authentication authentication, HttpSession session, HttpServletResponse response) throws IOException, ServletException {
-
-        Long userId = userRepo.findByEmail(authentication.getName()).orElseThrow().getId();
-
-
-        if(where.equalsIgnoreCase("medicare")) {
-
-            Long medicareId = medicareService.getId();
-            if(medicareId == null){
-                medicareService.retrieveId();
-                medicareId = medicareService.getId();
-            }
-
-            Optional<EhrPatientCrosswalk> crosswalkOpt = ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(userId, medicareId);
-
-            if(crosswalkOpt.isEmpty()){
-
-                String linkToken =  UUID.randomUUID().toString();
-                log.info("Crosswalk currently empty! Building with user {} and Session {} Link token: {}",
-                        userId, session.getId(), linkToken);
-
-                EhrPatientCrosswalk toadd = new EhrPatientCrosswalk();
-
-                // Set up what we do know
-                toadd.setLinkToken(linkToken);
-                toadd.setSourceId(medicareId);
-                toadd.setPatientId(userId);
-
-                // We don't know this yet, but can't leave it null.
-                toadd.setExternalPatientId("");
-                ehrPatientCrosswalkRepository.save(toadd);
-                session.setAttribute(where, linkToken);
-            }else{
-                // Re-Authenticating to keep the long login up to date. Still needs a fresh linkToken
-                EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
-                String linkToken =  UUID.randomUUID().toString();
-                crosswalk.setLinkToken(linkToken);
-                ehrPatientCrosswalkRepository.save(crosswalk);
-                session.setAttribute(where, linkToken);
-            }
-
-
-        }
-        response.sendRedirect("/oauth2/authorization/" + where);
-    }
-
-    @GetMapping("/v1/api/medicare/disconnect")
-    public ResponseEntity<String> revoke(){
-        Long medicareId = medicareService.getId();
-        if(medicareId == null){
-            medicareService.retrieveId();
-            medicareId = medicareService.getId();
-        }
-        Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareId);
-        if(crosswalkOpt.isEmpty()){
-            return ResponseEntity.notFound().build();
-        }
-        EhrPatientCrosswalk crosswalk = crosswalkOpt.orElseThrow();
-        medicareService.revoke(crosswalk.getToken());
-        ehrPatientCrosswalkRepository.delete(crosswalk);
-        return ResponseEntity.ok().build();
-    }
-
-    @GetMapping("/v1/api/medicare/status")
-    public ResponseEntity<String> status(){
-        Long medicareId = medicareService.getId();
-        if(medicareId == null){
-            medicareService.retrieveId();
-            medicareId = medicareService.getId();
-        }
-        Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareId);
-        if(crosswalkOpt.isEmpty()){
-            return ResponseEntity.notFound().build();
-        }
-        // I guess just return if you have medicare linked?
-        // Really not sure what kind of status I could be pulling right now.
-        return ResponseEntity.ok().build();
-    }
 
     @GetMapping("/v1/api/medicare/patient")
     public ResponseEntity<Object> fetchIdentity(){
@@ -159,7 +70,7 @@ public class EhrController{
 
             EhrSourceIdentity toreturn;
             if(identities.isEmpty() || ChronoUnit.DAYS.between(identities.orElseThrow().getSourceUpdatedAt(), LocalDateTime.now()) < 1){
-                Patient results = medicareService.requestMedicarePatientInfo(crosswalk.getToken());
+                Patient results = medicareService.requestMedicarePatientInfo(connections.requireAccessToken(crosswalk));
 
                 // Add the new one.
                 EhrSourceIdentity identity = new EhrSourceIdentity(crosswalk.getPatientId(), results, medicareId);
@@ -195,14 +106,14 @@ public class EhrController{
                     ehrCoverageRepository.findByPatientIdAndSourceId(
                             crosswalk.getPatientId(), medicareId);
             if (coverages.isEmpty()){
-                List<Coverage> results = medicareService.requestMedicareCoverageInfo(crosswalk.getToken());
+                List<Coverage> results = medicareService.requestMedicareCoverageInfo(connections.requireAccessToken(crosswalk));
                 for(Coverage item: results){
                     // TODO actual repalcement logic
                     coverages.add(ehrCoverageRepository.save(new EhrCoverageRecord(crosswalk.getPatientId(), item, medicareId)));
                 }
 
             }else if(ChronoUnit.DAYS.between(coverages.get(0).getSourceUpdatedAt(), LocalDateTime.now()) < 1) {
-                List<Coverage> results = medicareService.requestMedicareCoverageInfo(crosswalk.getToken(),
+                List<Coverage> results = medicareService.requestMedicareCoverageInfo(connections.requireAccessToken(crosswalk),
                         Date.from(coverages.get(0).getSourceUpdatedAt().atZone(ZoneId.systemDefault()).toInstant()));
                 for(Coverage item: results){
                     // TODO actual replacement logic
@@ -242,14 +153,14 @@ public class EhrController{
                     ehrVisitRecordRepository.findByPatientIdAndSourceId(
                             crosswalk.getPatientId(), medicareId);
             if (visits.isEmpty()){
-                List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(crosswalk.getToken());
+                List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(connections.requireAccessToken(crosswalk));
                 for(ExplanationOfBenefit item: results){
                     // Add/Update the resource
                     visits.add(ehrVisitRecordRepository.save(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId)));
                 }
 
             }else if(ChronoUnit.DAYS.between(visits.get(0).getSourceUpdatedAt(), LocalDateTime.now()) < 1) {
-                List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(crosswalk.getToken(),
+                List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(connections.requireAccessToken(crosswalk),
                         Date.from(visits.get(0).getSourceUpdatedAt().atZone(ZoneId.systemDefault()).toInstant()));
                 for(ExplanationOfBenefit item: results){
 

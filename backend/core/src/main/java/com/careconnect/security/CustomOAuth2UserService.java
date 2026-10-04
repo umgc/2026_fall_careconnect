@@ -28,9 +28,6 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         if(Objects.equals(userRequest.getClientRegistration().getRegistrationId(), "medicare")){
             // Only patients can log into their medicare accounts, so there's only one role option here.
-            for(Object object : userRequest.getAdditionalParameters().values()){
-                log.info(object.toString());
-            }
             return new DefaultOAuth2User(
                     List.of(new SimpleGrantedAuthority("ROLE_PATIENT")),
                     delegate.loadUser(userRequest).getAttributes(),

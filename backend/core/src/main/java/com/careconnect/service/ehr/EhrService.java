@@ -2,8 +2,8 @@ package com.careconnect.service.ehr;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
-import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +26,9 @@ public class EhrService {
     @Autowired
     private EhrPatientCrosswalkRepository ehrPatientCrosswalkRepository;
 
+    @Autowired
+    private PatientRepository patientRepository;
+
     public static final FhirContext ctxR4 = FhirContext.forR4();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
     public String patientToJSON(Patient patient) {
@@ -38,11 +41,22 @@ public class EhrService {
         return parser.encodeResourceToString(eob);
     }
 
+    /**
+     * The signed-in patient's <em>linked</em> crosswalk row for this source. Empty for a user with no
+     * patient record, no row, or a link that is still pending (no token yet).
+     * <p>
+     * Keyed by {@code patient.id}: the crosswalk's {@code patient_id} is a foreign key to
+     * {@code patient}, and a user id is a different number for most accounts.
+     */
     public Optional<EhrPatientCrosswalk> getCrosswalk(Long id){
         Authentication currentUserAuth = SecurityContextHolder.getContext().getAuthentication();
-        log.info(currentUserAuth.getName());
-        User currentUser = userRepository.findByEmail(currentUserAuth.getName()).orElseThrow();
-        return ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(currentUser.getId(), id);
+        if (currentUserAuth == null) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmail(currentUserAuth.getName())
+                .flatMap(user -> patientRepository.findByUserId(user.getId()))
+                .flatMap(patient -> ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(patient.getId(), id))
+                .filter(EhrPatientCrosswalk::isLinked);
     }
 
 }
