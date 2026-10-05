@@ -5,6 +5,7 @@ import 'package:care_connect_app/features/tasks/utils/task_type_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Widget _wrapWithProviders(Widget child) {
   return ChangeNotifierProvider<TaskTypeManager>(
@@ -19,6 +20,10 @@ CalendarEventData<Task> _eventForTask(Task t) =>
     CalendarEventData<Task>(date: t.date, event: t, title: t.name);
 
 void main() {
+  // TaskTypeManager loads saved types from SharedPreferences. Without a mock
+  // this throws MissingPluginException on Linux CI.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('TaskListWeek Widget Tests', () {
     testWidgets('shows "No tasks this week" when empty', (tester) async {
       await tester.pumpWidget(

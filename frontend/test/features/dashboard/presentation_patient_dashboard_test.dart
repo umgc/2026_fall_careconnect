@@ -21,6 +21,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -41,6 +42,8 @@ class _NullUserProvider extends MockUserProvider {
 
 Widget _wrapNull() {
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: _NullUserProvider(),
       child: const PatientDashboard(),
@@ -53,6 +56,8 @@ Widget _wrapWithUser({int? userId}) {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
   );
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: PatientDashboard(userId: userId),

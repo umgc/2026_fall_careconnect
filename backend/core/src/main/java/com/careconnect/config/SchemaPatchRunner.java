@@ -33,6 +33,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
     private static final Pattern POSTGRES_TEXT_CAST = Pattern.compile(
             "::(?:character varying|varchar|text)(?:\\(\\d+\\))?");
     private static final Pattern QUOTED_NUMBER = Pattern.compile("'(\\d+)'");
+    private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     private final DataSource dataSource;
     private final SchemaPatchLedger patchLedger;
@@ -104,6 +105,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
+    /**
+     * Rejects anything that is not a plain SQL identifier before it is concatenated into DDL.
+     * <p>
+     * The helpers below build statements by string concatenation because DDL cannot take bind
+     * parameters for object names. Every caller today passes a literal, so nothing is exploitable
+     * as it stands; this makes that a property of the helpers instead of a habit of their callers
+     * (PR #216 review). Unquoted identifiers only: no schema qualification, no quoting.
+     */
+    static String requireSafeIdentifier(final String identifier) {
+        if (identifier == null || !SAFE_IDENTIFIER.matcher(identifier).matches()) {
+            throw new IllegalArgumentException(
+                    "Not a plain SQL identifier, refusing to build DDL with it: " + identifier);
+        }
+        return identifier;
+    }
+
     private static String foreignKeyIfMissing(
             final String constraint,
             final String table,
@@ -111,6 +128,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String referencedTable,
             final String referencedColumn,
             final String suffix) {
+        requireSafeIdentifier(constraint);
+        requireSafeIdentifier(table);
+        requireSafeIdentifier(column);
+        requireSafeIdentifier(referencedTable);
+        requireSafeIdentifier(referencedColumn);
         return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c " +
                 "WHERE c.conrelid = '" + table + "'::regclass " +
                 "AND c.confrelid = '" + referencedTable + "'::regclass " +
@@ -367,6 +389,10 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
+        applyEhrCanonicalSchemaPatches();
+        applyEhrIdentityReconciliationPatches();
+        applyPatientAuditTimestampBackfill();
+        applyEhrAuditTimestampZonePatches();
         seedDemoScheduledVisits();
     }
 
@@ -375,6 +401,324 @@ public class SchemaPatchRunner implements CommandLineRunner {
      */
     private void applyTranscriptArchiveStoragePatch() {
         applyCatalogPatch("2607191300-transcript-archive-purge");
+    }
+
+    /**
+     * Phase 2 of the EHR canonical schema — the identity-reconciliation tables. Mirrors
+     * db/migration V2609291200__create_ehr_identity_reconciliation.sql.
+     * <p>
+     * Hibernate creates the three tables from their entities. Everything here is what it will
+     * not create and what the design actually depends on: the CHECK constraints that keep the
+     * date_of_birth carve-out honest, the partial unique index that stops two open conflicts on
+     * one field, and the foreign keys (the entities store bare Long ids, not @ManyToOne).
+     * <p>
+     * No organization column on any of the three — see the 2026-09-26 org-scoping reversal.
+     */
+    private void applyEhrIdentityReconciliationPatches() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL EHR identity-reconciliation patches for non-PostgreSQL datasource");
+            return;
+        }
+
+        applyRequiredPatch(
+                "V2609291200a - unique ehr_source_identity(patient_id, source_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_source_identity_patient_source "
+                        + "ON ehr_source_identity (patient_id, source_id)"
+        );
+        applyRequiredPatch(
+                "V2609291200b - unique ehr_identity_field_provenance(patient_id, field_name)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_identity_field_provenance_patient_field "
+                        + "ON ehr_identity_field_provenance (patient_id, field_name)"
+        );
+
+        // At most one open conflict per field. Partial, so resolved rows accumulate freely --
+        // the audit trail is the point of the table.
+        applyRequiredPatch(
+                "V2609291200c - one open conflict per (patient, field)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_identity_conflict_open "
+                        + "ON ehr_identity_conflict (patient_id, field_name) WHERE status = 'PENDING'"
+        );
+
+        applyRequiredPatch(
+                "V2609291200d - ehr_identity_conflict.status vocabulary",
+                checkIfMissing("ck_ehr_identity_conflict_status", "ehr_identity_conflict",
+                        "status IN ('PENDING', 'ACCEPTED', 'REJECTED')")
+        );
+        applyRequiredPatch(
+                "V2609291200e - ehr_identity_conflict.resolved_by vocabulary (no STAFF)",
+                checkIfMissing("ck_ehr_identity_conflict_resolver", "ehr_identity_conflict",
+                        "resolved_by IS NULL OR resolved_by IN ('SYSTEM', 'PATIENT')")
+        );
+
+        // The carve-out that application code must not be trusted to remember: every field
+        // except date_of_birth resolves in the same transaction that detects it, so a PENDING
+        // row for anything else would silently reintroduce the risk the 2026-09-26 reversal
+        // accepted only for non-DOB fields.
+        applyRequiredPatch(
+                "V2609291200f - PENDING is reachable only for date_of_birth",
+                checkIfMissing("ck_ehr_identity_conflict_pending_dob", "ehr_identity_conflict",
+                        "status <> 'PENDING' OR field_name = 'date_of_birth'")
+        );
+
+        // Open means unresolved, closed means resolved -- no half-states.
+        applyRequiredPatch(
+                "V2609291200g - resolution fields agree with status",
+                checkIfMissing("ck_ehr_identity_conflict_resolution", "ehr_identity_conflict",
+                        "(status = 'PENDING' AND resolved_at IS NULL AND resolved_by IS NULL) "
+                                + "OR (status <> 'PENDING' AND resolved_at IS NOT NULL AND resolved_by IS NOT NULL)")
+        );
+
+        applyRequiredPatch(
+                "V2609291200h - FK ehr_source_identity.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_source_identity_patient", "ehr_source_identity",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyRequiredPatch(
+                "V2609291200i - FK ehr_source_identity.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_source_identity_source", "ehr_source_identity",
+                        "source_id", "ehr_source", "id", "")
+        );
+        applyRequiredPatch(
+                "V2609291200j - FK ehr_identity_conflict.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_identity_conflict_patient", "ehr_identity_conflict",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyRequiredPatch(
+                "V2609291200k - FK ehr_identity_conflict.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_identity_conflict_source", "ehr_identity_conflict",
+                        "source_id", "ehr_source", "id", "")
+        );
+        applyRequiredPatch(
+                "V2609291200l - FK ehr_identity_field_provenance.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_identity_field_provenance_patient", "ehr_identity_field_provenance",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyRequiredPatch(
+                "V2609291200m - FK ehr_identity_field_provenance.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_identity_field_provenance_source", "ehr_identity_field_provenance",
+                        "source_id", "ehr_source", "id", "")
+        );
+    }
+
+    /**
+     * Gives every pre-existing {@code patient} row the timestamps {@code Patient} gained when it
+     * started extending {@code Auditable} on 2026-09-29. New rows get theirs from {@code @PrePersist};
+     * rows written before the column existed have NULL, and NULL is not a usable baseline.
+     *
+     * <h3>What backfilling now() decides</h3>
+     * {@code updated_at} is the reconciliation algorithm's baseline of last resort: for a field with
+     * no provenance row yet, an incoming EHR value must be <em>newer</em> than it to be applied
+     * (Assumption A1). Backfilling the migration timestamp therefore says: <b>an EHR record's history
+     * does not retroactively overwrite what is already on file, but any EHR update made after this
+     * migration does.</b> Decided 2026-09-29 by the tech leads, consistent with the recency rule the
+     * rest of the algorithm runs on.
+     *
+     * <p>Two things keep that from being as restrictive as it first sounds. A field that is
+     * <em>empty</em> on {@code patient} is filled directly with no timestamp comparison at all, so a
+     * first sync still populates everything blank. And the baseline is only ever consulted until a
+     * source establishes provenance for that field, after which the comparison is against real
+     * source timestamps rather than this one.
+     *
+     * <p>The alternative considered and rejected was backfilling an early sentinel date, which would
+     * have let historical EHR values silently overwrite values patients entered at signup.
+     *
+     * <p>Required rather than best-effort: a NULL baseline does not fail, it produces a comparison
+     * with nothing to compare against, which changes who wins a reconciliation silently. That is
+     * exactly the class of absence that has to stop the boot instead of being logged.
+     *
+     * <p>Idempotent by predicate rather than by ledger: {@code WHERE updated_at IS NULL} means a
+     * later row that somehow arrives without timestamps is also repaired, at its own now(), rather
+     * than being left as a permanent null baseline.
+     */
+    private void applyPatientAuditTimestampBackfill() {
+        // A core-schema patch, called from run() rather than from the EHR method that first needed
+        // it: it alters the shared patient table, not an ehr_* one. PostgreSQL only, as it was when
+        // it ran inside applyEhrIdentityReconciliationPatches() behind that method's guard.
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL patient audit-timestamp backfill for non-PostgreSQL datasource");
+            return;
+        }
+
+        // Defaults first. The backfill below repairs rows that exist when it runs; a row inserted by
+        // SQL after it -- the dev seed in db/migration/mock_data.sql, loaded by DevDataLoader after
+        // this runner -- would otherwise carry no baseline until the next boot, and
+        // JpaPatientFieldAccessor.getPatientUpdatedAt refuses a null one. DEF-EHR-REC-02.
+        applyRequiredPatch(
+                "V2609291230c - patient.created_at defaults to now() for rows inserted outside JPA",
+                "ALTER TABLE patient ALTER COLUMN created_at SET DEFAULT now()"
+        );
+        applyRequiredPatch(
+                "V2609291230d - patient.updated_at defaults to now() for rows inserted outside JPA",
+                "ALTER TABLE patient ALTER COLUMN updated_at SET DEFAULT now()"
+        );
+        applyRequiredPatch(
+                "V2609291230a - backfill patient.created_at for rows predating Auditable",
+                "UPDATE patient SET created_at = now() WHERE created_at IS NULL"
+        );
+        applyRequiredPatch(
+                "V2609291230b - backfill patient.updated_at for rows predating Auditable",
+                "UPDATE patient SET updated_at = now() WHERE updated_at IS NULL"
+        );
+    }
+
+    /**
+     * Makes {@code created_at} / {@code updated_at} on the six {@code ehr_*} tables
+     * {@code TIMESTAMPTZ}. Raised in the PR #209 review.
+     * <p>
+     * The entities inherit both columns from the shared {@code Auditable}, which maps them as
+     * {@code LocalDateTime}, so {@code ddl-auto=update} creates them as {@code timestamp without
+     * time zone}. A zone-less column stores a wall-clock reading, and which instant that reading
+     * means depends on settings outside the schema: {@code hibernate.jdbc.time_zone} decides what
+     * Hibernate writes and the session {@code TimeZone} decides what {@code now()} writes. The
+     * application sets both to UTC, so it agrees with itself; a connection that sets neither --
+     * psql, a test profile, a second service -- does not. {@code TIMESTAMPTZ} stores the instant,
+     * which removes the dependency instead of documenting it.
+     * <p>
+     * {@code Auditable} is unchanged, so no other team's entity is affected. Binding a
+     * {@code LocalDateTime} to a {@code TIMESTAMPTZ} column is safe because the driver sends the
+     * value with an explicit offset, which a zone-aware column honours and a zone-less one discards.
+     * <p>
+     * Existing values are read as UTC, which is what the application wrote. Scoped to the
+     * {@code ehr_*} tables: {@code patient.updated_at}, the Assumption A1 baseline, is the same
+     * shape on a shared table and is deliberately not converted here.
+     */
+    private void applyEhrAuditTimestampZonePatches() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL EHR audit-timestamp zone patches for non-PostgreSQL datasource");
+            return;
+        }
+
+        for (final String table : new String[]{
+                "ehr_source",
+                "ehr_patient_crosswalk",
+                "ehr_raw_payload",
+                "ehr_source_identity",
+                "ehr_identity_conflict",
+                "ehr_identity_field_provenance"}) {
+            for (final String column : new String[]{"created_at", "updated_at"}) {
+                applyRequiredPatch(
+                        "V2609301900 - " + table + "." + column + " is TIMESTAMPTZ",
+                        timestamptzIfZoneless(table, column)
+                );
+            }
+        }
+    }
+
+    /**
+     * Idempotent {@code timestamp} to {@code timestamptz} conversion. The type guard is what makes
+     * a re-run a no-op: {@code AT TIME ZONE} applied to a column that is already zone-aware would
+     * convert it back to a wall-clock reading and shift every value by the session offset.
+     */
+    private static String timestamptzIfZoneless(final String table, final String column) {
+        requireSafeIdentifier(table);
+        requireSafeIdentifier(column);
+        return "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns "
+                + "WHERE table_schema = current_schema() AND table_name = '" + table + "' "
+                + "AND column_name = '" + column + "' "
+                + "AND data_type = 'timestamp without time zone') THEN "
+                + "ALTER TABLE " + table + " ALTER COLUMN " + column
+                + " TYPE TIMESTAMPTZ USING " + column + " AT TIME ZONE 'UTC'; END IF; END $$;";
+    }
+
+    /**
+     * Idempotent CHECK constraint. {@code ALTER TABLE ... ADD CONSTRAINT} has no IF NOT EXISTS,
+     * and this runner executes on every start.
+     */
+    private static String checkIfMissing(final String constraint, final String table, final String predicate) {
+        requireSafeIdentifier(constraint);
+        requireSafeIdentifier(table);
+        return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '"
+                + constraint + "' AND conrelid = '" + table + "'::regclass) THEN "
+                + "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint
+                + " CHECK (" + predicate + "); END IF; END $$;";
+    }
+
+    /**
+     * Phase 1 of the EHR canonical schema (WBS 1.4.3) — source registry, patient crosswalk and
+     * raw payload store. Mirrors db/migration V2609261500__create_ehr_canonical_schema.sql.
+     * <p>
+     * Hibernate {@code ddl-auto=update} creates the three tables from their entities; this
+     * supplies what it will not. The foreign keys are applied here because the entities store
+     * bare {@code Long} ids rather than {@code @ManyToOne}, the same reason usps_mailpiece
+     * applies its own. The unique indexes are a safety net for databases where the tables were
+     * created before those constraints were declared.
+     * <p>
+     * Deliberately adds no organization/tenant column: FR-EHR-10 instructs reuse of an existing
+     * organization-identifier isolation pattern, and none exists in this schema. The gap is filed
+     * for the tech leads to route, rather than hidden behind a placeholder column that no query
+     * could filter on. (An earlier version named a "Requirements Owner" role and a "DE-02" item;
+     * neither is defined anywhere in this repository, so the routing is left to the leads instead
+     * of asserted.)
+     */
+    private void applyEhrCanonicalSchemaPatches() {
+        // Seed rows use only plain types and portable predicates, so they apply on H2 too.
+        for (final String[] source : new String[][]{
+                {"ATHENAHEALTH", "athenahealth"},
+                {"MEDICARE", "Medicare"},
+                {"EPIC", "Epic"},
+                {"ORACLE_HEALTH", "Oracle Health"}}) {
+            applyPatch(
+                    "V2609261500a - seed ehr_source " + source[0],
+                    "INSERT INTO ehr_source (code, display_name, fhir_version, enabled, "
+                            + "created_at, updated_at) "
+                            + "SELECT '" + source[0] + "', '" + source[1] + "', 'R4', TRUE, "
+                            + "now(), now() "
+                            + "WHERE NOT EXISTS (SELECT 1 FROM ehr_source WHERE code = '"
+                            + source[0] + "')"
+            );
+        }
+
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL EHR canonical schema patches for non-PostgreSQL datasource");
+            return;
+        }
+
+        applyRequiredPatch(
+                "V2609261500b - unique ehr_patient_crosswalk(source_id, external_patient_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_crosswalk_source_external "
+                        + "ON ehr_patient_crosswalk (source_id, external_patient_id)"
+        );
+        applyRequiredPatch(
+                "V2609261500c - unique ehr_patient_crosswalk(patient_id, source_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_crosswalk_patient_source "
+                        + "ON ehr_patient_crosswalk (patient_id, source_id)"
+        );
+        applyPatch(
+                "V2609261500d - index ehr_patient_crosswalk(patient_id)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_crosswalk_patient "
+                        + "ON ehr_patient_crosswalk (patient_id)"
+        );
+        applyPatch(
+                "V2609261500e - index ehr_raw_payload(patient_id, source_id, resource_type)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_raw_payload_patient_resource "
+                        + "ON ehr_raw_payload (patient_id, source_id, resource_type)"
+        );
+        applyPatch(
+                "V2609261500f - index ehr_raw_payload(retrieved_at)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_raw_payload_retrieved_at "
+                        + "ON ehr_raw_payload (retrieved_at)"
+        );
+
+        applyRequiredPatch(
+                "V2609261500g - FK ehr_patient_crosswalk.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_crosswalk_patient", "ehr_patient_crosswalk",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyRequiredPatch(
+                "V2609261500h - FK ehr_patient_crosswalk.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_crosswalk_source", "ehr_patient_crosswalk",
+                        "source_id", "ehr_source", "id", "")
+        );
+        applyRequiredPatch(
+                "V2609261500i - FK ehr_raw_payload.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_raw_payload_patient", "ehr_raw_payload",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+        applyRequiredPatch(
+                "V2609261500j - FK ehr_raw_payload.source_id -> ehr_source.id",
+                foreignKeyIfMissing("fk_ehr_raw_payload_source", "ehr_raw_payload",
+                        "source_id", "ehr_source", "id", "")
+        );
     }
 
     /**
@@ -415,11 +759,17 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyRequiredPatch(
                 "H2 – drop legacy ai_held_item open unique",
                 "DROP INDEX IF EXISTS uq_ai_held_item_open_surface_hash");
+        // H2 has no partial indexes: emulate Postgres' WHERE clause with a generated flag that
+        // is NULL for closed holds (NULLs never collide in a unique index).
+        applyRequiredPatch(
+                "H2 – ai_held_item open hold flag",
+                "ALTER TABLE ai_held_item ADD COLUMN IF NOT EXISTS open_hold_flag BOOLEAN "
+                        + "GENERATED ALWAYS AS (CASE WHEN status = 'PENDING_REVIEW' "
+                        + "AND query_text_hash IS NOT NULL THEN TRUE END)");
         applyRequiredPatch(
                 "H2 – ai_held_item open unique",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_ai_held_item_open_patient_surface_hash "
-                        + "ON ai_held_item (patient_id, source_surface, query_text_hash) "
-                        + "WHERE status = 'PENDING_REVIEW' AND query_text_hash IS NOT NULL");
+                        + "ON ai_held_item (patient_id, source_surface, query_text_hash, open_hold_flag)");
         applyRequiredPatch(
                 "H2 – user_files.extracted_text",
                 "ALTER TABLE user_files ADD COLUMN IF NOT EXISTS extracted_text CLOB");
@@ -572,11 +922,15 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "H2 – consent_grants lookup index",
                 "CREATE INDEX IF NOT EXISTS idx_consent_grants_lookup "
                         + "ON consent_grants (patient_user_id, grantee_user_id, scope, status)");
+        // H2 has no partial indexes: emulate WHERE status = 'ACTIVE' with a generated flag.
+        applyRequiredPatch(
+                "H2 – consent_grants active flag",
+                "ALTER TABLE consent_grants ADD COLUMN IF NOT EXISTS active_flag BOOLEAN "
+                        + "GENERATED ALWAYS AS (CASE WHEN status = 'ACTIVE' THEN TRUE END)");
         applyRequiredPatch(
                 "H2 – consent_grants active unique",
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_consent_grants_active "
-                        + "ON consent_grants (patient_user_id, grantee_user_id, scope) "
-                        + "WHERE status = 'ACTIVE'");
+                        + "ON consent_grants (patient_user_id, grantee_user_id, scope, active_flag)");
     }
 
     /**
