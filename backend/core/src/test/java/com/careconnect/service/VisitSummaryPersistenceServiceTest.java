@@ -31,6 +31,19 @@ class VisitSummaryPersistenceServiceTest {
     @InjectMocks
     private VisitSummaryPersistenceService persistenceService;
 
+    private static VisitSummary sample(final String status) {
+        final VisitSummary summary = new VisitSummary();
+        summary.setVisitId("visit-1");
+        summary.setPatientId(42L);
+        summary.setSummaryJson("{\"overview\":\"ok\"}");
+        summary.setStatus(status);
+        summary.setTranscriptSegmentCount(3);
+        summary.setGeneratedAt(LocalDateTime.of(2026, 7, 23, 12, 0));
+        summary.setCaregiverVisibility("on_consent");
+        summary.setSummarizationEngine("test-engine");
+        return summary;
+    }
+
     @Test
     void persist_emitsSummaryCreatedForSuccessfulVisit() {
         final VisitSummary incoming = sample("SUCCESS");
@@ -82,18 +95,5 @@ class VisitSummaryPersistenceServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("patient ownership");
         verify(indexingEventEmitter, never()).emitSummaryCreated(any());
-    }
-
-    private static VisitSummary sample(final String status) {
-        final VisitSummary summary = new VisitSummary();
-        summary.setVisitId("visit-1");
-        summary.setPatientId(42L);
-        summary.setSummaryJson("{\"overview\":\"ok\"}");
-        summary.setStatus(status);
-        summary.setTranscriptSegmentCount(3);
-        summary.setGeneratedAt(LocalDateTime.of(2026, 7, 23, 12, 0));
-        summary.setCaregiverVisibility("on_consent");
-        summary.setSummarizationEngine("test-engine");
-        return summary;
     }
 }

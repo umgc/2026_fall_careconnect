@@ -16,18 +16,18 @@ public interface SymptomEntryRepository extends JpaRepository<SymptomEntry, Long
 
     // Already existing analytics queries:
     @Query("SELECT COUNT(s) " +
-           "FROM SymptomEntry s " +
-           "WHERE s.patient.id = :patientId " +
-           "AND s.takenAt BETWEEN :from AND :to " +
-           "AND s.completed = true")
+            "FROM SymptomEntry s " +
+            "WHERE s.patient.id = :patientId " +
+            "AND s.takenAt BETWEEN :from AND :to " +
+            "AND s.completed = true")
     long countCompleted(@Param("patientId") Long patientId,
                         @Param("from") Instant from,
                         @Param("to") Instant to);
 
     @Query("SELECT COUNT(s) " +
-           "FROM SymptomEntry s " +
-           "WHERE s.patient.id = :patientId " +
-           "AND s.takenAt BETWEEN :from AND :to")
+            "FROM SymptomEntry s " +
+            "WHERE s.patient.id = :patientId " +
+            "AND s.takenAt BETWEEN :from AND :to")
     long countTotal(@Param("patientId") Long patientId,
                     @Param("from") Instant from,
                     @Param("to") Instant to);

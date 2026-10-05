@@ -26,18 +26,18 @@ import java.util.Optional;
 @Service
 @Transactional
 public class TaskService {
-    
+
     private static final Logger log = LoggerFactory.getLogger(TaskService.class);
-    
+
     @Autowired
     private TaskRepository taskRepository;
 
     @Autowired
     private PatientRepository patientRepository;
-    
+
     @Autowired
     private SesService sesService;
-    
+
     @Autowired
     private SnsService snsService;
 
@@ -56,11 +56,11 @@ public class TaskService {
         Optional<List<Task>> tasksOpt = taskRepository.findByPatientId(patientId);
         return tasksOpt.orElseGet(ArrayList::new);
     }
-    
+
     public Task createTask(Long patientId, TaskDto task) {
         // Get the patient and ensure it exists
         Patient patient = patientRepository.findById(patientId).orElseThrow(
-            () -> new AppException(HttpStatus.NOT_FOUND, "Patient not found")
+                () -> new AppException(HttpStatus.NOT_FOUND, "Patient not found")
         );
         System.out.println("Creating task for patient: " + patient.getId());
         System.out.println("Task details: " + task);
@@ -80,12 +80,12 @@ public class TaskService {
         System.out.println("New task created: " + newTask);
         try {
             Task savedTask = taskRepository.save(newTask);
-            
+
             // Trigger notifications if this is an appointment
             if ("Appointment".equalsIgnoreCase(savedTask.getTaskType())) {
                 sendAppointmentNotification(savedTask, patient);
             }
-            
+
             return savedTask;
         } catch (Exception e) {
             throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -95,7 +95,7 @@ public class TaskService {
 
     public Map<String, Object> previewTaskNotification(Long patientId, TaskDto task) {
         Patient patient = patientRepository.findById(patientId).orElseThrow(
-            () -> new AppException(HttpStatus.NOT_FOUND, "Patient not found")
+                () -> new AppException(HttpStatus.NOT_FOUND, "Patient not found")
         );
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -142,7 +142,7 @@ public class TaskService {
         existingTask.setDaysOfWeek(task.getDaysOfWeek());
 
         // Save the updated task
-        return taskRepository.save(existingTask);   
+        return taskRepository.save(existingTask);
     }
 
     public boolean deleteTask(Long taskId) {
@@ -179,11 +179,11 @@ public class TaskService {
             if (emailAddress != null && !emailAddress.isBlank()) {
                 try {
                     sesService.sendAppointmentReminder(
-                        emailAddress,
-                        recipientName,
-                        appointmentType,
-                        dateTime,
-                        location
+                            emailAddress,
+                            recipientName,
+                            appointmentType,
+                            dateTime,
+                            location
                     );
                     log.info("Appointment confirmation email sent to {}", emailAddress);
                 } catch (Exception e) {
@@ -194,10 +194,10 @@ public class TaskService {
             if (phoneNumber != null && !phoneNumber.isBlank()) {
                 try {
                     snsService.sendAppointmentReminderSms(
-                        phoneNumber,
-                        recipientName,
-                        appointmentType,
-                        dateTime
+                            phoneNumber,
+                            recipientName,
+                            appointmentType,
+                            dateTime
                     );
                     log.info("Appointment confirmation SMS sent to {}", phoneNumber);
                 } catch (Exception e) {

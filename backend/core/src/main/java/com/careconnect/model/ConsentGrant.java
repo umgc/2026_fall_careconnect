@@ -36,13 +36,19 @@ import java.time.Instant;
 @Builder
 public class ConsentGrant {
 
-    /** Default scope used for Ask AI retrieval consent grants. */
+    /**
+     * Default scope used for Ask AI retrieval consent grants.
+     */
     public static final String SCOPE_AI_RETRIEVAL = "AI_RETRIEVAL";
 
-    /** Status set while a grant is in force. */
+    /**
+     * Status set while a grant is in force.
+     */
     public static final String STATUS_ACTIVE = "ACTIVE";
 
-    /** Status set once a grant has been revoked. */
+    /**
+     * Status set once a grant has been revoked.
+     */
     public static final String STATUS_REVOKED = "REVOKED";
 
     @Id

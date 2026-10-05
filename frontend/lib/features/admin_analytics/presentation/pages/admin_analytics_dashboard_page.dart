@@ -91,24 +91,23 @@ class _AdminAnalyticsDashboardPageState
     }
   }
 
-  Future<void> _pickDateRange() async {
+  Future<void> _pickDateRange(bool errState) async {
     final now = DateTime.now();
     final picked = await showDateRangePicker(
       context: context,
       firstDate: now.subtract(const Duration(days: 365 * 5)),
       lastDate: now,
       initialDateRange: _selectedRange,
-      helpText: 'Select analytics period',
+      helpText: errState
+          ? 'Date range cannot exceed $_maxRangeDays days; please try again.'
+          : 'Select analytics period',
     );
     if (picked == null || !mounted) return;
 
-    final inclusiveDays = _dateOnly(picked.end).difference(_dateOnly(picked.start)).inDays + 1;
+    final inclusiveDays =
+        _dateOnly(picked.end).difference(_dateOnly(picked.start)).inDays + 1;
     if (inclusiveDays > _maxRangeDays) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Date range cannot exceed $_maxRangeDays days'),
-        ),
-      );
+      _pickDateRange(true);
       return;
     }
 
@@ -256,7 +255,7 @@ class _AdminAnalyticsDashboardPageState
 
   Widget _buildDateRangeSelector() {
     return OutlinedButton.icon(
-      onPressed: _pickDateRange,
+      onPressed: () => _pickDateRange(false),
       icon: const Icon(Icons.date_range),
       label: Text(_formatSelectedRangeLabel()),
       style: OutlinedButton.styleFrom(
@@ -328,8 +327,8 @@ class _AdminAnalyticsDashboardPageState
         AdminTopFeaturesSection(
           features: summary.topFeatures,
           sortDescending: _featuresSortDescending,
-          onSortToggle: () =>
-              setState(() => _featuresSortDescending = !_featuresSortDescending),
+          onSortToggle: () => setState(
+              () => _featuresSortDescending = !_featuresSortDescending),
           onFeatureTap: (feature) => _showFeatureDetail(feature, summary),
         ),
         const SizedBox(height: 16),

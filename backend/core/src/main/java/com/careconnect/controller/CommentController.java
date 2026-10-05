@@ -37,33 +37,33 @@ public class CommentController {
 
     @GetMapping("/post/{postId}")
     @Operation(
-        summary = "Get comments for a post",
-        description = "Retrieve all comments for a specific post, ordered by creation time."
+            summary = "Get comments for a post",
+            description = "Retrieve all comments for a specific post, ordered by creation time."
     )
     @ApiResponses({
-        @ApiResponse(
-            responseCode = "200",
-            description = "Comments retrieved successfully",
-            content = @Content(
-                mediaType = "application/json",
-                schema = @Schema(implementation = Comment.class, type = "array"),
-                examples = @ExampleObject(value = "[\n    {\n        \"id\": 1,\n        \"postId\": 123,\n        \"userId\": 456,\n        \"username\": \"john_doe\",\n        \"content\": \"Great post!\",\n        \"createdAt\": \"2025-01-15T10:30:00Z\"\n    }\n]")
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Comments retrieved successfully",
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = Comment.class, type = "array"),
+                            examples = @ExampleObject(value = "[\n    {\n        \"id\": 1,\n        \"postId\": 123,\n        \"userId\": 456,\n        \"username\": \"john_doe\",\n        \"content\": \"Great post!\",\n        \"createdAt\": \"2025-01-15T10:30:00Z\"\n    }\n]")
+                    )
+            ),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Not authenticated"
             )
-        ),
-        @ApiResponse(
-            responseCode = "403",
-            description = "Not authenticated"
-        )
     })
     public ResponseEntity<?> getCommentsForPost(
-        @Parameter(description = "ID of the post to get comments for", required = true)
-        @PathVariable Long postId
+            @Parameter(description = "ID of the post to get comments for", required = true)
+            @PathVariable Long postId
     ) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not authenticated");
         }
-        
+
         List<Comment> comments = commentService.getCommentsForPost(postId);
         return ResponseEntity.ok(comments);
     }
@@ -77,19 +77,19 @@ public class CommentController {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Not authenticated");
         }
-        
+
         // Get user from JWT token (email is the subject)
         String email = authentication.getName();
         User user = userRepository.findByEmail(email).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("User not found");
         }
-        
+
         // Verify the comment belongs to the authenticated user
         if (!user.getId().equals(comment.getUserId())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Cannot comment as another user");
         }
-        
+
         Comment saved = commentService.addComment(postId, comment.getUserId(), comment.getUsername(), comment.getContent());
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }

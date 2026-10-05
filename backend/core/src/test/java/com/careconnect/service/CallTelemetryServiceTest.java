@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for CallTelemetryService.
- *
+ * <p>
  * Uses a real ObjectMapper so JSON serialization actually runs,
  * allowing us to verify sanitization behavior via the saved payloadJson.
  */
@@ -35,12 +35,10 @@ import static org.mockito.Mockito.when;
 @DisplayName("CallTelemetryService Tests")
 class CallTelemetryServiceTest {
 
+    private static final String CALL_ID = "call-1";
     @Mock
     private CallTelemetryEventRepository callTelemetryEventRepository;
-
     private CallTelemetryService callTelemetryService;
-
-    private static final String CALL_ID = "call-1";
 
     @BeforeEach
     void setUp() {
@@ -98,8 +96,8 @@ class CallTelemetryServiceTest {
         @DisplayName("recordCallEvent with null metadata does not throw")
         void recordCallEvent_nullMetadata_doesNotThrow() {
             assertThatCode(() ->
-                callTelemetryService.recordCallEvent(
-                        CALL_ID, "CALL_JOIN", 1L, null, "SUCCESS", null, null)
+                    callTelemetryService.recordCallEvent(
+                            CALL_ID, "CALL_JOIN", 1L, null, "SUCCESS", null, null)
             ).doesNotThrowAnyException();
 
             verify(callTelemetryEventRepository).save(any(CallTelemetryEvent.class));
@@ -109,8 +107,8 @@ class CallTelemetryServiceTest {
         @DisplayName("recordCallEvent with null callId does not throw, saves with null callId")
         void recordCallEvent_nullCallId_doesNotThrow() {
             assertThatCode(() ->
-                callTelemetryService.recordCallEvent(
-                        null, "CALL_JOIN", 1L, null, "SUCCESS", Map.of(), null)
+                    callTelemetryService.recordCallEvent(
+                            null, "CALL_JOIN", 1L, null, "SUCCESS", Map.of(), null)
             ).doesNotThrowAnyException();
 
             ArgumentCaptor<CallTelemetryEvent> captor = ArgumentCaptor.forClass(CallTelemetryEvent.class);

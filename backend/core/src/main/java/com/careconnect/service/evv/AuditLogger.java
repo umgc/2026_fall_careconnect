@@ -8,11 +8,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
-@Component @RequiredArgsConstructor
+@Component
+@RequiredArgsConstructor
 public class AuditLogger {
     private final EvvAuditEventRepository repo;
 
-    public void log(EvvRecord rec, Long actorUserId, String type, Map<String,Object> details){
+    public void log(EvvRecord rec, Long actorUserId, String type, Map<String, Object> details) {
         repo.save(EvvAuditEvent.builder()
                 .evvRecord(rec)
                 .actorUserId(actorUserId)

@@ -26,13 +26,13 @@ public class LinkMaintenanceService {
     public void cleanupExpiredLinks() {
         try {
             log.info("Starting automatic cleanup of expired links");
-            
+
             // Cleanup caregiver-patient links
             caregiverPatientLinkService.cleanupExpiredLinks();
-            
+
             // Cleanup family member links
             familyMemberService.cleanupExpiredFamilyMemberLinks();
-            
+
             log.info("Completed automatic cleanup of expired links");
         } catch (Exception e) {
             log.error("Error during automatic link cleanup", e);
@@ -47,11 +47,11 @@ public class LinkMaintenanceService {
     public void notifyExpiringSoonLinks() {
         try {
             log.info("Checking for links expiring soon");
-            
+
             // TODO: Implement notification logic
             // This could send emails or push notifications to relevant users
             // about links that are expiring soon
-            
+
             log.info("Completed check for expiring links");
         } catch (Exception e) {
             log.error("Error during expiring links notification", e);
@@ -66,14 +66,14 @@ public class LinkMaintenanceService {
     public void generateDailyLinkStatistics() {
         try {
             log.info("Generating daily link statistics");
-            
+
             // TODO: Implement statistics generation
             // This could track:
             // - Number of active links
             // - Number of temporary vs permanent links
             // - Average link duration
             // - Most common link types
-            
+
             log.info("Completed daily link statistics generation");
         } catch (Exception e) {
             log.error("Error during daily link statistics generation", e);

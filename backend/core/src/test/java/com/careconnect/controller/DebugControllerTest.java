@@ -23,10 +23,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
-/*
- * MockitoExtension enables strict stubbing.
- * This ensures no unused mocks or argument mismatches exist.
- */
+        /*
+         * MockitoExtension enables strict stubbing.
+         * This ensures no unused mocks or argument mismatches exist.
+         */
 class DebugControllerTest {
 
     private MockMvc mockMvc;

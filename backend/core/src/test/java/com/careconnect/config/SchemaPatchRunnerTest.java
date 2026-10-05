@@ -19,6 +19,32 @@ import static org.mockito.Mockito.when;
 class SchemaPatchRunnerTest {
 
     @Test
+    void requireSafeIdentifier_acceptsPlainIdentifiers() {
+        assertThat(SchemaPatchRunner.requireSafeIdentifier("ehr_raw_payload")).isEqualTo("ehr_raw_payload");
+        assertThat(SchemaPatchRunner.requireSafeIdentifier("fk_ehr_crosswalk_patient"))
+                .isEqualTo("fk_ehr_crosswalk_patient");
+        assertThat(SchemaPatchRunner.requireSafeIdentifier("_t1")).isEqualTo("_t1");
+    }
+
+    @Test
+    void requireSafeIdentifier_rejectsAnythingThatCouldChangeTheStatement() {
+        for (final String hostile : new String[]{
+                "patient; DROP TABLE patient",
+                "patient'::regclass) THEN DROP TABLE patient; --",
+                "public.patient",
+                "\"patient\"",
+                "patient id",
+                "1patient",
+                ""}) {
+            assertThatThrownBy(() -> SchemaPatchRunner.requireSafeIdentifier(hostile))
+                    .as("identifier <%s>", hostile)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+        assertThatThrownBy(() -> SchemaPatchRunner.requireSafeIdentifier(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void normalizeIndexDefinition_acceptsPostgresCanonicalPredicateCasts() {
         final String requested = """
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_summary_replay_claim_fair
@@ -47,7 +73,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         assertThat(source).contains("idx_call_sessions_call_id_uidx");
         assertThat(source).contains("idx_call_participants_session_user_uidx");
@@ -92,7 +118,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final String applyRetrievalBody = source.substring(
                 source.indexOf("private void applyRetrievalIndexChunkPatches()"),
@@ -117,7 +143,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final int unlockIndexes = source.indexOf("ensureRetrievalConcurrentIndexes();");
         final int embeddingVerify = source.indexOf(
@@ -141,7 +167,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         assertThat(source).contains("TimeUnit.MINUTES.toNanos(10)");
         assertThat(source).doesNotContain("TimeUnit.SECONDS.toNanos(30)");
@@ -157,7 +183,7 @@ class SchemaPatchRunnerTest {
         final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
                 ? sourcePath
                 : java.nio.file.Path.of(
-                        "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
         final String source = java.nio.file.Files.readString(resolved);
         final int methodStart = source.indexOf("private void verifyCallTerminationSchema()");
         final int methodEnd = source.indexOf(

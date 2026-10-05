@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Data
 public class ScheduledVisitResponse {
-    
+
     private Long id;
     private Long caregiverId;
     private Long patientId;
@@ -25,8 +25,9 @@ public class ScheduledVisitResponse {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    
-    public ScheduledVisitResponse() {}
+
+    public ScheduledVisitResponse() {
+    }
 
     public ScheduledVisitResponse(ScheduledVisit visit, String patientName) {
         this.id = visit.getId();

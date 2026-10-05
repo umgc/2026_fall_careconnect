@@ -28,16 +28,13 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class GmailClientTest {
 
-    @Mock
-    private RestTemplate restTemplate;
-
-    private GmailClient client;
-
-    private final ObjectMapper mapper = new ObjectMapper();
     private static final String TOKEN = "test-token";
-
     // 2024-12-24 00:00:00 UTC in epoch millis
     private static final long RECENT_DATE_MS = 1735000000000L;
+    private final ObjectMapper mapper = new ObjectMapper();
+    @Mock
+    private RestTemplate restTemplate;
+    private GmailClient client;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -47,12 +44,16 @@ class GmailClientTest {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    /** Encode a string as Base64-URL so it can be used as Gmail message body.data */
+    /**
+     * Encode a string as Base64-URL so it can be used as Gmail message body.data
+     */
     private String b64(String text) {
         return Base64.getUrlEncoder().encodeToString(text.getBytes(StandardCharsets.UTF_8));
     }
 
-    /** Parse a JSON string into a JsonNode */
+    /**
+     * Parse a JSON string into a JsonNode
+     */
     private JsonNode json(String raw) throws Exception {
         return mapper.readTree(raw);
     }
@@ -68,7 +69,9 @@ class GmailClientTest {
                 + "\"body\":{\"data\":\"" + data + "\"},\"parts\":[]}}");
     }
 
-    /** Build a search-result JSON listing the given message IDs */
+    /**
+     * Build a search-result JSON listing the given message IDs
+     */
     private JsonNode searchResult(String... ids) throws Exception {
         final StringBuilder sb = new StringBuilder("{\"messages\":[");
         for (int i = 0; i < ids.length; i++) {

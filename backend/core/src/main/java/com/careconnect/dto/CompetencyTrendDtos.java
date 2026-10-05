@@ -11,7 +11,9 @@ import java.util.List;
  */
 public class CompetencyTrendDtos {
 
-    /** One data point: week start date, average score, and log count for that activity that week. */
+    /**
+     * One data point: week start date, average score, and log count for that activity that week.
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -21,7 +23,9 @@ public class CompetencyTrendDtos {
         private int logCount;
     }
 
-    /** One activity's trend: list of weekly data points. */
+    /**
+     * One activity's trend: list of weekly data points.
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
@@ -31,12 +35,16 @@ public class CompetencyTrendDtos {
         private List<WeekDataPoint> dataPoints;
     }
 
-    /** Full response: overall status and per-activity trends. */
+    /**
+     * Full response: overall status and per-activity trends.
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     public static class CompetencyTrendsResponse {
-        /** "IMPROVING", "STABLE", or "DECLINING" */
+        /**
+         * "IMPROVING", "STABLE", or "DECLINING"
+         */
         private String status;
         private List<String> weekLabels; // sorted week start dates
         private List<ActivityTrend> activityTrends;

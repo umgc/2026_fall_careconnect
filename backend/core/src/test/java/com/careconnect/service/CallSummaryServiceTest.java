@@ -33,24 +33,43 @@ import static org.mockito.Mockito.when;
 @DisplayName("CallSummaryService Tests")
 class CallSummaryServiceTest {
 
+    private static final String CALL_ID = "call-1";
     @Mock
     private CallSummaryRepository callSummaryRepository;
-
     @Mock
     private CallTranscriptService callTranscriptService;
-
     @Mock
     private BedrockSentimentService bedrockSentimentService;
-
     @Mock
     private IndexingEventEmitter indexingEventEmitter;
-
     @Mock
     private CallPatientResolver callPatientResolver;
-
     private CallSummaryService service;
 
-    private static final String CALL_ID = "call-1";
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> asObjectMap(final Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (value instanceof Map<?, ?> rawMap) {
+            return (Map<String, Object>) rawMap;
+        }
+        throw new AssertionError("Expected a map but found: " + value.getClass());
+    }
+
+    private static CallTranscriptService.TranscriptSnapshot snapshot(
+            final String text, final long count) {
+        return new CallTranscriptService.TranscriptSnapshot(
+                text, count, "sha256:test-" + count);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ArgumentCaptor<
+            Map<String, BedrockSentimentService.SentimentResult>
+            > channelScoresCaptor() {
+        return (ArgumentCaptor<Map<String, BedrockSentimentService.SentimentResult>>)
+                (ArgumentCaptor<?>) ArgumentCaptor.forClass(LinkedHashMap.class);
+    }
 
     @BeforeEach
     void setUp() {
@@ -467,31 +486,6 @@ class CallSummaryServiceTest {
 
             verify(callSummaryRepository, org.mockito.Mockito.times(1)).save(any(CallSummary.class));
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> asObjectMap(final Object value) {
-        if (value == null) {
-            return Map.of();
-        }
-        if (value instanceof Map<?, ?> rawMap) {
-            return (Map<String, Object>) rawMap;
-        }
-        throw new AssertionError("Expected a map but found: " + value.getClass());
-    }
-
-    private static CallTranscriptService.TranscriptSnapshot snapshot(
-            final String text, final long count) {
-        return new CallTranscriptService.TranscriptSnapshot(
-                text, count, "sha256:test-" + count);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static ArgumentCaptor<
-            Map<String, BedrockSentimentService.SentimentResult>
-    > channelScoresCaptor() {
-        return (ArgumentCaptor<Map<String, BedrockSentimentService.SentimentResult>>)
-                (ArgumentCaptor<?>) ArgumentCaptor.forClass(LinkedHashMap.class);
     }
 
     @Nested

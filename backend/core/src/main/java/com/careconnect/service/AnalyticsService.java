@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.lowagie.text.*;
 import com.careconnect.exception.AppException;
 import com.lowagie.text.pdf.*;
+
 import java.util.Comparator;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
@@ -23,6 +24,7 @@ import java.util.Collections;
 import java.time.Instant;
 import java.util.stream.Collectors;
 import java.time.*;
+
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 
@@ -185,10 +187,17 @@ public class AnalyticsService {
                 .build();
     }
 
-    private double round1(double v) { return Math.round(v * 10) / 10.0; }
-    private double round0(double v) { return Math.round(v); }
+    private double round1(double v) {
+        return Math.round(v * 10) / 10.0;
+    }
 
-    private Integer doubleToInt(Double d) { return d == null ? null : d.intValue(); }
+    private double round0(double v) {
+        return Math.round(v);
+    }
+
+    private Integer doubleToInt(Double d) {
+        return d == null ? null : d.intValue();
+    }
 
     /**
      * Get patient by user ID

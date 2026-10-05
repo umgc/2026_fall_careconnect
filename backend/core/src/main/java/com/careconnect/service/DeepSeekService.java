@@ -24,13 +24,11 @@ import java.util.List;
 @ConditionalOnProperty(name = "careconnect.ai.provider", havingValue = "deepseek")
 public class DeepSeekService implements AIService {
 
+    private final RestClient restClient;
     @Value("${deepseek.api.key:}")
     private String apiKey;
-
     @Value("${deepseek.api.url:https://api.deepseek.com/v1}")
     private String apiUrl;
-
-    private final RestClient restClient;
 
     public DeepSeekService(
             @Value("${deepseek.api.key:}") String apiKey,
@@ -107,6 +105,28 @@ public class DeepSeekService implements AIService {
         return chat;
     }
 
+    @Override
+    public List<ChatConversationSummary> getPatientConversations(Long patientId) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public List<ChatMessageSummary> getConversationMessages(String conversationId) {
+        throw new UnsupportedOperationException();
+    }
+
+    // ===== Stubbed methods =====
+
+    @Override
+    public List<ChatMessageSummary> getRecentMessagesForUser(Long userId, int limit) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public void deactivateConversation(String conversationId) {
+        throw new UnsupportedOperationException();
+    }
+
     @Data
     @NoArgsConstructor
     public static class DeepSeekChatRequest {
@@ -127,28 +147,6 @@ public class DeepSeekService implements AIService {
             this.role = role;
             this.content = content;
         }
-    }
-
-    // ===== Stubbed methods =====
-
-    @Override
-    public List<ChatConversationSummary> getPatientConversations(Long patientId) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public List<ChatMessageSummary> getConversationMessages(String conversationId) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public List<ChatMessageSummary> getRecentMessagesForUser(Long userId, int limit) {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void deactivateConversation(String conversationId) {
-        throw new UnsupportedOperationException();
     }
 
     // ===== DTOs =====

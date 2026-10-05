@@ -32,7 +32,7 @@ PatientNote _makeNote({
   );
 }
 
-/// Wraps NotetakerDetailView with no extra (triggers redirect to notetaker-search).
+/// Wraps NotetakerDetailView with no extra and no noteId/patientId params.
 Widget _wrapNoExtra({MockUserProvider? provider}) {
   final userProvider =
       provider ?? MockUserProvider(mockUser: MockUser(role: 'PATIENT'));
@@ -174,19 +174,25 @@ void main() {
     );
   });
 
-  group('NotetakerDetailView - no extra (redirect)', () {
-    testWidgets('shows CircularProgressIndicator when note is null',
+  // Without a PatientNote extra, the view expects a deep link
+  // (noteId + ?patientId=). With neither, it shows an error in place.
+  group('NotetakerDetailView - no extra and no deep-link params', () {
+    testWidgets('shows missing-context error when note is null',
         (tester) async {
       await tester.pumpWidget(_wrapNoExtra());
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pump();
+      expect(find.text('Note Detail'), findsOneWidget);
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
 
-    testWidgets('navigates to notetaker-search when extra is null',
+    testWidgets('stays on the detail view instead of redirecting',
         (tester) async {
       await tester.pumpWidget(_wrapNoExtra());
       await tester.pump();
       await tester.pump();
-      expect(find.text('Notetaker Search'), findsOneWidget);
+      expect(find.text('Notetaker Search'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
   });
 

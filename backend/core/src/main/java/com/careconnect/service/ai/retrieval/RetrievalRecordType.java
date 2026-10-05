@@ -23,7 +23,9 @@ public enum RetrievalRecordType {
     SUMMARY_CONDITION,
     SUMMARY_SOAP,
     SUMMARY_CLINICAL_OBSERVATION,
-    /** Derived from careInstructions type=medication (FR-AI-11 / Task 4.5). */
+    /**
+     * Derived from careInstructions type=medication (FR-AI-11 / Task 4.5).
+     */
     MEDICATION_TIMELINE_EVENT,
     MEDICATION,
     TASK,

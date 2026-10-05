@@ -2,6 +2,7 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 @Entity

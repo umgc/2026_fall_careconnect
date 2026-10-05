@@ -1,0 +1,132 @@
+name: Backend Teardown
+
+# Deletes an entire environment: service -> platform -> data -> networking,
+# emptying the ECR repository first (the platform stack cannot delete while
+# images remain). Staging is torn down between demos to control cost.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to DESTROY"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - cfdemo
+          - dev
+      confirm:
+        description: "Type the environment name again to confirm"
+        required: true
+      skip_ecr_cleanup:
+        description: "Skip emptying the ECR repository (leaves the platform stack undeletable)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: backend-teardown-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  teardown:
+    name: Destroy Environment
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Confirm intent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event.inputs.confirm }}" != "${{ github.event.inputs.environment }}" ]]; then
+            echo "::error::Confirmation '${{ github.event.inputs.confirm }}' does not match environment '${{ github.event.inputs.environment }}'. Aborting."
+            exit 1
+          fi
+          echo "Destroying environment: ${{ github.event.inputs.environment }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: careconnect-backend-teardown
+
+      - name: Make teardown script executable
+        run: chmod +x cloudformation-fargate/cdestroy_cloudformation.sh
+
+      - name: Destroy environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARGS=(
+            --environment "${{ github.event.inputs.environment }}"
+            --region "${{ env.AWS_REGION }}"
+          )
+          if [[ "${{ github.event.inputs.skip_ecr_cleanup }}" == "true" ]]; then
+            ARGS+=(--skip-ecr-cleanup)
+          fi
+          ./cloudformation-fargate/cdestroy_cloudformation.sh "${ARGS[@]}"
+
+      - name: Purge scheduled-for-deletion secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_NAME="${{ github.event.inputs.environment }}"
+          REGION="${{ env.AWS_REGION }}"
+
+          # CloudFormation only SCHEDULES secret deletion (30-day recovery window)
+          # and the name stays reserved, so the next full deploy would fail with
+          # "a secret with this name is already scheduled for deletion". These
+          # secrets are recreated from GitHub secrets on every full deploy, so
+          # there is nothing to recover.
+          for SECRET in \
+            "/careconnect/${ENV_NAME}/db-password" \
+            "/careconnect/${ENV_NAME}/jwt-secret"; do
+            if aws secretsmanager describe-secret \
+                 --secret-id "$SECRET" --region "$REGION" >/dev/null 2>&1; then
+              aws secretsmanager delete-secret \
+                --secret-id "$SECRET" \
+                --region "$REGION" \
+                --force-delete-without-recovery >/dev/null
+              echo "Force-deleted $SECRET"
+            else
+              echo "$SECRET not present"
+            fi
+          done
+
+      - name: Confirm nothing is left
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENV_NAME="${{ github.event.inputs.environment }}"
+          REMAINING=$(aws cloudformation list-stacks \
+            --region "${{ env.AWS_REGION }}" \
+            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE DELETE_FAILED \
+            --query "StackSummaries[?contains(StackName, 'careconnect') && contains(StackName, '${ENV_NAME}')].StackName" \
+            --output text)
+
+          {
+            echo "## Teardown: ${ENV_NAME}"
+            if [[ -z "$REMAINING" ]]; then
+              echo ""
+              echo "All \`careconnect-*-${ENV_NAME}\` stacks are gone. Nothing is accruing cost."
+            else
+              echo ""
+              echo ":warning: **Stacks still present:**"
+              echo ""
+              for s in $REMAINING; do echo "- \`$s\`"; done
+              echo ""
+              echo "These are still costing money. Re-run this workflow or delete them in the CloudFormation console."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

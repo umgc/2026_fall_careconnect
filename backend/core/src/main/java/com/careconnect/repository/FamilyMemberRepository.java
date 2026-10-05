@@ -10,6 +10,8 @@ import java.util.Optional;
 @Repository
 public interface FamilyMemberRepository extends JpaRepository<FamilyMember, Long> {
     Optional<FamilyMember> findByUser(User user);
+
     Optional<FamilyMember> findByEmail(String email);
+
     boolean existsByEmail(String email);
 }

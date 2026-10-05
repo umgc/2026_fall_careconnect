@@ -56,6 +56,47 @@ class GoogleOAuthServiceTest {
     // exchange() tests
     // -----------------------------------------------------------------------
 
+    private EmailCredentialRepository createRepositoryStub() throws Exception {
+        final InvocationHandler handler = new InvocationHandler() {
+            @Override
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                final String name = method.getName();
+                if (method.getDeclaringClass() == Object.class) {
+                    return switch (name) {
+                        case "toString" -> "EmailCredentialRepositoryStub";
+                        case "hashCode" -> System.identityHashCode(proxy);
+                        case "equals" -> proxy == args[0];
+                        default -> method.invoke(this, args);
+                    };
+                }
+                switch (name) {
+                    case "save" -> {
+                        final EmailCredential entity = (EmailCredential) args[0];
+                        savedRef.set(entity);
+                        return entity;
+                    }
+                    case "findFirstByUserIdAndProvider", "findFirstByUserIdAndProviderOrderByIdDesc" -> {
+                        final EmailCredential existing = existingCredRef.get();
+                        if (existing != null) {
+                            return Optional.of(existing);
+                        }
+                        return Optional.empty();
+                    }
+                    default -> throw new UnsupportedOperationException("Method " + name + " not supported in stub");
+                }
+            }
+        };
+        return (EmailCredentialRepository) Proxy.newProxyInstance(
+                GoogleOAuthServiceTest.class.getClassLoader(),
+                new Class[]{EmailCredentialRepository.class},
+                handler
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // ensureFreshToken() tests
+    // -----------------------------------------------------------------------
+
     @Nested
     @DisplayName("exchange() method")
     class ExchangeTests {
@@ -64,7 +105,7 @@ class GoogleOAuthServiceTest {
         @DisplayName("exchange succeeds with access token and refresh token")
         void exchangeSucceedsWithAccessAndRefreshToken() throws Exception {
             final String json = "{\"access_token\": \"access-abc\",\"refresh_token\":" +
-            "\"refresh-xyz\",\"expires_in\": 3600}";
+                    "\"refresh-xyz\",\"expires_in\": 3600}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -93,7 +134,7 @@ class GoogleOAuthServiceTest {
         @DisplayName("exchange succeeds without refresh token and no existing credential")
         void exchangeSucceedsWithoutRefreshTokenNoExisting() throws Exception {
             final String json = "{\"access_token\": \"access-only\"," +
-                      "\"expires_in\": 3600}";
+                    "\"expires_in\": 3600}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -120,7 +161,7 @@ class GoogleOAuthServiceTest {
             existingCredRef.set(existing);
 
             final String json = "{\"access_token\": \"new-access\"," +
-                      "\"expires_in\": 7200}";
+                    "\"expires_in\": 7200}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -156,7 +197,7 @@ class GoogleOAuthServiceTest {
         @DisplayName("exchange throws RuntimeException when access token is null")
         void exchangeThrowsWhenAccessTokenIsNull() throws Exception {
             final String json = "{\"refresh_token\": \"refresh-only\"," +
-                      "\"expires_in\": 3600}";
+                    "\"expires_in\": 3600}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -188,7 +229,7 @@ class GoogleOAuthServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // ensureFreshToken() tests
+    // postForToken() non-2xx branch
     // -----------------------------------------------------------------------
 
     @Nested
@@ -219,7 +260,7 @@ class GoogleOAuthServiceTest {
             credential.setExpiresAt(Instant.now().minusSeconds(5));
 
             final String json = "{\"access_token\": \"new-access-token\"," +
-                      "\"expires_in\": 3600}";
+                    "\"expires_in\": 3600}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -252,7 +293,7 @@ class GoogleOAuthServiceTest {
             credential.setExpiresAt(null);
 
             final String json = "{\"access_token\": \"refreshed-access\"," +
-                      "\"expires_in\": 1800}";
+                    "\"expires_in\": 1800}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -277,7 +318,7 @@ class GoogleOAuthServiceTest {
             credential.setExpiresAt(Instant.now().plusSeconds(60));
 
             final String json = "{\"access_token\": \"fresh-access\"," +
-                      "\"expires_in\": 3600}";
+                    "\"expires_in\": 3600}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -524,7 +565,7 @@ class GoogleOAuthServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // postForToken() non-2xx branch
+    // safeId() private method coverage
     // -----------------------------------------------------------------------
 
     @Nested
@@ -549,7 +590,7 @@ class GoogleOAuthServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // safeId() private method coverage
+    // Edge cases
     // -----------------------------------------------------------------------
 
     @Nested
@@ -563,9 +604,9 @@ class GoogleOAuthServiceTest {
             service.clientId = "a]very-long-client-id-for-testing";
 
             final String json = "{" +
-                      "\"access_token\": \"token-abc\"," +
-                      "\"refresh_token\": \"refresh-abc\"," +
-                      "\"expires_in\": 3600" +
+                    "\"access_token\": \"token-abc\"," +
+                    "\"refresh_token\": \"refresh-abc\"," +
+                    "\"expires_in\": 3600" +
                     "}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
@@ -586,10 +627,10 @@ class GoogleOAuthServiceTest {
 
             final String json =
                     "{" +
-                      "\"access_token\": \"token-short\"," +
-                      "\"refresh_token\": \"refresh-short\"," +
-                      "\"expires_in\": 3600" +
-                    "}";
+                            "\"access_token\": \"token-short\"," +
+                            "\"refresh_token\": \"refresh-short\"," +
+                            "\"expires_in\": 3600" +
+                            "}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -619,10 +660,10 @@ class GoogleOAuthServiceTest {
 
             final String json =
                     "{" +
-                      "\"access_token\": \"token-12\"," +
-                      "\"refresh_token\": \"refresh-12\"," +
-                      "\"expires_in\": 3600" +
-                    "}";
+                            "\"access_token\": \"token-12\"," +
+                            "\"refresh_token\": \"refresh-12\"," +
+                            "\"expires_in\": 3600" +
+                            "}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -636,7 +677,7 @@ class GoogleOAuthServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // Edge cases
+    // Repository stub
     // -----------------------------------------------------------------------
 
     @Nested
@@ -655,9 +696,9 @@ class GoogleOAuthServiceTest {
 
             final String json =
                     "{" +
-                      "\"access_token\": \"access-edge\"," +
-                      "\"expires_in\": 3600" +
-                    "}";
+                            "\"access_token\": \"access-edge\"," +
+                            "\"expires_in\": 3600" +
+                            "}";
 
             server.expect(requestTo("https://oauth2.googleapis.com/token"))
                     .andExpect(method(HttpMethod.POST))
@@ -672,46 +713,5 @@ class GoogleOAuthServiceTest {
 
             server.verify();
         }
-    }
-
-    // -----------------------------------------------------------------------
-    // Repository stub
-    // -----------------------------------------------------------------------
-
-    private EmailCredentialRepository createRepositoryStub() throws Exception {
-        final InvocationHandler handler = new InvocationHandler() {
-            @Override
-            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                final String name = method.getName();
-                if (method.getDeclaringClass() == Object.class) {
-                    return switch (name) {
-                        case "toString" -> "EmailCredentialRepositoryStub";
-                        case "hashCode" -> System.identityHashCode(proxy);
-                        case "equals" -> proxy == args[0];
-                        default -> method.invoke(this, args);
-                    };
-                }
-                switch (name) {
-                    case "save" -> {
-                        final EmailCredential entity = (EmailCredential) args[0];
-                        savedRef.set(entity);
-                        return entity;
-                    }
-                    case "findFirstByUserIdAndProvider", "findFirstByUserIdAndProviderOrderByIdDesc" -> {
-                        final EmailCredential existing = existingCredRef.get();
-                        if (existing != null) {
-                            return Optional.of(existing);
-                        }
-                        return Optional.empty();
-                    }
-                    default -> throw new UnsupportedOperationException("Method " + name + " not supported in stub");
-                }
-            }
-        };
-        return (EmailCredentialRepository) Proxy.newProxyInstance(
-                GoogleOAuthServiceTest.class.getClassLoader(),
-                new Class[]{EmailCredentialRepository.class},
-                handler
-        );
     }
 }

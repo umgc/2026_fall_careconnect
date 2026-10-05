@@ -47,14 +47,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @ExtendWith(MockitoExtension.class)
 class CheckInQuestionControllerTest {
-    @RestControllerAdvice
-    static class UnauthorizedOnlyExceptionHandler {
-        @ExceptionHandler(UnauthorizedException.class)
-        ResponseEntity<Map<String, String>> handleUnauthorized(UnauthorizedException ex) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", ex.getMessage()));
-        }
-    }
-
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private MockMvc mockMvc;
 
     @Mock
@@ -71,8 +64,6 @@ class CheckInQuestionControllerTest {
 
     @InjectMocks
     private CheckInQuestionController controller;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -288,5 +279,13 @@ class CheckInQuestionControllerTest {
                 .andExpect(status().isForbidden());
 
         verify(checkInSnapshotService, never()).listCheckInsForPatient(any());
+    }
+
+    @RestControllerAdvice
+    static class UnauthorizedOnlyExceptionHandler {
+        @ExceptionHandler(UnauthorizedException.class)
+        ResponseEntity<Map<String, String>> handleUnauthorized(UnauthorizedException ex) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", ex.getMessage()));
+        }
     }
 }

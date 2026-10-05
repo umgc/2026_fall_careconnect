@@ -146,7 +146,7 @@ class VoiceIntentServiceTest {
 
         assertThat(response.getIntent()).isEqualTo("unknown");
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getErrorMessage()).isEqualTo("Bedrock unavailable");
+        assertThat(response.getErrorMessage()).isEqualTo("Voice intent service is temporarily unavailable.");
     }
 
     @Test

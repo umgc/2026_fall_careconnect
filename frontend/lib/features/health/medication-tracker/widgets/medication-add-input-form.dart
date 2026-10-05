@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
@@ -274,6 +276,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                     const SizedBox(height: 8),
                     DropdownButtonFormField<MedicationType>(
                       initialValue: _selectedMedicationType,
+                      isExpanded: true,
                       decoration: InputDecoration(
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -296,7 +299,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
                       items: MedicationType.values.map((MedicationType type) {
                         return DropdownMenuItem<MedicationType>(
                           value: type,
-                          child: Text(type.name),
+                          child: Text(type.label, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
                       onChanged: (MedicationType? newValue) {
@@ -577,9 +580,14 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
           if (_notesController.text.isNotEmpty) 'notes': _notesController.text,
         };
 
+
         final response = await ApiService.addPatientMedication(
           patientId,
           medicationData,
+        );
+        
+        unawaited(
+          Telemetry.event('feature.medications.add', {'statusCode': response.statusCode})
         );
 
         if (response.statusCode == 200) {

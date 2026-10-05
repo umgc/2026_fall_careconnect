@@ -25,13 +25,13 @@ import static org.mockito.Mockito.*;
 
 /**
  * RBAC tests for CheckInController.
- *
+ * <p>
  * Tests that:
  * - GET /{id} enforces requireAdminOrCaregiver()
  * - GET / (getCheckIns) enforces requireAdminOrCaregiver()
  * - PUT /{id} enforces requireAdminOrCaregiver()
  * - POST / (patientCheckIn) requires resolveCurrentUser() (any authenticated user)
- *
+ * <p>
  * Uses pure Mockito to match CheckInControllerTest conventions.
  */
 @ExtendWith(MockitoExtension.class)

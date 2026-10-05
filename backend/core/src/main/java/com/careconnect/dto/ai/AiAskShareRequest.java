@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -26,5 +27,6 @@ public record AiAskShareRequest(
     public record AiAskShareMessage(
             @Size(max = 16) String role,
             @NotBlank @Size(max = 8000) String text,
-            @Size(max = 64) String occurredAt) {}
+            @Size(max = 64) String occurredAt) {
+    }
 }

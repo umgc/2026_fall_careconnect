@@ -27,7 +27,9 @@ public class SymptomEntryController {
     private final SecurityUtil securityUtil;
     private final AuthorizationService authorizationService;
 
-    /** Create a new symptom entry */
+    /**
+     * Create a new symptom entry
+     */
     @RequirePermission(Permission.RECORD_HEALTH_DATA)
 
     @PostMapping
@@ -35,16 +37,18 @@ public class SymptomEntryController {
         try {
             SymptomEntryDTO created = symptomEntryService.createSymptom(dto);
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(Map.of("data", created, "message", "Symptom created successfully"));
+                    .body(Map.of("data", created, "message", "Symptom created successfully"));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to create symptom"));
+                    .body(Map.of("error", "Failed to create symptom"));
         }
     }
 
-    /** Get all symptoms for a patient */
+    /**
+     * Get all symptoms for a patient
+     */
     @RequirePermission(Permission.VIEW_HEALTH_DATA)
 
     @GetMapping("/patient/{patientId}")
@@ -56,11 +60,13 @@ public class SymptomEntryController {
             return ResponseEntity.ok(Map.of("data", list, "message", "Symptoms retrieved successfully"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to fetch symptoms"));
+                    .body(Map.of("error", "Failed to fetch symptoms"));
         }
     }
 
-    /** Delete a symptom by ID */
+    /**
+     * Delete a symptom by ID
+     */
     @RequirePermission(Permission.RECORD_HEALTH_DATA)
 
     @DeleteMapping("/{id}")
@@ -72,7 +78,7 @@ public class SymptomEntryController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to delete symptom"));
+                    .body(Map.of("error", "Failed to delete symptom"));
         }
     }
 }

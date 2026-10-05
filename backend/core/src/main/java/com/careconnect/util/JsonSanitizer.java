@@ -7,7 +7,8 @@ package com.careconnect.util;
  */
 public final class JsonSanitizer {
 
-    private JsonSanitizer() {}
+    private JsonSanitizer() {
+    }
 
     public static String extractFirstJsonObject(String s) {
         if (s == null) return null;

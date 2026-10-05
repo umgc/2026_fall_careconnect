@@ -29,12 +29,18 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class InvoiceSpecsTest {
 
-    @Mock Root<Invoice>    root;
-    @Mock CriteriaQuery<?> cq;
-    @Mock CriteriaBuilder  cb;
-    @Mock Path             path;
-    @Mock Expression       expr;
-    @Mock Predicate        predicate;
+    @Mock
+    Root<Invoice> root;
+    @Mock
+    CriteriaQuery<?> cq;
+    @Mock
+    CriteriaBuilder cb;
+    @Mock
+    Path path;
+    @Mock
+    Expression expr;
+    @Mock
+    Predicate predicate;
 
     // ─── Private constructor ──────────────────────────────────────────────────
 
@@ -64,7 +70,7 @@ class InvoiceSpecsTest {
 
     @Test
     void search_validQuery_buildsOrPredicateWithThreeLikes() throws Exception {
-        final String q    = "John";
+        final String q = "John";
         final String like = "%" + q.toLowerCase() + "%";
 
         when(root.get("invoiceNumber")).thenReturn(path);
@@ -173,8 +179,8 @@ class InvoiceSpecsTest {
 
     @Test
     void dueBetween_bothValid_buildsBetweenPredicate() throws Exception {
-        final OffsetDateTime start = OffsetDateTime.of(2024, 1,  1,  0,  0,  0, 0, ZoneOffset.UTC);
-        final OffsetDateTime end   = OffsetDateTime.of(2024, 12, 31, 23, 59, 59, 0, ZoneOffset.UTC);
+        final OffsetDateTime start = OffsetDateTime.of(2024, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
+        final OffsetDateTime end = OffsetDateTime.of(2024, 12, 31, 23, 59, 59, 0, ZoneOffset.UTC);
 
         when(root.get("dueDate")).thenReturn(path);
         when(cb.between(path, start, end)).thenReturn(predicate);

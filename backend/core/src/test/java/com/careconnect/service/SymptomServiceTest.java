@@ -39,7 +39,9 @@ class SymptomServiceTest {
     @InjectMocks
     private SymptomService symptomService;
 
-    /** Shared patient instance reused across tests. */
+    /**
+     * Shared patient instance reused across tests.
+     */
     private Patient patient;
 
     @BeforeEach
@@ -205,12 +207,12 @@ class SymptomServiceTest {
 
         final SymptomDTO result = symptomService.update(1L, patch);
 
-        assertEquals("new-key",       result.symptomKey());
-        assertEquals("new-value",     result.symptomValue());
-        assertEquals(5,               result.severity());
-        assertEquals("updated note",  result.notes());
+        assertEquals("new-key", result.symptomKey());
+        assertEquals("new-value", result.symptomValue());
+        assertEquals(5, result.severity());
+        assertEquals("updated note", result.notes());
         assertTrue(result.completed());
-        assertEquals(newTs,           result.takenAt());
+        assertEquals(newTs, result.takenAt());
         verify(symptomRepo).save(existing);
     }
 
@@ -234,9 +236,9 @@ class SymptomServiceTest {
 
         final SymptomDTO result = symptomService.update(2L, patch);
 
-        assertEquals("headache",       result.symptomKey());   // unchanged
-        assertEquals("mild",           result.symptomValue()); // unchanged
-        assertEquals("original note",  result.notes());        // unchanged
+        assertEquals("headache", result.symptomKey());   // unchanged
+        assertEquals("mild", result.symptomValue()); // unchanged
+        assertEquals("original note", result.notes());        // unchanged
         assertTrue(result.completed());                         // unchanged
         assertEquals(5, result.severity());                    // updated
     }
@@ -335,7 +337,7 @@ class SymptomServiceTest {
 
         assertEquals(2, result.size());
         assertEquals("headache", result.get(0).symptomKey());
-        assertEquals("fatigue",  result.get(1).symptomKey());
+        assertEquals("fatigue", result.get(1).symptomKey());
         verify(symptomRepo).findByPatientIdOrderByTakenAtDesc(1L);
     }
 
@@ -367,13 +369,13 @@ class SymptomServiceTest {
 
         final SymptomDTO dto = symptomService.listByPatient(1L).get(0);
 
-        assertEquals(7L,             dto.id());
-        assertEquals(1L,             dto.patientId());
-        assertEquals("pain",         dto.symptomKey());
-        assertEquals("acute",        dto.symptomValue());
-        assertEquals(5,              dto.severity());
-        assertEquals("clinical note",dto.notes());
-        assertEquals(ts,             dto.takenAt());
+        assertEquals(7L, dto.id());
+        assertEquals(1L, dto.patientId());
+        assertEquals("pain", dto.symptomKey());
+        assertEquals("acute", dto.symptomValue());
+        assertEquals(5, dto.severity());
+        assertEquals("clinical note", dto.notes());
+        assertEquals(ts, dto.takenAt());
         assertFalse(dto.completed());
     }
 

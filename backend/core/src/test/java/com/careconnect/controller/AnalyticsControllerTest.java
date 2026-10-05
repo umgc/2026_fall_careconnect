@@ -28,6 +28,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+
 import java.time.Instant;
 
 import java.time.Period;
@@ -43,6 +44,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AnalyticsControllerTest {
 
+    private static final Long PATIENT_ID = 1L;
+    private static final Long USER_ID = 10L;
+    private static final Long OTHER_ID = 99L;
+    private static final String USER_EMAIL = "user@example.com";
     @Mock
     private UserRepository userRepository;
     @Mock
@@ -59,23 +64,16 @@ class AnalyticsControllerTest {
     private VitalSampleService vitalSampleService;
     @Mock
     private Authentication authentication;
+
+    // ── Shared test fixtures ──────────────────────────────────────────────────
     @Mock
     private SecurityContext securityContext;
-
     @Mock
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
-
     @InjectMocks
     private AnalyticsController controller;
-
-    // ── Shared test fixtures ──────────────────────────────────────────────────
-
-    private static final Long PATIENT_ID = 1L;
-    private static final Long USER_ID = 10L;
-    private static final Long OTHER_ID = 99L;
-    private static final String USER_EMAIL = "user@example.com";
 
     private User makeUser(Long id, Role role) {
         final User u = new User();
@@ -92,7 +90,9 @@ class AnalyticsControllerTest {
         return p;
     }
 
-    /** Wire up SecurityContextHolder so auth.getName() returns USER_EMAIL. */
+    /**
+     * Wire up SecurityContextHolder so auth.getName() returns USER_EMAIL.
+     */
     private void mockAuth() throws Exception {
         when(securityContext.getAuthentication()).thenReturn(authentication);
         SecurityContextHolder.setContext(securityContext);
@@ -107,6 +107,13 @@ class AnalyticsControllerTest {
     }
 
     // ── dashboard() ───────────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private Object bodyValue(ResponseEntity<?> response, String key) {
+        return ((Map<String, Object>) response.getBody()).get(key);
+    }
+
+    // ── exportVitalsCsv() ────────────────────────────────────────────────────
 
     @Nested
     class Dashboard {
@@ -133,7 +140,7 @@ class AnalyticsControllerTest {
         }
     }
 
-    // ── exportVitalsCsv() ────────────────────────────────────────────────────
+    // ── exportVitalsPdf() ────────────────────────────────────────────────────
 
     @Nested
     class ExportCsv {
@@ -162,14 +169,14 @@ class AnalyticsControllerTest {
         }
     }
 
-    // ── exportVitalsPdf() ────────────────────────────────────────────────────
+    // ── live() SSE ────────────────────────────────────────────────────────────
 
     @Nested
     class ExportPdf {
 
         @Test
         void returnsPdfBytes() throws Exception {
-            final byte[] pdf = new byte[] { 1, 2, 3 };
+            final byte[] pdf = new byte[]{1, 2, 3};
             when(analyticsService.exportVitalsPdf(PATIENT_ID, Period.ofDays(7))).thenReturn(pdf);
 
             final ResponseEntity<byte[]> response = controller.exportVitalsPdf(PATIENT_ID, 7);
@@ -191,7 +198,7 @@ class AnalyticsControllerTest {
         }
     }
 
-    // ── live() SSE ────────────────────────────────────────────────────────────
+    // ── vitals() GET ──────────────────────────────────────────────────────────
 
     @Nested
     class Live {
@@ -212,7 +219,7 @@ class AnalyticsControllerTest {
         }
     }
 
-    // ── vitals() GET ──────────────────────────────────────────────────────────
+    // ── createVitalSample() POST ──────────────────────────────────────────────
 
     @Nested
     class GetVitals {
@@ -341,7 +348,7 @@ class AnalyticsControllerTest {
         }
     }
 
-    // ── createVitalSample() POST ──────────────────────────────────────────────
+    // ── updateVitalSample() PUT ───────────────────────────────────────────────
 
     @Nested
     class CreateVitalSample {
@@ -510,7 +517,7 @@ class AnalyticsControllerTest {
         }
     }
 
-    // ── updateVitalSample() PUT ───────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     @Nested
     class UpdateVitalSample {
@@ -699,12 +706,5 @@ class AnalyticsControllerTest {
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    @SuppressWarnings("unchecked")
-    private Object bodyValue(ResponseEntity<?> response, String key) {
-        return ((Map<String, Object>) response.getBody()).get(key);
     }
 }

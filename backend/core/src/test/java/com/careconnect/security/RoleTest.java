@@ -2,6 +2,7 @@ package com.careconnect.security;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -31,9 +32,9 @@ public class RoleTest {
     public void testAllRolesHaveDisplayNames() throws Exception {
         for (Role role : Role.values()) {
             assertNotNull(role.getDisplayName(),
-                "Role " + role.name() + " should have a display name");
+                    "Role " + role.name() + " should have a display name");
             assertFalse(role.getDisplayName().isEmpty(),
-                "Role " + role.name() + " display name should not be empty");
+                    "Role " + role.name() + " display name should not be empty");
         }
     }
 
@@ -42,9 +43,9 @@ public class RoleTest {
     public void testAllRolesHaveDescriptions() throws Exception {
         for (Role role : Role.values()) {
             assertNotNull(role.getDescription(),
-                "Role " + role.name() + " should have a description");
+                    "Role " + role.name() + " should have a description");
             assertFalse(role.getDescription().isEmpty(),
-                "Role " + role.name() + " description should not be empty");
+                    "Role " + role.name() + " description should not be empty");
         }
     }
 
@@ -98,7 +99,7 @@ public class RoleTest {
             Role.fromString(null);
         });
         assertTrue(exception.getMessage().contains("cannot be null"),
-            "Exception message should mention null");
+                "Exception message should mention null");
     }
 
     @Test
@@ -108,7 +109,7 @@ public class RoleTest {
             Role.fromString("");
         });
         assertTrue(exception.getMessage().contains("cannot be null or empty"),
-            "Exception message should mention empty string");
+                "Exception message should mention empty string");
     }
 
     @Test
@@ -118,9 +119,9 @@ public class RoleTest {
             Role.fromString("INVALID_ROLE");
         });
         assertTrue(exception.getMessage().contains("Invalid role"),
-            "Exception message should mention invalid role");
+                "Exception message should mention invalid role");
         assertTrue(exception.getMessage().contains("ADMIN"),
-            "Exception message should list valid roles");
+                "Exception message should list valid roles");
     }
 
     @Test
@@ -172,26 +173,26 @@ public class RoleTest {
     @DisplayName("canModifyData should return false only for Family Member")
     public void testCanModifyData() throws Exception {
         assertTrue(Role.ADMIN.canModifyData(),
-            "Admin should be able to modify data");
+                "Admin should be able to modify data");
         assertTrue(Role.CAREGIVER.canModifyData(),
-            "Caregiver should be able to modify data");
+                "Caregiver should be able to modify data");
         assertTrue(Role.PATIENT.canModifyData(),
-            "Patient should be able to modify own data");
+                "Patient should be able to modify own data");
         assertFalse(Role.FAMILY_MEMBER.canModifyData(),
-            "Family Member should be read-only");
+                "Family Member should be read-only");
     }
 
     @Test
     @DisplayName("getHierarchyLevel should return correct levels")
     public void testGetHierarchyLevel() throws Exception {
         assertEquals(0, Role.ADMIN.getHierarchyLevel(),
-            "Admin should be level 0 (highest)");
+                "Admin should be level 0 (highest)");
         assertEquals(1, Role.CAREGIVER.getHierarchyLevel(),
-            "Caregiver should be level 1");
+                "Caregiver should be level 1");
         assertEquals(2, Role.PATIENT.getHierarchyLevel(),
-            "Patient should be level 2");
+                "Patient should be level 2");
         assertEquals(3, Role.FAMILY_MEMBER.getHierarchyLevel(),
-            "Family Member should be level 3 (lowest)");
+                "Family Member should be level 3 (lowest)");
     }
 
     @Test
@@ -201,7 +202,7 @@ public class RoleTest {
         for (int i = 0; i < roles.length; i++) {
             for (int j = i + 1; j < roles.length; j++) {
                 assertNotEquals(roles[i].getHierarchyLevel(), roles[j].getHierarchyLevel(),
-                    "Each role should have a unique hierarchy level");
+                        "Each role should have a unique hierarchy level");
             }
         }
     }
@@ -239,11 +240,11 @@ public class RoleTest {
     public void testToString() throws Exception {
         String adminString = Role.ADMIN.toString();
         assertTrue(adminString.contains("ADMIN"),
-            "toString should contain role name");
+                "toString should contain role name");
         assertTrue(adminString.contains("Administrator"),
-            "toString should contain display name");
+                "toString should contain display name");
         assertTrue(adminString.contains("Full system access"),
-            "toString should contain description");
+                "toString should contain description");
     }
 
     @Test
@@ -276,7 +277,7 @@ public class RoleTest {
         for (int i = 0; i < roles.length; i++) {
             for (int j = i + 1; j < roles.length; j++) {
                 assertNotEquals(roles[i].name(), roles[j].name(),
-                    "Roles should have unique names");
+                        "Roles should have unique names");
             }
         }
     }
@@ -287,9 +288,9 @@ public class RoleTest {
         for (Role role : Role.values()) {
             String description = role.getDescription();
             assertTrue(description.length() >= 10,
-                "Role " + role.name() + " description should be meaningful (at least 10 chars)");
+                    "Role " + role.name() + " description should be meaningful (at least 10 chars)");
             assertTrue(Character.isUpperCase(description.charAt(0)),
-                "Role " + role.name() + " description should start with capital letter");
+                    "Role " + role.name() + " description should start with capital letter");
         }
     }
 
@@ -300,7 +301,7 @@ public class RoleTest {
             String apiString = role.toApiString();
             Role converted = Role.fromString(apiString);
             assertEquals(role, converted,
-                "Converting to API string and back should return same role");
+                    "Converting to API string and back should return same role");
         }
     }
 }

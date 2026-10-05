@@ -13,7 +13,9 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Post-HITL delivery snapshot; keeps the original audit record immutable. */
+/**
+ * Post-HITL delivery snapshot; keeps the original audit record immutable.
+ */
 @Entity
 @Table(name = "ai_ask_audit_delivery_supplement")
 @Data

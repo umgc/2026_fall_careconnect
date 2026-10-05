@@ -12,7 +12,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.careconnect.notifications.dto.DemoNotificationRequest;
+
 import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,424 +26,426 @@ import org.springframework.http.ResponseEntity;
 @ExtendWith(MockitoExtension.class)
 class NotificationControllerTest {
 
-  @Mock private SesService sesService;
-  @Mock private SnsService snsService;
-
-  private NotificationController controller;
-
-  @BeforeEach
-  void setUp() {
-    controller = new NotificationController(sesService, snsService);
-  }
-
-  // ── payment ──────────────────────────────────────────────────────────────
+    @Mock
+    private SesService sesService;
+    @Mock
+    private SnsService snsService;
+
+    private NotificationController controller;
+
+    @BeforeEach
+    void setUp() {
+        controller = new NotificationController(sesService, snsService);
+    }
+
+    // ── payment ──────────────────────────────────────────────────────────────
+
+    @Test
+    void sendPaymentNotification_emailAndPhone_success() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("test@example.com");
+        req.setToPhone("+15551234567");
+        req.setRecipientName("Alice");
+        req.setAmount("49.99");
+
+        when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Alice"),
+                eq("49.99"), anyString())).thenReturn("email-id-1");
+        when(snsService.sendPaymentConfirmationSms("+15551234567", "Alice", "49.99"))
+                .thenReturn("sms-id-1");
 
-  @Test
-  void sendPaymentNotification_emailAndPhone_success() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("test@example.com");
-    req.setToPhone("+15551234567");
-    req.setRecipientName("Alice");
-    req.setAmount("49.99");
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
 
-    when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Alice"),
-        eq("49.99"), anyString())).thenReturn("email-id-1");
-    when(snsService.sendPaymentConfirmationSms("+15551234567", "Alice", "49.99"))
-        .thenReturn("sms-id-1");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Payment notifications sent successfully", response.getBody());
+        verify(sesService).sendPaymentConfirmation(eq("test@example.com"), eq("Alice"),
+                eq("49.99"), anyString());
+        verify(snsService).sendPaymentConfirmationSms("+15551234567", "Alice", "49.99");
+    }
 
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
+    @Test
+    void sendPaymentNotification_emailOnly_noSmsSent() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("test@example.com");
+        req.setRecipientName("Bob");
+        req.setAmount("10.00");
+
+        when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Bob"),
+                eq("10.00"), anyString())).thenReturn("email-id-2");
+
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(snsService, never()).sendPaymentConfirmationSms(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void sendPaymentNotification_nullFields_usesDefaults() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("test@example.com");
+
+        when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Valued Customer"),
+                eq("0.00"), anyString())).thenReturn("email-id-3");
+
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(sesService).sendPaymentConfirmation(eq("test@example.com"), eq("Valued Customer"),
+                eq("0.00"), anyString());
+    }
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Payment notifications sent successfully", response.getBody());
-    verify(sesService).sendPaymentConfirmation(eq("test@example.com"), eq("Alice"),
-        eq("49.99"), anyString());
-    verify(snsService).sendPaymentConfirmationSms("+15551234567", "Alice", "49.99");
-  }
+    @Test
+    void sendPaymentNotification_exception_returns500() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("test@example.com");
 
-  @Test
-  void sendPaymentNotification_emailOnly_noSmsSent() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("test@example.com");
-    req.setRecipientName("Bob");
-    req.setAmount("10.00");
+        when(sesService.sendPaymentConfirmation(anyString(), anyString(), anyString(), anyString()))
+                .thenThrow(new RuntimeException("SES down"));
 
-    when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Bob"),
-        eq("10.00"), anyString())).thenReturn("email-id-2");
-
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
-
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(snsService, never()).sendPaymentConfirmationSms(anyString(), anyString(), anyString());
-  }
-
-  @Test
-  void sendPaymentNotification_nullFields_usesDefaults() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("test@example.com");
-
-    when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Valued Customer"),
-        eq("0.00"), anyString())).thenReturn("email-id-3");
-
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(sesService).sendPaymentConfirmation(eq("test@example.com"), eq("Valued Customer"),
-        eq("0.00"), anyString());
-  }
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody().toString().contains("SES down"));
+    }
 
-  @Test
-  void sendPaymentNotification_exception_returns500() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("test@example.com");
+    // ── message ──────────────────────────────────────────────────────────────
 
-    when(sesService.sendPaymentConfirmation(anyString(), anyString(), anyString(), anyString()))
-        .thenThrow(new RuntimeException("SES down"));
+    @Test
+    void sendMessageNotification_emailAndPhone_success() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("user@example.com");
+        req.setToPhone("+15559876543");
+        req.setRecipientName("Charlie");
+        req.setMessage("Hello there");
+
+        when(sesService.sendCaregiverMessage("user@example.com", "CareConnect System",
+                "Charlie", "Hello there", "normal")).thenReturn("email-id");
+        when(snsService.sendCaregiverMessageSms("+15559876543", "CareConnect",
+                "Hello there", false)).thenReturn("sms-id");
+
+        ResponseEntity<?> response = controller.sendMessageNotification(req);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Message notifications sent successfully", response.getBody());
+    }
 
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
+    @Test
+    void sendMessageNotification_nullFields_usesDefaults() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("user@example.com");
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    assertTrue(response.getBody().toString().contains("SES down"));
-  }
+        when(sesService.sendCaregiverMessage("user@example.com", "CareConnect System",
+                "Recipient", "You have a new message", "normal")).thenReturn("email-id");
 
-  // ── message ──────────────────────────────────────────────────────────────
+        ResponseEntity<?> response = controller.sendMessageNotification(req);
 
-  @Test
-  void sendMessageNotification_emailAndPhone_success() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("user@example.com");
-    req.setToPhone("+15559876543");
-    req.setRecipientName("Charlie");
-    req.setMessage("Hello there");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
 
-    when(sesService.sendCaregiverMessage("user@example.com", "CareConnect System",
-        "Charlie", "Hello there", "normal")).thenReturn("email-id");
-    when(snsService.sendCaregiverMessageSms("+15559876543", "CareConnect",
-        "Hello there", false)).thenReturn("sms-id");
-
-    ResponseEntity<?> response = controller.sendMessageNotification(req);
+    @Test
+    void sendMessageNotification_exception_returns500() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("user@example.com");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Message notifications sent successfully", response.getBody());
-  }
+        when(sesService.sendCaregiverMessage(anyString(), anyString(), anyString(),
+                anyString(), anyString())).thenThrow(new RuntimeException("connection refused"));
 
-  @Test
-  void sendMessageNotification_nullFields_usesDefaults() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("user@example.com");
+        ResponseEntity<?> response = controller.sendMessageNotification(req);
 
-    when(sesService.sendCaregiverMessage("user@example.com", "CareConnect System",
-        "Recipient", "You have a new message", "normal")).thenReturn("email-id");
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody().toString().contains("connection refused"));
+    }
 
-    ResponseEntity<?> response = controller.sendMessageNotification(req);
+    // ── medication reminder ──────────────────────────────────────────────────
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-  }
+    @Test
+    void sendMedicationReminder_emailAndPhone_success() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
+        req.setToPhone("+15550001111");
+        req.setRecipientName("Dana");
+        req.setSubject("Aspirin");
+        req.setAmount("100mg");
+        req.setMessage("8:00 AM");
 
-  @Test
-  void sendMessageNotification_exception_returns500() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("user@example.com");
+        when(sesService.sendMedicationReminder("patient@example.com", "Dana",
+                "Aspirin", "100mg", "8:00 AM")).thenReturn("email-id");
+        when(snsService.sendMedicationReminderSms("+15550001111", "Dana",
+                "Aspirin", "100mg")).thenReturn("sms-id");
 
-    when(sesService.sendCaregiverMessage(anyString(), anyString(), anyString(),
-        anyString(), anyString())).thenThrow(new RuntimeException("connection refused"));
+        ResponseEntity<?> response = controller.sendMedicationReminder(req);
 
-    ResponseEntity<?> response = controller.sendMessageNotification(req);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Medication reminder notifications sent successfully", response.getBody());
+    }
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    assertTrue(response.getBody().toString().contains("connection refused"));
-  }
+    @Test
+    void sendMedicationReminder_nullFields_usesDefaults() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
 
-  // ── medication reminder ──────────────────────────────────────────────────
+        when(sesService.sendMedicationReminder("patient@example.com", "Patient",
+                "Medication", "As prescribed", "Now")).thenReturn("email-id");
 
-  @Test
-  void sendMedicationReminder_emailAndPhone_success() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
-    req.setToPhone("+15550001111");
-    req.setRecipientName("Dana");
-    req.setSubject("Aspirin");
-    req.setAmount("100mg");
-    req.setMessage("8:00 AM");
+        ResponseEntity<?> response = controller.sendMedicationReminder(req);
 
-    when(sesService.sendMedicationReminder("patient@example.com", "Dana",
-        "Aspirin", "100mg", "8:00 AM")).thenReturn("email-id");
-    when(snsService.sendMedicationReminderSms("+15550001111", "Dana",
-        "Aspirin", "100mg")).thenReturn("sms-id");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
 
-    ResponseEntity<?> response = controller.sendMedicationReminder(req);
+    @Test
+    void sendMedicationReminder_exception_returns500() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Medication reminder notifications sent successfully", response.getBody());
-  }
+        when(sesService.sendMedicationReminder(anyString(), anyString(), anyString(),
+                anyString(), anyString())).thenThrow(new RuntimeException("timeout"));
 
-  @Test
-  void sendMedicationReminder_nullFields_usesDefaults() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
+        ResponseEntity<?> response = controller.sendMedicationReminder(req);
 
-    when(sesService.sendMedicationReminder("patient@example.com", "Patient",
-        "Medication", "As prescribed", "Now")).thenReturn("email-id");
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody().toString().contains("timeout"));
+    }
 
-    ResponseEntity<?> response = controller.sendMedicationReminder(req);
+    // ── appointment reminder ─────────────────────────────────────────────────
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-  }
+    @Test
+    void sendAppointmentReminder_emailAndPhone_success() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
+        req.setToPhone("+15552223333");
+        req.setRecipientName("Eve");
+        req.setSubject("Checkup");
+        req.setMessage("2026-04-01 10:00");
+        req.setAmount("Main Clinic");
 
-  @Test
-  void sendMedicationReminder_exception_returns500() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
+        when(sesService.sendAppointmentReminder("patient@example.com", "Eve",
+                "Checkup", "2026-04-01 10:00", "Main Clinic")).thenReturn("email-id");
+        when(snsService.sendAppointmentReminderSms("+15552223333", "Eve",
+                "Checkup", "2026-04-01 10:00")).thenReturn("sms-id");
 
-    when(sesService.sendMedicationReminder(anyString(), anyString(), anyString(),
-        anyString(), anyString())).thenThrow(new RuntimeException("timeout"));
+        ResponseEntity<?> response = controller.sendAppointmentReminder(req);
 
-    ResponseEntity<?> response = controller.sendMedicationReminder(req);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Appointment reminder notifications sent successfully", response.getBody());
+    }
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    assertTrue(response.getBody().toString().contains("timeout"));
-  }
+    @Test
+    void sendAppointmentReminder_nullFields_usesDefaults() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
 
-  // ── appointment reminder ─────────────────────────────────────────────────
+        when(sesService.sendAppointmentReminder("patient@example.com", "Patient",
+                "Appointment", "Today", "Clinic")).thenReturn("email-id");
 
-  @Test
-  void sendAppointmentReminder_emailAndPhone_success() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
-    req.setToPhone("+15552223333");
-    req.setRecipientName("Eve");
-    req.setSubject("Checkup");
-    req.setMessage("2026-04-01 10:00");
-    req.setAmount("Main Clinic");
+        ResponseEntity<?> response = controller.sendAppointmentReminder(req);
 
-    when(sesService.sendAppointmentReminder("patient@example.com", "Eve",
-        "Checkup", "2026-04-01 10:00", "Main Clinic")).thenReturn("email-id");
-    when(snsService.sendAppointmentReminderSms("+15552223333", "Eve",
-        "Checkup", "2026-04-01 10:00")).thenReturn("sms-id");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
 
-    ResponseEntity<?> response = controller.sendAppointmentReminder(req);
+    @Test
+    void sendAppointmentReminder_exception_returns500() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToPhone("+15552223333");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Appointment reminder notifications sent successfully", response.getBody());
-  }
+        when(snsService.sendAppointmentReminderSms(anyString(), anyString(), anyString(),
+                anyString())).thenThrow(new RuntimeException("SNS error"));
 
-  @Test
-  void sendAppointmentReminder_nullFields_usesDefaults() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
+        ResponseEntity<?> response = controller.sendAppointmentReminder(req);
 
-    when(sesService.sendAppointmentReminder("patient@example.com", "Patient",
-        "Appointment", "Today", "Clinic")).thenReturn("email-id");
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody().toString().contains("SNS error"));
+    }
 
-    ResponseEntity<?> response = controller.sendAppointmentReminder(req);
-
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-  }
+    // ── emergency alert ──────────────────────────────────────────────────────
+
+    @Test
+    void sendEmergencyAlert_emailAndPhone_success() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("nurse@example.com");
+        req.setToPhone("+15554445555");
+        req.setRecipientName("Frank");
+        req.setSubject("Fall Detected");
+        req.setMessage("Room 204");
 
-  @Test
-  void sendAppointmentReminder_exception_returns500() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToPhone("+15552223333");
+        when(sesService.sendEmail(eq("nurse@example.com"), eq("EMERGENCY ALERT - Fall Detected"),
+                isNull(), anyString())).thenReturn("email-id");
+        when(snsService.sendEmergencyAlertSms("+15554445555", "Frank",
+                "Fall Detected", "Room 204")).thenReturn("sms-id");
 
-    when(snsService.sendAppointmentReminderSms(anyString(), anyString(), anyString(),
-        anyString())).thenThrow(new RuntimeException("SNS error"));
+        ResponseEntity<?> response = controller.sendEmergencyAlert(req);
 
-    ResponseEntity<?> response = controller.sendAppointmentReminder(req);
-
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    assertTrue(response.getBody().toString().contains("SNS error"));
-  }
-
-  // ── emergency alert ──────────────────────────────────────────────────────
-
-  @Test
-  void sendEmergencyAlert_emailAndPhone_success() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("nurse@example.com");
-    req.setToPhone("+15554445555");
-    req.setRecipientName("Frank");
-    req.setSubject("Fall Detected");
-    req.setMessage("Room 204");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Emergency alert notifications sent successfully", response.getBody());
+    }
 
-    when(sesService.sendEmail(eq("nurse@example.com"), eq("EMERGENCY ALERT - Fall Detected"),
-        isNull(), anyString())).thenReturn("email-id");
-    when(snsService.sendEmergencyAlertSms("+15554445555", "Frank",
-        "Fall Detected", "Room 204")).thenReturn("sms-id");
+    @Test
+    void sendEmergencyAlert_nullFields_usesDefaults() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToPhone("+15554445555");
 
-    ResponseEntity<?> response = controller.sendEmergencyAlert(req);
+        when(snsService.sendEmergencyAlertSms("+15554445555", "Patient",
+                "Emergency", "Unknown location")).thenReturn("sms-id");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Emergency alert notifications sent successfully", response.getBody());
-  }
+        ResponseEntity<?> response = controller.sendEmergencyAlert(req);
 
-  @Test
-  void sendEmergencyAlert_nullFields_usesDefaults() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToPhone("+15554445555");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(sesService, never()).sendEmail(anyString(), anyString(), any(), anyString());
+    }
 
-    when(snsService.sendEmergencyAlertSms("+15554445555", "Patient",
-        "Emergency", "Unknown location")).thenReturn("sms-id");
+    @Test
+    void sendEmergencyAlert_exception_returns500() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("nurse@example.com");
 
-    ResponseEntity<?> response = controller.sendEmergencyAlert(req);
+        when(sesService.sendEmail(anyString(), anyString(), any(), anyString()))
+                .thenThrow(new RuntimeException("SES failure"));
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(sesService, never()).sendEmail(anyString(), anyString(), any(), anyString());
-  }
+        ResponseEntity<?> response = controller.sendEmergencyAlert(req);
 
-  @Test
-  void sendEmergencyAlert_exception_returns500() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("nurse@example.com");
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody().toString().contains("SES failure"));
+    }
 
-    when(sesService.sendEmail(anyString(), anyString(), any(), anyString()))
-        .thenThrow(new RuntimeException("SES failure"));
+    // ── caregiver message ────────────────────────────────────────────────────
 
-    ResponseEntity<?> response = controller.sendEmergencyAlert(req);
+    @Test
+    void sendCaregiverMessage_emailAndPhone_success() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
+        req.setToPhone("+15556667777");
+        req.setRecipientName("Grace");
+        req.setSubject("Dr. Smith");
+        req.setMessage("Please take your medication");
+        req.setAmount("normal");
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    assertTrue(response.getBody().toString().contains("SES failure"));
-  }
+        when(sesService.sendCaregiverMessage("patient@example.com", "Dr. Smith",
+                "Grace", "Please take your medication", "normal")).thenReturn("email-id");
+        when(snsService.sendCaregiverMessageSms("+15556667777", "Dr. Smith",
+                "Please take your medication", false)).thenReturn("sms-id");
 
-  // ── caregiver message ────────────────────────────────────────────────────
+        ResponseEntity<?> response = controller.sendCaregiverMessage(req);
 
-  @Test
-  void sendCaregiverMessage_emailAndPhone_success() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
-    req.setToPhone("+15556667777");
-    req.setRecipientName("Grace");
-    req.setSubject("Dr. Smith");
-    req.setMessage("Please take your medication");
-    req.setAmount("normal");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Caregiver message notifications sent successfully", response.getBody());
+    }
 
-    when(sesService.sendCaregiverMessage("patient@example.com", "Dr. Smith",
-        "Grace", "Please take your medication", "normal")).thenReturn("email-id");
-    when(snsService.sendCaregiverMessageSms("+15556667777", "Dr. Smith",
-        "Please take your medication", false)).thenReturn("sms-id");
+    @Test
+    void sendCaregiverMessage_urgent_setsUrgentFlag() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
+        req.setToPhone("+15556667777");
+        req.setRecipientName("Grace");
+        req.setSubject("Dr. Smith");
+        req.setMessage("Urgent update");
+        req.setAmount("urgent");
 
-    ResponseEntity<?> response = controller.sendCaregiverMessage(req);
+        when(sesService.sendCaregiverMessage("patient@example.com", "Dr. Smith",
+                "Grace", "Urgent update", "urgent")).thenReturn("email-id");
+        when(snsService.sendCaregiverMessageSms("+15556667777", "Dr. Smith",
+                "Urgent update", true)).thenReturn("sms-id");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Caregiver message notifications sent successfully", response.getBody());
-  }
+        ResponseEntity<?> response = controller.sendCaregiverMessage(req);
 
-  @Test
-  void sendCaregiverMessage_urgent_setsUrgentFlag() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
-    req.setToPhone("+15556667777");
-    req.setRecipientName("Grace");
-    req.setSubject("Dr. Smith");
-    req.setMessage("Urgent update");
-    req.setAmount("urgent");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(sesService).sendCaregiverMessage("patient@example.com", "Dr. Smith",
+                "Grace", "Urgent update", "urgent");
+        verify(snsService).sendCaregiverMessageSms("+15556667777", "Dr. Smith",
+                "Urgent update", true);
+    }
 
-    when(sesService.sendCaregiverMessage("patient@example.com", "Dr. Smith",
-        "Grace", "Urgent update", "urgent")).thenReturn("email-id");
-    when(snsService.sendCaregiverMessageSms("+15556667777", "Dr. Smith",
-        "Urgent update", true)).thenReturn("sms-id");
+    @Test
+    void sendCaregiverMessage_nullFields_usesDefaults() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
 
-    ResponseEntity<?> response = controller.sendCaregiverMessage(req);
+        when(sesService.sendCaregiverMessage("patient@example.com", "Caregiver",
+                "Recipient", "New message from caregiver", "normal")).thenReturn("email-id");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(sesService).sendCaregiverMessage("patient@example.com", "Dr. Smith",
-        "Grace", "Urgent update", "urgent");
-    verify(snsService).sendCaregiverMessageSms("+15556667777", "Dr. Smith",
-        "Urgent update", true);
-  }
+        ResponseEntity<?> response = controller.sendCaregiverMessage(req);
 
-  @Test
-  void sendCaregiverMessage_nullFields_usesDefaults() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+    }
 
-    when(sesService.sendCaregiverMessage("patient@example.com", "Caregiver",
-        "Recipient", "New message from caregiver", "normal")).thenReturn("email-id");
+    @Test
+    void sendCaregiverMessage_exception_returns500() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("patient@example.com");
 
-    ResponseEntity<?> response = controller.sendCaregiverMessage(req);
+        when(sesService.sendCaregiverMessage(anyString(), anyString(), anyString(),
+                anyString(), anyString())).thenThrow(new RuntimeException("auth error"));
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-  }
+        ResponseEntity<?> response = controller.sendCaregiverMessage(req);
 
-  @Test
-  void sendCaregiverMessage_exception_returns500() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("patient@example.com");
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertTrue(response.getBody().toString().contains("auth error"));
+    }
 
-    when(sesService.sendCaregiverMessage(anyString(), anyString(), anyString(),
-        anyString(), anyString())).thenThrow(new RuntimeException("auth error"));
+    // ── bulk ─────────────────────────────────────────────────────────────────
 
-    ResponseEntity<?> response = controller.sendCaregiverMessage(req);
+    @Test
+    void sendBulkNotifications_returnsNotImplemented() {
+        List<DemoNotificationRequest> requests = List.of(new DemoNotificationRequest());
 
-    assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    assertTrue(response.getBody().toString().contains("auth error"));
-  }
+        ResponseEntity<?> response = controller.sendBulkNotifications(requests);
 
-  // ── bulk ─────────────────────────────────────────────────────────────────
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Bulk notifications not yet implemented", response.getBody());
+    }
 
-  @Test
-  void sendBulkNotifications_returnsNotImplemented() {
-    List<DemoNotificationRequest> requests = List.of(new DemoNotificationRequest());
+    // ── topic ────────────────────────────────────────────────────────────────
 
-    ResponseEntity<?> response = controller.sendBulkNotifications(requests);
+    @Test
+    void sendTopicNotification_returnsNotImplemented() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Bulk notifications not yet implemented", response.getBody());
-  }
+        ResponseEntity<?> response = controller.sendTopicNotification("caregivers", req);
 
-  // ── topic ────────────────────────────────────────────────────────────────
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Topic notifications not yet implemented", response.getBody());
+    }
 
-  @Test
-  void sendTopicNotification_returnsNotImplemented() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
+    // ── edge cases ───────────────────────────────────────────────────────────
 
-    ResponseEntity<?> response = controller.sendTopicNotification("caregivers", req);
+    @Test
+    void sendPaymentNotification_emptyEmail_noEmailSent() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("");
+        req.setToPhone("+15551234567");
+        req.setAmount("25.00");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    assertEquals("Topic notifications not yet implemented", response.getBody());
-  }
+        when(snsService.sendPaymentConfirmationSms("+15551234567", "Customer", "25.00"))
+                .thenReturn("sms-id");
 
-  // ── edge cases ───────────────────────────────────────────────────────────
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
 
-  @Test
-  void sendPaymentNotification_emptyEmail_noEmailSent() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("");
-    req.setToPhone("+15551234567");
-    req.setAmount("25.00");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(sesService, never()).sendPaymentConfirmation(anyString(), anyString(),
+                anyString(), anyString());
+    }
 
-    when(snsService.sendPaymentConfirmationSms("+15551234567", "Customer", "25.00"))
-        .thenReturn("sms-id");
+    @Test
+    void sendPaymentNotification_emptyPhone_noSmsSent() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
+        req.setToEmail("test@example.com");
+        req.setToPhone("");
 
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
+        when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Valued Customer"),
+                eq("0.00"), anyString())).thenReturn("email-id");
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(sesService, never()).sendPaymentConfirmation(anyString(), anyString(),
-        anyString(), anyString());
-  }
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
 
-  @Test
-  void sendPaymentNotification_emptyPhone_noSmsSent() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-    req.setToEmail("test@example.com");
-    req.setToPhone("");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(snsService, never()).sendPaymentConfirmationSms(anyString(), anyString(), anyString());
+    }
 
-    when(sesService.sendPaymentConfirmation(eq("test@example.com"), eq("Valued Customer"),
-        eq("0.00"), anyString())).thenReturn("email-id");
+    @Test
+    void sendPaymentNotification_noEmailNoPhone_stillReturnsOk() {
+        DemoNotificationRequest req = new DemoNotificationRequest();
 
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
+        ResponseEntity<?> response = controller.sendPaymentNotification(req);
 
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(snsService, never()).sendPaymentConfirmationSms(anyString(), anyString(), anyString());
-  }
-
-  @Test
-  void sendPaymentNotification_noEmailNoPhone_stillReturnsOk() {
-    DemoNotificationRequest req = new DemoNotificationRequest();
-
-    ResponseEntity<?> response = controller.sendPaymentNotification(req);
-
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    verify(sesService, never()).sendPaymentConfirmation(anyString(), anyString(),
-        anyString(), anyString());
-    verify(snsService, never()).sendPaymentConfirmationSms(anyString(), anyString(), anyString());
-  }
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(sesService, never()).sendPaymentConfirmation(anyString(), anyString(),
+                anyString(), anyString());
+        verify(snsService, never()).sendPaymentConfirmationSms(anyString(), anyString(), anyString());
+    }
 }

@@ -1,7 +1,9 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.CallAttendee;
+
 import java.time.LocalDateTime;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,17 @@ class CallAttendeeRepositoryTest {
 
     @Autowired
     private CallAttendeeRepository repository;
+
+    private static CallAttendee buildAttendee(
+            final String chimeAttendeeId, final Long userId, final String role) {
+        final CallAttendee attendee = new CallAttendee();
+        attendee.setCallId(CALL_ID);
+        attendee.setChimeAttendeeId(chimeAttendeeId);
+        attendee.setUserId(userId);
+        attendee.setRole(role);
+        attendee.setJoinedAt(LocalDateTime.now());
+        return attendee;
+    }
 
     @Test
     @DisplayName("SPEAKER-007: save and find by callId and chimeAttendeeId")
@@ -63,16 +76,5 @@ class CallAttendeeRepositoryTest {
                 .first()
                 .extracting(CallAttendee::getChimeAttendeeId)
                 .isEqualTo("att-active");
-    }
-
-    private static CallAttendee buildAttendee(
-            final String chimeAttendeeId, final Long userId, final String role) {
-        final CallAttendee attendee = new CallAttendee();
-        attendee.setCallId(CALL_ID);
-        attendee.setChimeAttendeeId(chimeAttendeeId);
-        attendee.setUserId(userId);
-        attendee.setRole(role);
-        attendee.setJoinedAt(LocalDateTime.now());
-        return attendee;
     }
 }

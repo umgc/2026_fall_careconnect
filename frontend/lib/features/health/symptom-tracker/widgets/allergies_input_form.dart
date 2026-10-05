@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/ai_analyze_service.dart';
 
-
 class AllergyInputForm extends StatefulWidget {
   final String patientId;
   final Function(Map<String, dynamic>)? onAllergyAdded;
@@ -69,7 +68,7 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
     if (reaction.isEmpty && transcript.isNotEmpty) {
       reaction = transcript;
     }
-    final sevRaw   = (ai['severity'] ?? '').toString().toUpperCase();
+    final sevRaw = (ai['severity'] ?? '').toString().toUpperCase();
 
     String dropdownLabel = 'Mild (Minor symptoms)';
     switch (sevRaw) {
@@ -114,9 +113,12 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
   }
 
   Future<void> _submitAllergy() async {
-    final allergen = _drugController.text.trim();        // send as allergen
+    final allergen = _drugController.text.trim(); // send as allergen
     final reaction = _reactionController.text.trim();
-    final sevUi = _selectedSeverity.split(' ').first.toLowerCase(); // mild|moderate|severe
+    final sevUi = _selectedSeverity
+        .split(' ')
+        .first
+        .toLowerCase(); // mild|moderate|severe
 
     if (!_apiReady || allergen.isEmpty || reaction.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -224,7 +226,9 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
                     // Patient ID is loaded before using AI
                     if (!_apiReady) {
                       messenger.showSnackBar(
-                        const SnackBar(content: Text('Please wait, loading your profile...')),
+                        const SnackBar(
+                            content:
+                                Text('Please wait, loading your profile...')),
                       );
                       return;
                     }
@@ -242,12 +246,18 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
 
                     final trimmedTranscript = transcript.trim();
 
+                    // Keep the dictation even if AI parsing fails (matches the
+                    // symptom form); a successful AI result overwrites it.
+                    setState(
+                        () => _reactionController.text = trimmedTranscript);
+
                     // Send to DeepSeek AI
                     try {
                       setState(() => _usingAi = true);
 
                       final int? intPid = int.tryParse(widget.patientId);
-                      if (intPid == null) { // ADD
+                      if (intPid == null) {
+                        // ADD
                         messenger.showSnackBar(
                           const SnackBar(content: Text('Invalid patient ID')),
                         );
@@ -269,26 +279,30 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
                       );
                     } catch (e) {
                       messenger.showSnackBar(
-                        SnackBar(content: Text('⚠️ AI could not parse. You can edit manually. ($e)')),
+                        SnackBar(
+                            content: Text(
+                                '⚠️ AI could not parse. You can edit manually. ($e)')),
                       );
                     } finally {
                       if (mounted) setState(() => _usingAi = false);
                     }
                   },
                   icon: const Icon(Icons.mic, size: 16),
-                  label: _usingAi ? const Text('Analyzing...') : const Text('Use AI Voice'),
+                  label: _usingAi
+                      ? const Text('Analyzing...')
+                      : const Text('Use AI Voice'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Theme.of(context).colorScheme.primary,
-                    side: BorderSide(color: Theme.of(context).colorScheme.primary),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    side: BorderSide(
+                        color: Theme.of(context).colorScheme.primary),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                   ),
                 ),
               ),
             ],
           ),
-
-           const SizedBox(height: 16),
-
+          const SizedBox(height: 16),
           const Text(
             'Drug/Medication',
             style: TextStyle(fontWeight: FontWeight.w500),
@@ -299,7 +313,10 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
             decoration: InputDecoration(
               hintText: 'e.g., Penicillin, Aspirin, Codeine, Sulfa drugs...',
               hintStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -323,7 +340,10 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
               hintText:
                   'Describe the allergic reaction (anaphylaxis, hives, swelling, breathing difficulties...)',
               hintStyle: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.5),
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -351,17 +371,16 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
                 vertical: 8,
               ),
             ),
-            items:
-                [
-                  'Mild (Minor symptoms)',
-                  'Moderate (Noticeable symptoms)',
-                  'Severe (Life-threatening)',
-                ].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
+            items: [
+              'Mild (Minor symptoms)',
+              'Moderate (Noticeable symptoms)',
+              'Severe (Life-threatening)',
+            ].map((String value) {
+              return DropdownMenuItem<String>(
+                value: value,
+                child: Text(value),
+              );
+            }).toList(),
             onChanged: (String? newValue) {
               setState(() {
                 _selectedSeverity = newValue!;
@@ -369,7 +388,6 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
             },
           ),
           const SizedBox(height: 16),
-
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
@@ -380,7 +398,8 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ),
@@ -388,6 +407,7 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
       ),
     );
   }
+
   @override
   void dispose() {
     _reactionController.dispose();

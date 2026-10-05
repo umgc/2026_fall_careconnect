@@ -8,6 +8,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -31,7 +32,7 @@ void _ignoreOverflowErrors(FlutterErrorDetails details) {
 }
 
 Widget _wrap({int patientId = 0}) =>
-    MaterialApp(home: AnalyticsPage(patientId: patientId));
+    MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: AnalyticsPage(patientId: patientId));
 
 void _setupMocks() {
   SharedPreferences.setMockInitialValues({});

@@ -25,7 +25,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class VirginiaHhaExchangeClientTest {
 
-    @Mock private RestTemplate restTemplate;
+    @Mock
+    private RestTemplate restTemplate;
 
     private HhaExchangeProperties props;
     private VirginiaHhaExchangeClient client;

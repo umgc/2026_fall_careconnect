@@ -6,7 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Locale;
 
 final class AiParsingUtils {
-    private AiParsingUtils() {}
+    private AiParsingUtils() {
+    }
 
     static String normalizeModelContent(String content) {
         if (content == null) {

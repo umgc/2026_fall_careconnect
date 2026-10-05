@@ -1,8 +1,10 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.CallAttendee;
+
 import java.util.List;
 import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -12,7 +14,7 @@ public interface CallAttendeeRepository extends JpaRepository<CallAttendee, Long
     /**
      * Returns the attendee row for a call and Chime attendee id.
      *
-     * @param callId call identifier
+     * @param callId          call identifier
      * @param chimeAttendeeId Chime attendee UUID
      * @return matching row when present
      */

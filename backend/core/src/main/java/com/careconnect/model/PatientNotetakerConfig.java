@@ -13,7 +13,7 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "patient_note_taker_config")
 @Data
-@NoArgsConstructor 
+@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class PatientNotetakerConfig {
@@ -29,7 +29,7 @@ public class PatientNotetakerConfig {
 
     @Column(name = "permit_caregiver_access", nullable = false)
     private Boolean permitCaregiverAccess;
-    
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "trigger_keywords", nullable = true, columnDefinition = "jsonb")
     private List<PatientNotetakerKeyword> triggerKeywords;
