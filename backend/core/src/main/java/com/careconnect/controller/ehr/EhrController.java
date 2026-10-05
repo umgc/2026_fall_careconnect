@@ -166,8 +166,8 @@ public class EhrController{
                 for(Coverage item: results){
                     // The tricky part is that some of this data might overwrite existing data in the database
 
-                    //EhrCoverageRecord tosave = new EhrCoverageRecord(crosswalk.getPatientId(), item, medicareId);
-                    //ehrCoverageRepository.save(tosave);
+                    ehrService.updateCoverageRepository(new EhrCoverageRecord(crosswalk.getPatientId(), item, medicareId));
+
                     EhrRawPayload candidate = ehrService.coverageToRawPayload(item, patientId, OffsetDateTime.now(), medicareId);
                     for(EhrRawPayload cached: cachedCoverages){
                         if(item.getId().equals(cached.getExternalResourceId())){
@@ -233,8 +233,9 @@ public class EhrController{
                 List<ExplanationOfBenefit> results = medicareService.requestMedicareEOBInfo(connections.requireAccessToken(crosswalk),
                         Date.from(cachedVisits.get(0).getRetrievedAt().toInstant()));
                 for(ExplanationOfBenefit item: results){
+
                     // The tricky part is that some of this data might overwrite existing data in the database
-                    //ehrVisitRecordRepository.save(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId));
+                    ehrService.updateVisitRepository(new EhrVisitRecord(crosswalk.getPatientId(), item, medicareId));
 
                     EhrRawPayload candidate = ehrService.eobToRawPayload(item, patientId, OffsetDateTime.now(), medicareId);
                     for(EhrRawPayload cached: cachedVisits){

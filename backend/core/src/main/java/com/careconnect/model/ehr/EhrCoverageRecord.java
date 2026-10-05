@@ -18,7 +18,6 @@ import org.hl7.fhir.r4.model.Coverage;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 /**
  * Insurance coverage as reported by one external source — a mapped FHIR {@code Coverage}.
@@ -51,7 +50,7 @@ public class EhrCoverageRecord extends Auditable {
         this.patientId = patientId;
         this.sourceId = sourceId;
         this.sourceUpdatedAt = coverage.getMeta().getLastUpdated().toInstant();
-        this.externalCoverageId = coverage.getContractFirstRep().getDisplay();
+        this.externalCoverageId = coverage.getId();
         this.beneficiary = coverage.getBeneficiary().getDisplay();
         this.network = coverage.getNetwork();
         this.payor = coverage.getPayorFirstRep().getDisplay();

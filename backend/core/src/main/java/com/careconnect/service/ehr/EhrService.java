@@ -2,11 +2,15 @@ package com.careconnect.service.ehr;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
+import com.careconnect.model.ehr.EhrCoverageRecord;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
 import com.careconnect.model.ehr.EhrRawPayload;
+import com.careconnect.model.ehr.EhrVisitRecord;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.repository.ehr.EhrCoverageRecordRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
+import com.careconnect.repository.ehr.EhrVisitRecordRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,9 +37,15 @@ public class EhrService {
     private EhrPatientCrosswalkRepository ehrPatientCrosswalkRepository;
 
     @Autowired
+    private EhrVisitRecordRepository ehrVisitRecordRepository;
+
+    @Autowired
+    private EhrCoverageRecordRepository ehrCoverageRecordRepository;
+
+    @Autowired
     private PatientRepository patientRepository;
 
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public static final FhirContext ctxR4 = FhirContext.forR4();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
@@ -89,6 +99,19 @@ public class EhrService {
         return toreturn;
     }
 
+    public void updateCoverageRepository(EhrCoverageRecord coverage) {
+        // Either update an existing coverage by replacing the id or add this new one to the mix.
+        Optional<EhrCoverageRecord> check = ehrCoverageRecordRepository.findByPatientIdAndSourceIdAndExternalCoverageId(coverage.getPatientId(), coverage.getSourceId(), coverage.getExternalCoverageId());
+        check.ifPresent(ehrCoverageRecord -> coverage.setId(ehrCoverageRecord.getId()));
+        ehrCoverageRecordRepository.save(coverage);
+    }
+
+    public void updateVisitRepository(EhrVisitRecord visit) {
+        // Either update an existing visit record by replacing the id or add this new one to the mix.
+        Optional<EhrVisitRecord> check = ehrVisitRecordRepository.findByPatientIdAndSourceIdAndExternalVisitId(visit.getPatientId(), visit.getSourceId(), visit.getExternalVisitId());
+        check.ifPresent(ehrVisitRecord -> visit.setId(ehrVisitRecord.getId()));
+        ehrVisitRecordRepository.save(visit);
+    }
 
 
 
