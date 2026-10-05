@@ -181,6 +181,12 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
     // Social
     _CommandMatch(
         phrase: 'open social feed', intent: 'navigate', entity: 'social feed'),
+    _CommandMatch(
+        phrase: 'social feed', intent: 'navigate', entity: 'social feed'),
+    _CommandMatch(
+        phrase: 'show social feed', intent: 'navigate', entity: 'social feed'),
+    _CommandMatch(
+        phrase: 'take me to social feed', intent: 'navigate', entity: 'social feed'),
     // Caregiver
     _CommandMatch(
         phrase: 'open patient list',
