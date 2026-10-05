@@ -885,10 +885,10 @@ if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
 fi
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
-# Print the final API Gateway endpoint so the frontend or health checks can use it.
 step "Reading final API endpoint"
 CURRENT_OPERATION="Reading final API endpoint"
 API_ENDPOINT="$(get_stack_output "$SERVICE_STACK_NAME" "ApiEndpoint" | tr -d '\r')"
+WEBSOCKET_URL="$(get_stack_output "$SERVICE_STACK_NAME" "WebSocketUrl" | tr -d '\r')"
 CURRENT_STACK_NAME=""
 CURRENT_OPERATION=""
 
@@ -899,4 +899,5 @@ echo "Repository:    $REPOSITORY_NAME"
 echo "Image URI:     $IMAGE_URI"
 echo "API Endpoint:  $API_ENDPOINT"
 echo "Health check:  ${API_ENDPOINT}/v1/api/test/health"
+echo "WebSocket URL: ${WEBSOCKET_URL}   (frontend WEBSOCKET_GATEWAY_URL)"
 echo "Elapsed time:  $(elapsed_time_text)"

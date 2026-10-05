@@ -10,6 +10,7 @@ import 'package:care_connect_app/features/analytics/web_utils.dart'
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/auth_token_manager.dart';
+import 'package:care_connect_app/utils/websocket_keep_alive.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -92,6 +93,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
+  final WebSocketKeepAlive _keepAlive = WebSocketKeepAlive();
 
   // Fallback polling
   Timer? _pollingTimer;
@@ -228,16 +230,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         cancelOnError: false,
       );
 
-      _wsSend({
-        'type': 'authenticate',
-        'userId': _currentUserId.toString(),
-      });
+      _wsSend({'type': 'authenticate', 'token': token});
 
       if (mounted) {
         setState(() => _wsStatus = _WsStatus.connected);
         _markVisibleIncomingMessagesRead(messages);
       }
       _reconnectAttempts = 0;
+      _keepAlive.onConnected((message) => _wsChannel?.sink.add(message));
       _retryPendingMessages();
     } catch (e) {
       debugPrint('ChatWS connect error: $e');
@@ -324,12 +324,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   void _onWsError(Object error) {
+    _keepAlive.onDisconnected();
     if (mounted) setState(() => _wsStatus = _WsStatus.disconnected);
     _startPolling();
     _scheduleReconnect();
   }
 
   void _onWsDone() {
+    _keepAlive.onDisconnected();
     if (mounted) setState(() => _wsStatus = _WsStatus.disconnected);
     _startPolling();
     _scheduleReconnect();
@@ -560,7 +562,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
-  void _reconcilePendingWithServerMessages(List<MessageDto> serverMessages) async {
+  void _reconcilePendingWithServerMessages(
+      List<MessageDto> serverMessages) async {
     if (_pendingMessages.isEmpty) {
       return;
     }
@@ -1158,6 +1161,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   @override
   void dispose() {
     _reconnectTimer?.cancel();
+    _keepAlive.stop();
     _pollingTimer?.cancel();
     _permissionRefreshTimer?.cancel();
     _typingStopTimer?.cancel();
