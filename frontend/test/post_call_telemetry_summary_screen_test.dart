@@ -4,6 +4,7 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/utils/sentiment_clip_recording_status.dart';
 import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
 import 'package:care_connect_app/widgets/sentiment_clip_player_widget.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,7 +12,12 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: child);
+Widget _wrap(Widget child) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: child,
+    );
 
 Future<void> _pumpLoaded(WidgetTester tester) async {
   await tester.pump();
@@ -375,7 +381,11 @@ void main() {
       expect(find.text('Call Again'), findsOneWidget);
       expect(find.text('Send Message'), findsOneWidget);
 
+      await tester.ensureVisible(find.text('Call Again'));
+      await tester.pump();
       await tester.tap(find.text('Call Again'));
+      await tester.pump();
+      await tester.ensureVisible(find.text('Send Message'));
       await tester.pump();
       await tester.tap(find.text('Send Message'));
       await tester.pump();
@@ -454,6 +464,9 @@ void main() {
         findsOneWidget,
       );
 
+      await tester
+          .ensureVisible(find.widgetWithText(OutlinedButton, 'Approve'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
       await _pumpLoaded(tester);
 
@@ -462,8 +475,7 @@ void main() {
       expect(find.text('Items to confirm'), findsNothing);
     });
 
-    testWidgets(
-        'FR-SUM-4 shows clinician-review snackbar when item is held',
+    testWidgets('FR-SUM-4 shows clinician-review snackbar when item is held',
         (tester) async {
       ApiService.debugSetHttpClient(
         MockClient((request) async {
@@ -524,6 +536,9 @@ void main() {
         findsOneWidget,
       );
 
+      await tester
+          .ensureVisible(find.widgetWithText(OutlinedButton, 'Approve'));
+      await tester.pump();
       await tester.tap(find.widgetWithText(OutlinedButton, 'Approve'));
       await _pumpLoaded(tester);
 
@@ -617,7 +632,8 @@ void main() {
       expect(find.byType(SentimentClipPlayerWidget), findsOneWidget);
     });
 
-    testWidgets('dismiss button hides sentiment clip panel and clears selection',
+    testWidgets(
+        'dismiss button hides sentiment clip panel and clears selection',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -741,7 +757,8 @@ void main() {
       expect(find.textContaining('Selected sample:'), findsNothing);
     });
 
-    testWidgets('SENT-CLIP-007 playback fetch failure shows SnackBar on dot tap',
+    testWidgets(
+        'SENT-CLIP-007 playback fetch failure shows SnackBar on dot tap',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -832,7 +849,8 @@ void main() {
             );
           }
           if (path.endsWith('/recording/playback-url')) {
-            fail('playback-url should not be fetched when playbackReady is false');
+            fail(
+                'playback-url should not be fetched when playbackReady is false');
           }
           return http.Response('', 404);
         }),
@@ -848,17 +866,20 @@ void main() {
       );
       await _pumpLoaded(tester);
 
-      expect(find.text(kSentimentClipRecordingStatusProcessing), findsOneWidget);
+      expect(
+          find.text(kSentimentClipRecordingStatusProcessing), findsOneWidget);
       expect(find.text(kSentimentChartDotTapHintProcessing), findsOneWidget);
 
       await _tapTimelineNearFirstVoiceSample(tester);
       await _pumpClipLoaded(tester);
 
       expect(find.byType(SentimentClipPlayerWidget), findsNothing);
-      expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsOneWidget);
+      expect(
+          find.text(kSentimentClipRecordingProcessingSnackBar), findsOneWidget);
     });
 
-    testWidgets('SENT-CLIP-005 system-only tap is silent with unavailable status',
+    testWidgets(
+        'SENT-CLIP-005 system-only tap is silent with unavailable status',
         (tester) async {
       tester.view.physicalSize = const Size(800, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -890,7 +911,8 @@ void main() {
             );
           }
           if (path.contains('/recording/playback-url')) {
-            fail('playback-url should not be fetched for system-only recording');
+            fail(
+                'playback-url should not be fetched for system-only recording');
           }
           return http.Response('', 404);
         }),
@@ -906,14 +928,17 @@ void main() {
       );
       await _pumpLoaded(tester);
 
-      expect(find.text(kSentimentClipRecordingStatusUnavailable), findsOneWidget);
-      expect(find.text(kSentimentChartDotTapHintTranscriptOnly), findsOneWidget);
+      expect(
+          find.text(kSentimentClipRecordingStatusUnavailable), findsOneWidget);
+      expect(
+          find.text(kSentimentChartDotTapHintTranscriptOnly), findsOneWidget);
 
       await _tapTimelineNearFirstVoiceSample(tester);
       await _pumpClipLoaded(tester);
 
       expect(find.byType(SentimentClipPlayerWidget), findsNothing);
-      expect(find.text(kSentimentClipRecordingProcessingSnackBar), findsNothing);
+      expect(
+          find.text(kSentimentClipRecordingProcessingSnackBar), findsNothing);
     });
   });
 }

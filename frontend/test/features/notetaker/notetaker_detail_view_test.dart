@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/notetaker/models/patient_note_model.dart';
 import 'package:care_connect_app/features/notetaker/presentation/notetaker_detail_view.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import '../../mock_user_provider.dart';
 
@@ -32,7 +33,9 @@ PatientNote _makeNote({
   );
 }
 
-/// Wraps NotetakerDetailView with no extra (triggers redirect to notetaker-search).
+/// Wraps NotetakerDetailView with no extra and no note id/patient context, so
+/// the view renders its inline error state ("Invalid note ID or missing patient
+/// context") instead of loading a note.
 Widget _wrapNoExtra({MockUserProvider? provider}) {
   final userProvider =
       provider ?? MockUserProvider(mockUser: MockUser(role: 'PATIENT'));
@@ -41,8 +44,7 @@ Widget _wrapNoExtra({MockUserProvider? provider}) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) =>
-            ChangeNotifierProvider<UserProvider>.value(
+        builder: (context, state) => ChangeNotifierProvider<UserProvider>.value(
           value: userProvider,
           child: const NotetakerDetailView(),
         ),
@@ -54,7 +56,12 @@ Widget _wrapNoExtra({MockUserProvider? provider}) {
       ),
     ],
   );
-  return MaterialApp.router(routerConfig: router);
+  return MaterialApp.router(
+    routerConfig: router,
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+  );
 }
 
 /// Wraps NotetakerDetailView with a PatientNote as extra, using a sub-route
@@ -72,8 +79,7 @@ Widget _wrapWithNote({
     routes: [
       GoRoute(
         path: '/home',
-        builder: (context, state) =>
-            const Scaffold(body: Text('Home Page')),
+        builder: (context, state) => const Scaffold(body: Text('Home Page')),
         routes: [
           GoRoute(
             path: 'detail',
@@ -174,19 +180,23 @@ void main() {
     );
   });
 
-  group('NotetakerDetailView - no extra (redirect)', () {
-    testWidgets('shows CircularProgressIndicator when note is null',
+  group('NotetakerDetailView - no extra (inline error)', () {
+    testWidgets('shows the inline error when no note data is provided',
         (tester) async {
       await tester.pumpWidget(_wrapNoExtra());
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      await tester.pump();
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
 
-    testWidgets('navigates to notetaker-search when extra is null',
-        (tester) async {
+    testWidgets('does not navigate away when extra is null', (tester) async {
       await tester.pumpWidget(_wrapNoExtra());
       await tester.pump();
       await tester.pump();
-      expect(find.text('Notetaker Search'), findsOneWidget);
+      // Behavior changed from redirect-to-search to an inline error.
+      expect(find.text('Notetaker Search'), findsNothing);
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
   });
 
@@ -208,8 +218,8 @@ void main() {
       await tester.pump();
       await tester.pump();
       await tester.pump();
-      expect(find.text('View and edit the details of this note.'),
-          findsOneWidget);
+      expect(
+          find.text('View and edit the details of this note.'), findsOneWidget);
     });
 
     testWidgets('shows info icon in info card', (tester) async {
@@ -463,8 +473,8 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pump();
 
-      expect(
-          find.text('Are you sure you want to delete this note?'), findsNothing);
+      expect(find.text('Are you sure you want to delete this note?'),
+          findsNothing);
     });
 
     testWidgets('confirm delete triggers delete (HTTP fails gracefully)',
@@ -496,8 +506,7 @@ void main() {
         'shows content after loading fails for CAREGIVER (fallback name)',
         (tester) async {
       final provider = MockUserProvider(
-        mockUser:
-            MockUser(role: 'CAREGIVER', caregiverId: 10, patientId: null),
+        mockUser: MockUser(role: 'CAREGIVER', caregiverId: 10, patientId: null),
       );
       await tester.pumpWidget(_wrapWithNote(provider: provider));
       await tester.pump();
@@ -558,8 +567,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Unsaved Changes'), findsOneWidget);
-      expect(
-          find.text('You have unsaved changes. Do you want to save them?'),
+      expect(find.text('You have unsaved changes. Do you want to save them?'),
           findsOneWidget);
       expect(find.text('Cancel'), findsOneWidget);
       expect(find.text('Discard'), findsOneWidget);
@@ -588,8 +596,7 @@ void main() {
       expect(find.text('Note Detail'), findsOneWidget);
     });
 
-    testWidgets('discard in unsaved changes dialog pops back',
-        (tester) async {
+    testWidgets('discard in unsaved changes dialog pops back', (tester) async {
       final provider =
           MockUserProvider(mockUser: MockUser(role: 'PATIENT', patientId: 1));
       await tester.pumpWidget(_wrapWithNote(provider: provider));
@@ -612,8 +619,7 @@ void main() {
       expect(find.text('Unsaved Changes'), findsNothing);
     });
 
-    testWidgets('changing AI summary also triggers hasChanges',
-        (tester) async {
+    testWidgets('changing AI summary also triggers hasChanges', (tester) async {
       final provider =
           MockUserProvider(mockUser: MockUser(role: 'PATIENT', patientId: 1));
       await tester.pumpWidget(_wrapWithNote(provider: provider));
@@ -657,8 +663,7 @@ void main() {
   });
 
   group('NotetakerDetailView - save from unsaved dialog', () {
-    testWidgets(
-        'save option in unsaved changes dialog triggers save',
+    testWidgets('save option in unsaved changes dialog triggers save',
         (tester) async {
       final provider =
           MockUserProvider(mockUser: MockUser(role: 'PATIENT', patientId: 1));
@@ -694,8 +699,8 @@ void main() {
         note: 'Custom patient observations',
         aiSummary: 'Custom AI analysis of the session',
       );
-      await tester.pumpWidget(
-          _wrapWithNote(note: customNote, provider: provider));
+      await tester
+          .pumpWidget(_wrapWithNote(note: customNote, provider: provider));
       await tester.pump();
       await tester.pump();
       await tester.pump();
@@ -710,8 +715,8 @@ void main() {
         createdAt: DateTime(2024, 12, 25, 9, 0),
         updatedAt: DateTime(2025, 3, 1, 15, 30),
       );
-      await tester.pumpWidget(
-          _wrapWithNote(note: customNote, provider: provider));
+      await tester
+          .pumpWidget(_wrapWithNote(note: customNote, provider: provider));
       await tester.pump();
       await tester.pump();
       await tester.pump();
@@ -745,8 +750,7 @@ void main() {
       expect(find.text('Note Content'), findsOneWidget);
     });
 
-    testWidgets('edit icon in Note Content section is present',
-        (tester) async {
+    testWidgets('edit icon in Note Content section is present', (tester) async {
       final provider =
           MockUserProvider(mockUser: MockUser(role: 'PATIENT', patientId: 1));
       await tester.pumpWidget(_wrapWithNote(provider: provider));
@@ -762,8 +766,8 @@ void main() {
       final provider =
           MockUserProvider(mockUser: MockUser(role: 'PATIENT', patientId: 1));
       final emptyNote = _makeNote(note: '', aiSummary: '');
-      await tester.pumpWidget(
-          _wrapWithNote(note: emptyNote, provider: provider));
+      await tester
+          .pumpWidget(_wrapWithNote(note: emptyNote, provider: provider));
       await tester.pump();
       await tester.pump();
       await tester.pump();
@@ -777,8 +781,8 @@ void main() {
           MockUserProvider(mockUser: MockUser(role: 'PATIENT', patientId: 1));
       final longText = 'A' * 500;
       final longNote = _makeNote(note: longText);
-      await tester.pumpWidget(
-          _wrapWithNote(note: longNote, provider: provider));
+      await tester
+          .pumpWidget(_wrapWithNote(note: longNote, provider: provider));
       await tester.pump();
       await tester.pump();
       await tester.pump();

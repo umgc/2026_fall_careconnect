@@ -10,6 +10,7 @@
 //  - Page body structure (SafeArea, Column, Container decoration)
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
@@ -22,6 +23,9 @@ Widget _wrapWithPatientId(int? patientId) {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: patientId),
   );
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const MedicationsTrackerPage(),
@@ -43,7 +47,8 @@ void main() {
       expect(find.byType(SafeArea), findsOneWidget);
     });
 
-    testWidgets('shows medication_outlined icon in header area', (tester) async {
+    testWidgets('shows medication_outlined icon in header area',
+        (tester) async {
       await tester.pumpWidget(_wrapWithPatientId(null));
       await tester.pump();
       expect(find.byIcon(Icons.medication_outlined), findsWidgets);
@@ -118,8 +123,7 @@ void main() {
       expect(find.text('No medications found'), findsNothing);
     });
 
-    testWidgets(
-        'does not show "Add your first medication" when in error state',
+    testWidgets('does not show "Add your first medication" when in error state',
         (tester) async {
       await tester.pumpWidget(_wrapWithPatientId(null));
       await tester.pump();

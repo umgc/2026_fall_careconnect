@@ -124,14 +124,15 @@ String getBackendBaseUrl() {
 
   if (resolved.isEmpty) {
     if (kIsWeb) {
-      resolved = 'http://localhost:8080';
+      resolved = 'http://localhost:8081';
     } else {
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
-          resolved = 'http://10.0.2.2:8080';
+          // 10.0.2.2 is the Android emulator's alias for the host loopback.
+          resolved = 'http://10.0.2.2:8081';
           break;
         default:
-          resolved = 'http://localhost:8080';
+          resolved = 'http://localhost:8081';
       }
     }
   }

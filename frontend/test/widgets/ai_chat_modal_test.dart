@@ -3,6 +3,7 @@
 // Needs UserProvider; shown as a Dialog.
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/widgets/ai_chat_modal.dart';
@@ -21,6 +22,9 @@ class _NullUserProvider extends MockUserProvider {
 Widget _wrap() {
   final provider = _NullUserProvider();
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: Builder(
@@ -99,6 +103,9 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: ChangeNotifierProvider<UserProvider>.value(
             value: provider,
             child: Builder(

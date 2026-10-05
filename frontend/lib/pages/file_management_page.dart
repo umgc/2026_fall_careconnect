@@ -57,13 +57,6 @@ class _FileManagementPageState extends State<FileManagementPage>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _highlightFileId ??=
-        GoRouterState.of(context).uri.queryParameters['fileId'];
-  }
-
-  @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
@@ -145,18 +138,16 @@ class _FileManagementPageState extends State<FileManagementPage>
   void _filterFiles() {
     setState(() {
       _filteredFiles = _allFiles.where((file) {
-        final matchesSearch =
-            _searchQuery.isEmpty ||
+        final matchesSearch = _searchQuery.isEmpty ||
             file.originalFilename.toLowerCase().contains(
-              _searchQuery.toLowerCase(),
-            ) ||
-            (file.description?.toLowerCase().contains(
                   _searchQuery.toLowerCase(),
-                ) ??
+                ) ||
+            (file.description?.toLowerCase().contains(
+                      _searchQuery.toLowerCase(),
+                    ) ??
                 false);
 
-        final matchesCategory =
-            _selectedCategory == null ||
+        final matchesCategory = _selectedCategory == null ||
             file.fileCategory == _selectedCategory!.value;
 
         return matchesSearch && matchesCategory;
@@ -170,7 +161,9 @@ class _FileManagementPageState extends State<FileManagementPage>
     final user = userProvider.user;
     final t = AppLocalizations.of(context)!;
     if (user == null) {
-      Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
+      // This is a GoRouter app; use context.go (Navigator named routes are not
+      // registered, so pushReplacementNamed('/login') throws in production).
+      Future.microtask(() => context.go('/login'));
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final isAdmin = user.role.toUpperCase() == 'ADMIN';
@@ -185,8 +178,7 @@ class _FileManagementPageState extends State<FileManagementPage>
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (routeContext) =>
-                        const ComplianceDashboardPage(),
+                    builder: (routeContext) => const ComplianceDashboardPage(),
                   ),
                 );
               },
@@ -229,53 +221,53 @@ class _FileManagementPageState extends State<FileManagementPage>
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _filteredFiles.isEmpty
-              ? _buildEmptyState()
-              : _buildFilesList(),
+                  ? _buildEmptyState()
+                  : _buildFilesList(),
         ),
       ],
     );
   }
 
-  String _translateCategory(String name){
+  String _translateCategory(String name) {
     final t = AppLocalizations.of(context)!;
-    switch(name){
-      case('Medical Report'):
+    switch (name) {
+      case ('Medical Report'):
         return t.filemanage_medReport;
-      case('Lab Result'):
+      case ('Lab Result'):
         return t.filemanage_labResult;
-      case('Prescription'):
+      case ('Prescription'):
         return t.filemanage_prescription;
-      case('Clinical Notes'): 
+      case ('Clinical Notes'):
         return t.filemanage_clinicNotes;
-      case('Profile Picture'): 
+      case ('Profile Picture'):
         return t.filemanage_profilePic;
-      case('Emergency Contact'):
+      case ('Emergency Contact'):
         return t.filemanage_emgContact;
-      case('Insurance Document'):
+      case ('Insurance Document'):
         return t.filemanage_insurDocument;
-      case('AI Chat File'):
+      case ('AI Chat File'):
         return t.filemanage_aiChatFile;
-      case('General Document'):
+      case ('General Document'):
         return t.filemanage_genDocument;
-      case('Health Data Import'):
+      case ('Health Data Import'):
         return t.filemanage_hlthDataImport;
-      case('Backup File'):
+      case ('Backup File'):
         return t.filemanage_backupFile;
-      case('Employment Application'):
+      case ('Employment Application'):
         return t.filemanage_empApplication;
-      case('Onboarding Form'):
+      case ('Onboarding Form'):
         return t.filemanage_onboardForm;
-      case('Background Check'):
+      case ('Background Check'):
         return t.filemanage_backgroundCheck;
-      case('Certification / License'):
+      case ('Certification / License'):
         return t.filemanage_cert;
-      case('Reference'):
+      case ('Reference'):
         return t.filemanage_ref;
-      case('Employment Contract'):
+      case ('Employment Contract'):
         return t.filemanage_empContract;
-      case('Tax Form (W-4)'):
+      case ('Tax Form (W-4)'):
         return t.filemanage_taxForm;
-      case('Work Authorization (I-9)'):
+      case ('Work Authorization (I-9)'):
         return t.filemanage_workAuth;
       default:
         return name;
@@ -330,7 +322,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               Expanded(
                 child: DropdownButtonFormField<FileCategory?>(
                   initialValue: _selectedCategory,
-                  decoration: AppTheme.inputDecoration(t.filemanage_filterByCat),
+                  decoration:
+                      AppTheme.inputDecoration(t.filemanage_filterByCat),
                   items: [
                     DropdownMenuItem<FileCategory?>(
                       value: null,
@@ -387,8 +380,9 @@ class _FileManagementPageState extends State<FileManagementPage>
                 ? t.filemanage_noFilesMatchFilter
                 : t.ptfiles_noFilesUploaded,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -396,8 +390,9 @@ class _FileManagementPageState extends State<FileManagementPage>
                 ? t.filemanage_tryAdjustingCriteria
                 : t.filemanage_uploadFirstFile,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-            ),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
             textAlign: TextAlign.center,
           ),
           if (_searchQuery.isEmpty && _selectedCategory == null) ...[
@@ -460,15 +455,13 @@ class _FileManagementPageState extends State<FileManagementPage>
           backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
           child: Text(
             file.fileIcon,
-            style:
-                theme.textTheme.titleLarge?.copyWith(fontSize: 20) ??
+            style: theme.textTheme.titleLarge?.copyWith(fontSize: 20) ??
                 const TextStyle(fontSize: 20),
           ),
         ),
         title: Text(
           baseName,
-          style:
-              theme.textTheme.bodyLarge?.copyWith(
+          style: theme.textTheme.bodyLarge?.copyWith(
                 fontWeight: FontWeight.bold,
               ) ??
               AppTheme.bodyLarge.copyWith(fontWeight: FontWeight.bold),
@@ -547,7 +540,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               value: 'download',
               child: ListTile(
                 leading: Icon(Icons.download, color: theme.iconTheme.color),
-                title: Text(t.ptfiles_downloadButton, style: theme.textTheme.bodyMedium),
+                title: Text(t.ptfiles_downloadButton,
+                    style: theme.textTheme.bodyMedium),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -556,7 +550,8 @@ class _FileManagementPageState extends State<FileManagementPage>
                 value: 'preview',
                 child: ListTile(
                   leading: Icon(Icons.visibility, color: theme.iconTheme.color),
-                  title: Text(t.ptfiles_previewButton, style: theme.textTheme.bodyMedium),
+                  title: Text(t.ptfiles_previewButton,
+                      style: theme.textTheme.bodyMedium),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -1031,7 +1026,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('${t.filemanage_deleted} ${file.originalFilename}'),
+                    content: Text(
+                        '${t.filemanage_deleted} ${file.originalFilename}'),
                     backgroundColor: AppTheme.success,
                   ),
                 );
@@ -1039,7 +1035,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('${t.filemanage_failedToDelete} ${file.originalFilename}'),
+                    content: Text(
+                        '${t.filemanage_failedToDelete} ${file.originalFilename}'),
                     backgroundColor: AppTheme.error,
                   ),
                 );
