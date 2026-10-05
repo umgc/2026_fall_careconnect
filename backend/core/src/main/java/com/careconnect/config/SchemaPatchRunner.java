@@ -33,6 +33,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
     private static final Pattern POSTGRES_TEXT_CAST = Pattern.compile(
             "::(?:character varying|varchar|text)(?:\\(\\d+\\))?");
     private static final Pattern QUOTED_NUMBER = Pattern.compile("'(\\d+)'");
+    private static final Pattern SAFE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
 
     private final DataSource dataSource;
     private final SchemaPatchLedger patchLedger;
@@ -104,6 +105,22 @@ public class SchemaPatchRunner implements CommandLineRunner {
         }
     }
 
+    /**
+     * Rejects anything that is not a plain SQL identifier before it is concatenated into DDL.
+     * <p>
+     * The helpers below build statements by string concatenation because DDL cannot take bind
+     * parameters for object names. Every caller today passes a literal, so nothing is exploitable
+     * as it stands; this makes that a property of the helpers instead of a habit of their callers
+     * (PR #216 review). Unquoted identifiers only: no schema qualification, no quoting.
+     */
+    static String requireSafeIdentifier(final String identifier) {
+        if (identifier == null || !SAFE_IDENTIFIER.matcher(identifier).matches()) {
+            throw new IllegalArgumentException(
+                    "Not a plain SQL identifier, refusing to build DDL with it: " + identifier);
+        }
+        return identifier;
+    }
+
     private static String foreignKeyIfMissing(
             final String constraint,
             final String table,
@@ -111,6 +128,11 @@ public class SchemaPatchRunner implements CommandLineRunner {
             final String referencedTable,
             final String referencedColumn,
             final String suffix) {
+        requireSafeIdentifier(constraint);
+        requireSafeIdentifier(table);
+        requireSafeIdentifier(column);
+        requireSafeIdentifier(referencedTable);
+        requireSafeIdentifier(referencedColumn);
         return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint c " +
                 "WHERE c.conrelid = '" + table + "'::regclass " +
                 "AND c.confrelid = '" + referencedTable + "'::regclass " +
@@ -371,6 +393,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyEhrResourceJsonbPatch();
         applyEhrResourcePatientIdPatch();
         applyEhrIdentityReconciliationPatches();
+        applyPatientAuditTimestampBackfill();
         applyEhrAuditTimestampZonePatches();
         seedDemoScheduledVisits();
     }
@@ -477,7 +500,6 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 foreignKeyIfMissing("fk_ehr_identity_field_provenance_source", "ehr_identity_field_provenance",
                         "source_id", "ehr_source", "id", "")
         );
-        applyPatientAuditTimestampBackfill();
     }
 
     /**
@@ -511,6 +533,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
      * than being left as a permanent null baseline.
      */
     private void applyPatientAuditTimestampBackfill() {
+        // A core-schema patch, called from run() rather than from the EHR method that first needed
+        // it: it alters the shared patient table, not an ehr_* one. PostgreSQL only, as it was when
+        // it ran inside applyEhrIdentityReconciliationPatches() behind that method's guard.
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL patient audit-timestamp backfill for non-PostgreSQL datasource");
+            return;
+        }
+
         // Defaults first. The backfill below repairs rows that exist when it runs; a row inserted by
         // SQL after it -- the dev seed in db/migration/mock_data.sql, loaded by DevDataLoader after
         // this runner -- would otherwise carry no baseline until the next boot, and
@@ -648,6 +678,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
      * convert it back to a wall-clock reading and shift every value by the session offset.
      */
     private static String timestamptzIfZoneless(final String table, final String column) {
+        requireSafeIdentifier(table);
+        requireSafeIdentifier(column);
         return "DO $$ BEGIN IF EXISTS (SELECT 1 FROM information_schema.columns "
                 + "WHERE table_schema = current_schema() AND table_name = '" + table + "' "
                 + "AND column_name = '" + column + "' "
@@ -661,6 +693,8 @@ public class SchemaPatchRunner implements CommandLineRunner {
      * and this runner executes on every start.
      */
     private static String checkIfMissing(final String constraint, final String table, final String predicate) {
+        requireSafeIdentifier(constraint);
+        requireSafeIdentifier(table);
         return "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '"
                 + constraint + "' AND conrelid = '" + table + "'::regclass) THEN "
                 + "ALTER TABLE " + table + " ADD CONSTRAINT " + constraint

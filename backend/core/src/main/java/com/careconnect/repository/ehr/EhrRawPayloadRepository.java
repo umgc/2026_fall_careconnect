@@ -2,7 +2,12 @@ package com.careconnect.repository.ehr;
 
 import com.careconnect.model.ehr.EhrRawPayload;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,4 +23,26 @@ public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Lo
 
     /** Delete the raw-payload history for one patient and source (disconnect cleanup). */
     int deleteByPatientIdAndSourceId(Long patientId, Long sourceId);
+
+    /**
+     * Retention purge, step one: who has payloads the source answered before {@code cutoff}. The
+     * date of birth comes back as stored because it is a varchar in two formats, which SQL cannot
+     * compare; {@code EhrRetentionWorker} parses it and decides who is old enough.
+     * One row per patient, not per payload.
+     */
+    @Query("select distinct p.patientId as patientId, pt.dob as dob "
+            + "from EhrRawPayload p left join Patient pt on pt.id = p.patientId "
+            + "where p.retrievedAt < :cutoff")
+    List<PatientDateOfBirth> findPatientsWithPayloadRetrievedBefore(@Param("cutoff") OffsetDateTime cutoff);
+
+    /**
+     * Retention purge, step two: removes the payloads the source answered before {@code cutoff}
+     * for the given patients only. One bulk statement, so nothing is loaded into memory first.
+     * Returns the number of rows deleted.
+     */
+    @Modifying
+    @Transactional
+    @Query("delete from EhrRawPayload p where p.retrievedAt < :cutoff and p.patientId in :patientIds")
+    int deleteRetrievedBeforeForPatients(
+            @Param("cutoff") OffsetDateTime cutoff, @Param("patientIds") List<Long> patientIds);
 }

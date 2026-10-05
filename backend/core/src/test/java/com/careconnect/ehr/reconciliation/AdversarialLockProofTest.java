@@ -31,6 +31,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * class for catching a broken implementation. What they cannot give is a repetition count: a race
  * that goes wrong one time in ten passes a single-shot test nine times out of ten.
  *
+ * <p><b>What this does not prove.</b> Everything here runs against the in-memory fakes, and
+ * {@code InMemoryTransactionRunner} runs its work directly with no database underneath. So this
+ * shows the algorithm converges under contention <em>when the store's lock works</em>; it cannot
+ * fail because {@code JpaIdentityFieldProvenanceStore}'s {@code SELECT ... FOR UPDATE} is missing
+ * or wrong. The database-level proof is TC-EHR-PROV-003 and only that. Do not accept this class as
+ * evidence that the JPA store serialises concurrent transactions (PR #216 review).
+ *
  * <p><b>Origin.</b> This replaces {@code ehr-identity-reconciliation/manual-verify/}, three files at
  * the repository root outside every Maven module. They were written when the authoring environment
  * had no JUnit or Maven Central, and they kept the "verified, not just written" claim in the library
