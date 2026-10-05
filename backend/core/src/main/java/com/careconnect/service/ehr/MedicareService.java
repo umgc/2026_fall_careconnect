@@ -12,7 +12,6 @@ import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import ca.uhn.fhir.rest.server.exceptions.BaseServerResponseException;
 import ca.uhn.fhir.util.BundleUtil;
 import com.careconnect.repository.ehr.EhrSourceRepository;
-import lombok.Getter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -59,8 +58,17 @@ public class MedicareService {
     @Autowired
     private EhrSourceRepository ehrSourceRepository;
 
-    @Getter
+
+    // Why on earth did we need a single database lookup for a single, unchanging numerical ID instead of hardcoding it?
+    // Cause you can't really do that lookup on Bean construction, so you just have to do it lazily, I guess.
     private Long id;
+    public Long getId(){
+        if(id != null){
+            return id;
+        }
+        id = ehrSourceRepository.findByCode("MEDICARE").orElseThrow().getId();
+        return id;
+    }
 
     public MedicareService() {
         this(SANDBOX_BASE, SANDBOX_REVOKE, BlueButtonRetryPolicy.THREAD_SLEEP);
@@ -77,10 +85,6 @@ public class MedicareService {
     void setClientCredentials(String clientId, String clientSecret) {
         this.clientId = clientId;
         this.clientSecret = clientSecret;
-    }
-
-    public void retrieveId(){
-        id = ehrSourceRepository.findByCode("MEDICARE").orElseThrow().getId();
     }
 
     /**

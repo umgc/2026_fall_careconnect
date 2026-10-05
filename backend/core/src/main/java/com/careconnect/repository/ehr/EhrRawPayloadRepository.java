@@ -17,6 +17,10 @@ public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Lo
     Optional<EhrRawPayload> findFirstByPatientIdAndSourceIdAndResourceTypeOrderByRetrievedAtDesc(
             Long patientId, Long sourceId, String resourceType);
 
+    /** All stored bodies for one resource type, used to re-derive a mapping. */
+    List<EhrRawPayload> findByPatientIdAndSourceIdAndResourceTypeOrderByRetrievedAtDesc(
+            Long patientId, Long sourceId, String resourceType);
+
     /** Retrieval history for one patient and source, newest first. */
     List<EhrRawPayload> findByPatientIdAndSourceIdOrderByRetrievedAtDesc(
             Long patientId, Long sourceId);

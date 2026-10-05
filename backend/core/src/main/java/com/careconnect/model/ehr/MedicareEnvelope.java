@@ -1,6 +1,8 @@
 package com.careconnect.model.ehr;
 
 import com.fasterxml.jackson.databind.JsonNode;
+
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -26,13 +28,14 @@ public record MedicareEnvelope(
         String mode,
         boolean synthetic,
         int total,
-        List<JsonNode> resources) {
+        List<JsonNode> resources,
+        OffsetDateTime fetchedAt) {
 
     /** Envelope for a list-valued read. */
-    public static MedicareEnvelope of(final String mode, final boolean synthetic, final List<JsonNode> resources) {
+    public static MedicareEnvelope of(final String mode, final boolean synthetic, final List<JsonNode> resources, final OffsetDateTime fetchedAt) {
         final List<JsonNode> safe = resources == null ? List.of() : resources;
         return new MedicareEnvelope(
-                MedicareProperties.SOURCE_MEDICARE, mode, synthetic, safe.size(), safe);
+                MedicareProperties.SOURCE_MEDICARE, mode, synthetic, safe.size(), safe, fetchedAt);
     }
 
     /**
@@ -41,7 +44,7 @@ public record MedicareEnvelope(
      * <p>Still a list, so that a caller parses one shape rather than two. A missing resource is
      * an empty list with {@code total} 0, not a null element.
      */
-    public static MedicareEnvelope ofSingle(final String mode, final boolean synthetic, final JsonNode resource) {
-        return of(mode, synthetic, resource == null || resource.isNull() ? List.of() : List.of(resource));
+    public static MedicareEnvelope ofSingle(final String mode, final boolean synthetic, final JsonNode resource, final OffsetDateTime fetchedAt) {
+        return of(mode, synthetic, resource == null || resource.isNull() ? List.of() : List.of(resource), fetchedAt);
     }
 }
