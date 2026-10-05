@@ -28,11 +28,13 @@ import java.time.OffsetDateTime;
  * payload holds retrieved clinical content, so it is subject to the retention and deletion
  * rules that apply to patient data.
  * <p>
- * <strong>No retention policy exists for it yet.</strong> There is no TTL, no purge job and no
- * configuration property -- raised by @SungWook1207 on PR #209, 2026-09-30. An earlier version of
+ * <strong>Retention.</strong> {@code EhrRetentionWorker} purges a payload once it was
+ * retrieved more than 7 years ago and the patient has reached age 25, following Maryland
+ * Health-General § 4-403 (decided 2026-10-02, issue #214; see that class for the reasoning). The
+ * gap was raised by @SungWook1207 on PR #209, 2026-09-30, and again on PR #216. An earlier version of
  * this note said "a Table 47 retention row is still outstanding"; the TDD's tables run 1 to 13 and
  * no Table 47 exists in any document in this repository, so that reference has been removed. The
- * gap is tracked as a {@code hipaa}/{@code retention} issue, and belongs with the WBS 1.8 HIPAA
+ * decision is recorded on issue #214, and the evidence belongs with the WBS 1.8 HIPAA
  * production gate, which already blocks production merges until retention evidence is attached.
  * <p>
  * Photographs are stripped before insert, never stored and trimmed afterwards: callers remove
