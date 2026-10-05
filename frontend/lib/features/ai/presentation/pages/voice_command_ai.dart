@@ -165,6 +165,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         intent: 'navigate',
         entity: 'smart devices'),
     _CommandMatch(
+        phrase: 'smart devices', intent: 'navigate', entity: 'smart devices'),
+    _CommandMatch(
+        phrase: 'show smart devices', intent: 'navigate', entity: 'smart devices'),
+    _CommandMatch(
+        phrase: 'my smart devices', intent: 'navigate', entity: 'smart devices'),
+    _CommandMatch(
+        phrase: 'open my smart devices', intent: 'navigate', entity: 'smart devices'),
+    _CommandMatch(
+        phrase: 'take me to smart devices', intent: 'navigate', entity: 'smart devices'),
+    _CommandMatch(
         phrase: 'open home monitoring',
         intent: 'navigate',
         entity: 'home monitoring'),
@@ -211,6 +221,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         entity: 'achievements'),
     _CommandMatch(phrase: 'open search', intent: 'navigate', entity: 'search'),
     _CommandMatch(
+        phrase: 'search', intent: 'navigate', entity: 'search'),
+    _CommandMatch(
+        phrase: 'go to search', intent: 'navigate', entity: 'search'),
+    _CommandMatch(
+        phrase: 'show search', intent: 'navigate', entity: 'search'),
+    _CommandMatch(
+        phrase: 'take me to search', intent: 'navigate', entity: 'search'),
+    _CommandMatch(
+        phrase: 'open the search screen', intent: 'navigate', entity: 'search'),
+    _CommandMatch(
         phrase: 'open subscription',
         intent: 'navigate',
         entity: 'subscription'),
@@ -218,6 +238,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         phrase: 'open ai configuration',
         intent: 'navigate',
         entity: 'ai configuration'),
+    _CommandMatch(
+        phrase: 'ai configuration', intent: 'navigate', entity: 'ai configuration'),
+    _CommandMatch(
+        phrase: 'ai settings', intent: 'navigate', entity: 'ai configuration'),
+    _CommandMatch(
+        phrase: 'open ai settings', intent: 'navigate', entity: 'ai configuration'),
+    _CommandMatch(
+        phrase: 'configure ai', intent: 'navigate', entity: 'ai configuration'),
+    _CommandMatch(
+        phrase: 'take me to ai configuration', intent: 'navigate', entity: 'ai configuration'),
     //emergency
     _CommandMatch(phrase: 'emergency', intent: 'sos', entity: 'emergency'),
   ];
