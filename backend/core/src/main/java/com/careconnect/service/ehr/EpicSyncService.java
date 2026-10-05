@@ -404,6 +404,9 @@ public class EpicSyncService {
                         userId, EpicProperties.SOURCE_EPIC, resourceType, fhirId)
                 .orElseGet(EhrResource::new);
         entity.setUserId(userId);
+        // Additive canonical key (Q1): derive patient_id from the same user_id resolution so the two
+        // cannot disagree. Null for a user with no patient row; user_id stays the dedup/scope key.
+        entity.setPatientId(patientId);
         entity.setSource(EpicProperties.SOURCE_EPIC);
         entity.setResourceType(resourceType);
         entity.setResourceFhirId(fhirId);

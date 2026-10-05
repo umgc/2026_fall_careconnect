@@ -369,6 +369,7 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyUspsMailpiecePatches();
         applyEhrCanonicalSchemaPatches();
         applyEhrResourceJsonbPatch();
+        applyEhrResourcePatientIdPatch();
         applyEhrIdentityReconciliationPatches();
         applyEhrAuditTimestampZonePatches();
         seedDemoScheduledVisits();
@@ -600,6 +601,44 @@ public class SchemaPatchRunner implements CommandLineRunner {
                         + "AND column_name = 'payload_json' AND data_type = 'oid') THEN "
                         + "ALTER TABLE ehr_resource DROP COLUMN payload_json; "
                         + "ALTER TABLE ehr_resource ADD COLUMN payload_json jsonb; END IF; END $$;"
+        );
+    }
+
+    /**
+     * Add the canonical {@code patient_id} to the interim mirror {@code ehr_resource}, additively
+     * (Team E standardization; EPIC Status.md §2 / Q1). This does not re-key the table: {@code user_id}
+     * stays the dedup / RBAC / index scope key and {@code patient_id} is a nullable, backfilled join
+     * column to the canonical layer.
+     * <p>
+     * Hibernate {@code ddl-auto=update} adds the column and the {@code (patient_id, source,
+     * resource_type)} index from the entity; this supplies what it will not and makes a pre-existing
+     * database consistent: the backfill from {@code patient.user_id}, and the foreign key (the entity
+     * stores a bare {@code Long}, matching {@code ehr_raw_payload}). Order matters — backfill before
+     * the FK so no row is left pointing at a non-existent patient. Idempotent: re-runs are no-ops.
+     */
+    private void applyEhrResourcePatientIdPatch() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL ehr_resource patient_id patch for non-PostgreSQL datasource");
+            return;
+        }
+        applyPatch(
+                "V2610041300a - ehr_resource.patient_id column",
+                "ALTER TABLE ehr_resource ADD COLUMN IF NOT EXISTS patient_id BIGINT"
+        );
+        applyPatch(
+                "V2610041300b - backfill ehr_resource.patient_id from patient.user_id",
+                "UPDATE ehr_resource er SET patient_id = p.id FROM patient p "
+                        + "WHERE p.user_id = er.user_id AND er.patient_id IS NULL"
+        );
+        applyPatch(
+                "V2610041300c - index ehr_resource(patient_id, source, resource_type)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_resource_patient_source_type "
+                        + "ON ehr_resource (patient_id, source, resource_type)"
+        );
+        applyRequiredPatch(
+                "V2610041300d - FK ehr_resource.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_resource_patient", "ehr_resource",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
         );
     }
 
