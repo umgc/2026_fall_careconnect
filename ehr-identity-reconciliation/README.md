@@ -20,6 +20,17 @@ except `date_of_birth`, that's the entire integration surface — everything abo
 decided inside the library, identically, regardless of which of you calls it. For `date_of_birth`
 specifically, there is a second entry point too — see "The `date_of_birth` carve-out" below.
 
+Two things the library relies on you for and does not check (PR #216 review):
+
+- **Upsert first.** `reconcile` assumes the snapshot's row is already in `ehr_source_identity` for the
+  same `(patient_id, source_id)`. No foreign key ties `ehr_identity_conflict` or
+  `ehr_identity_field_provenance` to that table, so a call made without the upsert succeeds and
+  leaves audit rows with no stored snapshot behind them.
+- **Use the published field names.** Build the snapshot's map from the constants in
+  `IdentityFieldNames` (`given_name`, `family_name`, `date_of_birth`, ...), which are the
+  `ehr_source_identity` column names. `JpaPatientFieldAccessor` rejects a name it does not know, but
+  only when the reconciler reaches that field, and fields before it have already committed.
+
 **Ids are `Long`, as of the PR #209 review (2026-09-30).** They were typed `Object` so adapters
 would not be forced onto this codebase's key types. That never bought anything: every table these
 ids land in declares `patient_id` and `source_id` as `bigint` with foreign keys to `patient.id`

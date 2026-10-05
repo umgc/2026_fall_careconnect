@@ -1,7 +1,11 @@
 -- Phase 2 of the EHR canonical schema: the identity-reconciliation tables.
 --
--- Flyway is disabled in every profile; this file is the canonical reference and
--- SchemaPatchRunner.applyEhrIdentityReconciliationPatches() mirrors it for dev and prod.
+-- NOTHING EXECUTES THIS FILE. Flyway is disabled in every profile, so there is one DDL path, not
+-- two: Hibernate ddl-auto=update creates the tables from the entities, and
+-- SchemaPatchRunner.applyEhrIdentityReconciliationPatches() adds the constraints, indexes and
+-- foreign keys on every boot. This file is the readable statement of the intended schema. If it
+-- ever disagrees with the entities or the runner, the running database follows them, and this
+-- file is the one that is wrong.
 --
 -- created_at/updated_at come from the shared Auditable @MappedSuperclass, which maps them as
 -- nullable LocalDateTime. Hibernate ddl-auto creates those as TIMESTAMP; they are TIMESTAMPTZ here
@@ -12,7 +16,7 @@
 --
 -- No organization column on any of these three. FR-EHR-10 instructs reuse of an existing
 -- organization-identifier isolation pattern; no such column exists anywhere in this schema, so
--- the gap is filed for the Requirements Owner and DE-02 rather than closed with a placeholder.
+-- the gap is left for the tech leads to route rather than closed with a placeholder.
 
 -- What one source currently believes about a patient. One row per (patient, source), upserted
 -- per sync -- NOT appended. The reconciler locks and diffs this row; an append-only history
