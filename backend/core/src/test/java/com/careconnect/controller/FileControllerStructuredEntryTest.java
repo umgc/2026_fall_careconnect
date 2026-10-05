@@ -61,19 +61,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc(addFilters = false)
 class FileControllerStructuredEntryTest {
 
+    private static final String VALID_BODY = """
+            {"documentType":"EMERGENCY_CONTACT","patientId":1,
+             "fields":{"contactName":"John Doe","relationship":"Son","phone":"555-0100"}}
+            """;
     @Autowired
     private MockMvc mockMvc;
-
-    @MockitoBean private FileManagementService fileManagementService;
-    @MockitoBean private S3StorageService s3StorageService;
-    @MockitoBean private UserRepository userRepository;
-    @MockitoBean private PatientRepository patientRepository;
-    @MockitoBean private MessageRepository messageRepository;
-    @MockitoBean private CaregiverService caregiverService;
-    @MockitoBean private PatientService patientService;
-    @MockitoBean private AuthorizationService authorizationService;
-    @MockitoBean private SecurityUtil securityUtil;
-
+    @MockitoBean
+    private FileManagementService fileManagementService;
+    @MockitoBean
+    private S3StorageService s3StorageService;
+    @MockitoBean
+    private UserRepository userRepository;
+    @MockitoBean
+    private PatientRepository patientRepository;
+    @MockitoBean
+    private MessageRepository messageRepository;
+    @MockitoBean
+    private CaregiverService caregiverService;
+    @MockitoBean
+    private PatientService patientService;
+    @MockitoBean
+    private AuthorizationService authorizationService;
+    @MockitoBean
+    private SecurityUtil securityUtil;
     private User patientUser;
     private User caregiverUser;
 
@@ -104,7 +115,9 @@ class FileControllerStructuredEntryTest {
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
     }
 
-    /** A file owned by the patient user (id 1). */
+    /**
+     * A file owned by the patient user (id 1).
+     */
     private UserFileDTO ownFile() {
         return UserFileDTO.builder()
                 .id(20L).ownerId(1L).ownerType("PATIENT").patientId(1L)
@@ -123,11 +136,6 @@ class FileControllerStructuredEntryTest {
                 .originalFilename("emergency.pdf")
                 .build();
     }
-
-    private static final String VALID_BODY = """
-            {"documentType":"EMERGENCY_CONTACT","patientId":1,
-             "fields":{"contactName":"John Doe","relationship":"Son","phone":"555-0100"}}
-            """;
 
     // ───────────────────────── Create ─────────────────────────
 

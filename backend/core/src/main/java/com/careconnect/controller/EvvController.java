@@ -19,16 +19,20 @@ import com.careconnect.service.evv.HhaExchangeBatchSubmissionService;
 import com.careconnect.service.evv.EvvOfflineSyncService;
 import com.careconnect.util.SecurityUtil;
 import jakarta.validation.Valid;
+
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-@RestController @RequestMapping("/v1/api/evv") @RequiredArgsConstructor
+@RestController
+@RequestMapping("/v1/api/evv")
+@RequiredArgsConstructor
 public class EvvController {
     private final EvvService evvService;
     private final EvvSubmissionService submitter;
@@ -95,7 +99,7 @@ public class EvvController {
         User currentUser = securityUtil.resolveCurrentUser();
         if (currentUser.isPatient()) {
             Patient patient = patientRepository.findByUser(currentUser)
-                .orElseThrow(() -> new UnauthorizedException("Patient record not found"));
+                    .orElseThrow(() -> new UnauthorizedException("Patient record not found"));
             searchRequest.setPatientId(patient.getId());
         } else {
             authorizationService.requireAdminOrCaregiver(currentUser);

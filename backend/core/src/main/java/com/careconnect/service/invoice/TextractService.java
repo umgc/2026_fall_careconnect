@@ -30,14 +30,12 @@ import java.util.stream.Collectors;
 @ConditionalOnProperty(name = "careconnect.aws.enabled", havingValue = "true", matchIfMissing = false)
 public class TextractService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TextractService.class);
-
+    private static final long POLL_INTERVAL_MS = 2000;       // 2 seconds
+    private static final long TIMEOUT_MS = 5 * 60 * 1000;    // 5 minutes
     private final TextractClient textractClient;
     private final S3Client s3Client;
     private final PdfService pdfService;
     private final S3StorageService s3StorageService;
-    private static final long POLL_INTERVAL_MS = 2000;       // 2 seconds
-    private static final long TIMEOUT_MS = 5 * 60 * 1000;    // 5 minutes
-
     @Value("${aws.s3.bucket-name}")
     private String s3BucketName;
 
@@ -99,6 +97,7 @@ public class TextractService {
 
         return new AiRequest.AnalysisResult(rawText, s3Key);
     }
+
     /**
      * Runs async Textract Text Detection for a PDF in S3 and returns all blocks.
      */

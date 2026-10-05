@@ -1,17 +1,20 @@
 # Digital Assessment Schema (Ticket #83)
 
-The question catalog now supports versioned form templates and section metadata so assessments can evolve without breaking historical check-ins.
+The question catalog now supports versioned form templates and section metadata so assessments can evolve without
+breaking historical check-ins.
 
 ## Schema fields
 
 `questions` now includes:
+
 - `form_key` (string): stable template identifier (example: `virtual-checkin`, `comprehensive-assessment`)
 - `form_version` (int): increment when you publish a new template revision
 - `section_key` (string): logical group inside the form
 - `field_key` (string): stable machine key for analytics and downstream mapping
 - `score_weight` (decimal, optional): contribution weight for scoring models
 
-`check_in_questions` snapshots now include matching `*_snapshot` metadata fields, so each check-in preserves the exact form definition used at creation time.
+`check_in_questions` snapshots now include matching `*_snapshot` metadata fields, so each check-in preserves the exact
+form definition used at creation time.
 
 ## Querying templates via existing API
 

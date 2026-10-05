@@ -38,7 +38,9 @@ public class AiAskConfirmationDecision {
     @Column(name = "request_id")
     private UUID requestId;
 
-    /** APPROVE_ONCE | APPROVE_SESSION | DECLINE */
+    /**
+     * APPROVE_ONCE | APPROVE_SESSION | DECLINE
+     */
     @Column(name = "decision", nullable = false, length = 32)
     private String decision;
 

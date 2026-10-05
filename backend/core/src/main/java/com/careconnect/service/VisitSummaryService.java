@@ -5,10 +5,12 @@ import com.careconnect.model.schedule.ScheduledVisit;
 import com.careconnect.repository.VisitSummaryRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,22 @@ public class VisitSummaryService {
     private final BedrockSentimentService bedrockSentimentService;
     private final ObjectMapper objectMapper;
 
+    private static String buildSourceText(final ScheduledVisit visit, final String notes) {
+        final StringBuilder builder = new StringBuilder();
+        if (visit.getServiceType() != null && !visit.getServiceType().isBlank()) {
+            builder.append("Service: ").append(visit.getServiceType()).append('\n');
+        }
+        if (visit.getScheduledDate() != null) {
+            builder.append("Date: ").append(visit.getScheduledDate());
+            if (visit.getScheduledTime() != null) {
+                builder.append(' ').append(visit.getScheduledTime());
+            }
+            builder.append('\n');
+        }
+        builder.append("Notes: ").append(notes);
+        return builder.toString();
+    }
+
     /**
      * Persists a visit summary row and, when {@code status=SUCCESS}, emits the
      * indexing outbox event consumed by {@code RetrievalIndexService}.
@@ -55,7 +73,7 @@ public class VisitSummaryService {
      * <p>When the visit has no notes, a {@code NO_TRANSCRIPT} summary is stored with an
      * empty overview payload instead of calling the summarization model.
      *
-     * @param visitId scheduled visit identifier
+     * @param visitId           scheduled visit identifier
      * @param generatedByUserId user that triggered generation, when known
      * @return the persisted visit summary
      */
@@ -78,9 +96,9 @@ public class VisitSummaryService {
                     visitSummaryRepository.findTopByVisitIdOrderByGeneratedAtDesc(visitIdKey);
             if (existing.isPresent()
                     && STATUS_SUCCESS.equalsIgnoreCase(
-                            existing.get().getStatus() == null
-                                    ? ""
-                                    : existing.get().getStatus().trim())) {
+                    existing.get().getStatus() == null
+                            ? ""
+                            : existing.get().getStatus().trim())) {
                 if (log.isDebugEnabled()) {
                     log.debug(
                             "Skipping visit summary generation for visitId={} — SUCCESS already exists",
@@ -134,22 +152,6 @@ public class VisitSummaryService {
             summary.setSummaryJson(EMPTY_OVERVIEW_JSON);
         }
         summary.setSummarizationEngine(bedrockSentimentService.summaryEngine());
-    }
-
-    private static String buildSourceText(final ScheduledVisit visit, final String notes) {
-        final StringBuilder builder = new StringBuilder();
-        if (visit.getServiceType() != null && !visit.getServiceType().isBlank()) {
-            builder.append("Service: ").append(visit.getServiceType()).append('\n');
-        }
-        if (visit.getScheduledDate() != null) {
-            builder.append("Date: ").append(visit.getScheduledDate());
-            if (visit.getScheduledTime() != null) {
-                builder.append(' ').append(visit.getScheduledTime());
-            }
-            builder.append('\n');
-        }
-        builder.append("Notes: ").append(notes);
-        return builder.toString();
     }
 
     private String toJsonSafe(final Object value) {

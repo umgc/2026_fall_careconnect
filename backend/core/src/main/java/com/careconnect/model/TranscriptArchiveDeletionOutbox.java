@@ -6,12 +6,16 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
+
 import lombok.Getter;
 import lombok.Setter;
 
-/** Durable outbox for deleting transcript archive objects after commit. */
+/**
+ * Durable outbox for deleting transcript archive objects after commit.
+ */
 @Entity
 @Table(name = "transcript_archive_deletion_outbox")
 @Getter

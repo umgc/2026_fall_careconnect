@@ -148,7 +148,8 @@ public class AnswerSubmissionService {
                     throw new AppException(HttpStatus.BAD_REQUEST, "NUMBER question requires valueNumber: " + item.questionId());
                 }
             }
-            default -> throw new AppException(HttpStatus.BAD_REQUEST, "Unsupported question type in snapshot: " + questionType);
+            default ->
+                    throw new AppException(HttpStatus.BAD_REQUEST, "Unsupported question type in snapshot: " + questionType);
         }
     }
 }

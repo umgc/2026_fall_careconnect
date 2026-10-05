@@ -185,7 +185,9 @@ class ScheduleAuditAspectTest {
         return new ScheduledVisitResponse(id);
     }
 
-    /** Inner class used to simulate ScheduledVisitResponse for reflection-based extraction. */
+    /**
+     * Inner class used to simulate ScheduledVisitResponse for reflection-based extraction.
+     */
     @SuppressWarnings("unused")
     private static class ScheduledVisitResponse {
         private Long id;

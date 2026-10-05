@@ -23,7 +23,7 @@ public class CcLambdaHandler implements RequestStreamHandler {
             // Initialize the handler with specific configurations
             HANDLER = SpringBootLambdaContainerHandler
                     .getAwsProxyHandler(CareconnectBackendApplication.class);
-            
+
             LOG.info("Lambda Handler initialized successfully");
         } catch (ContainerInitializationException e) {
             LOG.error("Failed to initialize Spring Boot application", e);
@@ -39,7 +39,7 @@ public class CcLambdaHandler implements RequestStreamHandler {
 
             // Process the request and write directly to output stream
             HANDLER.proxyStream(inputStream, outputStream, context);
-            
+
             // Log after processing
             LOG.info("Response sent directly to output stream");
         } catch (Exception e) {

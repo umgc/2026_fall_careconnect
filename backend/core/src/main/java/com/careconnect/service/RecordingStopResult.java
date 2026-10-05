@@ -3,7 +3,9 @@ package com.careconnect.service;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Typed result for an owner-fenced recording stop attempt. */
+/**
+ * Typed result for an owner-fenced recording stop attempt.
+ */
 public record RecordingStopResult(
         Status status,
         String callId,
@@ -13,8 +15,11 @@ public record RecordingStopResult(
         String concatenationStatus,
         String message) {
 
-    public enum Status {
-        STOPPED, ALREADY_STOPPED, NOT_RECORDING, RETRYABLE_FAILURE, FORBIDDEN
+    private static void put(
+            final Map<String, Object> target, final String key, final Object value) {
+        if (value != null) {
+            target.put(key, value);
+        }
     }
 
     public Map<String, Object> toMap() {
@@ -29,10 +34,7 @@ public record RecordingStopResult(
         return result;
     }
 
-    private static void put(
-            final Map<String, Object> target, final String key, final Object value) {
-        if (value != null) {
-            target.put(key, value);
-        }
+    public enum Status {
+        STOPPED, ALREADY_STOPPED, NOT_RECORDING, RETRYABLE_FAILURE, FORBIDDEN
     }
 }

@@ -38,6 +38,24 @@ class ChunkEmbeddingServiceTest {
 
     private ObjectMapper objectMapper;
 
+    private static RetrievalIndexChunk chunk(final String text) {
+        return RetrievalIndexChunk.builder()
+                .id(UUID.randomUUID())
+                .patientId(1L)
+                .recordType("CALL_SUMMARY")
+                .sourceRecordId("99")
+                .chunkText(text)
+                .build();
+    }
+
+    private static float[] sampleVector(final float fill) {
+        final float[] values = new float[RetrievalIndexSchema.EMBEDDING_DIMENSION];
+        for (int i = 0; i < values.length; i++) {
+            values[i] = fill;
+        }
+        return values;
+    }
+
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
@@ -181,24 +199,6 @@ class ChunkEmbeddingServiceTest {
                 "amazon.titan-embed-text-v1",
                 25,
                 8000);
-    }
-
-    private static RetrievalIndexChunk chunk(final String text) {
-        return RetrievalIndexChunk.builder()
-                .id(UUID.randomUUID())
-                .patientId(1L)
-                .recordType("CALL_SUMMARY")
-                .sourceRecordId("99")
-                .chunkText(text)
-                .build();
-    }
-
-    private static float[] sampleVector(final float fill) {
-        final float[] values = new float[RetrievalIndexSchema.EMBEDDING_DIMENSION];
-        for (int i = 0; i < values.length; i++) {
-            values[i] = fill;
-        }
-        return values;
     }
 
     private String embeddingJson(final float[] values) throws Exception {

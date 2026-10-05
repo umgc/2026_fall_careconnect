@@ -34,8 +34,8 @@ public interface WebSocketConnectionRepository extends JpaRepository<WebSocketCo
      * Used for email verification subscriptions
      */
     Optional<WebSocketConnection> findFirstByUserEmailAndSubscriptionTypeAndIsActiveTrueOrderByConnectedAtDesc(
-        String userEmail,
-        String subscriptionType
+            String userEmail,
+            String subscriptionType
     );
 
     /**

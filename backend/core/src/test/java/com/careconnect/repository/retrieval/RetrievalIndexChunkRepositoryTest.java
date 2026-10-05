@@ -14,7 +14,9 @@ import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Task 1.5 — JPA persistence smoke tests for retrieval_index_chunk (H2 portable columns). */
+/**
+ * Task 1.5 — JPA persistence smoke tests for retrieval_index_chunk (H2 portable columns).
+ */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")

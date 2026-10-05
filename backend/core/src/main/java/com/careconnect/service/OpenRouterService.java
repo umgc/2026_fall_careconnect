@@ -1,4 +1,3 @@
-
 package com.careconnect.service;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -6,6 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -49,9 +49,9 @@ public class OpenRouterService {
         }
         String url = endpoint + "chat/completions";
 
-    RestTemplate restTemplate = new RestTemplate();
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        RestTemplate restTemplate = new RestTemplate();
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
         try {
             String body = mapper.writeValueAsString(request);
@@ -278,6 +278,7 @@ public class OpenRouterService {
         public Integer getPromptCacheHitTokens() {
             return promptCacheHitTokens;
         }
+
         public void setPromptCacheHitTokens(Integer promptCacheHitTokens) {
             this.promptCacheHitTokens = promptCacheHitTokens;
         }
@@ -285,11 +286,11 @@ public class OpenRouterService {
         public Integer getPromptCacheMissTokens() {
             return promptCacheMissTokens;
         }
-        
+
         public void setPromptCacheMissTokens(Integer promptCacheMissTokens) {
             this.promptCacheMissTokens = promptCacheMissTokens;
         }
-       
+
         public Integer getPromptTokens() {
             return promptTokens;
         }

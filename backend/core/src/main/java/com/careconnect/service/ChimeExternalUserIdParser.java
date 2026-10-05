@@ -1,19 +1,23 @@
 package com.careconnect.service;
 
-/** Parses legacy {@code ROLE_…_userId} Chime externalUserIds and detects pipeline-internal ids.
-
+/**
+ * Parses legacy {@code ROLE_…_userId} Chime externalUserIds and detects pipeline-internal ids.
+ *
  * <p>Production attendees use opaque UUIDs from {@code ChimeService#toOpaqueChimeExternalUserId};
  * those must be resolved via {@code call_participants.chime_external_user_id}, not this parser.
  */
 final class ChimeExternalUserIdParser {
 
-    private ChimeExternalUserIdParser() {}
+    private ChimeExternalUserIdParser() {
+    }
 
     static boolean isPipelineInternal(final String externalUserId) {
         return externalUserId != null && externalUserId.startsWith("aws:");
     }
 
-    /** True when the id looks like a UUID (opaque attendee id), not {@code ROLE_…_userId}. */
+    /**
+     * True when the id looks like a UUID (opaque attendee id), not {@code ROLE_…_userId}.
+     */
     static boolean isOpaqueExternalUserId(final String externalUserId) {
         if (externalUserId == null || externalUserId.isBlank() || isPipelineInternal(externalUserId)) {
             return false;
@@ -57,7 +61,9 @@ final class ChimeExternalUserIdParser {
         }
     }
 
-    /** Legacy role prefix parser. Returns {@code UNKNOWN} for opaque / pipeline ids. */
+    /**
+     * Legacy role prefix parser. Returns {@code UNKNOWN} for opaque / pipeline ids.
+     */
     static String parseRole(final String externalUserId) {
         if (externalUserId == null
                 || externalUserId.isBlank()

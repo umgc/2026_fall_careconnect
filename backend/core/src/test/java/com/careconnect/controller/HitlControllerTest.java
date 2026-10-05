@@ -49,6 +49,29 @@ class HitlControllerTest {
     private MockMvc mockMvc;
     private User caller;
 
+    private static HitlDetailResponse detail(
+            final UUID heldItemId,
+            final String status,
+            final String deliveryStatus) {
+        return new HitlDetailResponse(
+                heldItemId,
+                42L,
+                7L,
+                status,
+                deliveryStatus,
+                List.of("MEDICATION_CHANGE"),
+                "Should I stop taking metformin?",
+                "draft",
+                "DELIVERED".equals(deliveryStatus) ? "draft" : null,
+                "[]",
+                "[]",
+                Instant.now(),
+                Instant.now().plusSeconds(3600),
+                Instant.now(),
+                99L,
+                "notes");
+    }
+
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
@@ -219,28 +242,5 @@ class HitlControllerTest {
         assertThat(HitlController.class.getMethod("reject", UUID.class, HitlRejectRequest.class)
                 .getAnnotation(RequirePermission.class).value())
                 .isEqualTo(Permission.REVIEW_AI_HOLDS);
-    }
-
-    private static HitlDetailResponse detail(
-            final UUID heldItemId,
-            final String status,
-            final String deliveryStatus) {
-        return new HitlDetailResponse(
-                heldItemId,
-                42L,
-                7L,
-                status,
-                deliveryStatus,
-                List.of("MEDICATION_CHANGE"),
-                "Should I stop taking metformin?",
-                "draft",
-                "DELIVERED".equals(deliveryStatus) ? "draft" : null,
-                "[]",
-                "[]",
-                Instant.now(),
-                Instant.now().plusSeconds(3600),
-                Instant.now(),
-                99L,
-                "notes");
     }
 }

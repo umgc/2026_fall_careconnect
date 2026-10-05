@@ -21,16 +21,17 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MedicationControllerTest {
 
-    @Mock private MedicationService medicationService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
+    private static final Long PATIENT_ID = 1L;
+    private static final Long MEDICATION_ID = 42L;
+    private static final Long CAREGIVER_ID = 7L;
+    @Mock
+    private MedicationService medicationService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
     @InjectMocks
     private MedicationController controller;
-
-    private static final Long PATIENT_ID    = 1L;
-    private static final Long MEDICATION_ID = 42L;
-    private static final Long CAREGIVER_ID  = 7L;
 
     private MedicationDTO dto(String name) {
         final MedicationDTO d = new MedicationDTO(null, null, name, null, null, null, null, null, null, null, null, null, null, null);
@@ -131,8 +132,7 @@ class MedicationControllerTest {
         final ResponseEntity<?> response = controller.approveMedication(PATIENT_ID, MEDICATION_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.get("message")).isEqualTo("Medication approved successfully");
         assertThat(body.get("approvedMedication")).isEqualTo(approved);
@@ -148,8 +148,7 @@ class MedicationControllerTest {
         final ResponseEntity<?> response = controller.deleteMedication(PATIENT_ID, MEDICATION_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.get("message")).isEqualTo("Medication removed and notification sent");
         verify(medicationService).deactivateMedication(PATIENT_ID, MEDICATION_ID);
@@ -164,8 +163,7 @@ class MedicationControllerTest {
         final ResponseEntity<?> response = controller.deleteMedicationByCaregiver(PATIENT_ID, MEDICATION_ID, CAREGIVER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body).isNotNull();
         assertThat(body.get("message")).isEqualTo("Medication deleted successfully");
         verify(medicationService).hardDeleteMedication(PATIENT_ID, MEDICATION_ID, CAREGIVER_ID);

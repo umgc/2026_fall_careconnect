@@ -21,16 +21,13 @@ import javax.sql.DataSource;
 @ConditionalOnProperty(name = "careconnect.database.use-aws-config", havingValue = "true", matchIfMissing = false)
 public class DatabaseConfig {
 
+    private final ParameterStoreService parameterService;
     @Value("${careconnect.db.url}")
     private String jdbcUrl;
-
     @Value("${careconnect.db.username}")
     private String userParameter;
-
     @Value("${careconnect.db.password}")
     private String passwordParameter;
-
-    private final ParameterStoreService parameterService;
 
     @Autowired(required = false)
     public DatabaseConfig(ParameterStoreService parameterService) {

@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Issue #213 — Tests: check-in hidden without caregiver consent.
- *
+ * <p>
  * Verifies that STML-3 GET /patients/{patientId}/checkin:
  * - Returns 403 when RetrievalScopeService denies scope (no RBAC access)
  * - Returns 200 with consentGranted=false when scope passes but consent link is absent
@@ -49,18 +49,22 @@ import static org.mockito.Mockito.when;
 @DisplayName("STML-3 Check-In Consent Gate Tests (Issue #213)")
 class StmlCheckInConsentTest {
 
-    @Mock private StmlService stmlService;
-    @Mock private StmlRecallService stmlRecallService;
-    @Mock private StmlCheckInService stmlCheckInService;
-    @Mock private StmlSearchService stmlSearchService;
-    @Mock private RetrievalScopeService retrievalScopeService;
-    @Mock private UserRepository userRepository;
-
-    @InjectMocks
-    private StmlController stmlController;
-
     private static final Long PATIENT_ID = 1L;
     private static final Long CAREGIVER_ID = 2L;
+    @Mock
+    private StmlService stmlService;
+    @Mock
+    private StmlRecallService stmlRecallService;
+    @Mock
+    private StmlCheckInService stmlCheckInService;
+    @Mock
+    private StmlSearchService stmlSearchService;
+    @Mock
+    private RetrievalScopeService retrievalScopeService;
+    @Mock
+    private UserRepository userRepository;
+    @InjectMocks
+    private StmlController stmlController;
 
     private User makeUser(Long id, Role role) {
         User u = new User();
@@ -72,10 +76,10 @@ class StmlCheckInConsentTest {
 
     private void setSecurityContext(User user) {
         SecurityContextHolder.getContext().setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                user.getEmail(), null, List.of()));
+                new UsernamePasswordAuthenticationToken(
+                        user.getEmail(), null, List.of()));
         when(userRepository.findByEmail(user.getEmail()))
-            .thenReturn(Optional.of(user));
+                .thenReturn(Optional.of(user));
     }
 
     @BeforeEach
@@ -99,13 +103,13 @@ class StmlCheckInConsentTest {
             User otherPatient = makeUser(CAREGIVER_ID, Role.PATIENT);
             setSecurityContext(otherPatient);
             when(retrievalScopeService.resolveRetrievalScope(otherPatient, PATIENT_ID))
-                .thenThrow(ForbiddenScopeException.of(
-                    ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
-                    PATIENT_ID, otherPatient.getId(),
-                    "Patient out of scope", UUID.randomUUID()));
+                    .thenThrow(ForbiddenScopeException.of(
+                            ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                            PATIENT_ID, otherPatient.getId(),
+                            "Patient out of scope", UUID.randomUUID()));
 
             ResponseEntity<StmlCheckInDTO> response =
-                stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
+                    stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             verifyNoInteractions(stmlCheckInService);
@@ -118,13 +122,13 @@ class StmlCheckInConsentTest {
             User fm = makeUser(CAREGIVER_ID, Role.FAMILY_MEMBER);
             setSecurityContext(fm);
             when(retrievalScopeService.resolveRetrievalScope(fm, PATIENT_ID))
-                .thenThrow(ForbiddenScopeException.of(
-                    ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
-                    PATIENT_ID, fm.getId(),
-                    "Patient out of scope", UUID.randomUUID()));
+                    .thenThrow(ForbiddenScopeException.of(
+                            ScopeDenialReason.PATIENT_OUT_OF_SCOPE,
+                            PATIENT_ID, fm.getId(),
+                            "Patient out of scope", UUID.randomUUID()));
 
             ResponseEntity<StmlCheckInDTO> response =
-                stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
+                    stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
             verifyNoInteractions(stmlCheckInService);
@@ -144,21 +148,21 @@ class StmlCheckInConsentTest {
             setSecurityContext(caregiver);
 
             StmlCheckInDTO deniedDto = StmlCheckInDTO.builder()
-                .patientId(PATIENT_ID)
-                .caregiverId(CAREGIVER_ID)
-                .generatedAt(LocalDateTime.now())
-                .consentGranted(false)
-                .notes(List.of())
-                .pendingItems(List.of())
-                .disclaimer("Access denied. The care recipient has not granted"
-                    + " consent for caregiver check-in view.")
-                .build();
+                    .patientId(PATIENT_ID)
+                    .caregiverId(CAREGIVER_ID)
+                    .generatedAt(LocalDateTime.now())
+                    .consentGranted(false)
+                    .notes(List.of())
+                    .pendingItems(List.of())
+                    .disclaimer("Access denied. The care recipient has not granted"
+                            + " consent for caregiver check-in view.")
+                    .build();
 
             when(stmlCheckInService.getCheckInView(PATIENT_ID, CAREGIVER_ID))
-                .thenReturn(deniedDto);
+                    .thenReturn(deniedDto);
 
             ResponseEntity<StmlCheckInDTO> response =
-                stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
+                    stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isNotNull();
@@ -166,7 +170,7 @@ class StmlCheckInConsentTest {
             assertThat(response.getBody().getNotes()).isEmpty();
             assertThat(response.getBody().getPendingItems()).isEmpty();
             assertThat(response.getBody().getDisclaimer())
-                .contains("has not granted");
+                    .contains("has not granted");
             verify(stmlCheckInService).getCheckInView(PATIENT_ID, CAREGIVER_ID);
         }
 
@@ -177,29 +181,29 @@ class StmlCheckInConsentTest {
             setSecurityContext(caregiver);
 
             StmlCheckInDTO deniedDto = StmlCheckInDTO.builder()
-                .patientId(PATIENT_ID)
-                .caregiverId(CAREGIVER_ID)
-                .consentGranted(false)
-                .notes(List.of())
-                .pendingItems(List.of())
-                .disclaimer("Access denied.")
-                .build();
+                    .patientId(PATIENT_ID)
+                    .caregiverId(CAREGIVER_ID)
+                    .consentGranted(false)
+                    .notes(List.of())
+                    .pendingItems(List.of())
+                    .disclaimer("Access denied.")
+                    .build();
 
             when(stmlCheckInService.getCheckInView(PATIENT_ID, CAREGIVER_ID))
-                .thenReturn(deniedDto);
+                    .thenReturn(deniedDto);
 
             ResponseEntity<StmlCheckInDTO> response =
-                stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
+                    stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
 
             StmlCheckInDTO body = response.getBody();
             assertThat(body).isNotNull();
             assertThat(body.isConsentGranted()).isFalse();
             assertThat(body.getNotes())
-                .as("Medical notes must be hidden without consent")
-                .isEmpty();
+                    .as("Medical notes must be hidden without consent")
+                    .isEmpty();
             assertThat(body.getPendingItems())
-                .as("Pending tasks must be hidden without consent")
-                .isEmpty();
+                    .as("Pending tasks must be hidden without consent")
+                    .isEmpty();
         }
     }
 
@@ -216,32 +220,32 @@ class StmlCheckInConsentTest {
             setSecurityContext(caregiver);
 
             StmlCheckInDTO.StmlCheckInItemDTO medItem = StmlCheckInDTO.StmlCheckInItemDTO.builder()
-                .type("MEDICATION")
-                .summary("Metformin 500mg, twice daily")
-                .source("MEDICATION")
-                .build();
+                    .type("MEDICATION")
+                    .summary("Metformin 500mg, twice daily")
+                    .source("MEDICATION")
+                    .build();
 
             StmlCheckInDTO.StmlCheckInItemDTO taskItem = StmlCheckInDTO.StmlCheckInItemDTO.builder()
-                .type("TASK")
-                .summary("Daily walk: 15 minutes")
-                .source("TASK")
-                .build();
+                    .type("TASK")
+                    .summary("Daily walk: 15 minutes")
+                    .source("TASK")
+                    .build();
 
             StmlCheckInDTO grantedDto = StmlCheckInDTO.builder()
-                .patientId(PATIENT_ID)
-                .caregiverId(CAREGIVER_ID)
-                .generatedAt(LocalDateTime.now())
-                .consentGranted(true)
-                .notes(List.of(medItem))
-                .pendingItems(List.of(taskItem))
-                .disclaimer("This information is drawn from the care recipient's records.")
-                .build();
+                    .patientId(PATIENT_ID)
+                    .caregiverId(CAREGIVER_ID)
+                    .generatedAt(LocalDateTime.now())
+                    .consentGranted(true)
+                    .notes(List.of(medItem))
+                    .pendingItems(List.of(taskItem))
+                    .disclaimer("This information is drawn from the care recipient's records.")
+                    .build();
 
             when(stmlCheckInService.getCheckInView(PATIENT_ID, CAREGIVER_ID))
-                .thenReturn(grantedDto);
+                    .thenReturn(grantedDto);
 
             ResponseEntity<StmlCheckInDTO> response =
-                stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
+                    stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody()).isNotNull();
@@ -260,19 +264,19 @@ class StmlCheckInConsentTest {
             setSecurityContext(admin);
 
             StmlCheckInDTO grantedDto = StmlCheckInDTO.builder()
-                .patientId(PATIENT_ID)
-                .caregiverId(CAREGIVER_ID)
-                .consentGranted(true)
-                .notes(List.of())
-                .pendingItems(List.of())
-                .disclaimer("Admin access.")
-                .build();
+                    .patientId(PATIENT_ID)
+                    .caregiverId(CAREGIVER_ID)
+                    .consentGranted(true)
+                    .notes(List.of())
+                    .pendingItems(List.of())
+                    .disclaimer("Admin access.")
+                    .build();
 
             when(stmlCheckInService.getCheckInView(PATIENT_ID, CAREGIVER_ID))
-                .thenReturn(grantedDto);
+                    .thenReturn(grantedDto);
 
             ResponseEntity<StmlCheckInDTO> response =
-                stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
+                    stmlController.getCheckInView(PATIENT_ID, CAREGIVER_ID);
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(response.getBody().isConsentGranted()).isTrue();

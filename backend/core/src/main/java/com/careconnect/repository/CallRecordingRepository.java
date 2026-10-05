@@ -114,7 +114,7 @@ public interface CallRecordingRepository
      *
      * @param callId call identifier
      * @return matching recordings
-     *     in descending start order
+     * in descending start order
      */
     List<CallRecording> findByCallIdOrderByStartedAtDesc(String callId);
 
@@ -123,7 +123,7 @@ public interface CallRecordingRepository
      *
      * @param userId initiating user identifier
      * @return matching recordings
-     *     in descending start order
+     * in descending start order
      */
     List<CallRecording> findByInitiatedByUserIdOrderByStartedAtDesc(
             Long userId
@@ -134,7 +134,7 @@ public interface CallRecordingRepository
      *
      * @param status recording status
      * @return matching recordings
-     *     in descending start order
+     * in descending start order
      */
     List<CallRecording> findByStatusOrderByStartedAtDesc(String status);
 
@@ -143,7 +143,7 @@ public interface CallRecordingRepository
      *
      * @param status recording status
      * @return up to 100 matching recordings in
-     *     descending start order
+     * descending start order
      */
     List<CallRecording> findTop100ByStatusOrderByStartedAtDesc(String status);
 

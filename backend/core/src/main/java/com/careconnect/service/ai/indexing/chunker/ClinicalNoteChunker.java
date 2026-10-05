@@ -2,10 +2,12 @@ package com.careconnect.service.ai.indexing.chunker;
 
 import com.careconnect.service.ai.indexing.IndexingChunkDraft;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
 import org.springframework.stereotype.Component;
 
 /**

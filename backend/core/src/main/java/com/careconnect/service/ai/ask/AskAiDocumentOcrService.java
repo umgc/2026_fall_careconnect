@@ -11,6 +11,7 @@ import com.careconnect.service.FileManagementService;
 import com.careconnect.service.S3StorageService;
 import com.careconnect.service.invoice.TextractService;
 import com.careconnect.util.ContentHashUtil;
+
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +19,7 @@ import java.io.InputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,6 +75,31 @@ public class AskAiDocumentOcrService {
         this.textractService = textractService;
         this.s3StorageService = s3StorageService;
         this.self = self != null ? self : this;
+    }
+
+    private static String safeErrorCode(final Throwable error) {
+        if (error == null) {
+            return "UNKNOWN";
+        }
+        return error.getClass().getSimpleName();
+    }
+
+    static boolean isOcrCandidate(final String contentType, final String filename) {
+        final String type = contentType == null ? "" : contentType.toLowerCase();
+        if (type.startsWith("image/") || type.contains("pdf")) {
+            return true;
+        }
+        if (filename == null || filename.isBlank()) {
+            return false;
+        }
+        final String lower = filename.toLowerCase();
+        return lower.endsWith(".pdf")
+                || lower.endsWith(".png")
+                || lower.endsWith(".jpg")
+                || lower.endsWith(".jpeg")
+                || lower.endsWith(".tif")
+                || lower.endsWith(".tiff")
+                || lower.endsWith(".webp");
     }
 
     /**
@@ -250,13 +277,6 @@ public class AskAiDocumentOcrService {
         });
     }
 
-    private static String safeErrorCode(final Throwable error) {
-        if (error == null) {
-            return "UNKNOWN";
-        }
-        return error.getClass().getSimpleName();
-    }
-
     private byte[] loadFileBytes(final UserFile userFile) {
         if (userFile.getStorageType() == UserFile.StorageType.DATABASE) {
             final byte[] data = userFile.getFileData();
@@ -275,24 +295,6 @@ public class AskAiDocumentOcrService {
             }
         }
         return null;
-    }
-
-    static boolean isOcrCandidate(final String contentType, final String filename) {
-        final String type = contentType == null ? "" : contentType.toLowerCase();
-        if (type.startsWith("image/") || type.contains("pdf")) {
-            return true;
-        }
-        if (filename == null || filename.isBlank()) {
-            return false;
-        }
-        final String lower = filename.toLowerCase();
-        return lower.endsWith(".pdf")
-                || lower.endsWith(".png")
-                || lower.endsWith(".jpg")
-                || lower.endsWith(".jpeg")
-                || lower.endsWith(".tif")
-                || lower.endsWith(".tiff")
-                || lower.endsWith(".webp");
     }
 
     private void emitDocumentIndexed(final UserFile file) {
@@ -322,7 +324,9 @@ public class AskAiDocumentOcrService {
         }
     }
 
-    /** Minimal {@link MultipartFile} for Textract without pulling spring-test into production. */
+    /**
+     * Minimal {@link MultipartFile} for Textract without pulling spring-test into production.
+     */
     static final class InMemoryMultipartFile implements MultipartFile {
         private final String name;
         private final String originalFilename;

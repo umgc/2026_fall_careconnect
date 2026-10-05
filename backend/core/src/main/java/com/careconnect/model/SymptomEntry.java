@@ -2,15 +2,21 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.Instant;
 
 
-@Entity @Table(name = "symptom_entry")
+@Entity
+@Table(name = "symptom_entry")
 @EqualsAndHashCode(callSuper = false)
-@Data @NoArgsConstructor @AllArgsConstructor @Builder
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class SymptomEntry extends Auditable {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -5,7 +5,6 @@ import com.careconnect.dto.EmailConnectionStatusResponse;
 import com.careconnect.dto.GmailConnectUrlResponse;
 import com.careconnect.model.EmailCredential;
 import com.careconnect.model.User;
-import com.careconnect.security.AuthRequestSupport;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
@@ -16,8 +15,6 @@ import com.careconnect.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,7 +28,11 @@ import java.util.Map;
 
 /**
  * Gmail credential APIs: lifecycle status/disconnect plus patient-scoped
- * JWT-authenticated Gmail status / disconnect / connect-url.
+ * Gmail status / disconnect / connect-url.
+ *
+ * <p>Authentication is enforced by {@code SecurityConfig} ({@code .authenticated()}) and
+ * patient access by {@link EmailCredentialService}. {@code JwtAuthenticationFilter} sets a
+ * {@code UserDetails} principal, so an {@code @AuthenticationPrincipal Jwt} is always null here.
  *
  * <p>Combines Task 3.14.9 lifecycle endpoints with HMAC connect-url and structured
  * Gmail status from the OAuth-hardening PR.
@@ -45,6 +46,16 @@ public class EmailCredentialController {
     private final AuthorizationService authorizationService;
     private final EmailCredentialLifecycleService credentialLifecycle;
     private final EmailCredentialService emailCredentialService;
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first.trim();
+        }
+        if (second != null && !second.isBlank()) {
+            return second.trim();
+        }
+        return null;
+    }
 
     /**
      * Legacy boolean status — true only when Gmail sync is ACTIVE.
@@ -69,14 +80,12 @@ public class EmailCredentialController {
     }
 
     /**
-     * Structured patient-scoped Gmail connection status (JWT required).
+     * Structured patient-scoped Gmail connection status.
      */
     @GetMapping("/gmail/status")
     public ResponseEntity<EmailConnectionStatus> getGmailConnectionStatus(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
         String identifier = firstNonBlank(patientEmail, userId);
         return ResponseEntity.ok(emailCredentialService.getGmailConnectionStatus(identifier));
     }
@@ -100,30 +109,26 @@ public class EmailCredentialController {
     }
 
     /**
-     * Patient-scoped Gmail disconnect with best-effort token revoke (JWT required).
+     * Patient-scoped Gmail disconnect with best-effort token revoke.
      */
     @DeleteMapping("/gmail")
     public ResponseEntity<Void> disconnectGmail(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
         String identifier = firstNonBlank(patientEmail, userId);
         emailCredentialService.disconnectGmail(identifier);
         return ResponseEntity.noContent().build();
     }
 
     /**
-     * Issues a signed start URL for external-browser OAuth (JWT required).
+     * Issues a signed start URL for external-browser OAuth.
      */
     @GetMapping("/gmail/connect-url")
     public ResponseEntity<GmailConnectUrlResponse> getGmailConnectUrl(
-            @AuthenticationPrincipal Jwt jwt,
             HttpServletRequest request,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String returnUrl) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
         String identifier = firstNonBlank(patientEmail, userId);
         String startToken = emailCredentialService.createGmailOAuthStartToken(identifier, returnUrl);
         String url = ServletUriComponentsBuilder.fromContextPath(request)
@@ -146,15 +151,5 @@ public class EmailCredentialController {
         } catch (final NumberFormatException ex) {
             throw new UnauthorizedException("Invalid userId");
         }
-    }
-
-    private static String firstNonBlank(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first.trim();
-        }
-        if (second != null && !second.isBlank()) {
-            return second.trim();
-        }
-        return null;
     }
 }

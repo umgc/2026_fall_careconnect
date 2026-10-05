@@ -55,33 +55,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 class ScheduledVisitServiceTest {
 
-    @Mock
-    private ScheduledVisitRepository scheduledVisitRepository;
-
-    @Mock
-    private ScheduledVisitAuditRepository scheduledVisitAuditRepository;
-
-    @Mock
-    private PatientRepository patientRepository;
-
-    @Mock
-    private ScheduleConflictService conflictService;
-
-    @Mock
-    private ObjectMapper objectMapper;
-
-    @Mock
-    private VisitSummaryService visitSummaryService;
-
-    @InjectMocks
-    private ScheduledVisitService visitService;
-
     private static final Long CAREGIVER_ID = 1L;
     private static final Long PATIENT_ID = 10L;
     private static final Long VISIT_ID = 100L;
     private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 17);
     private static final LocalTime TEST_TIME = LocalTime.of(10, 0);
     private static final String TEST_USER = "testuser";
+    @Mock
+    private ScheduledVisitRepository scheduledVisitRepository;
+    @Mock
+    private ScheduledVisitAuditRepository scheduledVisitAuditRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private ScheduleConflictService conflictService;
+    @Mock
+    private ObjectMapper objectMapper;
+    @Mock
+    private VisitSummaryService visitSummaryService;
+    @InjectMocks
+    private ScheduledVisitService visitService;
 
     @BeforeEach
     void setUp() {
@@ -1605,7 +1598,7 @@ class ScheduledVisitServiceTest {
     class ApplyAuditToVisitFieldCoverage {
 
         private ScheduledVisitAudit priorAuditFor(Long visitId, String field, String oldValue,
-                String newValue, LocalDateTime changedAt) {
+                                                  String newValue, LocalDateTime changedAt) {
             ScheduledVisitAudit audit = new ScheduledVisitAudit();
             audit.setId((long) changedAt.getNano()); // unique-enough id per call within a test
             audit.setVisitId(visitId);
@@ -1775,7 +1768,7 @@ class ScheduledVisitServiceTest {
                     .getDeclaredMethod("formatConflictingVisits", List.class);
             method.setAccessible(true);
 
-            String result = (String) method.invoke(visitService, new Object[] { null });
+            String result = (String) method.invoke(visitService, new Object[]{null});
 
             assertEquals("none", result);
         }

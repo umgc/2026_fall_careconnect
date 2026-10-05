@@ -36,12 +36,10 @@ import static org.mockito.Mockito.when;
 @DisplayName("CallTelemetryService Extended Tests")
 class CallTelemetryServiceExtendedTest {
 
+    private static final String CALL_ID = "call-ext-001";
     @Mock
     private CallTelemetryEventRepository repo;
-
     private CallTelemetryService service;
-
-    private static final String CALL_ID = "call-ext-001";
 
     @BeforeEach
     void setUp() {
@@ -64,8 +62,8 @@ class CallTelemetryServiceExtendedTest {
     }
 
     private CallTelemetryEvent sentimentEvent(String callId, String channel,
-                                               double score, String label,
-                                               LocalDateTime time) {
+                                              double score, String label,
+                                              LocalDateTime time) {
         CallTelemetryEvent e = eventAt(callId, "SENTIMENT_" + channel.toUpperCase(), time);
         e.setChannel(channel);
         e.setSentimentScore(score);
@@ -75,6 +73,43 @@ class CallTelemetryServiceExtendedTest {
 
     // ──────────────────────────────────────────────────────────────────
     //  recordWebSocketEvent
+    // ──────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("recordSentimentEvent with null result saves event without sentiment fields")
+    void recordSentimentEvent_nullResult_savesEvent() {
+        ArgumentCaptor<CallTelemetryEvent> cap = ArgumentCaptor.forClass(CallTelemetryEvent.class);
+
+        service.recordSentimentEvent(CALL_ID, "SENTIMENT_TEXT", "TEXT", 1L, 2L, "REALTIME",
+                null, Map.of("captureMode", "REALTIME"), "SUCCESS", null);
+
+        verify(repo).save(cap.capture());
+        assertThat(cap.getValue().getSentimentScore()).isNull();
+        assertThat(cap.getValue().getSentimentLabel()).isNull();
+        assertThat(cap.getValue().getStatus()).isEqualTo("SUCCESS");
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  getSentimentHistoryForUser (exercises summarizeCall)
+    // ──────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("recordSentimentEvent with SentimentResult sets score and label")
+    void recordSentimentEvent_withResult_setsSentimentFields() {
+        ArgumentCaptor<CallTelemetryEvent> cap = ArgumentCaptor.forClass(CallTelemetryEvent.class);
+        SentimentResult result = new SentimentResult(0.85, "CALM", "Stable", "TEXT",
+                CALL_ID, System.currentTimeMillis(), false);
+
+        service.recordSentimentEvent(CALL_ID, "SENTIMENT_TEXT", "TEXT", 1L, 2L, "REALTIME",
+                result, Map.of(), "SUCCESS", null);
+
+        verify(repo).save(cap.capture());
+        assertThat(cap.getValue().getSentimentScore()).isEqualTo(0.85);
+        assertThat(cap.getValue().getSentimentLabel()).isEqualTo("CALM");
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  sanitizePayload (via recordSentimentEvent)
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -127,7 +162,7 @@ class CallTelemetryServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  getSentimentHistoryForUser (exercises summarizeCall)
+    //  findCallHistoryForPatient
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -284,14 +319,16 @@ class CallTelemetryServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  sanitizePayload (via recordSentimentEvent)
+    //  deleteTelemetryEvents
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("sanitizePayload via recordSentimentEvent")
     class SanitizePayloadTests {
 
-        private ArgumentCaptor<CallTelemetryEvent> saved() { return ArgumentCaptor.forClass(CallTelemetryEvent.class); }
+        private ArgumentCaptor<CallTelemetryEvent> saved() {
+            return ArgumentCaptor.forClass(CallTelemetryEvent.class);
+        }
 
         @Test
         @DisplayName("redacts token field")
@@ -364,7 +401,7 @@ class CallTelemetryServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  findCallHistoryForPatient
+    //  deleteTelemetryForCall edge cases
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -428,7 +465,7 @@ class CallTelemetryServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  deleteTelemetryEvents
+    //  recordSentimentEvent with null SentimentResult
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -473,10 +510,6 @@ class CallTelemetryServiceExtendedTest {
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────
-    //  deleteTelemetryForCall edge cases
-    // ──────────────────────────────────────────────────────────────────
-
     @Nested
     @DisplayName("deleteTelemetryForCall edge cases")
     class DeleteCallEdgeCases {
@@ -502,38 +535,5 @@ class CallTelemetryServiceExtendedTest {
 
             assertThat(result).isEqualTo(5L);
         }
-    }
-
-    // ──────────────────────────────────────────────────────────────────
-    //  recordSentimentEvent with null SentimentResult
-    // ──────────────────────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("recordSentimentEvent with null result saves event without sentiment fields")
-    void recordSentimentEvent_nullResult_savesEvent() {
-        ArgumentCaptor<CallTelemetryEvent> cap = ArgumentCaptor.forClass(CallTelemetryEvent.class);
-
-        service.recordSentimentEvent(CALL_ID, "SENTIMENT_TEXT", "TEXT", 1L, 2L, "REALTIME",
-                null, Map.of("captureMode", "REALTIME"), "SUCCESS", null);
-
-        verify(repo).save(cap.capture());
-        assertThat(cap.getValue().getSentimentScore()).isNull();
-        assertThat(cap.getValue().getSentimentLabel()).isNull();
-        assertThat(cap.getValue().getStatus()).isEqualTo("SUCCESS");
-    }
-
-    @Test
-    @DisplayName("recordSentimentEvent with SentimentResult sets score and label")
-    void recordSentimentEvent_withResult_setsSentimentFields() {
-        ArgumentCaptor<CallTelemetryEvent> cap = ArgumentCaptor.forClass(CallTelemetryEvent.class);
-        SentimentResult result = new SentimentResult(0.85, "CALM", "Stable", "TEXT",
-                CALL_ID, System.currentTimeMillis(), false);
-
-        service.recordSentimentEvent(CALL_ID, "SENTIMENT_TEXT", "TEXT", 1L, 2L, "REALTIME",
-                result, Map.of(), "SUCCESS", null);
-
-        verify(repo).save(cap.capture());
-        assertThat(cap.getValue().getSentimentScore()).isEqualTo(0.85);
-        assertThat(cap.getValue().getSentimentLabel()).isEqualTo("CALM");
     }
 }

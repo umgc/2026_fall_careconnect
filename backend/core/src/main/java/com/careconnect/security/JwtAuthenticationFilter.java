@@ -28,22 +28,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     // Paths that should be excluded from JWT authentication
     private static final List<String> EXCLUDED_PATHS = Arrays.asList(
-        "/swagger-ui",
-        "/v3/api-docs",
-        "/swagger-resources",
-        "/webjars",
-        "/v1/api/auth",
-        "/api/v1/auth",
-        "/v1/api/test",
-        "/v1/api/email-test",
-        "/v1/api/emergency"
+            "/swagger-ui",
+            "/v3/api-docs",
+            "/swagger-resources",
+            "/webjars",
+            "/v1/api/auth",
+            "/api/v1/auth",
+            "/v1/api/test",
+            "/v1/api/email-test",
+            "/v1/api/emergency"
     );
-
+    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final JwtTokenProvider jwt;
     private final UserDetailsService uds;
 
-    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
-    
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
@@ -67,8 +65,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (token != null && jwt.validateToken(token)) {
             log.debug("Token is valid, processing authentication");
             Claims claims = jwt.getClaims(token);
-            String email  = claims.getSubject();
-            String role   = claims.get("role", String.class);
+            String email = claims.getSubject();
+            String role = claims.get("role", String.class);
             log.debug("Token email subject: {}, role: {}", email, role);
 
             // Use role-specific user loading for more precise authentication  
@@ -79,10 +77,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // Fallback to email-only lookup (may have ambiguity issues)
                 userDetails = uds.loadUserByUsername(email);
             }
-            
+
             UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
+                    new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
             auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(req));
             SecurityContextHolder.getContext().setAuthentication(auth);
             log.debug("Authentication set for user: {} with role: {}", email, role);
@@ -117,10 +115,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         // b) HttpOnly cookie
         if (req.getCookies() != null) {
             return Arrays.stream(req.getCookies())
-                         .filter(c -> COOKIE_NAME.equals(c.getName()))
-                         .findFirst()
-                         .map(Cookie::getValue)
-                         .orElse(null);
+                    .filter(c -> COOKIE_NAME.equals(c.getName()))
+                    .findFirst()
+                    .map(Cookie::getValue)
+                    .orElse(null);
         }
         return null;
     }

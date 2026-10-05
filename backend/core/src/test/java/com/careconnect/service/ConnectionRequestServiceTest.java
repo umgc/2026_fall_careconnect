@@ -355,8 +355,7 @@ class ConnectionRequestServiceTest {
         verify(linkRepo).save(any(CaregiverPatientLink.class));
 
         // notificationService IS injected, so notification is sent with default "Caregiver"
-        @SuppressWarnings("unchecked")
-        final ArgumentCaptor<Map<String, String>> dataCaptor = ArgumentCaptor.forClass(Map.class);
+        @SuppressWarnings("unchecked") final ArgumentCaptor<Map<String, String>> dataCaptor = ArgumentCaptor.forClass(Map.class);
         verify(notificationService).sendNotificationToUser(
                 eq(1L), anyString(), anyString(), eq("CONNECTION_ACCEPTED"), dataCaptor.capture());
         final Map<String, String> capturedData = dataCaptor.getValue();

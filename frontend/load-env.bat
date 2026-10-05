@@ -47,7 +47,7 @@ echo Starting CareConnect Backend...
 REM Execute the passed command with loaded environment
 if /I "%~1"=="flutter" (
     echo Using sentiment mode: %CC_SENTIMENT_MODE%
-    %* --dart-define=CARECONNECT_SENTIMENT_MODE=%CC_SENTIMENT_MODE%
+    %* --dart-define=CARECONNECT_SENTIMENT_MODE=%CC_SENTIMENT_MODE% --dart-define=GOOGLE_PLACES_API_KEY=%GOOGLE_PLACES_API_KEY% --dart-define=APPLE_MERCHANT_ID=%APPLE_MERCHANT_ID% --dart-define=GOOGLE_PAY_MERCHANT_ID=%GOOGLE_PAY_MERCHANT_ID%
 ) else (
     %*
 )

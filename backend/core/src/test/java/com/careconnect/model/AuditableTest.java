@@ -9,12 +9,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AuditableTest {
 
-    // Concrete subclass for testing the abstract Auditable
-    static class ConcreteAuditable extends Auditable {
-    }
-
-    // ─── onCreate() via @PrePersist ───────────────────────────────────────────
-
     @Test
     void onCreate_setsCreatedAtAndUpdatedAt() throws Exception {
         final ConcreteAuditable entity = new ConcreteAuditable();
@@ -27,7 +21,7 @@ class AuditableTest {
         assertThat(entity.getUpdatedAt()).isNotNull();
     }
 
-    // ─── onUpdate() via @PreUpdate ────────────────────────────────────────────
+    // ─── onCreate() via @PrePersist ───────────────────────────────────────────
 
     @Test
     void onUpdate_setsUpdatedAt() throws Exception {
@@ -40,7 +34,7 @@ class AuditableTest {
         assertThat(entity.getUpdatedAt()).isNotNull();
     }
 
-    // ─── Setters ──────────────────────────────────────────────────────────────
+    // ─── onUpdate() via @PreUpdate ────────────────────────────────────────────
 
     @Test
     void setters_updateFields() throws Exception {
@@ -55,7 +49,7 @@ class AuditableTest {
         assertThat(entity.getUpdatedAt()).isEqualTo(updated);
     }
 
-    // ─── Default state ────────────────────────────────────────────────────────
+    // ─── Setters ──────────────────────────────────────────────────────────────
 
     @Test
     void defaultConstructor_fieldsAreNull() throws Exception {
@@ -63,5 +57,11 @@ class AuditableTest {
 
         assertThat(entity.getCreatedAt()).isNull();
         assertThat(entity.getUpdatedAt()).isNull();
+    }
+
+    // ─── Default state ────────────────────────────────────────────────────────
+
+    // Concrete subclass for testing the abstract Auditable
+    static class ConcreteAuditable extends Auditable {
     }
 }

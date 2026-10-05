@@ -7,5 +7,5 @@ import com.careconnect.model.PatientNotetakerConfig;
 
 @Repository
 public interface PatientNotetakerConfigRepository extends JpaRepository<PatientNotetakerConfig, Long> {
-   PatientNotetakerConfig findByPatientId(Long patientId);
+    PatientNotetakerConfig findByPatientId(Long patientId);
 }

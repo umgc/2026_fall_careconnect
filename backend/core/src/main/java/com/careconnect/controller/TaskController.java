@@ -22,16 +22,14 @@ import java.util.Map;
 public class TaskController {
 
     private final TaskService taskService;
+    @Autowired
+    private SecurityUtil securityUtil;
+    @Autowired
+    private AuthorizationService authorizationService;
 
     public TaskController(TaskService taskService) {
         this.taskService = taskService;
     }
-
-    @Autowired
-    private SecurityUtil securityUtil;
-
-    @Autowired
-    private AuthorizationService authorizationService;
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllTasks() throws UnauthorizedException {

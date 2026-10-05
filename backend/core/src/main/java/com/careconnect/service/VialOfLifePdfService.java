@@ -9,7 +9,9 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+
 import java.awt.Color;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,8 +67,8 @@ public class VialOfLifePdfService {
      * Create a professional emergency PDF document from scratch
      */
     private byte[] createProfessionalEmergencyPdf(PatientProfileDTO patient,
-                                                 List<MedicationDTO> medications,
-                                                 List<FamilyMemberLinkResponse> emergencyContacts) throws IOException {
+                                                  List<MedicationDTO> medications,
+                                                  List<FamilyMemberLinkResponse> emergencyContacts) throws IOException {
 
         logger.info("Generating professional emergency PDF from scratch");
 
@@ -79,34 +81,34 @@ public class VialOfLifePdfService {
 
             try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
 
-            // Page setup
-            float pageWidth = page.getMediaBox().getWidth();
-            float pageHeight = page.getMediaBox().getHeight();
-            float margin = 50;
-            float yPosition = pageHeight - margin;
+                // Page setup
+                float pageWidth = page.getMediaBox().getWidth();
+                float pageHeight = page.getMediaBox().getHeight();
+                float margin = 50;
+                float yPosition = pageHeight - margin;
 
-            // Draw red cross header
-            drawRedCrossHeader(contentStream, pageWidth, yPosition);
-            yPosition -= 80;
+                // Draw red cross header
+                drawRedCrossHeader(contentStream, pageWidth, yPosition);
+                yPosition -= 80;
 
-            // Title
-            drawTitle(contentStream, pageWidth, yPosition);
-            yPosition -= 50;
+                // Title
+                drawTitle(contentStream, pageWidth, yPosition);
+                yPosition -= 50;
 
-            // Patient Information Section
-            yPosition = drawPatientInfoSection(contentStream, patient, margin, yPosition);
-            yPosition -= 30;
+                // Patient Information Section
+                yPosition = drawPatientInfoSection(contentStream, patient, margin, yPosition);
+                yPosition -= 30;
 
-            // Medical Information Section
-            yPosition = drawMedicalInfoSection(contentStream, patient, medications, margin, yPosition);
-            yPosition -= 30;
+                // Medical Information Section
+                yPosition = drawMedicalInfoSection(contentStream, patient, medications, margin, yPosition);
+                yPosition -= 30;
 
-            // Emergency Contacts Section
-            yPosition = drawEmergencyContactsSection(contentStream, emergencyContacts, margin, yPosition);
-            yPosition -= 40;
+                // Emergency Contacts Section
+                yPosition = drawEmergencyContactsSection(contentStream, emergencyContacts, margin, yPosition);
+                yPosition -= 40;
 
-            // Footer
-            drawFooter(contentStream, pageWidth, yPosition);
+                // Footer
+                drawFooter(contentStream, pageWidth, yPosition);
             }
 
             document.save(baos);
@@ -128,11 +130,11 @@ public class VialOfLifePdfService {
         contentStream.setNonStrokingColor(Color.RED);
 
         // Draw horizontal bar of cross
-        contentStream.addRect(crossX - 5, crossY + crossSize/3, crossSize + 10, crossSize/3);
+        contentStream.addRect(crossX - 5, crossY + crossSize / 3, crossSize + 10, crossSize / 3);
         contentStream.fill();
 
         // Draw vertical bar of cross
-        contentStream.addRect(crossX + crossSize/3, crossY - 5, crossSize/3, crossSize + 10);
+        contentStream.addRect(crossX + crossSize / 3, crossY - 5, crossSize / 3, crossSize + 10);
         contentStream.fill();
 
         // Reset color
@@ -227,8 +229,8 @@ public class VialOfLifePdfService {
         // Current Medications
         if (medications != null && !medications.isEmpty()) {
             List<MedicationDTO> activeMeds = medications.stream()
-                .filter(MedicationDTO::isActive)
-                .toList();
+                    .filter(MedicationDTO::isActive)
+                    .toList();
 
             if (!activeMeds.isEmpty()) {
                 yPosition = drawInfoLine(contentStream, "Current Medications:", "", margin, yPosition);

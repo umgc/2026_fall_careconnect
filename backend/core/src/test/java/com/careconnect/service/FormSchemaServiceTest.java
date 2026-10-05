@@ -38,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>The schema integrates with existing file-attachment records
  *       ({@link UserFile.FileCategory}).</li>
  * </ol>
- *
+ * <p>
  * Pure unit test: uses a Jackson {@link ObjectMapper} configured like Spring
  * Boot's and exercises {@link FormSchemaService} without a Spring context or
  * database (the repository is unused by the methods under test).
@@ -50,7 +50,9 @@ class FormSchemaServiceTest {
 
     private final FormSchemaService service = new FormSchemaService(null, objectMapper);
 
-    /** All seven required hiring/onboarding documents must be bundled. */
+    /**
+     * All seven required hiring/onboarding documents must be bundled.
+     */
     @Test
     void loadsAllSevenBundledDefinitions() {
         List<FormSchema> schemas = service.loadBundledSchemas();
@@ -67,7 +69,9 @@ class FormSchemaServiceTest {
                 .isEqualTo(7L);
     }
 
-    /** AC1-AC4 verified for every bundled definition. */
+    /**
+     * AC1-AC4 verified for every bundled definition.
+     */
     @Test
     void everyDefinitionMeetsAcceptanceCriteria() {
         for (FormSchema schema : service.loadBundledSchemas()) {
@@ -149,7 +153,9 @@ class FormSchemaServiceTest {
         }
     }
 
-    /** A complete, valid W-4 submission passes validation with no errors. */
+    /**
+     * A complete, valid W-4 submission passes validation with no errors.
+     */
     @Test
     void validatesCompleteW4SubmissionWithoutErrors() {
         FormSchema w4 = w4Schema();
@@ -159,7 +165,9 @@ class FormSchemaServiceTest {
         assertThat(errors).isEmpty();
     }
 
-    /** Missing required fields and malformed values are reported. */
+    /**
+     * Missing required fields and malformed values are reported.
+     */
     @Test
     void reportsMissingRequiredAndInvalidValues() {
         FormSchema w4 = w4Schema();
@@ -179,7 +187,9 @@ class FormSchemaServiceTest {
                 .hasSize(2);
     }
 
-    /** DATE rule rejects a non-ISO value and accepts a valid one. */
+    /**
+     * DATE rule rejects a non-ISO value and accepts a valid one.
+     */
     @Test
     void enforcesDateRule() {
         FormSchema schema = singleFieldSchema(FieldType.DATE,
@@ -189,7 +199,9 @@ class FormSchemaServiceTest {
         assertThat(service.validateSubmission(schema, Map.of("s.f", "2026-01-15"))).isEmpty();
     }
 
-    /** AGE_MIN rule rejects a DOB below the threshold and accepts one above it. */
+    /**
+     * AGE_MIN rule rejects a DOB below the threshold and accepts one above it.
+     */
     @Test
     void enforcesAgeMinRule() {
         FormSchema schema = singleFieldSchema(FieldType.DATE,
@@ -201,7 +213,9 @@ class FormSchemaServiceTest {
                 Map.of("s.f", LocalDate.now().minusYears(40).toString()))).isEmpty();
     }
 
-    /** MIN/MAX reject non-numeric input (previously a silent no-op via NaN). */
+    /**
+     * MIN/MAX reject non-numeric input (previously a silent no-op via NaN).
+     */
     @Test
     void enforcesNumericMinMax() {
         FormSchema minSchema = singleFieldSchema(FieldType.NUMBER,
@@ -212,7 +226,9 @@ class FormSchemaServiceTest {
         assertThat(service.validateSubmission(minSchema, Map.of("s.f", 5))).isEmpty();
     }
 
-    /** Unknown keys are stripped; sensitive fields are reported. */
+    /**
+     * Unknown keys are stripped; sensitive fields are reported.
+     */
     @Test
     void stripsUnknownKeysAndReportsSensitive() {
         FormField ssn = FormField.builder()
@@ -233,7 +249,9 @@ class FormSchemaServiceTest {
 
     // --- helpers ------------------------------------------------------------
 
-    /** A minimal schema with a single optional field carrying one validation rule. */
+    /**
+     * A minimal schema with a single optional field carrying one validation rule.
+     */
     private FormSchema singleFieldSchema(FieldType type, ValidationRule rule) {
         FormField field = FormField.builder()
                 .id("f").label("Field").fieldType(type).required(false).order(0)
@@ -251,7 +269,9 @@ class FormSchemaServiceTest {
                 .orElseThrow(() -> new AssertionError("W-4 definition not bundled"));
     }
 
-    /** Values keyed by "sectionId.fieldId" covering every required W-4 field. */
+    /**
+     * Values keyed by "sectionId.fieldId" covering every required W-4 field.
+     */
     private Map<String, Object> validW4Values() {
         Map<String, Object> v = new HashMap<>();
         v.put("step1_personal.first_name_mi", "Jane Q");

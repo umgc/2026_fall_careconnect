@@ -1,9 +1,11 @@
 package com.careconnect.repository.projection;
 
-/** Native-query projection for feature_use counts. */
+/**
+ * Native-query projection for feature_use counts.
+ */
 public interface FeatureUsageCountProjection {
 
-  String getFeature();
+    String getFeature();
 
-  Number getCount();
+    Number getCount();
 }

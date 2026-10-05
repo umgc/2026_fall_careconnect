@@ -15,7 +15,7 @@ public class PatientRegistration extends RegisterRequest {
     private AddressDto address;
     private String dob;
     private Gender gender;
-    private Long caregiverId;     
+    private Long caregiverId;
     private Long familyMemberId;
-    private String relationship;   
+    private String relationship;
 }

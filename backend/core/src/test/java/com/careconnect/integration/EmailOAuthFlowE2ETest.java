@@ -56,17 +56,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * End-to-end integration tests for PR #235: HMAC-signed OAuth state,
  * structured connection status, and Gmail disconnect flow.
- *
+ * <p>
  * Covers the full OAuth lifecycle:
- *   GET connect-url → GET /oauth/google/start → GET /oauth/google/callback
- *   → GET /v1/api/email-credentials/status → DELETE /v1/api/email-credentials/gmail
- *
+ * GET connect-url → GET /oauth/google/start → GET /oauth/google/callback
+ * → GET /v1/api/email-credentials/gmail/status → DELETE /v1/api/email-credentials/gmail
+ * <p>
  * Uses:
- *   - @SpringBootTest (full application context, H2 in-memory DB)
- *   - MockMvc for HTTP assertions
- *   - Real OAuthStateSigner/OAuthRedirectValidator beans (exercises actual HMAC logic)
- *   - Mocked GoogleOAuthService (no real Google token exchange)
- *   - Mocked EmailCredentialRepository (controls credential state per scenario)
+ * - @SpringBootTest (full application context, H2 in-memory DB)
+ * - MockMvc for HTTP assertions
+ * - Real OAuthStateSigner/OAuthRedirectValidator beans (exercises actual HMAC logic)
+ * - Mocked GoogleOAuthService (no real Google token exchange)
+ * - Mocked EmailCredentialRepository (controls credential state per scenario)
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -100,56 +100,96 @@ class EmailOAuthFlowE2ETest {
 
     // ── AWS SDK mocks (required so full context loads without real credentials) ──
 
-    @MockitoBean private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
-    @MockitoBean private ChimeSdkMediaPipelinesClient chimeSdkMediaPipelinesClient;
-    @MockitoBean private BedrockRuntimeClient bedrockRuntimeClient;
-    @MockitoBean private S3Client s3Client;
-    @MockitoBean private S3Presigner s3Presigner;
-    @MockitoBean private TextractClient textractClient;
-    @MockitoBean private SsmClient ssmClient;
-    @MockitoBean private StsClient stsClient;
-    @MockitoBean private IamClient iamClient;
-    @MockitoBean private SnsService snsService;
+    private static final String ADMIN_EMAIL = "admin@e2e-oauth.test";
+    private static final String PATIENT_EMAIL = "patient@e2e-oauth.test";
+    private static final String OTHER_PATIENT_EMAIL = "other-patient@e2e-oauth.test";
+    private static final String RETURN_URL = "http://localhost:3000/usps-test";
+    private static final String AUTH_CODE = "google-auth-code-abc123";
+    @MockitoBean
+    private ChimeSdkMeetingsClient chimeSdkMeetingsClient;
+    @MockitoBean
+    private ChimeSdkMediaPipelinesClient chimeSdkMediaPipelinesClient;
+    @MockitoBean
+    private BedrockRuntimeClient bedrockRuntimeClient;
+    @MockitoBean
+    private S3Client s3Client;
+    @MockitoBean
+    private S3Presigner s3Presigner;
+    @MockitoBean
+    private TextractClient textractClient;
 
     // ── Conditional services disabled in test profile ────────────────────────────
-
-    @MockitoBean private com.careconnect.service.OpenRouterService openRouterService;
-    @MockitoBean private dev.langchain4j.model.chat.ChatModel chatModel;
-    @MockitoBean(name = "mockAIChatService") private com.careconnect.service.AIChatService aiChatService;
-    @MockitoBean private com.careconnect.service.invoice.TextractService textractService;
-    @MockitoBean private com.careconnect.service.invoice.LlmExtractionService llmExtractionService;
-    @MockitoBean private com.careconnect.service.StripeService stripeService;
-    @MockitoBean private com.careconnect.service.SubscriptionService subscriptionService;
-    @MockitoBean private com.careconnect.service.DeepSeekService deepSeekService;
-    @MockitoBean private com.careconnect.service.AiSymptomService aiSymptomService;
-    @MockitoBean private com.careconnect.service.AiAllergyService aiAllergyService;
-    @MockitoBean private com.careconnect.service.S3StorageService s3StorageService;
-    @MockitoBean private com.careconnect.service.ParameterStoreService parameterStoreService;
+    @MockitoBean
+    private SsmClient ssmClient;
+    @MockitoBean
+    private StsClient stsClient;
+    @MockitoBean
+    private IamClient iamClient;
+    @MockitoBean
+    private SnsService snsService;
+    @MockitoBean
+    private com.careconnect.service.OpenRouterService openRouterService;
+    @MockitoBean
+    private dev.langchain4j.model.chat.ChatModel chatModel;
+    @MockitoBean(name = "mockAIChatService")
+    private com.careconnect.service.AIChatService aiChatService;
+    @MockitoBean
+    private com.careconnect.service.invoice.TextractService textractService;
+    @MockitoBean
+    private com.careconnect.service.invoice.LlmExtractionService llmExtractionService;
+    @MockitoBean
+    private com.careconnect.service.StripeService stripeService;
+    @MockitoBean
+    private com.careconnect.service.SubscriptionService subscriptionService;
+    @MockitoBean
+    private com.careconnect.service.DeepSeekService deepSeekService;
 
     // ── PR #235 service mocks ────────────────────────────────────────────────────
-
-    /** Mocked so no real Google token exchange occurs. */
-    @MockitoBean private GoogleOAuthService googleOAuthService;
-
-    /** Mocked so each test scenario controls the stored credential state. */
-    @MockitoBean private EmailCredentialRepository emailCredentialRepository;
+    @MockitoBean
+    private com.careconnect.service.AiSymptomService aiSymptomService;
+    @MockitoBean
+    private com.careconnect.service.AiAllergyService aiAllergyService;
 
     // ── Spring-managed beans ─────────────────────────────────────────────────────
-
-    @Autowired private MockMvc mockMvc;
-    @Autowired private UserRepository userRepository;
-    @Autowired private OAuthStateSigner oauthStateSigner;
-    @Autowired private ObjectMapper objectMapper;
+    @MockitoBean
+    private com.careconnect.service.S3StorageService s3StorageService;
+    @MockitoBean
+    private com.careconnect.service.ParameterStoreService parameterStoreService;
+    /**
+     * Mocked so no real Google token exchange occurs.
+     */
+    @MockitoBean
+    private GoogleOAuthService googleOAuthService;
+    /**
+     * Mocked so each test scenario controls the stored credential state.
+     */
+    @MockitoBean
+    private EmailCredentialRepository emailCredentialRepository;
 
     // ── Test fixtures ────────────────────────────────────────────────────────────
-
-    private static final String ADMIN_EMAIL   = "admin@e2e-oauth.test";
-    private static final String PATIENT_EMAIL = "patient@e2e-oauth.test";
-    private static final String RETURN_URL    = "http://localhost:3000/usps-test";
-    private static final String AUTH_CODE     = "google-auth-code-abc123";
-
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private OAuthStateSigner oauthStateSigner;
+    @Autowired
+    private ObjectMapper objectMapper;
     private User adminUser;
     private User patientUser;
+
+    private static String extractQueryParam(String url, String param) {
+        String search = param + "=";
+        int start = url.indexOf(search);
+        if (start < 0) return "";
+        start += search.length();
+        int end = url.indexOf('&', start);
+        return end < 0 ? url.substring(start) : url.substring(start, end);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 1. GET /v1/api/email-credentials/gmail/connect-url
+    // ═══════════════════════════════════════════════════════════════════════════
 
     @BeforeEach
     void setUp() {
@@ -171,13 +211,44 @@ class EmailOAuthFlowE2ETest {
             return userRepository.save(u);
         });
 
+        userRepository.findByEmail(OTHER_PATIENT_EMAIL).orElseGet(() -> {
+            User u = new User();
+            u.setEmail(OTHER_PATIENT_EMAIL);
+            u.setPassword("hashed");
+            u.setRole(Role.PATIENT);
+            u.setName("E2E Other Patient");
+            return userRepository.save(u);
+        });
+
         // Default: no stored credential
         when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(anyString(), any()))
                 .thenReturn(Optional.empty());
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 1. GET /v1/api/email-credentials/gmail/connect-url
+    // 2. GET /oauth/google/start  (public endpoint)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private EmailCredential connectedCredential() {
+        return connectedCredentialForUser(patientUser);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 3. GET /oauth/google/callback  (public endpoint)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private EmailCredential connectedCredentialForUser(User user) {
+        EmailCredential cred = new EmailCredential();
+        cred.setUserId(String.valueOf(user.getId()));
+        cred.setProvider(EmailCredential.Provider.GMAIL);
+        cred.setAccessTokenEnc("encrypted-access-token");
+        cred.setRefreshTokenEnc("encrypted-refresh-token");
+        cred.setExpiresAt(Instant.now().plusSeconds(3600));
+        return cred;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 4. GET /v1/api/email-credentials/gmail/status
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -188,7 +259,7 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("connectUrl_whenAuthenticated_returns200WithStartTokenUrl")
         void connectUrl_whenAuthenticated_returns200WithStartTokenUrl() throws Exception {
             MvcResult result = mockMvc.perform(get("/v1/api/email-credentials/gmail/connect-url")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .param("returnUrl", RETURN_URL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
@@ -205,7 +276,7 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("connectUrl_withoutReturnUrl_returns200WithDefaultUrl")
         void connectUrl_withoutReturnUrl_returns200WithDefaultUrl() throws Exception {
             mockMvc.perform(get("/v1/api/email-credentials/gmail/connect-url")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
                     .andExpect(status().isOk())
@@ -216,7 +287,7 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("connectUrl_whenUnauthenticated_returns401")
         void connectUrl_whenUnauthenticated_returns401() throws Exception {
             mockMvc.perform(get("/v1/api/email-credentials/gmail/connect-url")
-                            .param("patientEmail", ADMIN_EMAIL))
+                            .param("patientEmail", PATIENT_EMAIL))
                     .andExpect(status().isUnauthorized());
         }
 
@@ -225,7 +296,7 @@ class EmailOAuthFlowE2ETest {
         void connectUrl_startTokenIsShortLived_canBeUsedWithStartEndpoint() throws Exception {
             // Obtain start token via API
             MvcResult connectResult = mockMvc.perform(get("/v1/api/email-credentials/gmail/connect-url")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .param("returnUrl", RETURN_URL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
@@ -248,7 +319,7 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 2. GET /oauth/google/start  (public endpoint)
+    // 4b. Patient self-service (no VIEW_ASSIGNED_PATIENTS permission required)
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -306,7 +377,7 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 3. GET /oauth/google/callback  (public endpoint)
+    // 5. DELETE /v1/api/email-credentials/gmail
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
@@ -317,7 +388,7 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("callback_withValidSignedState_exchangesCodeAndRedirectsToReturnUrl")
         void callback_withValidSignedState_exchangesCodeAndRedirectsToReturnUrl() throws Exception {
             String userId = String.valueOf(adminUser.getId());
-            String state  = oauthStateSigner.sign(userId, RETURN_URL);
+            String state = oauthStateSigner.sign(userId, RETURN_URL);
 
             doNothing().when(googleOAuthService).exchange(eq(userId), eq(AUTH_CODE));
 
@@ -436,11 +507,11 @@ class EmailOAuthFlowE2ETest {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // 4. GET /v1/api/email-credentials/status
+    // 6. Full OAuth flow  — connect-url → start → callback → status → disconnect
     // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
-    @DisplayName("GET /v1/api/email-credentials/status")
+    @DisplayName("GET /v1/api/email-credentials/gmail/status")
     class ConnectionStatusTests {
 
         @Test
@@ -448,17 +519,17 @@ class EmailOAuthFlowE2ETest {
         void status_whenGmailConnectedAndTokenFresh_returnsConnectedStatus() throws Exception {
             EmailCredential cred = connectedCredential();
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
             when(googleOAuthService.ensureFreshToken(cred)).thenReturn(cred);
 
             // Second call after refresh
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL)
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(true))
@@ -470,11 +541,11 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("status_whenNoCredentialStored_returnsNotConnectedStatus")
         void status_whenNoCredentialStored_returnsNotConnectedStatus() throws Exception {
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.empty());
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL)
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(false))
@@ -487,12 +558,12 @@ class EmailOAuthFlowE2ETest {
         void status_whenTokenRefreshFails_returnsNeedsReconnectStatus() throws Exception {
             EmailCredential cred = connectedCredential();
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
             when(googleOAuthService.ensureFreshToken(cred)).thenReturn(null);
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL)
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(false))
@@ -503,16 +574,16 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("status_whenCredentialHasNoAccessToken_returnsNeedsReconnectStatus")
         void status_whenCredentialHasNoAccessToken_returnsNeedsReconnectStatus() throws Exception {
             EmailCredential cred = new EmailCredential();
-            cred.setUserId(String.valueOf(adminUser.getId()));
+            cred.setUserId(String.valueOf(patientUser.getId()));
             cred.setProvider(EmailCredential.Provider.GMAIL);
             // accessTokenEnc deliberately left null
 
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL)
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(false))
@@ -522,8 +593,8 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("status_acceptsLegacyUserIdParam")
         void status_acceptsLegacyUserIdParam() throws Exception {
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("userId", String.valueOf(adminUser.getId()))
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("userId", String.valueOf(patientUser.getId()))
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(false));
@@ -532,15 +603,13 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("status_whenUnauthenticated_returns401")
         void status_whenUnauthenticated_returns401() throws Exception {
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL))
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", PATIENT_EMAIL))
                     .andExpect(status().isUnauthorized());
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 4b. Patient self-service (no VIEW_ASSIGNED_PATIENTS permission required)
-    // ═══════════════════════════════════════════════════════════════════════════
+    // ── Helpers ──────────────────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("Patient self-service — email credential endpoints")
@@ -553,7 +622,7 @@ class EmailOAuthFlowE2ETest {
                     eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.empty());
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
                             .with(user(PATIENT_EMAIL).roles("PATIENT")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(false))
@@ -588,16 +657,12 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("patient_cannotAccessAnotherPatientsStatus")
         void patient_cannotAccessAnotherPatientsStatus() throws Exception {
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL)
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", OTHER_PATIENT_EMAIL)
                             .with(user(PATIENT_EMAIL).roles("PATIENT")))
                     .andExpect(status().isForbidden());
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 5. DELETE /v1/api/email-credentials/gmail
-    // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("DELETE /v1/api/email-credentials/gmail")
@@ -608,12 +673,12 @@ class EmailOAuthFlowE2ETest {
         void disconnect_whenCredentialExists_revokesAndReturns204() throws Exception {
             EmailCredential cred = connectedCredential();
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(cred));
             doNothing().when(googleOAuthService).revokeIfPossible(cred);
 
             mockMvc.perform(delete("/v1/api/email-credentials/gmail")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
                     .andExpect(status().isNoContent());
@@ -626,11 +691,11 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("disconnect_whenNoCredentialExists_returns204WithNoAction")
         void disconnect_whenNoCredentialExists_returns204WithNoAction() throws Exception {
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(String.valueOf(adminUser.getId())), eq(EmailCredential.Provider.GMAIL)))
+                    eq(String.valueOf(patientUser.getId())), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.empty());
 
             mockMvc.perform(delete("/v1/api/email-credentials/gmail")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
                     .andExpect(status().isNoContent());
@@ -640,7 +705,7 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("disconnect_acceptsLegacyUserIdParam")
         void disconnect_acceptsLegacyUserIdParam() throws Exception {
             mockMvc.perform(delete("/v1/api/email-credentials/gmail")
-                            .param("userId", String.valueOf(adminUser.getId()))
+                            .param("userId", String.valueOf(patientUser.getId()))
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
                     .andExpect(status().isNoContent());
@@ -650,15 +715,11 @@ class EmailOAuthFlowE2ETest {
         @DisplayName("disconnect_whenUnauthenticated_returns401")
         void disconnect_whenUnauthenticated_returns401() throws Exception {
             mockMvc.perform(delete("/v1/api/email-credentials/gmail")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(csrf()))
                     .andExpect(status().isUnauthorized());
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // 6. Full OAuth flow  — connect-url → start → callback → status → disconnect
-    // ═══════════════════════════════════════════════════════════════════════════
 
     @Nested
     @DisplayName("Full OAuth flow — happy path and replay-attack rejection")
@@ -667,12 +728,12 @@ class EmailOAuthFlowE2ETest {
         @Test
         @DisplayName("fullFlow_connectUrlToCallbackToStatusToDisconnect_happyPath")
         void fullFlow_connectUrlToCallbackToStatusToDisconnect_happyPath() throws Exception {
-            String adminId = String.valueOf(adminUser.getId());
+            String patientId = String.valueOf(patientUser.getId());
 
             // Step 1 — get connect URL (authenticated)
             MvcResult connectResult = mockMvc.perform(
                             get("/v1/api/email-credentials/gmail/connect-url")
-                                    .param("patientEmail", ADMIN_EMAIL)
+                                    .param("patientEmail", PATIENT_EMAIL)
                                     .param("returnUrl", RETURN_URL)
                                     .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
@@ -695,7 +756,7 @@ class EmailOAuthFlowE2ETest {
             assertThat(signedState).isNotBlank();
 
             // Step 3 — simulate Google calling back with code + signed state
-            doNothing().when(googleOAuthService).exchange(eq(adminId), eq(AUTH_CODE));
+            doNothing().when(googleOAuthService).exchange(eq(patientId), eq(AUTH_CODE));
 
             MvcResult callbackResult = mockMvc.perform(
                             get("/oauth/google/callback")
@@ -707,17 +768,17 @@ class EmailOAuthFlowE2ETest {
             String callbackRedirect = callbackResult.getResponse().getHeader("Location");
             assertThat(callbackRedirect).isEqualTo(RETURN_URL);
             assertThat(callbackRedirect).doesNotContain("oauthError");
-            verify(googleOAuthService).exchange(adminId, AUTH_CODE);
+            verify(googleOAuthService).exchange(patientId, AUTH_CODE);
 
             // Step 4 — check connection status (credential now "stored")
             EmailCredential storedCred = connectedCredential();
             when(emailCredentialRepository.findFirstByUserIdAndProviderOrderByIdDesc(
-                    eq(adminId), eq(EmailCredential.Provider.GMAIL)))
+                    eq(patientId), eq(EmailCredential.Provider.GMAIL)))
                     .thenReturn(Optional.of(storedCred));
             when(googleOAuthService.ensureFreshToken(storedCred)).thenReturn(storedCred);
 
-            mockMvc.perform(get("/v1/api/email-credentials/status")
-                            .param("patientEmail", ADMIN_EMAIL)
+            mockMvc.perform(get("/v1/api/email-credentials/gmail/status")
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.connected").value(true))
@@ -727,7 +788,7 @@ class EmailOAuthFlowE2ETest {
             doNothing().when(googleOAuthService).revokeIfPossible(storedCred);
 
             mockMvc.perform(delete("/v1/api/email-credentials/gmail")
-                            .param("patientEmail", ADMIN_EMAIL)
+                            .param("patientEmail", PATIENT_EMAIL)
                             .with(user(ADMIN_EMAIL).roles("ADMIN"))
                             .with(csrf()))
                     .andExpect(status().isNoContent());
@@ -742,7 +803,7 @@ class EmailOAuthFlowE2ETest {
             // Obtain a real start token via the connect-url endpoint
             MvcResult connectResult = mockMvc.perform(
                             get("/v1/api/email-credentials/gmail/connect-url")
-                                    .param("patientEmail", ADMIN_EMAIL)
+                                    .param("patientEmail", PATIENT_EMAIL)
                                     .with(user(ADMIN_EMAIL).roles("ADMIN")))
                     .andExpect(status().isOk())
                     .andReturn();
@@ -771,30 +832,5 @@ class EmailOAuthFlowE2ETest {
             mockMvc.perform(get("/oauth/google/start").param("startToken", callbackState))
                     .andExpect(status().is4xxClientError());
         }
-    }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────────
-
-    private EmailCredential connectedCredential() {
-        return connectedCredentialForUser(adminUser);
-    }
-
-    private EmailCredential connectedCredentialForUser(User user) {
-        EmailCredential cred = new EmailCredential();
-        cred.setUserId(String.valueOf(user.getId()));
-        cred.setProvider(EmailCredential.Provider.GMAIL);
-        cred.setAccessTokenEnc("encrypted-access-token");
-        cred.setRefreshTokenEnc("encrypted-refresh-token");
-        cred.setExpiresAt(Instant.now().plusSeconds(3600));
-        return cred;
-    }
-
-    private static String extractQueryParam(String url, String param) {
-        String search = param + "=";
-        int start = url.indexOf(search);
-        if (start < 0) return "";
-        start += search.length();
-        int end = url.indexOf('&', start);
-        return end < 0 ? url.substring(start) : url.substring(start, end);
     }
 }
