@@ -4,6 +4,7 @@ import com.careconnect.model.ehr.EhrAuditEvent;
 import com.careconnect.model.ehr.EhrConflictResolver;
 import com.careconnect.model.ehr.EhrConflictStatus;
 import com.careconnect.model.ehr.EhrIdentityConflict;
+import com.careconnect.model.ehr.EhrResource;
 import com.careconnect.model.ehr.EhrRetrievalOutcome;
 import com.careconnect.model.ehr.EhrSourceIdentity;
 import jakarta.persistence.EntityManager;
@@ -25,16 +26,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The retention queries {@code EhrRetentionWorker} runs against {@code ehr_identity_conflict},
- * {@code ehr_source_identity} and {@code ehr_audit_event}, on a real PostgreSQL. The unit test
- * mocks the repositories, so it cannot tell whether the JPQL selects and deletes the right rows.
- * ({@code ehr_raw_payload}'s pair is TC-EHR-RAW-007 in {@code EhrRawPayloadPostgresJsonbTest}.)
+ * {@code ehr_source_identity}, {@code ehr_audit_event} and {@code ehr_resource}, on a real
+ * PostgreSQL. The unit test mocks the repositories, so it cannot tell whether the JPQL selects and
+ * deletes the right rows. ({@code ehr_raw_payload}'s pair is TC-EHR-RAW-007 in
+ * {@code EhrRawPayloadPostgresJsonbTest}.)
  * <p>
  * Every case uses a cutoff of 2001-01-01, older than anything a real sync could have stored, so
  * the delete statements cannot touch rows this test did not create. Opt-in, like the other
  * PostgreSQL tests here: skipped unless {@code EHR_IT_JDBC_URI} is set, and the target database
  * must hold at least one {@code patient} row.
  * <p>
- * Test IDs TC-EHR-RET-005..007 are permanent. Never renumber, never reuse.
+ * Test IDs TC-EHR-RET-005..007 and 009 are permanent. Never renumber, never reuse.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -61,6 +63,8 @@ class EhrRetentionQueriesPostgresTest {
     private EhrSourceIdentityRepository sourceIdentities;
     @Autowired
     private EhrAuditEventRepository auditEvents;
+    @Autowired
+    private EhrResourceRepository resources;
     @Autowired
     private EntityManager entityManager;
 
@@ -224,5 +228,49 @@ class EhrRetentionQueriesPostgresTest {
         assertThat(auditEvents.existsById(expired)).isFalse();
         assertThat(auditEvents.existsById(recent)).isTrue();
         assertThat(auditEvents.existsById(orphan)).isTrue();
+    }
+
+    private EhrResource mirror() {
+        // user_id has no FK (any value); patient_id FKs to patient. A unique resource_fhir_id and a
+        // non-EPIC source keep this row clear of the real mirror rows for this patient.
+        return EhrResource.builder()
+                .userId(-424242L)
+                .patientId(patientId)
+                .source("ATHENAHEALTH")
+                .resourceType("Observation")
+                .resourceFhirId("retention-it-" + System.nanoTime())
+                .payloadJson("{}")
+                .build();
+    }
+
+    @Test
+    @DisplayName("TC-EHR-RET-009: a mirrored resource is found and deleted on last_synced_at")
+    void resourceMirrorQueries() {
+        // @PrePersist stamps last_synced_at = now, so a freshly stored mirror is not yet a candidate.
+        final Long id = resources.save(mirror()).getId();
+        entityManager.flush();
+
+        assertThat(resources.findPatientsWithResourceSyncedBefore(CUTOFF.toInstant())).isEmpty();
+        assertThat(resources.deleteSyncedBeforeForPatients(CUTOFF.toInstant(), List.of(patientId))).isZero();
+
+        // Age the row: this application last synced it before the cutoff.
+        entityManager
+                .createNativeQuery("update ehr_resource set last_synced_at = TIMESTAMP '1999-06-01 00:00:00' "
+                        + "where id = :id")
+                .setParameter("id", id)
+                .executeUpdate();
+        entityManager.clear();
+
+        assertThat(resources.findPatientsWithResourceSyncedBefore(CUTOFF.toInstant()))
+                .singleElement()
+                .satisfies(found -> {
+                    assertThat(found.getPatientId()).isEqualTo(patientId);
+                    assertThat(found.getDob()).isEqualTo(storedDob);
+                });
+        assertThat(resources.deleteSyncedBeforeForPatients(CUTOFF.toInstant(), List.of(-1L))).isZero();
+        assertThat(resources.deleteSyncedBeforeForPatients(CUTOFF.toInstant(), List.of(patientId))).isEqualTo(1);
+        entityManager.clear();
+
+        assertThat(resources.existsById(id)).isFalse();
     }
 }
