@@ -1011,7 +1011,7 @@
   "hiringformtab_rules": "Rules",
   "hiringformtab_source": "Source",
 
-  "homecarereview_review": "Review",
+    "homecarereview_review": "Review",
   "homecarereview_saving": "Saving",
   "homecarereview_confirmSave": "Confirm & Save",
   "homecarereview_autoExtractUnavailable": "Automatic extraction was unavailable. Please enter the fields manually.",
@@ -1023,6 +1023,267 @@
   "homecarereview_digitized": "Digitized",
   "homecarereview_reviewed": "(reviewed)",
   "homecarereview_savedForm": "Saved digitized form",
-  "homecarereview_failedToSave": "Failed to save digitized form"
+  "homecarereview_failedToSave": "Failed to save digitized form",
 
+    "fallAlertTitle": "Fall Alert",
+  "fallAlertPatientMayNeedHelp": "Patient may need help.",
+  "fallAlertViewDetails": "View Details",
+  "fallAlertNoResponseFromPatient": "No response from patient",
+  "fallAlertFallPlayback": "Fall Playback",
+  "fallAlertPlaybackUnavailable": "Playback Unavailable",
+  "fallAlertCallPatient": "Call Patient",
+  "fallAlertSendMessage": "Send Message",
+  "fallAlertContactEmergencyServices": "Contact Emergency Services",
+  "fallAlertDetails": "Details",
+  "fallAlertDetectedAt": "Detected at",
+  "fallAlertSource": "Source",
+  "fallAlertPatientPhone": "Patient phone",
+  "fallAlertPlayback": "Playback",
+  "fallAlertAvailable": "Available",
+  "fallAlertNotAvailable": "Not available",
+  "fallAlertNoPhoneNumberAvailable": "No phone number available",
+  "fallAlertCallFailedToStart": "Call failed to start",
+  "fallAlertSmsMessage": "I got an alert that you may have fallen. Are you okay? Please reply or call me if you need help.",
+  "fallAlertMessageFailedToStart": "Message failed to start",
+  "fallAlertPatientIdNotAvailable": "Patient ID not available",
+  "fallAlertEmergencyContact": "Emergency Contact",
+  "fallAlertEmergencyActions": "Emergency actions",
+  "fallAlertChooseHowToEscalate": "Choose how you want to escalate",
+  "fallAlertCall911": "Call 911",
+  "fallAlertConnectLocalEmergencyServices": "Connect to local emergency services",
+  "fallAlertCouldNotStartCall911": "Could not start call to 911",
+  "fallAlertCallContact": "Call {contactName}",
+  "@fallAlertCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertNoPhoneOnFile": "No phone on file",
+  "fallAlertCouldNotStartCallContact": "Could not start call to {contactName}",
+  "@fallAlertCouldNotStartCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertEmergencyInstruction": "If you cannot reach the patient, contact emergency services immediately.",
+  "fallAlertDetected": "Fall Detected",
+  "fallAlertAreYouOkay": "Are You Okay?",
+  "fallAlertMayHaveFallen": "It looks like you may have fallen. Do you need help?",
+  "fallAlertImOkay": "I'm Okay",
+  "fallAlertCallForHelp": "Call for Help",
+  "fallAlertNoResponseAutoCall": "If you do not respond within {seconds} seconds, emergency services will be contacted automatically.",
+  "@fallAlertNoResponseAutoCall": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertAutoCallingIn": "Auto-calling in {seconds} seconds...",
+  "@fallAlertAutoCallingIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+    "fallAlertGladYouAreOkay": "Glad you are okay. We will dismiss this alert.",
+  "fallAlertCouldNotStartCall": "Could not start the call.",
+  "fallAlertAutoCallFailed": "Auto call failed to start.",
+    "fallAlertCallEmergencyNumber": "Call {number}",
+  "@fallAlertCallEmergencyNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertMockAlerts": "Mock Fall Alerts",
+  "fallAlertStart": "Start",
+  "fallAlertStop": "Stop",
+  "fallAlertTrigger": "Trigger",
+  "fallAlertStatusRunning": "Status: running (emits every ~3s)",
+  "fallAlertStatusStopped": "Status: stopped",
+  "fallAlertMockAlertEmitted": "Mock fall alert emitted",
+  "fallAlertNoAlertsYet": "No alerts yet. Tap \"Trigger\" to emit one or start periodic.",
+  "fallAlertSourceWithTime": "Source: {source} • {time}",
+  "fallAlertCamera": "Camera",
+  "fallAlertSecondsAgo": "{count}s ago",
+"@fallAlertSecondsAgo": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"fallAlertMinutesAgo": "{count}m ago",
+"@fallAlertMinutesAgo": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"fallAlertHoursAgo": "{count}h ago",
+"@fallAlertHoursAgo": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"fallAlertDaysAgo": "{count}d ago",
+"@fallAlertDaysAgo": {
+  "placeholders": {
+    "count": {
+ "type": "int"
+    }
+  }
+},
+"@fallAlertSourceWithTime": {
+  "placeholders": {
+    "source": {
+      "type": "String"
+    },
+    "time": {
+      "type": "String"
+    }
+  }
+},
+"wearablesTitle": "Wearables",
+"wearablesNoConnected": "No Wearables Connected",
+"wearablesConnectDescription": "Connect wearable devices to track your patient's health data in real-time.",
+"wearablesAddFirstDevice": "Add Your First Device",
+"wearablesSupportedDevices": "Supported Devices",
+"wearablesLatestHealthData": "Latest Health Data",
+"wearablesSynchronizationFailed": "Synchronization failed",
+"wearablesSynchronizationFailedDescription": "We could not synchronize wearable readings.",
+"wearablesNoSyncedDataYet": "No synced data yet",
+"wearablesNoSyncedDataDescription": "Connect a wearable and run sync to view persisted vitals.",
+"wearablesYourDevices": "Your Devices",
+"wearablesConnectedDevices": "Connected Devices",
+"wearablesAddDevice": "Add Device",
+"wearablesDevicesConnected": "{count, plural, =0{No devices connected} =1{1 device connected} other{{count} devices connected}}",
+"@wearablesDevicesConnected": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"wearablesSemesterMetricScope": "Semester Metric Scope",
+"wearablesPersisted": "Persisted",
+"wearablesPlaceholder": "Placeholder",
+"wearablesMetricScopeDescription": "Persisted = mapped to backend entities. Placeholder = UI-only demo or not wired this semester.",
+"wearablesHealthMetrics": "Health Metrics",
+"wearablesUpdated": "Updated: {date}",
+"@wearablesUpdated": {
+  "placeholders": {
+    "date": {
+      "type": "String"
+    }
+  }
+},
+"wearablesConnectedOn": "Connected {date}",
+"@wearablesConnectedOn": {
+  "placeholders": {
+    "date": {
+      "type": "String"
+    }
+  }
+},
+"wearablesPermissionsGranted": "{count, plural, =0{No permissions granted} =1{1 permission granted} other{{count} permissions granted}}",
+"@wearablesPermissionsGranted": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"wearablesActive": "Active",
+"wearablesDaysAgo": "{count, plural, =1{1 day ago} other{{count} days ago}}",
+"@wearablesDaysAgo": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"wearablesHoursAgo": "{count, plural, =1{1 hour ago} other{{count} hours ago}}",
+"@wearablesHoursAgo": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"wearablesMinutesAgo": "{count, plural, =1{1 minute ago} other{{count} minutes ago}}",
+"@wearablesMinutesAgo": {
+  "placeholders": {
+    "count": {
+      "type": "int"
+    }
+  }
+},
+"wearablesJustNow": "Just now",
+"wearablesRemoveDevice": "Remove Device",
+"wearablesConfirmRemoveDevice": "Are you sure you want to remove {deviceName}?",
+"@wearablesConfirmRemoveDevice": {
+  "placeholders": {
+    "deviceName": {
+      "type": "String"
+    }
+  }
+},
+"wearablesRemove": "Remove",
+"wearablesDeviceRemoved": "{deviceName} has been removed",
+"@wearablesDeviceRemoved": {
+  "placeholders": {
+    "deviceName": {
+      "type": "String"
+    }
+  }
+},
+"wearablesFailedToRemoveDevice": "Failed to remove device",
+"wearablesSelectPatientFirst": "Select a patient first (Analytics patient dropdown), then tap refresh.",
+"wearablesNoAppleHealthSamples": "No Apple Health samples were collected in the last 7 days. Debug: collected={collected} accepted={accepted} rejected={rejected}",
+"@wearablesNoAppleHealthSamples": {
+  "placeholders": {
+    "collected": {
+      "type": "int"
+    },
+    "accepted": {
+      "type": "int"
+    },
+    "rejected": {
+      "type": "int"
+    }
+  }
+},
+"wearablesSyncFailedWithError": "Failed to synchronize wearable data: {error}",
+"@wearablesSyncFailedWithError": {
+  "placeholders": {
+    "error": {
+      "type": "String"
+    }
+  }
+},
+"wearablesNoPersistedVitals": "No persisted wearable vitals available in this range. Debug: collected={collected} accepted={accepted} rejected={rejected}",
+"@wearablesNoPersistedVitals": {
+  "placeholders": {
+    "collected": {
+      "type": "int"
+    },
+    "accepted": {
+      "type": "int"
+    },
+    "rejected": {
+      "type": "int"
+    }
+  }
+}
 }

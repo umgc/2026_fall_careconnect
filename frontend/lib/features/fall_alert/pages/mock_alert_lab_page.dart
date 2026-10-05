@@ -1,11 +1,15 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
+
 import '../models/fall_alert.dart';
 import '../services/mock_fall_detection_service.dart';
 import '../navigation/alert_navigation.dart';
 
 class MockAlertLabPage extends StatefulWidget {
   static const routeName = '/mock-alert-lab';
+
   const MockAlertLabPage({super.key});
 
   @override
@@ -22,10 +26,14 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
   @override
   void initState() {
     super.initState();
+
     _sub = _service.alerts$.listen((a) {
       setState(() {
         _recent.insert(0, a);
-        if (_recent.length > 20) _recent.removeLast();
+
+        if (_recent.length > 20) {
+          _recent.removeLast();
+        }
       });
     });
   }
@@ -39,8 +47,12 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Mock Fall Alerts')),
+      appBar: AppBar(
+        title: Text(t.fallAlertMockAlerts),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -49,17 +61,17 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
               children: [
                 FilledButton(
                   onPressed: _running ? null : _startPeriodic,
-                  child: const Text('Start'),
+                  child: Text(t.fallAlertStart),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton(
                   onPressed: _running ? _stopPeriodic : null,
-                  child: const Text('Stop'),
+                  child: Text(t.fallAlertStop),
                 ),
                 const Spacer(),
                 FilledButton.tonal(
                   onPressed: _triggerOnce,
-                  child: const Text('Trigger'),
+                  child: Text(t.fallAlertTrigger),
                 ),
               ],
             ),
@@ -67,7 +79,7 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                _running ? 'Status: running (emits every ~3s)' : 'Status: stopped',
+                _running ? t.fallAlertStatusRunning : t.fallAlertStatusStopped,
                 style: theme.textTheme.bodyMedium,
               ),
             ),
@@ -78,7 +90,8 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
                   : ListView.separated(
                       itemCount: _recent.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) => _AlertTile(alert: _recent[i]),
+                      itemBuilder: (context, i) =>
+                          _AlertTile(alert: _recent[i]),
                     ),
             ),
           ],
@@ -99,9 +112,15 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
 
   Future<void> _triggerOnce() async {
     await _service.emitNow();
+
     if (!mounted) return;
+
+    final t = AppLocalizations.of(context)!;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Mock fall alert emitted')),
+      SnackBar(
+        content: Text(t.fallAlertMockAlertEmitted),
+      ),
     );
   }
 }
@@ -111,9 +130,11 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Center(
       child: Text(
-        'No alerts yet. Tap "Trigger now" to emit one or start periodic.',
+        t.fallAlertNoAlertsYet,
         textAlign: TextAlign.center,
       ),
     );
@@ -122,19 +143,34 @@ class _EmptyHint extends StatelessWidget {
 
 class _AlertTile extends StatelessWidget {
   final FallAlert alert;
-  const _AlertTile({required this.alert});
+
+  const _AlertTile({
+    required this.alert,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final when = alert.detectedAtUtc.toLocal();
-    final subtitle = 'Source: ${alert.source} • ${when.toLocal()}';
+
+    final subtitle = t.fallAlertSourceWithTime(
+      alert.source,
+      when.toString(),
+    );
+
     return ListTile(
       title: Text(alert.patientName),
       subtitle: Text(subtitle),
-      trailing: alert.hasLiveVideo ? const Icon(Icons.videocam) : const Icon(Icons.watch),
+      trailing: alert.hasLiveVideo
+          ? const Icon(Icons.videocam)
+          : const Icon(Icons.watch),
       onTap: () {
-        // Navigate directly into the alert details screen, same as tapping a notification
-        AlertNavigation.navigateFromPayload(context, alert.toPayload());
+        // Navigate directly into the alert details screen,
+        // same as tapping a notification.
+        AlertNavigation.navigateFromPayload(
+          context,
+          alert.toPayload(),
+        );
       },
     );
   }

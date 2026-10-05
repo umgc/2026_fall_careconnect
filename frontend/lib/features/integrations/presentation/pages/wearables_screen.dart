@@ -13,6 +13,7 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/auth_service.dart' as auth_service;
 import 'package:care_connect_app/services/user_role_storage_service.dart';
 import 'package:care_connect_app/config/env_constant.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import 'add_devices_screen.dart';
 
@@ -347,14 +348,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
               .where((device) => device.isActive)
               .toList();
         });
-        print('✓ Loaded ${connectedDevices.length} connected devices');
+        debugPrint('✓ Loaded ${connectedDevices.length} connected devices');
       }
 
       if (kIsWeb) {
         await _syncWebGoogleHealthConnection(prefs);
       }
     } catch (e) {
-      print('✗ Failed to load devices: $e');
+      debugPrint('✗ Failed to load devices: $e');
     }
   }
 
@@ -383,7 +384,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
       if (connected && !hasWebGoogleHealthDevice) {
         connectedDevices.add(
           ConnectedDevice(
-            id: '${webDevicePrefix}${DateTime.now().millisecondsSinceEpoch}',
+            id: '$webDevicePrefix${DateTime.now().millisecondsSinceEpoch}',
             platform: 'fitbit',
             name: 'Fitbit (Google Health)',
             connectedAt: DateTime.now(),
@@ -454,23 +455,32 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
       final acceptedReadings =
           await _ingestReadings(patientId: patientId, readings: readings);
+
       final hasPersistedData =
           await _loadPersistedReadings(patientId: patientId);
+
       if (!hasPersistedData && acceptedReadings.isNotEmpty) {
         _applyAcceptedIngestionSnapshot(acceptedReadings);
       } else if (!hasPersistedData && readings.isEmpty) {
         setState(() {
           syncStatusMessage =
-              'No Apple Health samples were collected in the last 7 days. '
-              'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
+              AppLocalizations.of(context)!.wearablesNoAppleHealthSamples(
+            _lastCollectedCount,
+            _lastAcceptedCount,
+            _lastRejectedCount,
+          );
         });
       }
     } catch (e) {
       setState(() {
         hasSyncError = true;
-        syncStatusMessage = 'Failed to synchronize wearable data: $e';
+        syncStatusMessage =
+            AppLocalizations.of(context)!.wearablesSyncFailedWithError(
+          e.toString(),
+        );
       });
-      print('✗ Error syncing wearable health data: $e');
+
+      debugPrint('✗ Error syncing wearable health data: $e');
     } finally {
       setState(() {
         isLoadingData = false;
@@ -607,7 +617,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
         );
       }
     } catch (e) {
-      print('⚠ Fitbit reading collection failed: $e');
+      debugPrint('⚠ Fitbit reading collection failed: $e');
     }
   }
 
@@ -658,7 +668,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
         );
       }
     } catch (e) {
-      print('⚠ Plugin health fallback collection failed for $source: $e');
+      debugPrint('⚠ Plugin health fallback collection failed for $source: $e');
     }
   }
 
@@ -737,7 +747,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
         });
       }
     } catch (e) {
-      print('⚠ Health data collection failed: $e');
+      debugPrint('⚠ Health data collection failed: $e');
     }
   }
 
@@ -957,26 +967,34 @@ class _WearablesScreenState extends State<WearablesScreen> {
     setState(() {
       hasSyncError = false;
       latestHealthData = persisted;
+
       if (persisted.isEmpty) {
         syncStatusMessage =
-            'No persisted wearable vitals available in this range. '
-            'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
-      } else if (syncStatusMessage == null) {
-        syncStatusMessage = null;
+            AppLocalizations.of(context)!.wearablesNoPersistedVitals(
+          _lastCollectedCount,
+          _lastAcceptedCount,
+          _lastRejectedCount,
+        );
       }
     });
+
     return persisted.isNotEmpty;
   }
 
   void _applyAcceptedIngestionSnapshot(List<_IngestReading> acceptedReadings) {
     final snapshot = <String, HealthData>{};
+
     for (final reading in acceptedReadings) {
       final metricKey = _uiMetricKeyForBackendMetric(reading.metric);
+
       if (metricKey == null) continue;
+
       final existing = snapshot[metricKey];
+
       if (existing != null && existing.date.isAfter(reading.recordedAt)) {
         continue;
       }
+
       snapshot[metricKey] = _healthDataFromDefinition(
         key: metricKey,
         source: 'CareConnect Backend',
@@ -998,132 +1016,30 @@ class _WearablesScreenState extends State<WearablesScreen> {
     switch (backendMetric.toUpperCase()) {
       case 'STEPS':
         return 'steps';
+
       case 'HEART_RATE':
         return 'heart_rate';
+
       case 'SPO2':
         return 'spo2';
+
       case 'BLOOD_PRESSURE_SYS':
         return 'blood_pressure_systolic';
+
       case 'BLOOD_PRESSURE_DIA':
         return 'blood_pressure_diastolic';
+
       case 'WEIGHT':
         return 'weight';
+
       default:
         return null;
     }
   }
 
-  Future<void> _fetchFitbitData(DateTime startTime, DateTime endTime) async {
-    bool hasFitbitDevice =
-        connectedDevices.any((device) => device.platform == 'fitbit');
-    if (!hasFitbitDevice) return;
-
-    try {
-      String? accessToken =
-          await _secureStorage.read(key: 'fitbit_access_token');
-      String? userID = await _secureStorage.read(key: 'fitbit_user_id');
-
-      if (accessToken == null) {
-        _setDefaultFitbitData();
-        return;
-      }
-
-      userID ??= '-';
-
-      FitbitCredentials fitbitCredentials = FitbitCredentials(
-        userID: userID,
-        fitbitAccessToken: accessToken,
-        fitbitRefreshToken: '',
-      );
-
-      DateTime today = DateTime.now();
-
-      // Fetch Steps
-      await _fetchFitbitSteps(fitbitCredentials, today);
-
-      // Fetch Calories
-      await _fetchFitbitCalories(fitbitCredentials, today);
-    } catch (e) {
-      _setDefaultFitbitData();
-    }
-  }
-
-  Future<void> _fetchFitbitSteps(
-      FitbitCredentials credentials, DateTime date) async {
-    try {
-      FitbitActivityTimeseriesDataManager stepsManager =
-          FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId!,
-        clientSecret: fitbitClientSecret!,
-      );
-
-      final stepsData = await stepsManager
-          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
-        date: date,
-        resource: Resource.steps,
-        fitbitCredentials: credentials,
-      ));
-
-      List<dynamic> dataList = stepsData;
-      if (dataList.isNotEmpty) {
-        var latestData = dataList.last;
-        double finalValue = _extractFitbitValue(latestData);
-        DateTime dataDate = _extractFitbitDate(latestData);
-
-        setState(() {
-          latestHealthData['steps'] = _healthDataFromDefinition(
-            key: 'steps',
-            source: 'Fitbit',
-            value: finalValue,
-            date: dataDate,
-          );
-        });
-      }
-    } catch (e) {
-      _setDefaultValue('steps', 'Fitbit',
-          reason: 'No Fitbit steps data available.');
-    }
-  }
-
-  Future<void> _fetchFitbitCalories(
-      FitbitCredentials credentials, DateTime date) async {
-    try {
-      FitbitActivityTimeseriesDataManager caloriesManager =
-          FitbitActivityTimeseriesDataManager(
-        clientID: fitbitClientId!,
-        clientSecret: fitbitClientSecret!,
-      );
-
-      final caloriesData = await caloriesManager
-          .fetch(FitbitActivityTimeseriesAPIURL.dayWithResource(
-        date: date,
-        resource: Resource.calories,
-        fitbitCredentials: credentials,
-      ));
-
-      List<dynamic> dataList = caloriesData;
-      if (dataList.isNotEmpty) {
-        var latestData = dataList.last;
-        double finalValue = _extractFitbitValue(latestData);
-        DateTime dataDate = _extractFitbitDate(latestData);
-
-        setState(() {
-          latestHealthData['calories'] = _healthDataFromDefinition(
-            key: 'calories',
-            source: 'Fitbit',
-            value: finalValue,
-            date: dataDate,
-          );
-        });
-      }
-    } catch (e) {
-      _setDefaultValue('calories', 'Fitbit',
-          reason: 'Activity is demo-only this semester.');
-    }
-  }
-
   double _extractFitbitValue(dynamic data) {
     dynamic value = 0;
+
     if (data is FitbitActivityTimeseriesData) {
       value = data.value;
     } else if (data is Map) {
@@ -1139,6 +1055,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
     } catch (e) {
       return 0;
     }
+
     return 0;
   }
 
@@ -1216,208 +1133,6 @@ class _WearablesScreenState extends State<WearablesScreen> {
     );
   }
 
-  void _setDefaultValue(String key, String source, {String? reason}) {
-    setState(() {
-      latestHealthData[key] = _healthDataFromDefinition(
-        key: key,
-        source: source,
-        value: 0,
-        date: DateTime.now(),
-        isPlaceholder: true,
-        placeholderReason: reason,
-      );
-    });
-  }
-
-  void _setDefaultFitbitData() {
-    _setDefaultValue('steps', 'Fitbit',
-        reason: 'No Fitbit steps data available.');
-    _setDefaultValue('calories', 'Fitbit',
-        reason: 'Activity is demo-only this semester.');
-    _setDefaultValue('heart_rate', 'Fitbit',
-        reason: 'Fitbit heart-rate sync is a placeholder this semester.');
-  }
-
-  Future<void> _fetchGoogleAppleHealthData(
-      DateTime startTime, DateTime endTime) async {
-    bool hasHealthDevice = connectedDevices.any((device) =>
-        device.platform == 'google_fit' || device.platform == 'apple_health');
-
-    if (!hasHealthDevice) return;
-
-    try {
-      Health health = Health();
-      await health.configure();
-
-      String source =
-          connectedDevices.any((device) => device.platform == 'apple_health')
-              ? 'Apple Health'
-              : 'Health Connect';
-
-      List<HealthDataType> types = [
-        HealthDataType.STEPS,
-        HealthDataType.ACTIVE_ENERGY_BURNED,
-        HealthDataType.HEART_RATE,
-        HealthDataType.BLOOD_GLUCOSE,
-        HealthDataType.BLOOD_PRESSURE_DIASTOLIC,
-        HealthDataType.BLOOD_PRESSURE_SYSTOLIC,
-      ];
-
-      // Fetch all health data types at once
-      List<HealthDataPoint> allHealthData = await health.getHealthDataFromTypes(
-        startTime: startTime,
-        endTime: endTime,
-        types: types,
-      );
-
-      // Process each type of health data
-      await _processHealthDataByType(allHealthData, source);
-    } catch (e) {
-      print('⚠ Health data fetch failed: $e');
-      _setDefaultHealthData();
-    }
-  }
-
-  Future<void> _processHealthDataByType(
-      List<HealthDataPoint> allHealthData, String source) async {
-    // Group data by type
-    Map<HealthDataType, List<HealthDataPoint>> groupedData = {};
-    for (var point in allHealthData) {
-      if (!groupedData.containsKey(point.type)) {
-        groupedData[point.type] = [];
-      }
-      groupedData[point.type]!.add(point);
-    }
-
-    // Process Steps
-    if (groupedData.containsKey(HealthDataType.STEPS)) {
-      int totalSteps = groupedData[HealthDataType.STEPS]!
-          .fold(0, (sum, point) => sum + (point.value as num).toInt());
-
-      setState(() {
-        latestHealthData['steps'] = _healthDataFromDefinition(
-          key: 'steps',
-          source: source,
-          value: totalSteps.toDouble(),
-          date: DateTime.now(),
-        );
-      });
-    }
-
-    // Process Calories (Active Energy Burned)
-    if (groupedData.containsKey(HealthDataType.ACTIVE_ENERGY_BURNED)) {
-      double totalCalories = groupedData[HealthDataType.ACTIVE_ENERGY_BURNED]!
-          .fold(0.0, (sum, point) => sum + (point.value as num).toDouble());
-
-      setState(() {
-        latestHealthData['calories'] = _healthDataFromDefinition(
-          key: 'calories',
-          source: source,
-          value: totalCalories,
-          date: DateTime.now(),
-        );
-      });
-    }
-
-    // Process Heart Rate (get latest reading)
-    if (groupedData.containsKey(HealthDataType.HEART_RATE)) {
-      var heartRateData = groupedData[HealthDataType.HEART_RATE]!;
-      if (heartRateData.isNotEmpty) {
-        // Get the most recent heart rate reading
-        heartRateData.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
-        var latestHR = heartRateData.first;
-
-        setState(() {
-          latestHealthData['heart_rate'] = _healthDataFromDefinition(
-            key: 'heart_rate',
-            source: source,
-            value: (latestHR.value as num).toDouble(),
-            date: latestHR.dateFrom,
-          );
-        });
-      }
-    }
-
-    // Process Blood Glucose (get latest reading)
-    if (groupedData.containsKey(HealthDataType.BLOOD_GLUCOSE)) {
-      var glucoseData = groupedData[HealthDataType.BLOOD_GLUCOSE]!;
-      if (glucoseData.isNotEmpty) {
-        glucoseData.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
-        var latestGlucose = glucoseData.first;
-
-        setState(() {
-          latestHealthData['blood_glucose'] = _healthDataFromDefinition(
-            key: 'blood_glucose',
-            source: source,
-            value: (latestGlucose.value as num).toDouble(),
-            date: latestGlucose.dateFrom,
-            isPlaceholder: true,
-            placeholderReason:
-                'Blood glucose is outside semester scope for persisted metrics.',
-          );
-        });
-      }
-    }
-
-    // Process Blood Pressure Diastolic (get latest reading)
-    if (groupedData.containsKey(HealthDataType.BLOOD_PRESSURE_DIASTOLIC)) {
-      var diastolicData = groupedData[HealthDataType.BLOOD_PRESSURE_DIASTOLIC]!;
-      if (diastolicData.isNotEmpty) {
-        diastolicData.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
-        var latestDiastolic = diastolicData.first;
-
-        setState(() {
-          latestHealthData['blood_pressure_diastolic'] =
-              _healthDataFromDefinition(
-            key: 'blood_pressure_diastolic',
-            source: source,
-            value: (latestDiastolic.value as num).toDouble(),
-            date: latestDiastolic.dateFrom,
-          );
-        });
-      }
-    }
-
-    // Process Blood Pressure Systolic (get latest reading)
-    if (groupedData.containsKey(HealthDataType.BLOOD_PRESSURE_SYSTOLIC)) {
-      var systolicData = groupedData[HealthDataType.BLOOD_PRESSURE_SYSTOLIC]!;
-      if (systolicData.isNotEmpty) {
-        systolicData.sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
-        var latestSystolic = systolicData.first;
-
-        setState(() {
-          latestHealthData['blood_pressure_systolic'] =
-              _healthDataFromDefinition(
-            key: 'blood_pressure_systolic',
-            source: source,
-            value: (latestSystolic.value as num).toDouble(),
-            date: latestSystolic.dateFrom,
-          );
-        });
-      }
-    }
-
-    // Set default values for any missing data
-    _setDefaultHealthData(source);
-  }
-
-  void _setDefaultHealthData([String? source]) {
-    String defaultSource = source ??
-        (connectedDevices.any((device) => device.platform == 'apple_health')
-            ? 'Apple Health'
-            : 'Health Connect');
-
-    final platform =
-        defaultSource == 'Apple Health' ? 'apple_health' : 'google_fit';
-    final defaultMetrics = _semesterSourceMetricMatrix[platform] ?? const [];
-
-    for (final metric in defaultMetrics) {
-      if (!latestHealthData.containsKey(metric.key)) {
-        _setDefaultValue(metric.key, defaultSource, reason: metric.note);
-      }
-    }
-  }
-
   // Get appropriate icon for health data type
   IconData _getHealthDataIcon(String type) {
     switch (type.toLowerCase()) {
@@ -1466,23 +1181,33 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Future<void> _removeDevice(ConnectedDevice device) async {
+    final t = AppLocalizations.of(context)!;
+
     try {
-      bool? shouldRemove = await showDialog<bool>(
+      final bool? shouldRemove = await showDialog<bool>(
         context: context,
-        builder: (BuildContext context) {
+        builder: (BuildContext dialogContext) {
           return AlertDialog(
-            title: const Text('Remove Device'),
-            content: Text('Are you sure you want to remove ${device.name}?'),
+            title: Text(t.wearablesRemoveDevice),
+            content: Text(
+              t.wearablesConfirmRemoveDevice(device.name),
+            ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(t.cancel),
               ),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child:
-                    const Text('Remove', style: TextStyle(color: Colors.white)),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+                child: Text(
+                  t.wearablesRemove,
+                  style: const TextStyle(
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ],
           );
@@ -1495,13 +1220,17 @@ class _WearablesScreenState extends State<WearablesScreen> {
         });
 
         await _saveConnectedDevicesToStorage();
-        await _secureStorage.delete(key: '${device.platform}_access_token');
+        await _secureStorage.delete(
+          key: '${device.platform}_access_token',
+        );
 
         if (connectedDevices.isEmpty ||
-            !connectedDevices.any((d) =>
-                d.platform == 'google_fit' ||
-                d.platform == 'apple_health' ||
-                d.platform == 'fitbit')) {
+            !connectedDevices.any(
+              (d) =>
+                  d.platform == 'google_fit' ||
+                  d.platform == 'apple_health' ||
+                  d.platform == 'fitbit',
+            )) {
           setState(() {
             latestHealthData.clear();
           });
@@ -1512,20 +1241,25 @@ class _WearablesScreenState extends State<WearablesScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${device.name} has been removed'),
+              content: Text(
+                t.wearablesDeviceRemoved(device.name),
+              ),
               backgroundColor: Colors.green,
             ),
           );
         }
 
-        print('✓ Removed device: ${device.name}');
+        debugPrint('✓ Removed device: ${device.name}');
       }
     } catch (e) {
-      print('✗ Failed to remove device: $e');
+      debugPrint('✗ Failed to remove device: $e');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to remove device'),
+          SnackBar(
+            content: Text(
+              t.wearablesFailedToRemoveDevice,
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -1538,10 +1272,15 @@ class _WearablesScreenState extends State<WearablesScreen> {
       final prefs = await SharedPreferences.getInstance();
       final devicesJson =
           connectedDevices.map((device) => device.toJson()).toList();
-      await prefs.setString('connected_devices', jsonEncode(devicesJson));
-      print('✓ Saved ${connectedDevices.length} connected devices');
+
+      await prefs.setString(
+        'connected_devices',
+        jsonEncode(devicesJson),
+      );
+
+      debugPrint('✓ Saved ${connectedDevices.length} connected devices');
     } catch (e) {
-      print('✗ Failed to save devices: $e');
+      debugPrint('✗ Failed to save devices: $e');
     }
   }
 
@@ -1581,11 +1320,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       drawer: const CommonDrawer(currentRoute: '/wearables'),
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'Wearables',
+        title: t.wearablesTitle,
         centerTitle: true,
         additionalActions: [
           IconButton(
@@ -1625,7 +1366,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
           ),
           const SizedBox(height: 32),
           Text(
-            'No Wearables Connected',
+            AppLocalizations.of(context)!.wearablesNoConnected,
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -1633,10 +1374,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Connect wearable devices to track your patient\'s health data in real-time.',
+          Text(
+            AppLocalizations.of(context)!.wearablesConnectDescription,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.4),
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 40),
           SizedBox(
@@ -1650,7 +1395,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 color: Theme.of(context).colorScheme.onPrimary,
               ),
               label: Text(
-                'Add Your First Device',
+                AppLocalizations.of(context)!.wearablesAddFirstDevice,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 16,
@@ -1676,9 +1421,12 @@ class _WearablesScreenState extends State<WearablesScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  const Text(
-                    'Supported Devices',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    AppLocalizations.of(context)!.wearablesSupportedDevices,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Wrap(
@@ -1735,9 +1483,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             if (isLoadingData ||
                 latestHealthData.isNotEmpty ||
                 syncStatusMessage != null) ...[
-              const Text(
-                'Latest Health Data',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.wearablesLatestHealthData,
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.indigo,
@@ -1755,25 +1503,28 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 _buildSyncStateCard(
                   icon: Icons.sync_problem,
                   color: Colors.red,
-                  title: 'Synchronization failed',
+                  title: AppLocalizations.of(context)!
+                      .wearablesSynchronizationFailed,
                   subtitle: syncStatusMessage ??
-                      'We could not synchronize wearable readings.',
+                      AppLocalizations.of(context)!
+                          .wearablesSynchronizationFailedDescription,
                 )
               else if (latestHealthData.isEmpty)
                 _buildSyncStateCard(
                   icon: Icons.inbox_outlined,
                   color: Colors.blueGrey,
-                  title: 'No synced data yet',
+                  title: AppLocalizations.of(context)!.wearablesNoSyncedDataYet,
                   subtitle: syncStatusMessage ??
-                      'Connect a wearable and run sync to view persisted vitals.',
+                      AppLocalizations.of(context)!
+                          .wearablesNoSyncedDataDescription,
                 )
               else
                 _buildHealthDataCards(),
               const SizedBox(height: 20),
             ],
-            const Text(
-              'Your Devices',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.wearablesYourDevices,
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.indigo,
@@ -1788,19 +1539,20 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Widget _buildConnectedDevicesHeader() {
-    final subtitle =
-        '${connectedDevices.length} device${connectedDevices.length == 1 ? '' : 's'} connected';
+    final subtitle = AppLocalizations.of(context)!
+        .wearablesDevicesConnected(connectedDevices.length);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 430;
+
         if (isCompact) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Connected Devices',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.wearablesConnectedDevices,
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.indigo,
@@ -1820,7 +1572,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _navigateToAddDevice,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Device'),
+                  label: Text(
+                    AppLocalizations.of(context)!.wearablesAddDevice,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                     foregroundColor: Colors.white,
@@ -1837,9 +1591,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Connected Devices',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context)!.wearablesConnectedDevices,
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.indigo,
@@ -1858,7 +1612,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             ElevatedButton.icon(
               onPressed: _navigateToAddDevice,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add Device'),
+              label: Text(
+                AppLocalizations.of(context)!.wearablesAddDevice,
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo,
                 foregroundColor: Colors.white,
@@ -1872,18 +1628,21 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
   Widget _buildSemesterScopeCard() {
     final connectedPlatforms = connectedDevices.map((d) => d.platform).toSet();
+
     final visiblePlatforms = connectedPlatforms.isEmpty
         ? {
             'fitbit',
             if (!kIsWeb && Platform.isIOS) 'apple_health',
-            if (!kIsWeb && Platform.isAndroid) 'google_fit'
+            if (!kIsWeb && Platform.isAndroid) 'google_fit',
           }
         : connectedPlatforms;
 
     final rows = <Widget>[];
+
     for (final platform in visiblePlatforms) {
       final metrics = _semesterSourceMetricMatrix[platform] ?? const [];
       final sourceLabel = _sourceLabelForPlatform(platform);
+
       rows.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -1906,12 +1665,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
                   final bool isPlaceholder =
                       !metric.availableFromCurrentSource ||
                           !metric.mappedToPersistedEntity;
+
                   final Color chipColor =
                       isPlaceholder ? Colors.orange : Colors.green;
-                  final String status = metric.mappedToPersistedEntity &&
-                          metric.availableFromCurrentSource
-                      ? 'Persisted'
-                      : 'Placeholder';
+
+                  final String status = isPlaceholder
+                      ? AppLocalizations.of(context)!.wearablesPlaceholder
+                      : AppLocalizations.of(context)!.wearablesPersisted;
+
                   return Chip(
                     label: Text('${metric.type} ($status)'),
                     backgroundColor: chipColor.withValues(alpha: 0.12),
@@ -1940,18 +1701,20 @@ class _WearablesScreenState extends State<WearablesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Semester Metric Scope',
-              style: TextStyle(
-                fontSize: 16,
+            Text(
+              AppLocalizations.of(context)!.wearablesSemesterMetricScope,
+              style: const TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.indigo,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Persisted = mapped to backend entities. Placeholder = UI-only demo or not wired this semester.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              AppLocalizations.of(context)!.wearablesMetricScopeDescription,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
             ),
             const SizedBox(height: 12),
             ...rows,
@@ -1971,9 +1734,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text(
-              'Health Metrics',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.wearablesHealthMetrics,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.indigo,
@@ -2090,7 +1853,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color:
                             _getSourceColor(data.source).withValues(alpha: 0.1),
@@ -2107,7 +1872,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1),
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         color: data.isPlaceholder
                             ? Colors.orange.withValues(alpha: 0.12)
@@ -2129,7 +1896,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Updated: ${_formatDate(data.date)}',
+                  AppLocalizations.of(context)!
+                      .wearablesUpdated(_formatDate(data.date)),
                   style: const TextStyle(
                     fontSize: 11,
                     color: Colors.grey,
@@ -2201,6 +1969,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Widget _buildDeviceCard(ConnectedDevice device) {
+    final t = AppLocalizations.of(context)!;
+
     IconData deviceIcon;
     Color deviceColor;
 
@@ -2259,7 +2029,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Connected ${_formatDate(device.connectedAt)}',
+                    t.wearablesConnectedOn(
+                      _formatDate(device.connectedAt),
+                    ),
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
@@ -2267,7 +2039,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${device.permissions.length} permission${device.permissions.length == 1 ? '' : 's'} granted',
+                    t.wearablesPermissionsGranted(
+                      device.permissions.length,
+                    ),
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.green,
@@ -2279,15 +2053,17 @@ class _WearablesScreenState extends State<WearablesScreen> {
             Column(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Text(
-                    'Active',
-                    style: TextStyle(
+                  child: Text(
+                    t.wearablesActive,
+                    style: const TextStyle(
                       fontSize: 12,
                       color: Colors.green,
                       fontWeight: FontWeight.bold,
@@ -2320,17 +2096,18 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   String _formatDate(DateTime date) {
+    final t = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final difference = now.difference(date);
 
     if (difference.inDays > 0) {
-      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
+      return t.wearablesDaysAgo(difference.inDays);
     } else if (difference.inHours > 0) {
-      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+      return t.wearablesHoursAgo(difference.inHours);
     } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
+      return t.wearablesMinutesAgo(difference.inMinutes);
     } else {
-      return 'Just now';
+      return t.wearablesJustNow;
     }
   }
 

@@ -1,342 +1,484 @@
 import 'package:care_connect_app/features/fall_alert/pages/skeleton_playback_widget.dart';
-import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart'; 
+import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/fall_alert.dart';
 
- 
+import '../models/fall_alert.dart';
 
 class AlertDetailsPage extends StatelessWidget {
   static const routeName = '/alert-details';
+
   final FallAlert alert;
 
-  const AlertDetailsPage({super.key,  required this.alert});
+  const AlertDetailsPage({
+    super.key,
+    required this.alert,
+  });
 
- @override
-Widget build(BuildContext context) {
-  final theme = Theme.of(context);
-  final cs = theme.colorScheme;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final t = AppLocalizations.of(context)!;
 
-  final now = DateTime.now().toUtc();
-  final timeAgo = _formatTimeAgo(now.difference(alert.detectedAtUtc));
-  final bool hasPlayback = alert.playbackData != null;
+    final now = DateTime.now().toUtc();
+    final timeAgo = _formatTimeAgo(
+      now.difference(alert.detectedAtUtc),
+      t,
+    );
+    final bool hasPlayback = alert.playbackData != null;
 
-  return Scaffold(
-    // was const Color(0xFF0F172A)
-    backgroundColor: cs.surface,
-    appBar: AppBar(
-      // was const Color(0xFF111827)
-      backgroundColor: theme.appBarTheme.backgroundColor ?? cs.surface,
-      foregroundColor: theme.appBarTheme.foregroundColor ?? cs.onSurface,
-      title: const Text('Fall Alert'),
-    ),
-    body: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.12)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Patient may need help.',
-                    style: theme.textTheme.bodyMedium!.copyWith(
-                      color: cs.error,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Patient card
-          Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.only(top: 16),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: cs.secondaryContainer,
-                  child: Text(
-                    _initials(alert.patientName),
-                    style: theme.textTheme.titleMedium!.copyWith(
-                      color: cs.onSecondaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(alert.patientName,
-                          style: theme.textTheme.titleMedium!
-                              .copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.videocam_outlined,
-                              size: 16, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                    const Expanded(  
-                        child: Text( 
-                          'camera',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.access_time,
-                              size: 16, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                        Expanded(  
-                                child: Text(
-                                  timeAgo,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _openPatientDetails(context),
-                  icon: const Icon(Icons.person_outline, size: 18),
-                  label: const Text('View Details'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          if (now.difference(alert.detectedAtUtc) > const Duration(minutes: 2))
+    return Scaffold(
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        backgroundColor: theme.appBarTheme.backgroundColor ?? cs.surface,
+        foregroundColor: theme.appBarTheme.foregroundColor ?? cs.onSurface,
+        title: Text(t.fallAlertTitle),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Header
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: cs.error,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text('No response from patient',
-                  style: theme.textTheme.bodyMedium!
-                      .copyWith(color: cs.onError, fontWeight: FontWeight.w600)),
-            ),
-          if (now.difference(alert.detectedAtUtc) > const Duration(minutes: 2))
-            const SizedBox(height: 16),
-
-          if (hasPlayback) ...[
-            const _SectionTitle('Fall Playback'),
-            const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.12),
                 ),
-                child: SkeletonPlaybackWidget(sampleResponse: alert.playbackData!),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: cs.error,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      t.fallAlertPatientMayNeedHelp,
+                      style: theme.textTheme.bodyMedium!.copyWith(
+                        color: cs.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 18),
-          ] else ...[
+
+            // Patient card
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.10),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: cs.secondaryContainer,
+                    child: Text(
+                      _initials(alert.patientName),
+                      style: theme.textTheme.titleMedium!.copyWith(
+                        color: cs.onSecondaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          alert.patientName,
+                          style: theme.textTheme.titleMedium!.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.videocam_outlined,
+                              size: 16,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                t.fallAlertCamera,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time,
+                              size: 16,
+                              color: cs.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                timeAgo,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _openPatientDetails(context),
+                    icon: const Icon(
+                      Icons.person_outline,
+                      size: 18,
+                    ),
+                    label: Text(t.fallAlertViewDetails),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            if (now.difference(alert.detectedAtUtc) >
+                const Duration(minutes: 2))
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.error,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  t.fallAlertNoResponseFromPatient,
+                  style: theme.textTheme.bodyMedium!.copyWith(
+                    color: cs.onError,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+
+            if (now.difference(alert.detectedAtUtc) >
+                const Duration(minutes: 2))
+              const SizedBox(height: 16),
+
+            if (hasPlayback) ...[
+              _SectionTitle(t.fallAlertPlayback),
+              const SizedBox(height: 8),
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: theme.dividerColor.withValues(alpha: 0.10),
+                    ),
+                  ),
+                  child: SkeletonPlaybackWidget(
+                    sampleResponse: alert.playbackData!,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+            ] else ...[
+              _ActionButton(
+                icon: Icons.videocam_off,
+                label: t.fallAlertPlaybackUnavailable,
+                onPressed: null,
+                background: Colors.transparent,
+                border: cs.primary,
+                textColor: cs.primary,
+              ),
+              const SizedBox(height: 10),
+            ],
+
             _ActionButton(
-              icon: Icons.videocam_off,
-              label: 'Playback Unavailable',
-              onPressed: null,
-              background: Colors.transparent,
-              border: cs.primary,
-              textColor: cs.primary,
+              icon: Icons.call,
+              label: t.fallAlertCallPatient,
+              onPressed: () => _callPatient(context),
+              background: cs.primary,
+              textColor: cs.onPrimary,
             ),
             const SizedBox(height: 10),
+
+            _ActionButton(
+              icon: Icons.message_outlined,
+              label: t.fallAlertSendMessage,
+              onPressed: () => _messagePatient(context),
+              background: cs.surface,
+              border: theme.dividerColor.withValues(alpha: 0.24),
+              textColor: cs.onSurface,
+            ),
+            const SizedBox(height: 10),
+
+            _ActionButton(
+              icon: Icons.emergency_share_rounded,
+              label: t.fallAlertContactEmergencyServices,
+              onPressed: () => _alertEmergency(context),
+              background: cs.error,
+              textColor: cs.onError,
+            ),
+            const SizedBox(height: 18),
+
+            // Details
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: theme.dividerColor.withValues(alpha: 0.10),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SectionTitle(t.fallAlertDetails),
+                  _MetaRow(
+                    t.fallAlertDetectedAt,
+                    alert.detectedAtUtc.toLocal().toString(),
+                  ),
+                  _MetaRow(
+                    t.fallAlertSource,
+                    alert.source,
+                  ),
+                  _MetaRow(
+                    t.fallAlertPatientPhone,
+                    alert.patientPhone ?? t.fallAlertNotAvailable,
+                  ),
+                  _MetaRow(
+                    t.fallAlertPlayback,
+                    hasPlayback
+                        ? t.fallAlertAvailable
+                        : t.fallAlertNotAvailable,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
           ],
-
-          _ActionButton(
-            icon: Icons.call,
-            label: 'Call Patient',
-            onPressed: () => _callPatient(context),
-            background: cs.primary,
-            textColor: cs.onPrimary,
-          ),
-          const SizedBox(height: 10),
-          _ActionButton(
-            icon: Icons.message_outlined,
-            label: 'Send Message',
-            onPressed: () => _messagePatient(context),
-            background: cs.surface,
-            border: theme.dividerColor.withOpacity(0.24),
-            textColor: cs.onSurface,
-          ),
-          const SizedBox(height: 10),
-          _ActionButton(
-            icon: Icons.emergency_share_rounded,
-            label: 'Contact Emergency Services',
-            onPressed: () => _alertEmergency(context),
-            background: cs.error,
-            textColor: cs.onError,
-          ),
-          const SizedBox(height: 18),
-
-          // Details
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionTitle('Details'),
-                _MetaRow('Detected at', alert.detectedAtUtc.toLocal().toString()),
-                _MetaRow('Source', alert.source),
-                _MetaRow('Patient phone', alert.patientPhone ?? 'Not available'),
-                _MetaRow('Playback', hasPlayback ? 'Available' : 'Not available'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
-    ),
-  );
-}
-
- 
+    );
+  }
 
   Future<void> _callPatient(BuildContext context) async {
+    final t = AppLocalizations.of(context)!;
     final phone = alert.patientPhone;
+
     if (phone == null || phone.isEmpty) {
-      _toast(context, 'No phone number available');
+      _toast(context, t.fallAlertNoPhoneNumberAvailable);
       return;
     }
-    final uri = Uri(scheme: 'tel', path: phone);
-    if (!await launchUrl(uri)) {
-      _toast(context, 'Call failed to start');
+
+    final uri = Uri(
+      scheme: 'tel',
+      path: phone,
+    );
+
+    final launched = await launchUrl(uri);
+
+    if (!context.mounted) return;
+
+    if (!launched) {
+      _toast(
+        context,
+        t.fallAlertCallFailedToStart,
+      );
     }
   }
 
   Future<void> _messagePatient(BuildContext context) async {
+    final t = AppLocalizations.of(context)!;
     final phone = alert.patientPhone;
-    final message = 'I got an alert that you may have fallen. Are you okay? Please reply or call me if you need help.' ;
+    final message = t.fallAlertSmsMessage;
+
     if (phone == null || phone.isEmpty) {
-      _toast(context, 'No phone number available');
+      _toast(context, t.fallAlertNoPhoneNumberAvailable);
       return;
     }
-    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': message},);
-    if (!await launchUrl(uri)) {
-      _toast(context, 'Message failed to start');
+
+    final uri = Uri(
+      scheme: 'sms',
+      path: phone,
+      queryParameters: {
+        'body': message,
+      },
+    );
+
+    final launched = await launchUrl(uri);
+
+    if (!context.mounted) return;
+
+    if (!launched) {
+      _toast(
+        context,
+        t.fallAlertMessageFailedToStart,
+      );
     }
   }
 
   Future<void> _openPatientDetails(BuildContext context) async {
+    final t = AppLocalizations.of(context)!;
     final id = alert.patientId;
+
     if (id.isEmpty) {
-      _toast(context, 'Patient ID not available');
+      _toast(
+        context,
+        t.fallAlertPatientIdNotAvailable,
+      );
       return;
     }
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PatientDetailsPage(patientId: id),
-        settings: const RouteSettings(name: '/patient-details'),
+        builder: (_) => PatientDetailsPage(
+          patientId: id,
+        ),
+        settings: const RouteSettings(
+          name: '/patient-details',
+        ),
       ),
     );
   }
-  
+
   Future<void> _alertEmergency(BuildContext context) async {
-    final emergencyNumber = '911'; // consider making this region-aware
-    final contactName = alert.emergencyContactName ?? 'Emergency Contact';
+    final t = AppLocalizations.of(context)!;
+    const emergencyNumber = '911';
+
+    final contactName =
+        alert.emergencyContactName ?? t.fallAlertEmergencyContact;
+
     final contactPhone = alert.emergencyContactPhone;
 
     await showModalBottomSheet(
       context: context,
-       backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(16),
         ),
-      builder: (context) {
+      ),
+      builder: (sheetContext) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              24,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const ListTile(
+                ListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    'Emergency actions',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    t.fallAlertEmergencyActions,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   subtitle: Text(
-                    'Choose how you want to escalate',
-                    style: TextStyle(color: Colors.white70),
+                    t.fallAlertChooseHowToEscalate,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
                 _EmergencyTile(
                   icon: Icons.local_phone_rounded,
-                  label: 'Call 911',
-                  subtitle: 'Connect to local emergency services',
+                  label: t.fallAlertCall911,
+                  subtitle: t.fallAlertConnectLocalEmergencyServices,
                   onTap: () async {
-                    Navigator.pop(context);
-                    final uri = Uri(scheme: 'tel', path: emergencyNumber);
-                    if (!await launchUrl(uri)) {
-                      _toast(context, 'Could not start call to 911');
+                    Navigator.pop(sheetContext);
+
+                    final uri = Uri(
+                      scheme: 'tel',
+                      path: emergencyNumber,
+                    );
+
+                    final launched = await launchUrl(uri);
+
+                    if (!context.mounted) return;
+
+                    if (!launched) {
+                      _toast(
+                        context,
+                        t.fallAlertCouldNotStartCall911,
+                      );
                     }
                   },
                 ),
                 const SizedBox(height: 8),
                 _EmergencyTile(
                   icon: Icons.contact_phone_rounded,
-                  label: 'Call $contactName',
-                  subtitle: contactPhone ?? 'No phone on file',
+                  label: t.fallAlertCallContact(contactName),
+                  subtitle: contactPhone ?? t.fallAlertNoPhoneOnFile,
                   enabled: contactPhone != null && contactPhone.isNotEmpty,
                   onTap: () async {
-                    Navigator.pop(context);
-                    final uri = Uri(scheme: 'tel', path: contactPhone);
-                    if (!await launchUrl(uri)) {
-                      _toast(context, 'Could not start call to $contactName');
+                    Navigator.pop(sheetContext);
+
+                    final uri = Uri(
+                      scheme: 'tel',
+                      path: contactPhone,
+                    );
+
+                    final launched = await launchUrl(uri);
+
+                    if (!context.mounted) return;
+
+                    if (!launched) {
+                      _toast(
+                        context,
+                        t.fallAlertCouldNotStartCallContact(
+                          contactName,
+                        ),
+                      );
                     }
                   },
                 ),
                 const SizedBox(height: 12),
-                const Divider(color: Colors.white12),
+                const Divider(
+                  color: Colors.white12,
+                ),
                 const SizedBox(height: 8),
-                const Text(
-                  'If you cannot reach the patient, contact emergency services immediately.',
+                Text(
+                  t.fallAlertEmergencyInstruction,
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                  ),
                 ),
               ],
             ),
@@ -346,28 +488,49 @@ Widget build(BuildContext context) {
     );
   }
 
-  void _toast(BuildContext context, String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _toast(
+    BuildContext context,
+    String msg,
+  ) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+      ),
+    );
   }
-
-  // --- Helpers (Unchanged) ---
 
   static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+
     if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts.last[0]).toUpperCase();
+
+    if (parts.length == 1) {
+      return parts[0][0].toUpperCase();
     }
 
-  static String _formatTimeAgo(Duration d) {
-    if (d.inSeconds < 60) return '${d.inSeconds}s ago';
-    if (d.inMinutes < 60) return '${d.inMinutes}m ago';
-    if (d.inHours < 24) return '${d.inHours}h ago';
-    return '${d.inDays}d ago';
+    return (parts[0][0] + parts.last[0]).toUpperCase();
+  }
+
+  static String _formatTimeAgo(
+    Duration d,
+    AppLocalizations t,
+  ) {
+    if (d.inSeconds < 60) {
+      return t.fallAlertSecondsAgo(d.inSeconds);
+    }
+
+    if (d.inMinutes < 60) {
+      return t.fallAlertMinutesAgo(d.inMinutes);
+    }
+
+    if (d.inHours < 24) {
+      return t.fallAlertHoursAgo(d.inHours);
+    }
+
+    return t.fallAlertDaysAgo(d.inDays);
   }
 }
-
-// --- All helper widgets below are unchanged ---
 
 class _EmergencyTile extends StatelessWidget {
   final IconData icon;
@@ -384,25 +547,35 @@ class _EmergencyTile extends StatelessWidget {
     this.enabled = true,
   });
 
-   @override
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return ListTile(
       enabled: enabled,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       tileColor: cs.surface,
       leading: CircleAvatar(
-        backgroundColor: enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
-        child: Icon(icon, color: cs.onSecondaryContainer),
+        backgroundColor:
+            enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
+        child: Icon(
+          icon,
+          color: cs.onSecondaryContainer,
+        ),
       ),
-      title: Text(label, style: Theme.of(context).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(
+        label,
+        style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+      ),
       subtitle: subtitle != null ? Text(subtitle!) : null,
       onTap: enabled ? onTap : null,
     );
   }
 }
- 
-
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
@@ -411,7 +584,6 @@ class _ActionButton extends StatelessWidget {
   final Color background;
   final Color? border;
   final Color? textColor;
-  final IconData? trailing = null;
 
   const _ActionButton({
     required this.icon,
@@ -425,6 +597,7 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveText = textColor ?? Colors.white;
+
     return SizedBox(
       width: double.infinity,
       height: 48,
@@ -441,12 +614,20 @@ class _ActionButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: effectiveText),
+            Icon(
+              icon,
+              color: effectiveText,
+            ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(label, style: TextStyle(color: effectiveText, fontWeight: FontWeight.w600)),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: effectiveText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            if (trailing != null) Icon(trailing, color: effectiveText),
           ],
         ),
       ),
@@ -454,14 +635,16 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-  class _SectionTitle extends StatelessWidget {
+class _SectionTitle extends StatelessWidget {
   final String text;
+
   const _SectionTitle(this.text);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
@@ -479,14 +662,21 @@ class _ActionButton extends StatelessWidget {
 class _MetaRow extends StatelessWidget {
   final String label;
   final String value;
-  const _MetaRow(this.label, this.value);
+
+  const _MetaRow(
+    this.label,
+    this.value,
+  );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        vertical: 6,
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -494,16 +684,20 @@ class _MetaRow extends StatelessWidget {
             width: 120,
             child: Text(
               label,
-              style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurfaceVariant,
+              ),
             ),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               value,
-              style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurface,
+              ),
               overflow: TextOverflow.ellipsis,
-              maxLines: 2,  
+              maxLines: 2,
             ),
           ),
         ],

@@ -23,6 +23,42 @@
   "socialFeed": "Red Social",
   "gamification": "Gamificación",
   "wearables": "Dispositivos portátiles",
+  "wearablesTitle": "Dispositivos portátiles",
+"wearablesNoConnected": "No hay dispositivos portátiles conectados",
+"wearablesConnectDescription": "Conecta dispositivos portátiles para realizar un seguimiento de los datos de salud de tu paciente en tiempo real.",
+"wearablesAddFirstDevice": "Añade tu primer dispositivo",
+"wearablesSupportedDevices": "Dispositivos compatibles",
+"wearablesLatestHealthData": "Datos de salud más recientes",
+"wearablesSynchronizationFailed": "Error de sincronización",
+"wearablesSynchronizationFailedDescription": "No pudimos sincronizar las lecturas del dispositivo portátil.",
+"wearablesNoSyncedDataYet": "Aún no hay datos sincronizados",
+"wearablesNoSyncedDataDescription": "Conecta un dispositivo portátil y ejecuta la sincronización para ver los signos vitales guardados.",
+"wearablesYourDevices": "Tus dispositivos",
+"wearablesConnectedDevices": "Dispositivos conectados",
+"wearablesAddDevice": "Añadir dispositivo",
+"wearablesDevicesConnected": "{count, plural, =0{No hay dispositivos conectados} =1{1 dispositivo conectado} other{{count} dispositivos conectados}}",
+"wearablesSemesterMetricScope": "Alcance de métricas del semestre",
+"wearablesPersisted": "Guardado",
+"wearablesPlaceholder": "Marcador de posición",
+"wearablesMetricScopeDescription": "Guardado = asignado a entidades del backend. Marcador de posición = demostración solo de interfaz o no implementado este semestre.",
+"wearablesHealthMetrics": "Métricas de salud",
+"wearablesUpdated": "Actualizado: {date}",
+"wearablesConnectedOn": "Conectado el {date}",
+"wearablesPermissionsGranted": "{count, plural, =0{No se concedieron permisos} =1{1 permiso concedido} other{{count} permisos concedidos}}",
+"wearablesActive": "Activo",
+"wearablesDaysAgo": "{count, plural, =1{Hace 1 día} other{Hace {count} días}}",
+"wearablesHoursAgo": "{count, plural, =1{Hace 1 hora} other{Hace {count} horas}}",
+"wearablesMinutesAgo": "{count, plural, =1{Hace 1 minuto} other{Hace {count} minutos}}",
+"wearablesJustNow": "Ahora mismo",
+"wearablesRemoveDevice": "Eliminar dispositivo",
+"wearablesConfirmRemoveDevice": "¿Estás seguro de que deseas eliminar {deviceName}?",
+"wearablesRemove": "Eliminar",
+"wearablesDeviceRemoved": "{deviceName} ha sido eliminado",
+"wearablesFailedToRemoveDevice": "No se pudo eliminar el dispositivo",
+"wearablesSelectPatientFirst": "Selecciona primero un paciente (menú desplegable de pacientes de Analytics) y luego pulsa actualizar.",
+"wearablesNoAppleHealthSamples": "No se recopilaron muestras de Apple Health en los últimos 7 días. Depuración: recopiladas={collected} aceptadas={accepted} rechazadas={rejected}",
+"wearablesSyncFailedWithError": "No se pudieron sincronizar los datos del dispositivo portátil: {error}",
+"wearablesNoPersistedVitals": "No hay signos vitales guardados del dispositivo portátil disponibles en este intervalo. Depuración: recopilados={collected} aceptados={accepted} rechazados={rejected}",
   "fileManagement": "Gestión de Archivos",
   "addPatient": "Agregar Paciente",
   "settings": "Configuración",
@@ -1013,6 +1049,150 @@
   "homecarereview_digitized": "Digitalizado",
   "homecarereview_reviewed": "(revisado)",
   "homecarereview_savedForm": "Formulario digitalizado guardado",
-  "homecarereview_failedToSave": "No se ha podido guardar el formulario digitalizado"
+  "homecarereview_failedToSave": "No se ha podido guardar el formulario digitalizado",
+    "fallAlertTitle": "Alerta de caída",
+  "fallAlertPatientMayNeedHelp": "El paciente puede necesitar ayuda.",
+  "fallAlertViewDetails": "Ver detalles",
+  "fallAlertNoResponseFromPatient": "Sin respuesta del paciente",
+  "fallAlertFallPlayback": "Reproducción de la caída",
+  "fallAlertPlaybackUnavailable": "Reproducción no disponible",
+  "fallAlertCallPatient": "Llamar al paciente",
+  "fallAlertSendMessage": "Enviar mensaje",
+  "fallAlertContactEmergencyServices": "Contactar con los servicios de emergencia",
+  "fallAlertDetails": "Detalles",
+  "fallAlertDetectedAt": "Detectado a las",
+  "fallAlertSource": "Fuente",
+  "fallAlertPatientPhone": "Teléfono del paciente",
+  "fallAlertPlayback": "Reproducción",
+  "fallAlertAvailable": "Disponible",
+  "fallAlertNotAvailable": "No disponible",
+  "fallAlertNoPhoneNumberAvailable": "No hay ningún número de teléfono disponible",
+  "fallAlertCallFailedToStart": "No se pudo iniciar la llamada",
+  "fallAlertSmsMessage": "Recibí una alerta indicando que podrías haberte caído. ¿Estás bien? Responde o llámame si necesitas ayuda.",
+  "fallAlertMessageFailedToStart": "No se pudo iniciar el mensaje",
+  "fallAlertPatientIdNotAvailable": "El ID del paciente no está disponible",
+  "fallAlertEmergencyContact": "Contacto de emergencia",
+  "fallAlertEmergencyActions": "Acciones de emergencia",
+  "fallAlertChooseHowToEscalate": "Elige cómo deseas escalar la situación",
+  "fallAlertCall911": "Llamar al 911",
+  "fallAlertConnectLocalEmergencyServices": "Conectar con los servicios de emergencia locales",
+  "fallAlertCouldNotStartCall911": "No se pudo iniciar la llamada al 911",
+
+  "fallAlertCallContact": "Llamar a {contactName}",
+  "@fallAlertCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "fallAlertNoPhoneOnFile": "No hay ningún teléfono registrado",
+
+  "fallAlertCouldNotStartCallContact": "No se pudo iniciar la llamada a {contactName}",
+  "@fallAlertCouldNotStartCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "fallAlertEmergencyInstruction": "Si no puedes comunicarte con el paciente, contacta inmediatamente con los servicios de emergencia.",
+  "fallAlertDetected": "Caída detectada",
+  "fallAlertAreYouOkay": "¿Estás bien?",
+  "fallAlertMayHaveFallen": "Parece que podrías haberte caído. ¿Necesitas ayuda?",
+  "fallAlertImOkay": "Estoy bien",
+  "fallAlertCallForHelp": "Pedir ayuda",
+
+  "fallAlertNoResponseAutoCall": "Si no respondes en {seconds} segundos, se contactará automáticamente con los servicios de emergencia.",
+  "@fallAlertNoResponseAutoCall": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+
+  "fallAlertAutoCallingIn": "Llamada automática en {seconds} segundos...",
+  "@fallAlertAutoCallingIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+
+  "fallAlertGladYouAreOkay": "Nos alegra que estés bien. Descartaremos esta alerta.",
+  "fallAlertCouldNotStartCall": "No se pudo iniciar la llamada.",
+  "fallAlertAutoCallFailed": "No se pudo iniciar la llamada automática.",
+
+  "fallAlertCallEmergencyNumber": "Llamar al {number}",
+  "@fallAlertCallEmergencyNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+
+  "fallAlertMockAlerts": "Alertas de caída simuladas",
+  "fallAlertStart": "Iniciar",
+  "fallAlertStop": "Detener",
+  "fallAlertTrigger": "Activar",
+  "fallAlertStatusRunning": "Estado: en ejecución (emite cada ~3 s)",
+  "fallAlertStatusStopped": "Estado: detenido",
+  "fallAlertMockAlertEmitted": "Alerta de caída simulada emitida",
+  "fallAlertNoAlertsYet": "Aún no hay alertas. Pulsa \"Activar\" para emitir una o iniciar la emisión periódica.",
+
+  "fallAlertSourceWithTime": "Fuente: {source} • {time}",
+  "@fallAlertSourceWithTime": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "fallAlertCamera": "Cámara",
+
+  "fallAlertSecondsAgo": "hace {count} s",
+  "@fallAlertSecondsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "fallAlertMinutesAgo": "hace {count} min",
+  "@fallAlertMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "fallAlertHoursAgo": "hace {count} h",
+  "@fallAlertHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "fallAlertDaysAgo": "hace {count} d",
+  "@fallAlertDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 
 }
