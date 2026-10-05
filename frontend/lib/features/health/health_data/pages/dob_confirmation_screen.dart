@@ -3,21 +3,27 @@ import '../models/identity_conflict.dart';
 import '../services/identity_conflict_service.dart';
 
 class DobConfirmationScreen extends StatefulWidget {
-  const DobConfirmationScreen({super.key});
+  const DobConfirmationScreen({super.key, this.service});
+
+  /// Injected in tests; defaults to [IdentityConflictService].
+  final IdentityConflictService? service;
 
   @override
   State<DobConfirmationScreen> createState() => _DobConfirmationScreenState();
 }
 
 class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
-  static const _teal = Color(0xFF00A7C8);
+  // Text colours meet WCAG 2.1 AA (4.5:1); the lighter 00A7C8 and 6B7280
+  // did not on the chips, the grey value rows or the white button text.
+  static const _teal = Color(0xFF006B80);
   static const _text = Color(0xFF0F172A);
-  static const _muted = Color(0xFF6B7280);
+  static const _muted = Color(0xFF4B5563);
   static const _border = Color(0xFFE5E7EB);
   static const _warning = Color(0xFFF59E0B);
-  static const _success = Color(0xFF10B981);
+  static const _success = Color(0xFF047857);
 
-  final _service = IdentityConflictService();
+  late final IdentityConflictService _service =
+      widget.service ?? IdentityConflictService();
   bool _loading = true;
   List<IdentityConflict> _conflicts = [];
   final Set<int> _resolving = {};
@@ -40,22 +46,28 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
 
   Future<void> _resolve(IdentityConflict c, bool accepted) async {
     setState(() => _resolving.add(c.id));
-    final ok = await _service.resolve(c.id, accepted: accepted);
+    var ok = false;
+    try {
+      ok = await _service.resolve(c.id, accepted: accepted);
+    } catch (_) {
+      ok = false;
+    }
     if (!mounted) return;
     setState(() {
       _resolving.remove(c.id);
       if (ok) _conflicts.removeWhere((x) => x.id == c.id);
     });
-    if (ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: _success,
-          content: Text(accepted
-              ? 'Date of birth updated.'
-              : 'Kept your current date of birth.'),
-        ),
-      );
-    }
+    // A failed save keeps the card and says so; nothing changed.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: ok ? _success : const Color(0xFFB91C1C),
+        content: Text(!ok
+            ? 'We couldn\u2019t save your choice. Nothing was changed. Please try again.'
+            : accepted
+                ? 'Date of birth updated.'
+                : 'Kept your current date of birth.'),
+      ),
+    );
   }
 
   @override

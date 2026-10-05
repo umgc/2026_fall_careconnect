@@ -10,9 +10,12 @@ class HealthDataScreen extends StatefulWidget {
 }
 
 class _HealthDataScreenState extends State<HealthDataScreen> {
-  static const _teal = Color(0xFF00A7C8);
+  // Text colours meet WCAG 2.1 AA (4.5:1) on the page and on their own
+  // 12% tints; the lighter originals (00A7C8, 6B7280, 10B981, F59E0B) did not.
+  static const _teal = Color(0xFF006B80);
   static const _text = Color(0xFF0F172A);
-  static const _muted = Color(0xFF6B7280);
+  static const _muted = Color(0xFF4B5563);
+  static const _green = Color(0xFF047857);
   static const _border = Color(0xFFE5E7EB);
   static const _warning = Color(0xFFF59E0B);
 
@@ -29,13 +32,14 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   Future<void> _load() async {
     try {
       final result = await MedicareDataService().fetchRecords();
+      if (!mounted) return;
       setState(() {
         _medicare = result.records;
         _synthetic = result.synthetic;
         _loading = false;
       });
     } catch (_) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -138,13 +142,13 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   Color _sourceColor(RecordSource s) {
     switch (s) {
       case RecordSource.epic:
-        return const Color(0xFF2563EB);
+        return const Color(0xFF1D4ED8);
       case RecordSource.cerner:
-        return const Color(0xFF10B981);
+        return const Color(0xFF047857);
       case RecordSource.athena:
-        return const Color(0xFFF59E0B);
+        return const Color(0xFF92400E);
       case RecordSource.medicare:
-        return const Color(0xFF00A7C8);
+        return _teal;
     }
   }
 
@@ -236,13 +240,13 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+        color: _green.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(status,
           style: const TextStyle(
               fontSize: 11,
-              color: Color(0xFF10B981),
+              color: _green,
               fontWeight: FontWeight.w600)),
     );
   }

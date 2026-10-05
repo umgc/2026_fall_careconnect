@@ -144,11 +144,11 @@ class HealthRecord {
   factory HealthRecord.fromJson(Map<String, dynamic> json) {
     return HealthRecord(
       id: json['id'] as String? ?? '',
+      // An unknown source is dropped, never relabelled as another one:
+      // provenance shown to a patient must be the real one.
       sources: ((json['sources'] as List?) ?? [])
-          .map((s) => RecordSource.values.firstWhere(
-                (e) => e.name == s,
-                orElse: () => RecordSource.epic,
-              ))
+          .map((s) => RecordSource.values.where((e) => e.name == s).firstOrNull)
+          .whereType<RecordSource>()
           .toList(),
       type: RecordType.values.firstWhere(
         (e) => e.name == json['type'],
