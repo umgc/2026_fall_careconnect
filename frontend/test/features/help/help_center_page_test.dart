@@ -172,7 +172,7 @@ void main() {
         'Help uses shared typography and readable colors in $brightness',
         (tester) async {
       await _pumpHelp(tester, brightness: brightness);
-      final theme = Theme.of(tester.element(find.byType(HelpCenterPage)));
+      final theme = Theme.of(tester.element(find.text('Popular Help')));
       final article = tester
           .widget<HelpArticleTile>(find.byType(HelpArticleTile).first)
           .article;
@@ -237,7 +237,7 @@ void main() {
   testWidgets('untranslated Help labels and content fall back to English',
       (tester) async {
     await _pumpHelp(tester, locale: const Locale('es'));
-    expect(find.text('Help Center'), findsOneWidget);
+    expect(find.text('Help Center'), findsNWidgets(2));
     expect(find.text('Getting started with CareConnect'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'meds');
     await tester.pumpAndSettle();
@@ -249,7 +249,7 @@ void main() {
   testWidgets('home shows requested headings and six guides in explicit order',
       (tester) async {
     await _pumpHelp(tester);
-    expect(find.text('Help Center'), findsOneWidget);
+    expect(find.text('Help Center'), findsNWidgets(2));
     expect(find.widgetWithText(TextField, 'Search Help'), findsOneWidget);
     expect(find.text('Popular Help'), findsOneWidget);
     expect(find.text('Browse Topics'), findsOneWidget);
@@ -319,7 +319,7 @@ void main() {
   testWidgets('unknown topic offers a working return to Help Center',
       (tester) async {
     await _pumpHelp(tester, location: HelpRoutes.topic('missing'));
-    expect(find.text('Topic not found'), findsOneWidget);
+    expect(find.text('Topic not found'), findsNWidgets(2));
     await tester.tap(find.text('Back to Help Center'));
     await tester.pumpAndSettle();
     expect(find.byType(HelpCenterPage), findsOneWidget);

@@ -88,6 +88,7 @@ tests/previews and otherwise use the bundled catalog.
 - [Localization](../../../../docs/help/localization.md)
 - [Content verification](../../../../docs/help/content-verification.md)
 - [Production-flow verification](../../../../docs/help/verification-step-9.md)
+- [WCAG 2.1 AA accessibility review](../../../../docs/help/accessibility-audit.md)
 
 The test suite includes production routes with refused HTTP, catalog integrity,
 keyboard/semantics checks, and narrow/enlarged layouts. Its evidence is distinct

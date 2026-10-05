@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../models/help_article.dart';
+import '../../../../l10n/app_localizations.dart';
+import 'help_link_tile.dart';
 
 /// Shared article entry used by popular articles, search, and topic screens.
 class HelpArticleTile extends StatelessWidget {
@@ -12,19 +14,12 @@ class HelpArticleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MergeSemantics(
-        child: Semantics(
-            button: true,
-            child: Card(
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                title: Text(article.title,
-                    style: Theme.of(context).textTheme.titleMedium),
-                subtitle: Text(article.summary,
-                    style: Theme.of(context).textTheme.bodyLarge),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: onTap,
-              ),
-            )),
-      );
+          child: Card(
+        child: HelpLinkTile(
+          title: article.title,
+          summary: article.summary,
+          hint: AppLocalizations.of(context)!.helpOpenArticleHint,
+          onTap: onTap,
+        ),
+      ));
 }

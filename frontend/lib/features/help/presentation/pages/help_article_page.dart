@@ -6,6 +6,8 @@ import '../../data/help_repository.dart';
 import '../../help_routes.dart';
 import '../widgets/help_article_content.dart';
 import '../widgets/help_app_bar.dart';
+import '../widgets/help_accessibility.dart';
+import '../widgets/help_back_to_top.dart';
 
 /// One screen renders any catalog article using its permanent ID.
 class HelpArticlePage extends StatefulWidget {
@@ -20,6 +22,8 @@ class HelpArticlePage extends StatefulWidget {
 
 class _HelpArticlePageState extends State<HelpArticlePage> {
   final _scrollController = ScrollController();
+  final _titleFocus =
+      FocusNode(skipTraversal: true, debugLabel: 'Help article title');
   late final _bundledCatalog = HelpRepository.bundled();
   bool _showBackToTop = false;
 
@@ -35,6 +39,7 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
   }
 
   void _backToTop() {
+    _titleFocus.requestFocus();
     if (MediaQuery.disableAnimationsOf(context)) {
       _scrollController.jumpTo(0);
     } else {
@@ -46,11 +51,19 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _titleFocus.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => HelpAccessibility(
+      pageTitle: (widget.repository ?? _bundledCatalog)
+              .findArticle(widget.articleId)
+              ?.title ??
+          AppLocalizations.of(context)!.helpArticleNotFoundTitle,
+      builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final catalog = widget.repository ?? _bundledCatalog;
     final article = catalog.findArticle(widget.articleId);
@@ -60,15 +73,11 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
           title: article?.title ?? t.helpArticleNotFoundTitle),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: _showBackToTop && article != null
-          ? FloatingActionButton.extended(
-              heroTag: null,
-              onPressed: _backToTop,
-              icon: const Icon(Icons.arrow_upward),
-              label: Text(t.helpBackToTop),
-            )
+          ? HelpBackToTop(onPressed: _backToTop)
           : null,
       body: SafeArea(
         child: SingleChildScrollView(
+          key: const ValueKey('help-page-scroll'),
           controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 96),
           child: Center(
@@ -78,6 +87,14 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        Semantics(
+                            key: const ValueKey('help-page-heading'),
+                            header: true,
+                            headingLevel: 1,
+                            child: Text(t.helpArticleNotFoundTitle,
+                                style:
+                                    Theme.of(context).textTheme.displayMedium)),
+                        const SizedBox(height: 16),
                         Text(t.helpArticleNotFoundDescription,
                             style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: 16),
@@ -96,6 +113,7 @@ class _HelpArticlePageState extends State<HelpArticlePage> {
                         ),
                         const SizedBox(height: 16),
                         HelpArticleContent(
+                          titleFocusNode: _titleFocus,
                           article: article,
                           repository: catalog,
                           onGlossarySelected: (id) =>

@@ -6,6 +6,8 @@ import '../../models/help_article.dart';
 import '../../models/help_section.dart';
 import 'help_section_heading.dart';
 import 'help_glossary_entry.dart';
+import 'help_accessibility.dart';
+import 'help_link_tile.dart';
 
 /// Article presentation shared by the starter screen and future detail screens.
 class HelpArticleContent extends StatefulWidget {
@@ -15,12 +17,14 @@ class HelpArticleContent extends StatefulWidget {
     required this.repository,
     required this.onArticleSelected,
     this.onGlossarySelected,
+    this.titleFocusNode,
   });
 
   final HelpArticle article;
   final HelpRepository repository;
   final ValueChanged<String> onArticleSelected;
   final ValueChanged<String>? onGlossarySelected;
+  final FocusNode? titleFocusNode;
 
   @override
   State<HelpArticleContent> createState() => _HelpArticleContentState();
@@ -87,7 +91,10 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      HelpAccessibility(builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final t = AppLocalizations.of(context)!;
     final headings = [
@@ -97,7 +104,16 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(widget.article.title, style: textTheme.displayMedium),
+        Focus(
+          focusNode: widget.titleFocusNode,
+          skipTraversal: true,
+          child: Semantics(
+              key: const ValueKey('help-page-heading'),
+              header: true,
+              headingLevel: 1,
+              child:
+                  Text(widget.article.title, style: textTheme.displayMedium)),
+        ),
         const SizedBox(height: 8),
         Text(widget.article.summary, style: textTheme.bodyLarge),
         const SizedBox(height: 16),
@@ -113,6 +129,7 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
                     key: const ValueKey('help-contents-toggle-semantics'),
                     child: Semantics(
                       header: true,
+                      headingLevel: 2,
                       expanded: _contentsExpanded,
                       child: TextButton(
                         key: const ValueKey('help-contents-toggle'),
@@ -170,6 +187,7 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
             child: Semantics(
               key: ValueKey('help-section-heading-$index'),
               header: true,
+              headingLevel: 2,
               child: Text(heading, style: textTheme.displaySmall),
             ),
           ),
@@ -181,6 +199,7 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
                 for (final id in termIds)
                   HelpGlossaryEntry(
                       term: widget.repository.findGlossaryTerm(id)!,
+                      headingLevel: 3,
                       onGlossarySelected: widget.onGlossarySelected == null
                           ? null
                           : () => widget.onGlossarySelected!(id))
@@ -208,7 +227,11 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(tip.problem, style: textTheme.titleMedium),
+                          Semantics(
+                              header: true,
+                              headingLevel: 3,
+                              child: Text(tip.problem,
+                                  style: textTheme.titleMedium)),
                           const SizedBox(height: 8),
                           Text(tip.solution, style: textTheme.bodyLarge),
                         ],
@@ -220,17 +243,11 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
           HelpRelatedArticles(:final articleIds) => Column(
               children: [
                 for (final id in articleIds)
-                  MergeSemantics(
-                      child: Semantics(
-                          button: true,
-                          child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            title: Text(
-                                widget.repository.findArticle(id)!.title,
-                                style: textTheme.titleMedium),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => widget.onArticleSelected(id),
-                          ))),
+                  HelpLinkTile(
+                    title: widget.repository.findArticle(id)!.title,
+                    hint: AppLocalizations.of(context)!.helpOpenArticleHint,
+                    onTap: () => widget.onArticleSelected(id),
+                  ),
               ],
             ),
         },

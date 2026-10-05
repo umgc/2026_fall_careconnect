@@ -7,6 +7,8 @@ import '../../help_routes.dart';
 import '../../models/help_role.dart';
 import '../widgets/help_article_tile.dart';
 import '../widgets/help_app_bar.dart';
+import '../widgets/help_accessibility.dart';
+import '../widgets/help_link_tile.dart';
 import '../widgets/help_topic_tile.dart';
 import '../widgets/help_glossary_entry.dart';
 
@@ -22,6 +24,7 @@ class HelpCenterPage extends StatefulWidget {
 
 class _HelpCenterPageState extends State<HelpCenterPage> {
   final _searchController = TextEditingController();
+  final _searchFocus = FocusNode(debugLabel: 'Help search');
   final _topicsHeadingKey = GlobalKey();
   final _firstTopicFocusNode = FocusNode(debugLabel: 'First Help topic');
   late final _bundledCatalog = HelpRepository.bundled();
@@ -29,6 +32,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocus.dispose();
     _firstTopicFocusNode.dispose();
     super.dispose();
   }
@@ -44,7 +48,16 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => HelpAccessibility(
+      pageTitle: AppLocalizations.of(context)!.helpCenterTitle,
+      builder: _buildContent);
+
+  void _clearSearch() {
+    setState(_searchController.clear);
+    _searchFocus.requestFocus();
+  }
+
+  Widget _buildContent(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final catalog = widget.repository ?? _bundledCatalog;
     final searching = _searchController.text.trim().isNotEmpty;
@@ -69,7 +82,16 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      Semantics(
+                          key: const ValueKey('help-page-heading'),
+                          header: true,
+                          headingLevel: 1,
+                          child: Text(t.helpCenterTitle,
+                              style:
+                                  Theme.of(context).textTheme.displayMedium)),
+                      const SizedBox(height: 16),
                       TextField(
+                        focusNode: _searchFocus,
                         style: Theme.of(context).textTheme.bodyLarge,
                         controller: _searchController,
                         textInputAction: TextInputAction.search,
@@ -83,37 +105,28 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                               : IconButton(
                                   tooltip: t.helpClearSearch,
                                   icon: const Icon(Icons.clear),
-                                  onPressed: () =>
-                                      setState(_searchController.clear),
+                                  onPressed: _clearSearch,
                                 ),
                         ),
                       ),
                       const SizedBox(height: 24),
                       if (!searching) ...[
                         Card(
-                            child: MergeSemantics(
-                                child: Semantics(
-                                    button: true,
-                                    child: ListTile(
-                                      key: const ValueKey('help-open-glossary'),
-                                      contentPadding: const EdgeInsets.all(16),
-                                      title: Text(t.helpGlossary,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge),
-                                      subtitle: Text(t.helpGlossaryDescription,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyLarge),
-                                      trailing: const Icon(Icons.chevron_right),
-                                      onTap: () =>
-                                          context.push(HelpRoutes.glossary),
-                                    )))),
+                            child: HelpLinkTile(
+                          key: const ValueKey('help-open-glossary'),
+                          contentPadding: const EdgeInsets.all(16),
+                          title: t.helpGlossary,
+                          titleStyle: Theme.of(context).textTheme.titleLarge,
+                          summary: t.helpGlossaryDescription,
+                          hint: t.helpOpenGlossaryHint,
+                          onTap: () => context.push(HelpRoutes.glossary),
+                        )),
                         const SizedBox(height: 24),
                       ],
                       Semantics(
                           key: const ValueKey('help-search-status'),
                           header: true,
+                          headingLevel: 2,
                           liveRegion: searching,
                           label: searching
                               ? t.helpCombinedResultsCount(
@@ -147,6 +160,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                       if (searching && articles.isNotEmpty)
                         Semantics(
                             header: true,
+                            headingLevel: 3,
                             child: Text(t.helpArticles,
                                 style: Theme.of(context).textTheme.titleLarge)),
                       for (final article in articles)
@@ -160,6 +174,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                         const SizedBox(height: 24),
                         Semantics(
                             header: true,
+                            headingLevel: 3,
                             child: Text(t.helpWordsAndMeanings,
                                 style: Theme.of(context).textTheme.titleLarge)),
                         for (final term in terms)
@@ -174,6 +189,7 @@ class _HelpCenterPageState extends State<HelpCenterPage> {
                         Semantics(
                             key: _topicsHeadingKey,
                             header: true,
+                            headingLevel: 2,
                             child: Text(t.helpBrowseTopics,
                                 style:
                                     Theme.of(context).textTheme.displaySmall)),

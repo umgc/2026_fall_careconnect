@@ -158,6 +158,10 @@
   "helpTopicNotFoundDescription": "This help topic is unavailable. Return to the Help Center to browse other topics.",
   "helpTroubleshooting": "Troubleshooting",
   "helpRelatedArticles": "Related articles",
+  "helpOpenArticleHint": "Opens a Help article",
+  "helpOpenTopicHint": "Opens articles in this topic",
+  "helpOpenWordHint": "Opens this word in the glossary",
+  "helpOpenGlossaryHint": "Opens the glossary of app words and meanings",
   "helpArticlesAboutWord": "Articles about {term}",
   "@helpArticlesAboutWord": {
     "description": "Heading for articles related to a glossary word.",

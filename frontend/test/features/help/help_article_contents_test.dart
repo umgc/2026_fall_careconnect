@@ -209,7 +209,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(
         tester
-            .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
+            .widget<SingleChildScrollView>(
+                find.byKey(const ValueKey('help-page-scroll')))
             .controller!
             .offset,
         0);

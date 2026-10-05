@@ -7,6 +7,7 @@ import '../../help_routes.dart';
 import '../../models/help_role.dart';
 import '../widgets/help_article_tile.dart';
 import '../widgets/help_app_bar.dart';
+import '../widgets/help_accessibility.dart';
 
 /// A Browse Topics destination, resolved by permanent category ID.
 class HelpTopicPage extends StatelessWidget {
@@ -16,7 +17,14 @@ class HelpTopicPage extends StatelessWidget {
   final HelpRepository? repository;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => HelpAccessibility(
+      pageTitle: (repository ?? HelpRepository.bundled())
+              .findCategory(categoryId)
+              ?.title ??
+          AppLocalizations.of(context)!.helpTopicNotFound,
+      builder: _buildContent);
+
+  Widget _buildContent(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final catalog = repository ?? HelpRepository.bundled();
     final category = catalog.findCategory(categoryId);
@@ -35,6 +43,13 @@ class HelpTopicPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Semantics(
+                      key: const ValueKey('help-page-heading'),
+                      header: true,
+                      headingLevel: 1,
+                      child: Text(category?.title ?? t.helpTopicNotFound,
+                          style: Theme.of(context).textTheme.displayMedium)),
+                  const SizedBox(height: 16),
                   if (category == null) ...[
                     Text(t.helpTopicNotFoundDescription,
                         style: Theme.of(context).textTheme.bodyLarge),

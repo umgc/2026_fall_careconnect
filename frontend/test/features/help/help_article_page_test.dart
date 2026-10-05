@@ -68,7 +68,7 @@ void main() {
     expect(find.text('Try this fix'), findsOneWidget);
     expect(find.text('Related articles'), findsNWidgets(2));
     final textTheme =
-        Theme.of(tester.element(find.byType(HelpArticlePage))).textTheme;
+        Theme.of(tester.element(find.text('A helpful paragraph.'))).textTheme;
     final title = tester
         .widgetList<Text>(find.text('First guide'))
         .firstWhere((text) => text.style == textTheme.displayMedium);
@@ -111,7 +111,7 @@ void main() {
   testWidgets('an unknown ID provides a working return to Help Center',
       (tester) async {
     await _pumpHelp(tester, location: HelpRoutes.article('missing-article'));
-    expect(find.text('Article not found'), findsOneWidget);
+    expect(find.text('Article not found'), findsNWidgets(2));
     await tester.tap(find.text('Back to Help Center'));
     await tester.pumpAndSettle();
     expect(find.byType(HelpCenterPage), findsOneWidget);
@@ -132,7 +132,7 @@ void main() {
                 List.filled(60, 'A long paragraph with helpful instructions.')
                     .join(' ')),
         textScaler: const TextScaler.linear(2));
-    final scrollView = find.byType(SingleChildScrollView);
+    final scrollView = find.byKey(const ValueKey('help-page-scroll'));
     final controller =
         tester.widget<SingleChildScrollView>(scrollView).controller!;
     expect(find.text('Back to top'), findsNothing);
@@ -158,7 +158,7 @@ void main() {
   testWidgets('short articles do not show Back to top', (tester) async {
     await _pumpHelp(tester, location: HelpRoutes.article(secondHelpTestId));
     await tester.drag(
-        find.byType(SingleChildScrollView), const Offset(0, -500));
+        find.byKey(const ValueKey('help-page-scroll')), const Offset(0, -500));
     await tester.pumpAndSettle();
     expect(find.text('Back to top'), findsNothing);
     expect(tester.takeException(), isNull);

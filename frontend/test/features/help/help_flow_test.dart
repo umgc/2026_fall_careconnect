@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:care_connect_app/config/router/app_router.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
+import 'package:care_connect_app/config/theme/app_text_scaling.dart';
 import 'package:care_connect_app/features/help/data/help_content_ids.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
@@ -116,7 +117,7 @@ Future<GoRouter> _pumpProductionRoutes(
           builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(
                   textScaler: textScaler, disableAnimations: disableAnimations),
-              child: child!),
+              child: AppTextScaling(router: router, child: child!)),
         )),
   ));
   await tester.pumpAndSettle();
@@ -281,7 +282,7 @@ void main() {
             find.text(location.contains('/articles/')
                 ? 'Article not found'
                 : 'Topic not found'),
-            findsOneWidget);
+            findsNWidgets(2));
         await tester.tap(find.text('Back to Help Center'));
         await tester.pumpAndSettle();
         expect(find.byType(HelpCenterPage), findsOneWidget);
@@ -588,7 +589,7 @@ void main() {
         expect(
             tester
                 .widget<SingleChildScrollView>(
-                    find.byType(SingleChildScrollView))
+                    find.byKey(const ValueKey('help-page-scroll')))
                 .controller!
                 .offset,
             0);
@@ -650,6 +651,39 @@ void main() {
       });
     });
   }
+
+  testWidgets(
+      'all Help surfaces provide readable visual accessibility captures',
+      (tester) async {
+    if (_captureDirectory.isEmpty) return;
+    await _withoutNetwork((_) async {
+      for (final brightness in Brightness.values) {
+        for (final layout in {
+          'phone': (const Size(390, 844), TextScaler.noScaling),
+          'large': (const Size(320, 568), const TextScaler.linear(2)),
+          'landscape': (const Size(844, 390), const TextScaler.linear(2)),
+        }.entries) {
+          final router = await _pumpProductionRoutes(tester,
+              location: HelpRoutes.home,
+              brightness: brightness,
+              size: layout.value.$1,
+              textScaler: layout.value.$2);
+          for (final route in {
+            'home': HelpRoutes.home,
+            'topic': HelpRoutes.topic(HelpCategoryIds.gettingStarted),
+            'article': HelpRoutes.article(HelpArticleIds.recordingDose),
+            'glossary': HelpRoutes.glossaryTerm('evv'),
+          }.entries) {
+            router.go(route.value);
+            await tester.pumpAndSettle();
+            await _capture(
+                tester, 'audit-${brightness.name}-${layout.key}-${route.key}');
+            expect(tester.takeException(), isNull);
+          }
+        }
+      }
+    });
+  });
 
   testWidgets(
       'all bundled IDs and related links render disconnected at double text on a narrow screen',
