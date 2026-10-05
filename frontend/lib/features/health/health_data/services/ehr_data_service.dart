@@ -1,17 +1,18 @@
 import '../../../../services/auth_token_manager.dart';
 import '../../../../services/api_client.dart';
 import '../models/health_record.dart';
+import '../models/patient_demographics.dart';
 
 class EhrDataService {
   Future<List<HealthRecord>> fetchRecords() async {
-  try {
-    final headers = await AuthTokenManager.getAuthHeaders();
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
 
-    final resources = await ApiClient.instance.getJson<List<dynamic>>(
-      '/api/ehr/resources',
-      headers: headers,
-      parser: (json) => json is List ? json : <dynamic>[],
-    );
+      final resources = await ApiClient.instance.getJson<List<dynamic>>(
+        '/api/ehr/resources',
+        headers: headers,
+        parser: (json) => json is List ? json : <dynamic>[],
+      );
 
       return resources
           .whereType<Map<String, dynamic>>()
@@ -19,6 +20,22 @@ class EhrDataService {
           .toList();
     } catch (_) {
       return <HealthRecord>[];
+    }
+  }
+
+  Future<PatientDemographics?> fetchPatientDemographics() async {
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
+
+      return await ApiClient.instance.getJson<PatientDemographics>(
+        '/api/ehr/patient',
+        headers: headers,
+        parser: (json) => PatientDemographics.fromJson(
+          json as Map<String, dynamic>,
+        ),
+      );
+    } catch (_) {
+      return null;
     }
   }
 
