@@ -11,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.TestPropertySource;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code patient} row: {@code SchemaPatchRunner} applies
  * {@code fk_ehr_raw_payload_patient}, so an arbitrary patient id will not insert.
  * <p>
- * Test ID TC-EHR-RAW-002 is permanent. Never renumber, never reuse.
+ * Test IDs TC-EHR-RAW-002 and TC-EHR-RAW-007 are permanent. Never renumber, never reuse.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -105,5 +106,55 @@ class EhrRawPayloadPostgresJsonbTest {
 
         // Only reachable if the column really holds an object: ->> on a JSON string returns null.
         assertThat(String.valueOf(resourceType)).isEqualTo("Patient");
+    }
+
+    @Test
+    @DisplayName("TC-EHR-RAW-007: the retention queries find the patient and delete only their payloads before the cutoff")
+    void retentionDeleteRemovesOnlyRowsBeforeCutoff() {
+        final Long patientId = ((Number) entityManager
+                .createNativeQuery("select id from patient order by id limit 1")
+                .getSingleResult()).longValue();
+        final Long sourceId = ((Number) entityManager
+                .createNativeQuery("select id from ehr_source where code = 'ATHENAHEALTH'")
+                .getSingleResult()).longValue();
+
+        // A cutoff older than anything a real sync could have stored, so the statement cannot
+        // touch rows this test did not create even if the target database is not empty.
+        final OffsetDateTime cutoff = OffsetDateTime.parse("2001-01-01T00:00:00Z");
+        final Long expired = repository.save(payloadRetrievedAt(patientId, sourceId, cutoff.minusDays(1))).getId();
+        final Long kept = repository.save(payloadRetrievedAt(patientId, sourceId, cutoff.plusDays(1))).getId();
+        entityManager.flush();
+
+        // Step one of the purge: the patient is reported once, with patient.dob exactly as stored.
+        final Object storedDob = entityManager
+                .createNativeQuery("select dob from patient where id = :id")
+                .setParameter("id", patientId)
+                .getSingleResult();
+        assertThat(repository.findPatientsWithPayloadRetrievedBefore(cutoff))
+                .singleElement()
+                .satisfies(found -> {
+                    assertThat(found.getPatientId()).isEqualTo(patientId);
+                    assertThat(found.getDob()).isEqualTo(storedDob);
+                });
+
+        // Step two: a patient not in the list is left alone, then the listed one is purged.
+        assertThat(repository.deleteRetrievedBeforeForPatients(cutoff, List.of(-1L))).isZero();
+        final int deleted = repository.deleteRetrievedBeforeForPatients(cutoff, List.of(patientId));
+        entityManager.clear();
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(repository.existsById(expired)).isFalse();
+        assertThat(repository.existsById(kept)).isTrue();
+    }
+
+    private static EhrRawPayload payloadRetrievedAt(
+            final Long patientId, final Long sourceId, final OffsetDateTime retrievedAt) {
+        return EhrRawPayload.builder()
+                .patientId(patientId)
+                .sourceId(sourceId)
+                .resourceType("Patient")
+                .payload(PAYLOAD)
+                .retrievedAt(retrievedAt)
+                .build();
     }
 }

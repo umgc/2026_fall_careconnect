@@ -39,14 +39,14 @@ import java.time.Instant;
  * {@code date_of_birth} row contains two dates of birth, and other rows contain names, addresses
  * and phone numbers. Treat it as patient data, not as metadata about patient data.
  * <p>
- * Its retention question is harder than {@code ehr_raw_payload}'s, because the two requirements
- * pull against each other: the table exists <em>to be kept</em>, since the whole reason for
- * recording rejections is that a bad crosswalk stays reconstructable months later, which argues for
- * a <em>minimum</em> retention — while the PHI it holds argues for a <em>maximum</em>. A TTL alone
- * cannot satisfy both, and redacting the values while keeping the decision record is a compliance
- * decision rather than an engineering one. Tracked in the {@code hipaa}/{@code retention} issue
- * raised against PR #209; do not add a purge job here before that lands, or the audit trail this
- * table exists for will be deleted on a schedule nobody agreed to.
+ * <strong>Retention.</strong> Two requirements pull against each other here: the table exists
+ * <em>to be kept</em>, since the whole reason for recording rejections is that a bad crosswalk
+ * stays reconstructable later, which argues for a <em>minimum</em> retention — while the PHI it
+ * holds argues for a <em>maximum</em>. Decided 2026-10-02 (issue #214): the same rule as the other
+ * PHI-bearing {@code ehr_*} tables. A resolved row is kept for 7 years after {@code resolved_at}
+ * and until the patient is 25, then deleted whole by {@code EhrRetentionWorker}. A
+ * {@code PENDING} row is never purged. Redacting the values while keeping the decision record was
+ * the alternative; it was not chosen, so nothing of a row outlives the period.
  * <p>
  * Both CHECK constraints and the partial unique index are applied by {@code SchemaPatchRunner};
  * Hibernate will not create them.

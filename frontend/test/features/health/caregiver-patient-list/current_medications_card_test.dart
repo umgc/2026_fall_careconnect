@@ -14,7 +14,7 @@ Medication _med({
   String frequency = 'Once daily',
   String route = 'Oral',
   bool isActive = true,
-  MedicationType? type = MedicationType.OTC,
+  MedicationType? type = MedicationType.OVER_THE_COUNTER,
   String? prescribedBy,
   String? notes,
 }) =>
