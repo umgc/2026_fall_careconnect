@@ -60,7 +60,7 @@ Future<void> _pumpHelp(WidgetTester tester,
 }
 
 void main() {
-  testWidgets('empty results can browse visible topics with keyboard focus',
+  testWidgets('TC-HELP-017: empty results can browse visible topics with keyboard focus',
       (tester) async {
     await _pumpHelp(tester);
     await tester.enterText(find.byType(TextField), 'zzzz-no-match');
@@ -81,7 +81,7 @@ void main() {
         HelpCategoryIds.gettingStarted);
   });
 
-  testWidgets('Tab and Shift-Tab traverse search controls; Enter opens a guide',
+  testWidgets('TC-HELP-018: Tab and Shift-Tab traverse search controls; Enter opens a guide',
       (tester) async {
     final previousStrategy = FocusManager.instance.highlightStrategy;
     FocusManager.instance.highlightStrategy =
@@ -116,7 +116,7 @@ void main() {
   });
 
   testWidgets(
-      'screen readers receive article labels, topic buttons and result announcements',
+      'TC-HELP-019: screen readers receive article labels, topic buttons and result announcements',
       (tester) async {
     final semantics = tester.ensureSemantics();
     try {
@@ -169,7 +169,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        'Help uses shared typography and readable colors in $brightness',
+        'TC-HELP-020: Help uses shared typography and readable colors in $brightness',
         (tester) async {
       await _pumpHelp(tester, brightness: brightness);
       final theme = Theme.of(tester.element(find.text('Popular Help')));
@@ -203,7 +203,7 @@ void main() {
     });
 
     testWidgets(
-        'empty results, topic browsing and articles support $brightness and large text',
+        'TC-HELP-021: empty results, topic browsing and articles support $brightness and large text',
         (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1;
@@ -234,7 +234,7 @@ void main() {
     });
   }
 
-  testWidgets('untranslated Help labels and content fall back to English',
+  testWidgets('TC-HELP-022: untranslated Help labels and content fall back to English',
       (tester) async {
     await _pumpHelp(tester, locale: const Locale('es'));
     expect(find.text('Help Center'), findsNWidgets(2));
@@ -246,7 +246,7 @@ void main() {
     expect(t.helpSearchResultsCount(2), '2 Help articles found');
   });
 
-  testWidgets('home shows requested headings and six guides in explicit order',
+  testWidgets('TC-HELP-023: home shows requested headings and six guides in explicit order',
       (tester) async {
     await _pumpHelp(tester);
     expect(find.text('Help Center'), findsNWidgets(2));
@@ -270,7 +270,7 @@ void main() {
   });
 
   testWidgets(
-      'local search opens a result and keeps query after back; clear restores home',
+      'TC-HELP-024: local search opens a result and keeps query after back; clear restores home',
       (tester) async {
     await _pumpHelp(tester);
     await tester.enterText(find.byType(TextField), '  DOSE  ');
@@ -297,36 +297,7 @@ void main() {
   });
 
   testWidgets(
-      'Browse Topics opens a category then an article and returns through both screens',
-      (tester) async {
-    await _pumpHelp(tester);
-    await tester.ensureVisible(find.text('Medications'));
-    await tester.tap(find.text('Medications'));
-    await tester.pumpAndSettle();
-    expect(find.byType(HelpTopicPage), findsOneWidget);
-    expect(find.byType(HelpArticleTile), findsOneWidget);
-    await tester.tap(find.text('Viewing medications and recording a dose'));
-    await tester.pumpAndSettle();
-    expect(find.byType(HelpArticlePage), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.byType(HelpTopicPage), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.byType(HelpCenterPage), findsOneWidget);
-  });
-
-  testWidgets('unknown topic offers a working return to Help Center',
-      (tester) async {
-    await _pumpHelp(tester, location: HelpRoutes.topic('missing'));
-    expect(find.text('Topic not found'), findsNWidgets(2));
-    await tester.tap(find.text('Back to Help Center'));
-    await tester.pumpAndSettle();
-    expect(find.byType(HelpCenterPage), findsOneWidget);
-  });
-
-  testWidgets(
-      'home and topics remain scrollable at narrow width and large text',
+      'TC-HELP-025: home and topics remain scrollable at narrow width and large text',
       (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;

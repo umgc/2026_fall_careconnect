@@ -40,7 +40,7 @@ HelpArticle _article(
         sections: sections ?? const [HelpParagraph(text: 'Read this.')]);
 
 void main() {
-  test('all 75 approved labels and every alias are discoverable offline', () {
+  test('TC-HELP-037: all 75 approved labels and every alias are discoverable offline', () {
     final catalog = HelpRepository.bundled();
     expect(catalog.glossaryTerms, hasLength(75));
     for (final term in catalog.glossaryTerms) {
@@ -71,7 +71,7 @@ void main() {
         ['not', 'online', 'without', 'internet']);
   });
 
-  test('exact label outranks overlapping aliases and definition matches', () {
+  test('TC-HELP-038: exact label outranks overlapping aliases and definition matches', () {
     final exact = _term(term: 'Dose');
     final alias = _term(id: 'alias', term: 'Alias', aliases: ['dose']);
     final description = _term(
@@ -82,7 +82,7 @@ void main() {
     expect(catalog.searchGlossary('what is'), isEmpty);
   });
 
-  test('aliases normalize punctuation, apostrophes, case and duplicates', () {
+  test('TC-HELP-039: aliases normalize punctuation, apostrophes, case and duplicates', () {
     final aliases = [
       'text to speech',
       'TTS',
@@ -98,7 +98,7 @@ void main() {
     expect(() => term.aliases.clear(), throwsUnsupportedError);
   });
 
-  test('bad IDs, duplicate IDs, empty labels/meanings and missing links fail',
+  test('TC-HELP-040: bad IDs, duplicate IDs, empty labels/meanings and missing links fail',
       () {
     for (final terms in [
       [_term(id: 'Bad ID')],
@@ -141,7 +141,7 @@ void main() {
   });
 
   test(
-      'one definition generates article sections and audience-filtered backlinks',
+      'TC-HELP-041: one definition generates article sections and audience-filtered backlinks',
       () {
     final term = _term(aliases: ['plain words'], links: ['guide']);
     final patient = _article(terms: ['word']);

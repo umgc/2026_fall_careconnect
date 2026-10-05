@@ -178,7 +178,7 @@ void main() {
       ),
     }.entries) {
       testWidgets(
-          'all Help pages: contrast, targets, headings and reflow in $brightness ${layout.key}',
+          'TC-HELP-001: all Help pages: contrast, targets, headings and reflow in $brightness ${layout.key}',
           (tester) async {
         final semantics = tester.ensureSemantics();
         try {
@@ -228,7 +228,7 @@ void main() {
     }
   }
 
-  testWidgets('increased letter, word and line spacing reflows at 320px',
+  testWidgets('TC-HELP-002: increased letter, word and line spacing reflows at 320px',
       (tester) async {
     final router =
         await _pump(tester, size: const Size(320, 568), increasedSpacing: true);
@@ -257,7 +257,7 @@ void main() {
   });
 
   testWidgets(
-      'glossary links focus a named selected heading; Back to top restores title focus',
+      'TC-HELP-003: glossary links focus a named selected heading; Back to top restores title focus',
       (tester) async {
     final semantics = tester.ensureSemantics();
     try {
@@ -288,7 +288,7 @@ void main() {
   });
 
   testWidgets(
-      'Help preserves nonlinear scaling on entry and restores the existing policy on exit',
+      'TC-HELP-004: Help preserves nonlinear scaling on entry and restores the existing policy on exit',
       (tester) async {
     final router = await _pump(tester, scaler: const _NonlinearScaler());
     final heading = find.byKey(const ValueKey('help-page-heading'));
@@ -307,7 +307,7 @@ void main() {
   });
 
   testWidgets(
-      'English fallback language, unique button labels, live results and strong keyboard focus',
+      'TC-HELP-005: English fallback language, unique button labels, live results and strong keyboard focus',
       (tester) async {
     final semantics = tester.ensureSemantics();
     try {

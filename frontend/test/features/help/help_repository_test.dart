@@ -33,7 +33,7 @@ HelpArticle _article({
 
 void main() {
   test(
-      'authored section headings must be nonempty; repeated headings are valid',
+      'TC-HELP-048: authored section headings must be nonempty; repeated headings are valid',
       () {
     expect(
         () => HelpRepository(categories: const [
@@ -54,7 +54,7 @@ void main() {
     expect(catalog.articles.single.sections, hasLength(2));
   });
 
-  test('bundled content is readable through local IDs', () {
+  test('TC-HELP-049: bundled content is readable through local IDs', () {
     final catalog = HelpRepository.bundled();
 
     expect(catalog.findCategory(HelpCategoryIds.gettingStarted), isNotNull);
@@ -67,7 +67,7 @@ void main() {
     expect(catalog.findCategory('unknown'), isNull);
   });
 
-  test('changing display titles preserves article and category lookups', () {
+  test('TC-HELP-050: changing display titles preserves article and category lookups', () {
     // Arrange a revised title while preserving the published identifiers.
     final article = _article(title: 'Where to Find Help');
     final catalog = HelpRepository(
@@ -88,7 +88,7 @@ void main() {
     );
   });
 
-  test('duplicate article and category IDs cannot shadow existing links', () {
+  test('TC-HELP-051: duplicate article and category IDs cannot shadow existing links', () {
     expect(
       () => HelpRepository(
         categories: const [_category],
@@ -103,7 +103,7 @@ void main() {
     );
   });
 
-  test('articles must reference an existing category', () {
+  test('TC-HELP-052: articles must reference an existing category', () {
     expect(
       () => HelpRepository(
         categories: const [_category],
@@ -113,7 +113,7 @@ void main() {
     );
   });
 
-  test('IDs are valid URL slugs', () {
+  test('TC-HELP-053: IDs are valid URL slugs', () {
     expect(
       () => HelpRepository(
         categories: const [
@@ -125,7 +125,7 @@ void main() {
     );
   });
 
-  test('callers cannot mutate the catalog after construction', () {
+  test('TC-HELP-054: callers cannot mutate the catalog after construction', () {
     final input = [_article()];
     final catalog =
         HelpRepository(categories: const [_category], articles: input);
@@ -140,7 +140,7 @@ void main() {
     );
   });
 
-  test('related links can point forward but must resolve to an existing ID',
+  test('TC-HELP-055: related links can point forward but must resolve to an existing ID',
       () {
     final first = _article(sections: [
       HelpRelatedArticles(articleIds: [HelpArticleIds.readingHelp]),
@@ -158,7 +158,7 @@ void main() {
     );
   });
 
-  test('articles declare an audience and at least one content section', () {
+  test('TC-HELP-056: articles declare an audience and at least one content section', () {
     expect(
       () => HelpRepository(
         categories: const [_category],
@@ -175,7 +175,7 @@ void main() {
     );
   });
 
-  test('article and section collections cannot be changed by callers', () {
+  test('TC-HELP-057: article and section collections cannot be changed by callers', () {
     // Arrange mutable inputs to ensure models take defensive copies.
     final roles = [HelpRole.patient];
     final steps = ['First action'];

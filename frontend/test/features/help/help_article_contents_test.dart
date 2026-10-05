@@ -109,7 +109,7 @@ Future<void> _tapEntry(WidgetTester tester, int index) async {
 
 void main() {
   testWidgets(
-      'contents follow section order and collapse without hiding article text',
+      'TC-HELP-006: contents follow section order and collapse without hiding article text',
       (tester) async {
     final semantics = tester.ensureSemantics();
     try {
@@ -164,7 +164,7 @@ void main() {
   });
 
   testWidgets(
-      'every contents entry targets its own heading, including repeated names',
+      'TC-HELP-007: every contents entry targets its own heading, including repeated names',
       (tester) async {
     final semantics = tester.ensureSemantics();
     try {
@@ -190,7 +190,7 @@ void main() {
   });
 
   testWidgets(
-      'Tab and Enter jump to a heading; Back to top still returns to the beginning',
+      'TC-HELP-008: Tab and Enter jump to a heading; Back to top still returns to the beginning',
       (tester) async {
     await _pump(tester);
     // Back, header shortcuts, contents toggle, then the first section entry.
@@ -217,7 +217,7 @@ void main() {
     expect(find.text('Back to top'), findsNothing);
   });
 
-  testWidgets('section jump respects disabled animations', (tester) async {
+  testWidgets('TC-HELP-009: section jump respects disabled animations', (tester) async {
     await _pump(tester, disableAnimations: true);
     await tester.ensureVisible(_entry(2));
     await tester.pumpAndSettle();
@@ -227,7 +227,7 @@ void main() {
     expect(_heading(2).hitTestable(), findsOneWidget);
   });
 
-  testWidgets('contents are omitted with fewer than two named sections',
+  testWidgets('TC-HELP-010: contents are omitted with fewer than two named sections',
       (tester) async {
     await _pump(tester, articleId: 'short-guide');
     expect(find.byKey(_contentsKey), findsNothing);
@@ -236,7 +236,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        'contents and jumps support $brightness with doubled text at narrow width',
+        'TC-HELP-011: contents and jumps support $brightness with doubled text at narrow width',
         (tester) async {
       tester.view.physicalSize = const Size(320, 568);
       tester.view.devicePixelRatio = 1;

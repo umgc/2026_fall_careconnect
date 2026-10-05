@@ -10,11 +10,13 @@ import 'package:care_connect_app/config/theme/app_text_scaling.dart';
 import 'package:care_connect_app/features/help/data/help_content_ids.dart';
 import 'package:care_connect_app/features/help/data/help_repository.dart';
 import 'package:care_connect_app/features/help/help_routes.dart';
+import 'package:care_connect_app/features/help/models/help_role.dart';
 import 'package:care_connect_app/features/help/models/help_section.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_glossary_page.dart';
+import 'package:care_connect_app/features/help/presentation/widgets/help_article_tile.dart';
 import 'package:care_connect_app/features/help/presentation/widgets/help_glossary_entry.dart';
 import 'package:care_connect_app/features/help/presentation/widgets/help_article_content.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
@@ -62,6 +64,7 @@ Future<GoRouter> _pumpProductionRoutes(
   Brightness brightness = Brightness.light,
   bool disableAnimations = false,
   bool stubLoginPage = false,
+  String role = 'PATIENT',
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -86,7 +89,7 @@ Future<GoRouter> _pumpProductionRoutes(
       }
     });
   }
-  final userProvider = MockUserProvider(mockUser: MockUser(role: 'PATIENT'));
+  final userProvider = MockUserProvider(mockUser: MockUser(role: role));
   final theme =
       brightness == Brightness.light ? AppTheme.lightTheme : AppTheme.darkTheme;
   late final GoRouter router;
@@ -189,7 +192,7 @@ void main() {
     'phone': const Size(390, 844)
   }.entries) {
     testWidgets(
-        'disconnected ${layout.key}: Settings first entry through Topic and Article back to Settings',
+        'TC-HELP-026: disconnected ${layout.key}: Settings first entry through Topic and Article back to Settings',
         (tester) async {
       await _withoutNetwork((attempts) async {
         final router = await _pumpProductionRoutes(tester, size: layout.value);
@@ -234,6 +237,7 @@ void main() {
                 .uri
                 .path,
             HelpRoutes.topic(HelpCategoryIds.medications));
+        expect(find.byType(HelpArticleTile), findsOneWidget);
         await _capture(tester, '${layout.key}-help-topic');
         await tester.tap(find.text('Viewing medications and recording a dose'));
         await tester.pumpAndSettle();
@@ -260,7 +264,7 @@ void main() {
     });
   }
 
-  testWidgets('Settings back arrow is safe after Back to Settings clears history',
+  testWidgets('TC-HELP-027: Settings back arrow is safe after Back to Settings clears history',
       (tester) async {
     await _withoutNetwork((_) async {
       final router = await _pumpProductionRoutes(tester, stubLoginPage: true);
@@ -283,7 +287,7 @@ void main() {
   });
 
   testWidgets(
-      'disconnected production routes: keywords, empty browsing and missing content recovery',
+      'TC-HELP-028: disconnected production routes: keywords, empty browsing and missing content recovery',
       (tester) async {
     await _withoutNetwork((attempts) async {
       final router =
@@ -319,6 +323,8 @@ void main() {
         await tester.tap(find.text('Back to Help Center'));
         await tester.pumpAndSettle();
         expect(find.byType(HelpCenterPage), findsOneWidget);
+        expect(find.byType(HelpArticlePage), findsNothing);
+        expect(find.byType(HelpTopicPage), findsNothing);
       }
       expect(attempts.length, beforeHelp);
       expect(tester.takeException(), isNull);
@@ -326,7 +332,7 @@ void main() {
   });
 
   testWidgets(
-      'Help shortcuts stay visible on every screen with large text and direct entry',
+      'TC-HELP-029: Help shortcuts stay visible on every screen with large text and direct entry',
       (tester) async {
     await _withoutNetwork((_) async {
       final router = await _pumpProductionRoutes(tester,
@@ -377,7 +383,7 @@ void main() {
     'Help Center Home': HelpRoutes.home,
     'Back to Settings': '/settings',
   }.entries) {
-    testWidgets('${shortcut.key} exits a chain of related articles in one tap',
+    testWidgets('TC-HELP-030: ${shortcut.key} exits a chain of related articles in one tap',
         (tester) async {
       await _withoutNetwork((_) async {
         final catalog = HelpRepository.bundled();
@@ -425,7 +431,7 @@ void main() {
   }
 
   testWidgets(
-      'glossary entry, search, missing links and Back keep navigation predictable offline',
+      'TC-HELP-031: glossary entry, search, missing links and Back keep navigation predictable offline',
       (tester) async {
     await _withoutNetwork((attempts) async {
       final router =
@@ -494,7 +500,7 @@ void main() {
     });
   });
 
-  testWidgets('word results announce both counts and open by keyboard',
+  testWidgets('TC-HELP-032: word results announce both counts and open by keyboard',
       (tester) async {
     final semantics = tester.ensureSemantics();
     try {
@@ -538,7 +544,7 @@ void main() {
   });
 
   testWidgets(
-      'article meanings join contents navigation and open a focused glossary definition',
+      'TC-HELP-033: article meanings join contents navigation and open a focused glossary definition',
       (tester) async {
     await _withoutNetwork((attempts) async {
       final semantics = tester.ensureSemantics();
@@ -599,7 +605,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        'glossary handles $brightness, double text, reduced motion and keyboard search at 320px',
+        'TC-HELP-034: glossary handles $brightness, double text, reduced motion and keyboard search at 320px',
         (tester) async {
       await _withoutNetwork((attempts) async {
         final router = await _pumpProductionRoutes(tester,
@@ -686,9 +692,8 @@ void main() {
   }
 
   testWidgets(
-      'all Help surfaces provide readable visual accessibility captures',
-      (tester) async {
-    if (_captureDirectory.isEmpty) return;
+      'TC-HELP-035: all Help surfaces provide readable visual accessibility captures',
+      skip: _captureDirectory.isEmpty, (tester) async {
     await _withoutNetwork((_) async {
       for (final brightness in Brightness.values) {
         for (final layout in {
@@ -719,7 +724,7 @@ void main() {
   });
 
   testWidgets(
-      'all bundled IDs and related links render disconnected at double text on a narrow screen',
+      'TC-HELP-036: all bundled IDs and related links render disconnected at double text on a narrow screen',
       (tester) async {
     await _withoutNetwork((attempts) async {
       final catalog = HelpRepository.bundled();
@@ -793,6 +798,126 @@ void main() {
         expect(tester.takeException(), isNull);
       }
       expect(attempts.length, beforeHelp);
+    });
+  });
+
+  // Back (a pop) must restore the scaling policy as reliably as a shortcut (a go).
+  double scaleAt(WidgetTester tester, Finder finder) =>
+      MediaQuery.textScalerOf(tester.element(finder)).scale(16);
+
+  Future<void> openHelpFromSettings(WidgetTester tester) async {
+    await tester.scrollUntilVisible(find.text('Help'), 300,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Help'));
+  }
+
+  testWidgets(
+      'TC-HELP-060: Back from Help Center to Settings restores the 120% text cap',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      final router = await _pumpProductionRoutes(tester,
+          textScaler: const TextScaler.linear(2));
+      expect(scaleAt(tester, find.byType(SettingsPage)), 19.2);
+      await openHelpFromSettings(tester);
+      await tester.pumpAndSettle();
+      expect(scaleAt(tester, find.byType(HelpCenterPage)), 32);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(router.canPop(), isFalse);
+      expect(scaleAt(tester, find.byType(SettingsPage)), 19.2,
+          reason: 'Settings keeps its 120% cap after Back from Help.');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets(
+      'TC-HELP-061: each Back through Article, Topic and Help Center applies the right scaling',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      await _pumpProductionRoutes(tester,
+          textScaler: const TextScaler.linear(2));
+      await openHelpFromSettings(tester);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Medications'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Medications'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Viewing medications and recording a dose'));
+      await tester.pumpAndSettle();
+      expect(scaleAt(tester, find.byType(HelpArticlePage)), 32);
+      for (final page in [HelpTopicPage, HelpCenterPage]) {
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(scaleAt(tester, find.byType(page)), 32,
+            reason: '$page is a Help route and keeps full scaling.');
+      }
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(scaleAt(tester, find.byType(SettingsPage)), 19.2);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets(
+      'TC-HELP-062: system Back from Help Center to Settings restores the 120% text cap',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      await _pumpProductionRoutes(tester,
+          textScaler: const TextScaler.linear(2));
+      await openHelpFromSettings(tester);
+      await tester.pumpAndSettle();
+      expect(scaleAt(tester, find.byType(HelpCenterPage)), 32);
+      // The Android back button and browser history reach the router this way.
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(scaleAt(tester, find.byType(SettingsPage)), 19.2);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets(
+      'TC-HELP-063: Help opened from Settings keeps full scaling when the keyboard opens',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      await _pumpProductionRoutes(tester,
+          textScaler: const TextScaler.linear(2));
+      await openHelpFromSettings(tester);
+      await tester.pumpAndSettle();
+      expect(scaleAt(tester, find.byType(HelpCenterPage)), 32);
+      // Any MediaQuery change rebuilds the scaling wrapper; the keyboard is one.
+      await tester.showKeyboard(find.byType(TextField));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      expect(scaleAt(tester, find.byType(HelpCenterPage)), 32,
+          reason: 'Help keeps full scaling while the search keyboard is open.');
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  testWidgets(
+      'TC-HELP-064: a caregiver opens the same Patient Help Center from Settings',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      await _pumpProductionRoutes(tester, role: 'CAREGIVER');
+      await openHelpFromSettings(tester);
+      await tester.pumpAndSettle();
+      expect(
+          GoRouterState.of(tester.element(find.byType(HelpCenterPage))).uri.path,
+          HelpRoutes.home);
+      // Characterization: content is Patient-only and is not role-scoped yet.
+      expect(
+          tester
+              .widgetList<HelpArticleTile>(find.byType(HelpArticleTile))
+              .map((tile) => tile.article.id),
+          HelpRepository.bundled()
+              .popularArticlesForRole(HelpRole.patient)
+              .map((article) => article.id));
+      expect(find.text('Messaging your caregiver'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

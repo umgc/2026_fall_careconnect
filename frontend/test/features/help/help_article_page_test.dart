@@ -54,7 +54,7 @@ Future<void> _pumpHelp(
 
 void main() {
   testWidgets(
-      'a direct article ID renders paragraphs, numbered steps, and tips',
+      'TC-HELP-012: a direct article ID renders paragraphs, numbered steps, and tips',
       (tester) async {
     await _pumpHelp(tester, location: HelpRoutes.article(firstHelpTestId));
 
@@ -81,7 +81,7 @@ void main() {
   });
 
   testWidgets(
-      'home opens an article; related links open another ID and back returns',
+      'TC-HELP-013: home opens an article; related links open another ID and back returns',
       (tester) async {
     // Arrange: start from the home screen with a catalog shared by both pages.
     await _pumpHelp(tester, location: HelpRoutes.home);
@@ -108,18 +108,8 @@ void main() {
     expect(find.byType(HelpCenterPage), findsOneWidget);
   });
 
-  testWidgets('an unknown ID provides a working return to Help Center',
-      (tester) async {
-    await _pumpHelp(tester, location: HelpRoutes.article('missing-article'));
-    expect(find.text('Article not found'), findsNWidgets(2));
-    await tester.tap(find.text('Back to Help Center'));
-    await tester.pumpAndSettle();
-    expect(find.byType(HelpCenterPage), findsOneWidget);
-    expect(find.byType(HelpArticlePage), findsNothing);
-  });
-
   testWidgets(
-      'Back to top appears after scrolling, hides near the top, and returns to the beginning',
+      'TC-HELP-014: Back to top appears after scrolling, hides near the top, and returns to the beginning',
       (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;
@@ -155,7 +145,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('short articles do not show Back to top', (tester) async {
+  testWidgets('TC-HELP-015: short articles do not show Back to top', (tester) async {
     await _pumpHelp(tester, location: HelpRoutes.article(secondHelpTestId));
     await tester.drag(
         find.byKey(const ValueKey('help-page-scroll')), const Offset(0, -500));
@@ -165,7 +155,7 @@ void main() {
   });
 
   testWidgets(
-      'long content remains scrollable with large text on a narrow screen',
+      'TC-HELP-016: long content remains scrollable with large text on a narrow screen',
       (tester) async {
     tester.view.physicalSize = const Size(320, 568);
     tester.view.devicePixelRatio = 1;

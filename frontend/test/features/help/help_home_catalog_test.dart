@@ -52,7 +52,7 @@ HelpRepository _catalog(
     );
 
 void main() {
-  test('keyword synonyms match locally and are defensively copied', () {
+  test('TC-HELP-042: keyword synonyms match locally and are defensively copied', () {
     final keywords = ['rx', 'prescription refill'];
     final article = HelpArticle(
       id: 'medicine-guide',
@@ -77,7 +77,7 @@ void main() {
     expect(() => article.keywords.clear(), throwsUnsupportedError);
   });
 
-  test('bundled synonyms find the intended Patient guide', () {
+  test('TC-HELP-043: bundled synonyms find the intended Patient guide', () {
     final catalog = HelpRepository.bundled();
     expect(
         catalog
@@ -94,7 +94,7 @@ void main() {
         contains(HelpArticleIds.resettingPassword));
   });
 
-  test('bundled Patient popular guides have the requested fixed order', () {
+  test('TC-HELP-044: bundled Patient popular guides have the requested fixed order', () {
     final articles =
         HelpRepository.bundled().popularArticlesForRole(HelpRole.patient);
     expect(articles.map((article) => article.title), [
@@ -112,7 +112,7 @@ void main() {
         isNotNull);
   });
 
-  test('selection uses ID order independent of titles and catalog order', () {
+  test('TC-HELP-045: selection uses ID order independent of titles and catalog order', () {
     final ids = ['second', 'first'];
     final catalog = _catalog(popularIds: ids);
     ids.clear();
@@ -121,12 +121,12 @@ void main() {
     expect(() => catalog.popularArticleIds.clear(), throwsUnsupportedError);
   });
 
-  test('missing and duplicate popular IDs fail during catalog validation', () {
+  test('TC-HELP-046: missing and duplicate popular IDs fail during catalog validation', () {
     expect(() => _catalog(popularIds: ['missing']), throwsArgumentError);
     expect(() => _catalog(popularIds: ['first', 'first']), throwsArgumentError);
   });
 
-  test('search matches all words in content and topics and filters by role',
+  test('TC-HELP-047: search matches all words in content and topics and filters by role',
       () {
     final catalog = _catalog(popularIds: ['staff', 'second', 'first']);
     expect(
