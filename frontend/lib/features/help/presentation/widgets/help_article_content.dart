@@ -231,7 +231,10 @@ class _HelpArticleContentState extends State<HelpArticleContent> {
                               header: true,
                               headingLevel: 3,
                               child: Text(tip.problem,
-                                  style: textTheme.titleMedium)),
+                                  style: textTheme.titleMedium?.copyWith(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1.4))),
                           const SizedBox(height: 8),
                           Text(tip.solution, style: textTheme.bodyLarge),
                         ],
