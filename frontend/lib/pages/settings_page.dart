@@ -536,9 +536,16 @@ class _SettingsPageState extends State<SettingsPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(t.settings), // use existing "Settings" key
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+        leading: BackButton(
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              // Help shortcuts and direct entry can leave Settings as the
+              // only page. The dashboard route handles the stored session.
+              context.go('/dashboard');
+            }
+          },
         ),
       ),
       body: SafeArea(

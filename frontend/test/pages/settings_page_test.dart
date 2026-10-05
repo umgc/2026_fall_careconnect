@@ -42,13 +42,18 @@ Widget _buildApp({required UserProvider provider}) {
 }
 
 /// Build app wrapped with GoRouter so context.go / context.push work.
-Widget _buildAppWithRouter({required UserProvider provider}) {
-  final router = GoRouter(
+Widget _buildAppWithRouter({required UserProvider provider, GoRouter? router}) {
+  router ??= GoRouter(
     initialLocation: '/settings',
     routes: [
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/dashboard',
+        builder: (context, state) =>
+            const Scaffold(body: Text('Dashboard Page')),
       ),
       GoRoute(
         path: '/login',
@@ -133,6 +138,47 @@ void main() {
   // =========================================================================
   // 1. Basic render with null user
   // =========================================================================
+  group('SettingsPage - back navigation', () {
+    testWidgets('root Settings returns to the dashboard safely', (tester) async {
+      await tester.pumpWidget(_buildAppWithRouter(provider: _NullUserProvider()));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Back'), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Dashboard Page'), findsOneWidget);
+      expect(find.byType(SettingsPage), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pushed Settings returns to the previous page', (tester) async {
+      final router = GoRouter(initialLocation: '/previous', routes: [
+        GoRoute(
+          path: '/previous',
+          builder: (context, state) => const Scaffold(body: Text('Previous Page')),
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsPage(),
+        ),
+      ]);
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        router.dispose();
+      });
+      await tester.pumpWidget(
+          _buildAppWithRouter(provider: _NullUserProvider(), router: router));
+      await tester.pumpAndSettle();
+      router.push('/settings');
+      await tester.pumpAndSettle();
+      expect(router.canPop(), isTrue);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Previous Page'), findsOneWidget);
+      expect(router.canPop(), isFalse);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('SettingsPage - null user render', () {
     testWidgets('renders SettingsPage without crashing', (tester) async {
       await tester.pumpWidget(_buildApp(provider: _NullUserProvider()));

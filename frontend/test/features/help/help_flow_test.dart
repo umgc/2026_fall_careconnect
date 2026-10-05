@@ -61,6 +61,7 @@ Future<GoRouter> _pumpProductionRoutes(
   TextScaler textScaler = TextScaler.noScaling,
   Brightness brightness = Brightness.light,
   bool disableAnimations = false,
+  bool stubLoginPage = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -91,7 +92,17 @@ Future<GoRouter> _pumpProductionRoutes(
   late final GoRouter router;
   router = GoRouter(
     initialLocation: location,
-    routes: appRouter.configuration.routes,
+    routes: appRouter.configuration.routes.map((route) {
+      if (stubLoginPage && route is GoRoute && route.path == '/login') {
+        // Keep the production dashboard/session redirect while isolating its
+        // unrelated destination layout from the navigation regression.
+        return GoRoute(
+          path: '/login',
+          builder: (context, state) => const Scaffold(body: Text('Login Page')),
+        );
+      }
+      return route;
+    }).toList(),
     observers: [TelemetryGoRouterObserver(routerProvider: () => router)],
   );
   addTearDown(() async {
@@ -248,6 +259,28 @@ void main() {
       });
     });
   }
+
+  testWidgets('Settings back arrow is safe after Back to Settings clears history',
+      (tester) async {
+    await _withoutNetwork((_) async {
+      final router = await _pumpProductionRoutes(tester, stubLoginPage: true);
+      await tester.ensureVisible(find.text('Help'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Help'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Back to Settings'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(router.canPop(), isFalse);
+
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      // The production dashboard route sends an absent stored session to login.
+      expect(router.routeInformationProvider.value.uri.path, '/login');
+      expect(find.byType(SettingsPage), findsNothing);
+    });
+  });
 
   testWidgets(
       'disconnected production routes: keywords, empty browsing and missing content recovery',
