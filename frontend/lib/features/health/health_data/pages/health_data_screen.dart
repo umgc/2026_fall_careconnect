@@ -20,7 +20,6 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   static const _text = Color(0xFF0F172A);
   static const _muted = Color(0xFF4B5563);
   static const _green = Color(0xFF047857);
-  static const _border = Color(0xFFE5E7EB);
   static const _warning = Color(0xFFF59E0B);
   // Hidden until these sections are backed by real patient data.
   static const bool _showConfirmationSection = false;
@@ -725,18 +724,6 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
-  Color _sourceColor(RecordSource s) {
-    switch (s) {
-      case RecordSource.epic:
-        return const Color(0xFF1D4ED8);
-      case RecordSource.cerner:
-        return const Color(0xFF047857);
-      case RecordSource.athena:
-        return const Color(0xFF92400E);
-      case RecordSource.medicare:
-        return _teal;
-    }
-  }
   String _formatDate(DateTime date) {
     const months = [
       'January',
@@ -975,9 +962,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       ),
       child: Text(status,
           style: const TextStyle(
-              fontSize: 11,
-              color: _green,
-              fontWeight: FontWeight.w600)),
+              fontSize: 11, color: _green, fontWeight: FontWeight.w600)),
     );
   }
 }
