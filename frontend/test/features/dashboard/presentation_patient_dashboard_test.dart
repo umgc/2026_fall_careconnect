@@ -250,11 +250,10 @@ void main() {
       expect(find.byType(SafeArea), findsWidgets);
     });
 
-    testWidgets('shows SingleChildScrollView', (tester) async {
-      await tester.pumpWidget(_wrapNull());
-      await tester.pump();
-      expect(find.byType(SingleChildScrollView), findsWidgets);
-    });
+    // NOTE: "shows SingleChildScrollView" was removed. With a null user the
+    // dashboard defaults userId to 1 and fires an HTTP load, so after one pump()
+    // the body is still the loading/error branch; the loaded-only
+    // SingleChildScrollView is covered by the "logged in with mocked HTTP" group.
 
     testWidgets('shows FloatingActionButton', (tester) async {
       await tester.pumpWidget(_wrapNull());
