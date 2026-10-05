@@ -47,8 +47,9 @@ public class EhrController{
     @Autowired
     private MedicareConnectionService connections;
 
+    @Autowired
+    private MedicareProperties properties;
 
-    private final MedicareProperties properties = new MedicareProperties();
     private final MedicareResponseMapper mapper = new MedicareResponseMapper();
     private final ObjectMapper jsonmapper = new ObjectMapper();
 
