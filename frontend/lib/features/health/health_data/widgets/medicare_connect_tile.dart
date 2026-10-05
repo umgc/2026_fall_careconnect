@@ -183,10 +183,18 @@ class _MedicareConnectTileState extends State<MedicareConnectTile>
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _action(),
+              if (!_offersConnect) ...[
+                const SizedBox(width: 8),
+                _action(),
+              ],
             ],
           ),
+          // The connect control gets its own full-width row so its SRS name,
+          // "Connect Medicare Account", fits on a phone.
+          if (_offersConnect) ...[
+            const SizedBox(height: 12),
+            _action(),
+          ],
         ],
       ),
     );
@@ -226,6 +234,8 @@ class _MedicareConnectTileState extends State<MedicareConnectTile>
     }
   }
 
+  bool get _offersConnect => !_busy && _status == _Status.notConnected;
+
   Widget _action() {
     if (_busy || _status == _Status.loading) {
       return SizedBox(
@@ -261,10 +271,10 @@ class _MedicareConnectTileState extends State<MedicareConnectTile>
         backgroundColor: _teal,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        minimumSize: const Size(104, 48),
+        minimumSize: const Size.fromHeight(48),
       ),
       onPressed: _connect,
-      child: const Text('Connect'),
+      child: const Text('Connect Medicare Account'),
     );
   }
 
@@ -332,8 +342,9 @@ class _Message {
       case null:
         return null;
       case MedicareConnectResult.connected:
+        // SRS FR-MCR-04 / AC-MCR-04-1.
         return const _Message(_Tone.success,
-            'Medicare is connected. Your Medicare claims will show in Health Data.');
+            'Medicare account connected. Your Medicare claims will show in Health Data.');
       case MedicareConnectResult.cancelled:
         return const _Message(_Tone.info,
             'You didn\'t finish connecting Medicare, so nothing changed. '
@@ -356,6 +367,10 @@ class _Message {
 
   static _Message forError(MedicareConnectError e) {
     switch (e) {
+      case MedicareConnectError.offline:
+        // SRS ERR-MCR-04 (FR-MCR-26).
+        return const _Message(_Tone.error,
+            'You need an internet connection to connect your Medicare account.');
       case MedicareConnectError.signedOut:
         return const _Message(_Tone.error,
             'Your sign-in has expired. Please sign in again, then connect Medicare.');

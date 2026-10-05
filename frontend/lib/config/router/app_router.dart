@@ -196,6 +196,10 @@ Future<void> navigateToDashboard(
   );
 }
 
+/// Patient health screens are for a signed-in user only.
+Future<String?> _requireSignIn(BuildContext _, GoRouterState __) async =>
+    await UserRoleStorageService.instance.isLoggedIn() ? null : '/login';
+
 final GoRouter appRouter = _appRouterRef = GoRouter(
   initialLocation: '/',
   observers: [_telemetryGoRouterObserver],
@@ -216,10 +220,19 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       builder: (_, __) => const WelcomePage(),
     ),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
-    GoRoute(path: '/health-data', builder: (_, __) => const HealthDataScreen()),
-    GoRoute(path: '/dob-confirm', builder: (_, __) => const DobConfirmationScreen()),
+    GoRoute(
+      path: '/health-data',
+      redirect: _requireSignIn,
+      builder: (_, __) => const HealthDataScreen(),
+    ),
+    GoRoute(
+      path: '/dob-confirm',
+      redirect: _requireSignIn,
+      builder: (_, __) => const DobConfirmationScreen(),
+    ),
     GoRoute(
       path: '/medicare-connect',
+      redirect: _requireSignIn,
       builder: (_, state) {
         // Result arrives either on the hash route (preferred) or, the first
         // time only, on the plain page URL the backend returned to.

@@ -104,7 +104,7 @@ void main() {
         connectError: MedicareConnectError.signedOut);
     await t.pumpWidget(_app(s));
     await t.pumpAndSettle();
-    await t.tap(find.text('Connect'));
+    await t.tap(find.text('Connect Medicare Account'));
     await t.pumpAndSettle();
     expect(s.connectCalls, 1);
     expect(find.textContaining('sign-in has expired'), findsOneWidget);
@@ -137,7 +137,7 @@ void main() {
       'TC-MCR-CONN-008: every return result has its own announced message, '
       'and dismissing it removes it', (t) async {
     final expected = <MedicareConnectResult, String>{
-      MedicareConnectResult.connected: 'Medicare is connected',
+      MedicareConnectResult.connected: 'Medicare account connected',
       MedicareConnectResult.cancelled: 'didn\'t finish connecting',
       MedicareConnectResult.failed: 'couldn\'t connect to Medicare',
       MedicareConnectResult.linkExpired: 'timed out',
@@ -183,12 +183,12 @@ void main() {
           connectError: entry.key);
       await t.pumpWidget(_app(s));
       await t.pumpAndSettle();
-      await t.tap(find.text('Connect'));
+      await t.tap(find.text('Connect Medicare Account'));
       await t.pumpAndSettle();
       expect(find.textContaining(entry.value), findsOneWidget,
           reason: '${entry.key}');
       expect(find.text('Not connected'), findsOneWidget);
-      expect(find.text('Connect'), findsOneWidget);
+      expect(find.text('Connect Medicare Account'), findsOneWidget);
       await t.pumpWidget(const SizedBox());
     }
     final s = _FakeService(
@@ -196,7 +196,7 @@ void main() {
         connectThrows: StateError('boom'));
     await t.pumpWidget(_app(s));
     await t.pumpAndSettle();
-    await t.tap(find.text('Connect'));
+    await t.tap(find.text('Connect Medicare Account'));
     await t.pumpAndSettle();
     expect(find.textContaining('couldn\'t start the Medicare connection'),
         findsOneWidget);
@@ -213,19 +213,19 @@ void main() {
     await t.pump();
     expect(find.text('Checking…'), findsOneWidget);
     expect(find.bySemanticsLabel('Please wait'), findsOneWidget);
-    expect(find.text('Connect'), findsNothing);
+    expect(find.text('Connect Medicare Account'), findsNothing);
     s.statusGate!.complete();
     await t.pumpAndSettle();
 
     s.connectGate = Completer<void>();
-    await t.tap(find.text('Connect'));
+    await t.tap(find.text('Connect Medicare Account'));
     await t.pump();
     expect(find.bySemanticsLabel('Please wait'), findsOneWidget);
-    expect(find.text('Connect'), findsNothing);
+    expect(find.text('Connect Medicare Account'), findsNothing);
     expect(s.connectCalls, 1);
     s.connectGate!.complete();
     await t.pumpAndSettle();
-    expect(find.text('Connect'), findsOneWidget);
+    expect(find.text('Connect Medicare Account'), findsOneWidget);
     expect(s.connectCalls, 1);
   });
 
@@ -293,7 +293,7 @@ void main() {
       'Not connected (FR-MCR-26, AC-MCR-26-1)', (t) async {
     final s = _FakeService(
         statusResult: const MedicareStatus(connected: false),
-        connectError: MedicareConnectError.network);
+        connectError: MedicareConnectError.offline);
     await t.pumpWidget(_app(s));
     await t.pumpAndSettle();
     await t.tap(find.byType(ElevatedButton));

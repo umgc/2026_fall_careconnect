@@ -159,6 +159,25 @@ void main() {
   });
 
   test(
+      'TC-MCR-CONN-027: with no network connect() requests nothing and '
+      'reports offline (FR-MCR-26)', () async {
+    final previous = MedicareConnectService.isOffline;
+    MedicareConnectService.isOffline = () async => true;
+    addTearDown(() => MedicareConnectService.isOffline = previous);
+    final seen = <http.Request>[];
+    MedicareConnectError? error;
+    try {
+      await _with(() => MedicareConnectService().connect(),
+          (_) async => http.Response('{"url":"https://x.test/"}', 200),
+          seen: seen);
+    } on MedicareConnectException catch (e) {
+      error = e.error;
+    }
+    expect(error, MedicareConnectError.offline);
+    expect(seen, isEmpty);
+  });
+
+  test(
       'TC-MCR-CONN-020: parse accepts the US spelling, surrounding spaces and '
       'any case', () {
     expect(MedicareConnectResult.parse('canceled'),

@@ -2,7 +2,12 @@ import '../models/identity_conflict.dart';
 
 class IdentityConflictService {
   final bool useMock;
-  IdentityConflictService({this.useMock = true});
+
+  /// The sample conflict is opt-in (--dart-define=CARECONNECT_DOB_MOCK=true):
+  /// by default no build shows a patient a date of birth that isn't theirs or
+  /// reports a change that was never made.
+  IdentityConflictService(
+      {this.useMock = const bool.fromEnvironment('CARECONNECT_DOB_MOCK')});
 
   Future<List<IdentityConflict>> fetchPending() async {
     if (useMock) {

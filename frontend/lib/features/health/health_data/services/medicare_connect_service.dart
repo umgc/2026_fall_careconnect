@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -29,9 +30,23 @@ class MedicareConnectService {
 
   static String get _base => '${getBackendBaseUrl()}/v1/api/medicare';
 
+  /// True when the device has no network connection. Replaceable in tests.
+  static Future<bool> Function() isOffline = () async {
+    try {
+      final results = await Connectivity().checkConnectivity();
+      return results.isEmpty || results.every((r) => r == ConnectivityResult.none);
+    } catch (_) {
+      return false; // Unknown: let the request decide.
+    }
+  };
+
   /// Step 1 + 2: fetch the one-time link, then open it.
   /// Throws [MedicareConnectException] if the link can't be fetched or opened.
+  /// With no network nothing is requested (FR-MCR-26).
   Future<void> connect() async {
+    if (await isOffline()) {
+      throw const MedicareConnectException(MedicareConnectError.offline);
+    }
     final url = await fetchConnectUrl();
     final ok = await launchUrl(
       url,
@@ -117,7 +132,7 @@ class MedicareStatus {
   }
 }
 
-enum MedicareConnectError { network, signedOut, notPatient, server, launch }
+enum MedicareConnectError { offline, network, signedOut, notPatient, server, launch }
 
 class MedicareConnectException implements Exception {
   final MedicareConnectError error;
