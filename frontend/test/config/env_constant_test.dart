@@ -31,9 +31,9 @@ void main() {
       expect(url, anyOf(contains('localhost'), contains('10.0.2.2')));
     });
 
-    test('returns URL with port 8080', () {
+    test('returns URL with port 8081', () {
       final url = getBackendBaseUrl();
-      expect(url, contains('8080'));
+      expect(url, contains('8081'));
     });
 
     test('result is consistent across multiple calls', () {
