@@ -73,7 +73,6 @@ web-deploy.zip
 frontend-build.zip
 .vscode/
 frontend/web-build.zip
-/tmp/windows-online/
 ui-integration/mobile-app/dist/
 ui-integration/mobile-app/coverage/
 ui-integration/mobile-app/playwright-report/

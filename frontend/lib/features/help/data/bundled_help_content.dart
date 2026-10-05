@@ -101,10 +101,6 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
         'Locate the reminder for the dose you have taken and select Mark Taken.',
         'Check that the reminder shows Taken. If an error appears, the update may not have been saved.',
       ]),
-      const HelpParagraph(
-          heading: 'Windows preview',
-          text: 'Recording a dose needs a connection in the Windows preview. '
-              'Offline saving and later replay are unavailable. Reading this guide still works offline.'),
       HelpTroubleshooting(tips: [
         const HelpTroubleshootingTip(
             problem: 'There is no medication or reminder listed.',
@@ -328,7 +324,6 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
     ],
     keywords: [
       'offline',
-      'windows',
       'mobile',
       'web',
       'gps',
@@ -346,18 +341,9 @@ final bundledHelpArticles = List<HelpArticle>.unmodifiable([
             'Some app features described in a guide may still require a connection.',
       ),
       const HelpParagraph(
-          heading: 'Windows preview',
+          heading: 'Device features',
           text:
-              'Help articles, topic browsing, and Help search remain available offline. '
-              'The Windows preview cannot save changes offline or replay them later. '
-              'Text-to-speech, GPS, and native permission integrations are also unavailable '
-              'in that preview. Features that depend on them may not work. '
-              'Sign-in, messages, dose updates, and password reset requests still need a connection.'),
-      const HelpParagraph(
-          heading: 'Mobile apps',
-          text:
-              'The Windows preview restrictions do not describe all mobile features. '
-              'Camera, location, and other device features depend on device support and permissions. '
+              'Camera, location, text-to-speech, and other device features depend on device support and permissions. '
               'An article being readable offline does not mean the activity it describes can be completed offline.'),
       const HelpParagraph(
           heading: 'Web',

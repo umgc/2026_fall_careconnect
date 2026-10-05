@@ -508,27 +508,17 @@ hot reload. Regenerate localization after ARB edits; restart or rebuild when
 generated content remains stale. Fully stop/relaunch after changes to build
 configuration, native dependencies, or Dart defines.
 
-### Isolated Windows preview
+### Retired temporary Windows preview
 
-The preview launcher copies production frontend code into `tmp/windows-online`
-and runs Flutter from that copy. Editing `frontend/` does not update an already
-copied preview workspace. Stop the running preview before refreshing it and
-rerun this from the repository root:
+The temporary dependency-bypass launcher has been removed. Build and run from
+`frontend/` with the normal dependency set. SQLCipher, offline persistence,
+text-to-speech, location, permissions, and secure storage remain in the
+production frontend. Windows builds require their normal native build tools
+and libraries; Help introduces no native dependency bypasses.
 
-```powershell
-.\scripts\run-windows-preview.ps1
-```
-
-Pass the same `-BackendUrl` value as before if the preview uses a custom backend.
-For localization edits, generate from `frontend/` before relaunching. If using
-`-BuildOnly`, close the running executable, rebuild through the launcher, and
-open the new executable with its accompanying DLL/data files.
-
-Do not author production Help changes in `tmp/windows-online`; that is an
-isolated working copy. Hot restart of an existing copy cannot pick up source
-edits that have not been copied again. See the
-[Windows preview instructions](../../scripts/WINDOWS_PREVIEW.md) for build
-details and integration limitations.
+An old local `tmp/windows-online` copy may still exist for historical captures.
+It is not maintained and may contain disabled integrations and stale Help
+content. Use the production frontend for current development and verification.
 
 Help reading/search needs no backend request. Account sign-in and the operations
 described by articles may require a backend or platform integrations. On web,
@@ -597,7 +587,7 @@ them to the shipped catalog.
 | Duplicate/missing ID validation fails | Inspect constants, literal IDs, categories, related links, featured IDs, and term references. Resolve the dependency rather than suppressing the error. |
 | A glossary entry fails validation | Check its slug, unique normalized label, nonblank definition, aliases, and explicit guide targets. |
 | A term-reference edit fails validation | Ensure the term exists and is not repeated across generated references and authored glossary sections. |
-| Old content remains in a running app | Use hot restart; for the isolated Windows preview, stop and rerun the launcher to copy the changed frontend. |
+| Old content remains in a running app | Use hot restart from `frontend/`; stop and relaunch after build configuration or native dependency changes. |
 | An alias appears to have disappeared | Normalization removes duplicate/display-equivalent aliases. Test discovery rather than expecting redundant source forms to remain in memory. |
 | Search returns several meanings | Shared aliases and definition text can legitimately match. Exact labels/aliases rank first; check relevance before tightening phrases. |
 | Content stays English after a locale change | ARB labels and authored catalog text are separate. The runtime catalog is currently English. |
