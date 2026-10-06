@@ -19,9 +19,12 @@ import java.util.List;
  *
  * @param source     source discriminator, always {@code MEDICARE}
  * @param mode       {@code mock} or {@code live}
- * @param synthetic  true when the payload is fixture data and not a real beneficiary's record
+ * @param synthetic  true when the payload is not a real beneficiary's record: fixture data, or
+ *                   the CMS sandbox's synthetic beneficiaries ({@link MedicareProperties#isSynthetic()})
  * @param total      number of resources returned, after the status gate
  * @param resources  the resources themselves
+ * @param fetchedAt  when this data was last retrieved from Medicare, not when this request ran:
+ *                   reads are served from a cache, so this is what the app shows as "last updated"
  */
 public record MedicareEnvelope(
         String source,

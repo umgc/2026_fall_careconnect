@@ -60,6 +60,9 @@ class MedicareServiceTest {
         }
     }
 
+    /** A reply that closes the connection without sending a response, as a dropped connection does. */
+    private static final Reply DROP = new Reply(-1, "");
+
     @BeforeEach
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -94,6 +97,10 @@ class MedicareServiceTest {
         }
         Function<HttpExchange, Reply> route = routes.getOrDefault(key, routes.get(path));
         Reply r = route == null ? new Reply(404, "{}") : route.apply(ex);
+        if (r == DROP) {
+            ex.close();
+            return;
+        }
         byte[] bytes = r.body().getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", "application/fhir+json");
         r.headers().forEach((k, v) -> ex.getResponseHeaders().add(k, v));
@@ -184,6 +191,17 @@ class MedicareServiceTest {
         routes.put("Coverage", ex -> new Reply(500, "{}"));
         assertThrows(BaseServerResponseException.class, () -> service.requestMedicareCoverageInfo(TOKEN));
         assertEquals(3, hits.get("Coverage"));
+    }
+
+    @Test
+    @DisplayName("TC-MCR-FHIR-034 A dropped connection is tried 3 times in all, not again inside each attempt by the HTTP client (DEF-MCR-06)")
+    void droppedConnectionIsTriedThreeTimesInAll() {
+        routes.put("Coverage", ex -> DROP);
+
+        assertThrows(BaseServerResponseException.class, () -> service.requestMedicareCoverageInfo(TOKEN));
+
+        assertEquals(3, hits.get("Coverage"), "NFR-DEG-02: up to 3 attempts");
+        assertEquals(List.of(Duration.ofSeconds(2), Duration.ofSeconds(4)), waits);
     }
 
     @Test
