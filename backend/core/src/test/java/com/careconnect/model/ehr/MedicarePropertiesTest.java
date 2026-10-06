@@ -17,19 +17,19 @@ class MedicarePropertiesTest {
     }
 
     @Test
-    @DisplayName("live data from the CMS sandbox is synthetic: its beneficiaries are not real people")
+    @DisplayName("TC-MCR-CACHE-017: live data from the CMS sandbox is synthetic: its beneficiaries are not real people")
     void sandboxIsSynthetic() {
         assertThat(properties("live", true).isSynthetic()).isTrue();
     }
 
     @Test
-    @DisplayName("fixture (mock) data is synthetic whatever the sandbox setting")
+    @DisplayName("TC-MCR-CACHE-018: fixture (mock) data is synthetic whatever the sandbox setting")
     void mockIsSynthetic() {
         assertThat(properties("mock", false).isSynthetic()).isTrue();
     }
 
     @Test
-    @DisplayName("only live production data is real")
+    @DisplayName("TC-MCR-CACHE-019: only live production data is real")
     void liveProductionIsReal() {
         assertThat(properties("live", false).isSynthetic()).isFalse();
     }

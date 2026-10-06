@@ -22,7 +22,7 @@ class EhrSourceIdentityTest {
     }
 
     @Test
-    @DisplayName("the birth date is read as a calendar date (it used to throw DateTimeException for every patient)")
+    @DisplayName("TC-MCR-CACHE-011: the birth date is read as a calendar date (it used to throw DateTimeException for every patient)")
     void birthDateIsReadAsCalendarDate() {
         final Patient p = patient();
         p.setBirthDateElement(new DateType("1950-03-09"));
@@ -31,7 +31,7 @@ class EhrSourceIdentityTest {
     }
 
     @Test
-    @DisplayName("a partial or missing birth date is null, not a guessed day")
+    @DisplayName("TC-MCR-CACHE-012: a partial or missing birth date is null, not a guessed day")
     void partialOrMissingBirthDateIsNull() {
         final Patient yearOnly = patient();
         yearOnly.setBirthDateElement(new DateType("1950"));
@@ -41,7 +41,7 @@ class EhrSourceIdentityTest {
     }
 
     @Test
-    @DisplayName("a one-line address, no gender and a contact point without a system do not throw")
+    @DisplayName("TC-MCR-CACHE-013: a one-line address, no gender and a contact point without a system do not throw")
     void sparsePatientDoesNotThrow() {
         final Patient p = patient();
         p.addAddress(new Address().addLine("1 Main St").setCity("Baltimore"));

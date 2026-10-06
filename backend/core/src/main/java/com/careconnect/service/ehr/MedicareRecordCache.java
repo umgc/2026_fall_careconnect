@@ -158,10 +158,19 @@ public class MedicareRecordCache {
         final Long patientId = crosswalk.getPatientId();
         final Long sourceId = crosswalk.getSourceId();
         final Map<String, EhrRawPayload> current = currentCopies(patientId, sourceId, resourceType);
-        final Optional<OffsetDateTime> lastAnswered = auditEvents
+        final Optional<EhrAuditEvent> lastEvent = auditEvents
                 .findFirstByPatientIdAndSourceAndResourceTypeAndOutcomeInOrderByEventTimeDesc(
-                        patientId, MEDICARE, resourceType, ANSWERED)
-                .map(EhrAuditEvent::getEventTime);
+                        patientId, MEDICARE, resourceType, ANSWERED);
+        // A retrieval that returned records, with none of them stored now, means the cache was
+        // emptied since: an unlink deletes the payloads but keeps the audit log, so a relink inside
+        // the day would otherwise be served nothing (DEF-MCR-15). Ask again in full.
+        final boolean emptiedSince = current.isEmpty() && lastEvent
+                .map(e -> e.getOutcome() == EhrRetrievalOutcome.SUCCESS
+                        && e.getRecordCount() != null && e.getRecordCount() > 0)
+                .orElse(false);
+        final Optional<OffsetDateTime> lastAnswered = emptiedSince
+                ? Optional.empty()
+                : lastEvent.map(EhrAuditEvent::getEventTime);
         final OffsetDateTime now = OffsetDateTime.now(clock);
 
         if (lastAnswered.isPresent() && Duration.between(lastAnswered.get(), now).compareTo(MAX_AGE) < 0) {
@@ -179,7 +188,7 @@ public class MedicareRecordCache {
         } catch (RuntimeException e) {
             // Rethrown: a rejected token becomes ERR-MCR-05 in MedicareErrorAdvice.
             audit.log(patientId, MEDICARE, resourceType, EhrRetrievalOutcome.FAILURE, actorUserId, null,
-                    Map.of("error", e.getClass().getSimpleName(), "incremental", since != null));
+                    Map.of("error", e.getClass().getSimpleName(), "incremental", since != null), now);
             throw e;
         }
 
@@ -204,10 +213,12 @@ public class MedicareRecordCache {
             }
             mirror.accept(resource);
         }
-        // Counts and flags only: never tokens or clinical content (NFR-SEC-03).
+        // Counts and flags only: never tokens or clinical content (NFR-SEC-03). Stamped with the
+        // time captured before the request, which the next "changes since" read starts from, so a
+        // record CMS updates while this one is in flight is not skipped (DEF-MCR-16).
         audit.log(patientId, MEDICARE, resourceType,
                 results.isEmpty() ? EhrRetrievalOutcome.EMPTY : EhrRetrievalOutcome.SUCCESS,
-                actorUserId, results.size(), Map.of("incremental", since != null, "changed", changed));
+                actorUserId, results.size(), Map.of("incremental", since != null, "changed", changed), now);
         return new CachedRead(toJson(current.values()), now);
     }
 

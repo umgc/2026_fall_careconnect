@@ -15,6 +15,7 @@ import org.hl7.fhir.r4.model.Attachment;
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Coverage;
 import org.hl7.fhir.r4.model.Enumerations;
+import org.hl7.fhir.r4.model.ExplanationOfBenefit;
 import org.hl7.fhir.r4.model.HumanName;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Resource;
@@ -26,6 +27,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -53,7 +57,8 @@ import static org.mockito.Mockito.when;
  * The Medicare read cache: FHIR served from ehr_raw_payload, refreshed from Blue Button once a day.
  * <p>
  * Resources come from a parsed Bundle with fullUrl and a version, as Blue Button sends them, so the
- * id handling is tested against what HAPI really produces. Test IDs TC-MCR-CACHE-001..010 are
+ * id handling is tested against what HAPI really produces. Test IDs TC-MCR-CACHE-001..010 (the PR
+ * author's) and 020..024 (the Testing Lead's; 011..019 are the entity and properties tests) are
  * permanent. Never renumber, never reuse.
  */
 @ExtendWith(MockitoExtension.class)
@@ -192,7 +197,7 @@ class MedicareRecordCacheTest {
         assertThat(rows.getAllValues()).extracting(EhrRawPayload::getRetrievedAt).containsOnly(NOW);
         verify(ehrService, times(2)).updateCoverageRepository(any());
         verify(audit).log(eq(PATIENT_ID), eq("MEDICARE"), eq("Coverage"), eq(EhrRetrievalOutcome.SUCCESS),
-                eq(ACTOR), eq(2), anyMap());
+                eq(ACTOR), eq(2), anyMap(), eq(NOW));
 
         assertThat(read.fetchedAt()).isEqualTo(NOW);
         assertThat(read.resources()).extracting(r -> r.path("resourceType").asText()).containsOnly("Coverage");
@@ -251,7 +256,7 @@ class MedicareRecordCacheTest {
         final CachedRead read = cache.coverage(crosswalk, ACTOR);
 
         verify(audit).log(eq(PATIENT_ID), eq("MEDICARE"), eq("Coverage"), eq(EhrRetrievalOutcome.EMPTY),
-                eq(ACTOR), eq(0), anyMap());
+                eq(ACTOR), eq(0), anyMap(), eq(NOW));
         assertThat(plans(read)).containsExactly("A");
         assertThat(read.fetchedAt()).isEqualTo(NOW);
         verify(rawPayloads, never()).save(any());
@@ -268,7 +273,7 @@ class MedicareRecordCacheTest {
         assertThatThrownBy(() -> cache.coverage(crosswalk, ACTOR)).isInstanceOf(IllegalStateException.class);
 
         verify(audit).log(eq(PATIENT_ID), eq("MEDICARE"), eq("Coverage"), eq(EhrRetrievalOutcome.FAILURE),
-                eq(ACTOR), isNull(), anyMap());
+                eq(ACTOR), isNull(), anyMap(), eq(NOW));
         verify(rawPayloads, never()).save(any());
     }
 
@@ -365,5 +370,127 @@ class MedicareRecordCacheTest {
 
         assertThat(served).hasSize(1);
         assertThat(served.get(0).path("class").path(0).path("value").asText()).isEqualTo("A-new");
+    }
+
+    // ---- Testing Lead, 2026-10-06 (PR #272 review) ----
+
+    /** The synthetic Blue Button bundles, parsed as HAPI hands them over (ids are full URLs). */
+    private static <R extends Resource> List<R> fixture(final String file, final Class<R> type) {
+        try (InputStream in = MedicareRecordCacheTest.class.getResourceAsStream("/fixtures/bluebutton-synthetic/" + file)) {
+            final Bundle bundle = PARSER.parseResource(Bundle.class, in);
+            final List<R> out = new ArrayList<>();
+            bundle.getEntry().forEach(e -> out.add(type.cast(e.getResource())));
+            return out;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private void lastEvent(final String type, final OffsetDateTime at, final EhrRetrievalOutcome outcome, final Integer count) {
+        when(auditEvents.findFirstByPatientIdAndSourceAndResourceTypeAndOutcomeInOrderByEventTimeDesc(
+                eq(PATIENT_ID), eq("MEDICARE"), eq(type), any()))
+                .thenReturn(Optional.of(EhrAuditEvent.builder().eventTime(at).outcome(outcome).recordCount(count).build()));
+    }
+
+    @Test
+    @DisplayName("TC-MCR-CACHE-020: after an unlink and relink inside the day, the emptied cache is refilled from Blue Button, not served empty (DEF-MCR-15)")
+    void relinkInsideTheDayRefetches() {
+        // Unlink deleted the payloads; the audit log is kept (Addendum A1-Q1), so its last SUCCESS is 2 h old.
+        cached(MedicareRecordCache.COVERAGE);
+        lastEvent(MedicareRecordCache.COVERAGE, NOW.minusHours(2), EhrRetrievalOutcome.SUCCESS, 2);
+        when(connections.requireAccessToken(crosswalk)).thenReturn("tok");
+        when(medicare.requestMedicareCoverageInfo("tok")).thenReturn(fromBundle(coverage("part-a--1", "A")));
+        saveReturnsRowWithId();
+
+        final CachedRead read = cache.coverage(crosswalk, ACTOR);
+
+        assertThat(plans(read)).containsExactly("A");
+        assertThat(read.fetchedAt()).isEqualTo(NOW);
+        verify(medicare, never()).requestMedicareCoverageInfo(anyString(), any(Date.class));
+    }
+
+    @Test
+    @DisplayName("TC-MCR-CACHE-021: an EMPTY retrieval inside the day is still fresh: nothing cached is the right answer, and Blue Button is not asked again")
+    void emptyAnswerInsideTheDayIsServed() {
+        cached(MedicareRecordCache.EOB);
+        lastEvent(MedicareRecordCache.EOB, NOW.minusHours(2), EhrRetrievalOutcome.EMPTY, 0);
+
+        final CachedRead read = cache.visits(crosswalk, ACTOR);
+
+        assertThat(read.resources()).isEmpty();
+        assertThat(read.fetchedAt()).isEqualTo(NOW.minusHours(2));
+        verifyNoInteractions(medicare, connections, audit);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-CACHE-022: each retrieval is audited with the time captured before Blue Button was asked, which the next incremental read starts from (DEF-MCR-16)")
+    void retrievalIsAuditedWithItsStartTime() {
+        final OffsetDateTime twoDaysAgo = NOW.minusDays(2);
+        cached(MedicareRecordCache.EOB, stored("carrier--1", new ExplanationOfBenefit().setId("carrier--1"), twoDaysAgo));
+        lastEvent(MedicareRecordCache.EOB, twoDaysAgo, EhrRetrievalOutcome.SUCCESS, 1);
+        when(connections.requireAccessToken(crosswalk)).thenReturn("tok");
+        when(medicare.requestMedicareEOBInfo(eq("tok"), any(Date.class))).thenReturn(List.of());
+
+        cache.visits(crosswalk, ACTOR);
+
+        // Not left to @PrePersist, which stamps the row after the response has arrived.
+        verify(audit).log(eq(PATIENT_ID), eq("MEDICARE"), eq("ExplanationOfBenefit"), eq(EhrRetrievalOutcome.EMPTY),
+                eq(ACTOR), eq(0), anyMap(), eq(NOW));
+    }
+
+    @Test
+    @DisplayName("TC-MCR-CACHE-023: a day-old visit cache asks for ExplanationOfBenefit changes since the last retrieval and keeps the unchanged visits")
+    void staleVisitCacheFetchesChangesSince() {
+        final OffsetDateTime twoDaysAgo = NOW.minusDays(2);
+        final ExplanationOfBenefit kept = new ExplanationOfBenefit();
+        kept.setId("carrier--1");
+        kept.getMeta().setLastUpdated(Date.from(twoDaysAgo.toInstant()));
+        cached(MedicareRecordCache.EOB, stored("carrier--1", kept, twoDaysAgo));
+        lastEvent(MedicareRecordCache.EOB, twoDaysAgo, EhrRetrievalOutcome.SUCCESS, 1);
+        when(connections.requireAccessToken(crosswalk)).thenReturn("tok");
+        final ExplanationOfBenefit added = new ExplanationOfBenefit();
+        added.setId("inpatient--2");
+        added.getMeta().setLastUpdated(Date.from(NOW.minusHours(1).toInstant()));
+        when(medicare.requestMedicareEOBInfo("tok", Date.from(twoDaysAgo.toInstant()))).thenReturn(fromBundle(added));
+        saveReturnsRowWithId();
+
+        final CachedRead read = cache.visits(crosswalk, ACTOR);
+
+        assertThat(read.resources()).extracting(r -> r.path("id").asText())
+                .containsExactlyInAnyOrder("carrier--1", "inpatient--2");
+        verify(ehrService).updateVisitRepository(any());
+    }
+
+    @Test
+    @DisplayName("TC-MCR-CACHE-024: the synthetic Blue Button Patient, Coverage and ExplanationOfBenefit bundles load through the cache: one row per resource, keyed by id part, each mirrored")
+    void syntheticFixturesLoadThroughTheCache() {
+        when(connections.requireAccessToken(crosswalk)).thenReturn("tok");
+        saveReturnsRowWithId();
+        cached(MedicareRecordCache.PATIENT);
+        cached(MedicareRecordCache.COVERAGE);
+        cached(MedicareRecordCache.EOB);
+        lastAnswered(MedicareRecordCache.PATIENT, null);
+        lastAnswered(MedicareRecordCache.COVERAGE, null);
+        lastAnswered(MedicareRecordCache.EOB, null);
+        when(medicare.requestMedicarePatientInfo("tok")).thenReturn(fixture("patient-bundle.json", Patient.class).get(0));
+        when(medicare.requestMedicareCoverageInfo("tok")).thenReturn(fixture("coverage-bundle.json", Coverage.class));
+        when(medicare.requestMedicareEOBInfo("tok")).thenReturn(fixture("eob-bundle.json", ExplanationOfBenefit.class));
+        when(identities.findByPatientIdAndSourceId(PATIENT_ID, SOURCE_ID)).thenReturn(Optional.empty());
+
+        assertThat(cache.patient(crosswalk, ACTOR).resources()).hasSize(1);
+        assertThat(cache.coverage(crosswalk, ACTOR).resources()).hasSize(3);
+        assertThat(cache.visits(crosswalk, ACTOR).resources()).hasSize(3);
+
+        final ArgumentCaptor<EhrRawPayload> rows = ArgumentCaptor.forClass(EhrRawPayload.class);
+        verify(rawPayloads, times(7)).save(rows.capture());
+        assertThat(rows.getAllValues()).extracting(EhrRawPayload::getExternalResourceId).containsExactly(
+                "-20140000008325",
+                "part-a--20140000008325", "part-b--20140000008325", "part-d--20140000008325",
+                "carrier--22639159481", "inpatient--4411138162", "carrier--22639159999");
+        final ArgumentCaptor<EhrSourceIdentity> identity = ArgumentCaptor.forClass(EhrSourceIdentity.class);
+        verify(identities).save(identity.capture());
+        assertThat(identity.getValue().getDateOfBirth()).hasToString("1940-06-01");
+        verify(ehrService, times(3)).updateCoverageRepository(any());
+        verify(ehrService, times(3)).updateVisitRepository(any());
     }
 }

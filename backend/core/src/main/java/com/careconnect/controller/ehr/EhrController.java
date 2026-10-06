@@ -4,6 +4,7 @@ import com.careconnect.service.ehr.EhrService;
 import com.careconnect.service.ehr.MedicareRecordCache;
 import com.careconnect.service.ehr.MedicareRecordCache.CachedRead;
 import com.careconnect.service.ehr.MedicareService;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,10 @@ public class EhrController{
 
     @Autowired
     private MedicareProperties properties;
+
+    /** Cancelled, draft and entered-in-error resources are stored as retrieved but never served (DEF-MCR-19). */
+    @Autowired
+    private MedicareStatusGate statusGate;
 
     private final MedicareResponseMapper mapper = new MedicareResponseMapper();
 
@@ -72,7 +77,7 @@ public class EhrController{
 
             CachedRead read = cache.coverage(crosswalkOpt.orElseThrow(), ehrService.currentUserId().orElse(null));
             return ResponseEntity.ok(MedicareEnvelope.of(
-                    properties.getMode(), properties.isSynthetic(), mapper.toCoverageView(read.resources()), read.fetchedAt()));
+                    properties.getMode(), properties.isSynthetic(), mapper.toCoverageView(allowed(read.resources())), read.fetchedAt()));
         }
         return ResponseEntity.notFound().build();
     }
@@ -90,7 +95,7 @@ public class EhrController{
 
             CachedRead read = cache.visits(crosswalkOpt.orElseThrow(), ehrService.currentUserId().orElse(null));
             return ResponseEntity.ok(MedicareEnvelope.of(
-                    properties.getMode(), properties.isSynthetic(), mapper.toVisitView(read.resources()), read.fetchedAt()));
+                    properties.getMode(), properties.isSynthetic(), mapper.toVisitView(allowed(read.resources())), read.fetchedAt()));
         }
         return ResponseEntity.notFound().build();
     }
@@ -119,4 +124,8 @@ public class EhrController{
                         "detail", detail));
     }
 
+    /** The envelope's total is counted after this gate, as {@link MedicareEnvelope} documents. */
+    private List<JsonNode> allowed(final List<JsonNode> resources) {
+        return resources.stream().filter(statusGate::isAllowed).toList();
+    }
 }

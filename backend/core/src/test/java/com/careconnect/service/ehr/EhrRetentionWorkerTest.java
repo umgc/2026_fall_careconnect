@@ -178,7 +178,7 @@ class EhrRetentionWorkerTest {
     }
 
     @Test
-    @DisplayName("a negative retain-until-age is a configuration error, not a silent default")
+    @DisplayName("TC-EHR-RAW-013: a negative retain-until-age is a configuration error, not a silent default")
     void negativeAgeIsRejected() {
         assertThatThrownBy(() -> worker(7, -1)).isInstanceOf(IllegalArgumentException.class);
     }
