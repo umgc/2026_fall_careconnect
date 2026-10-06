@@ -639,20 +639,15 @@ WHERE NOT EXISTS (
 	  AND patient_user_id = (SELECT id FROM users WHERE email = 'romilda.smith@careconnect.com')
 );
 
--- Identity crosswalk, pinning the athena chart so demographic matching can be skipped
--- while testing. Commented out until feature/b-ehr-identity-reconciliation-schema merges,
--- because ehr_source and ehr_source_identity do not exist before then.
---
--- INSERT INTO ehr_source (code, display_name, fhir_version, active)
--- SELECT 'ATHENA', 'athenahealth', 'R4', true
--- WHERE NOT EXISTS (SELECT 1 FROM ehr_source WHERE code = 'ATHENA');
---
--- INSERT INTO ehr_source_identity
---   (patient_id, source_id, source_patient_id, first_name, last_name, date_of_birth, fetched_at)
--- SELECT p.id, s.id, 'a-195900.E-10037', 'Romilda', 'Smith', DATE '1976-02-28', now()
--- FROM patient p
--- JOIN users u ON u.id = p.user_id AND u.email = 'romilda.smith@careconnect.com'
--- JOIN ehr_source s ON s.code = 'ATHENA'
--- WHERE NOT EXISTS (
---     SELECT 1 FROM ehr_source_identity i WHERE i.patient_id = p.id AND i.source_id = s.id
--- );
+-- Crosswalk link pinning Romilda to her athena chart, so connecting her skips demographic
+-- matching. It is not consent: she is still NOT_CONNECTED until she connects in the app.
+-- SchemaPatchRunner seeds ehr_source before this loader runs; if the ATHENAHEALTH row is
+-- missing the SELECT matches nothing and no link is made, which exact matching then covers.
+INSERT INTO ehr_patient_crosswalk (patient_id, source_id, external_patient_id, created_at, updated_at)
+SELECT p.id, s.id, 'a-195900.E-10037', now(), now()
+FROM patient p
+JOIN users u ON u.id = p.user_id AND u.email = 'romilda.smith@careconnect.com'
+JOIN ehr_source s ON s.code = 'ATHENAHEALTH'
+WHERE NOT EXISTS (
+    SELECT 1 FROM ehr_patient_crosswalk x WHERE x.patient_id = p.id AND x.source_id = s.id
+);
