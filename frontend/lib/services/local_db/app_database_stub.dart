@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'offline_sync_row.dart';
 
 /// Session-scoped implementation of AppDatabase for web.
@@ -8,12 +10,6 @@ class AppDatabase {
   AppDatabase({dynamic encryptionService});
 
   final List<OfflineSyncDbRow> _offlineSyncQueue = <OfflineSyncDbRow>[];
-
-  static const Set<String> _actionableStatuses = <String>{
-    'pending',
-    'failed',
-    'syncing',
-  };
 
   /// Indicates whether an encryption key exists (always false on web)
   Future<bool> isEncrypted() async {
@@ -50,7 +46,7 @@ class AppDatabase {
         headersJson: headersJson,
         bodyJson: bodyJson,
         createdAt: DateTime.tryParse(createdAtIso) ?? DateTime.now().toUtc(),
-        status: 'pending',
+        status: OfflineSyncStatus.pending,
         retryCount: 0,
         lastError: null,
       ),
@@ -63,7 +59,7 @@ class AppDatabase {
     int limit = 200,
   }) async {
     final rows = _offlineSyncQueue
-        .where((row) => _actionableStatuses.contains(row.status))
+        .where((row) => OfflineSyncStatus.actionable.contains(row.status))
         .toList()
       ..sort((left, right) => left.createdAt.compareTo(right.createdAt));
     return rows.take(limit).toList();
@@ -72,7 +68,7 @@ class AppDatabase {
   /// Get the number of actionable offline sync rows.
   Future<int> getPendingOfflineSyncCount() async {
     return _offlineSyncQueue
-        .where((row) => _actionableStatuses.contains(row.status))
+        .where((row) => OfflineSyncStatus.actionable.contains(row.status))
         .length;
   }
 
@@ -88,7 +84,7 @@ class AppDatabase {
 
   /// Mark an offline sync as syncing.
   Future<void> markOfflineSyncAsSyncing(String id) async {
-    _replaceRow(id, status: 'syncing');
+    _replaceRow(id, status: OfflineSyncStatus.syncing);
   }
 
   /// Mark an offline sync as failed.
@@ -101,9 +97,8 @@ class AppDatabase {
       return;
     }
     final row = _offlineSyncQueue[index];
-    _offlineSyncQueue[index] = _copyRow(
-      row,
-      status: 'failed',
+    _offlineSyncQueue[index] = row.copyWith(
+      status: OfflineSyncStatus.failed,
       retryCount: row.retryCount + 1,
       lastError: errorMessage,
     );
@@ -119,34 +114,17 @@ class AppDatabase {
     // No-op on web
   }
 
+  @visibleForTesting
+  void resetQueue() {
+    _offlineSyncQueue.clear();
+  }
+
   void _replaceRow(String id, {required String status}) {
     final index = _offlineSyncQueue.indexWhere((row) => row.id == id);
     if (index == -1) {
       return;
     }
-    _offlineSyncQueue[index] = _copyRow(
-      _offlineSyncQueue[index],
-      status: status,
-    );
-  }
-
-  OfflineSyncDbRow _copyRow(
-    OfflineSyncDbRow row, {
-    String? status,
-    int? retryCount,
-    String? lastError,
-  }) {
-    return OfflineSyncDbRow(
-      id: row.id,
-      fingerprint: row.fingerprint,
-      method: row.method,
-      url: row.url,
-      headersJson: row.headersJson,
-      bodyJson: row.bodyJson,
-      createdAt: row.createdAt,
-      status: status ?? row.status,
-      retryCount: retryCount ?? row.retryCount,
-      lastError: lastError ?? row.lastError,
-    );
+    _offlineSyncQueue[index] =
+        _offlineSyncQueue[index].copyWith(status: status);
   }
 }

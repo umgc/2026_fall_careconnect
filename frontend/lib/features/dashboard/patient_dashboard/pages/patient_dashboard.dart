@@ -992,6 +992,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
 
+    // Keep the optimistic reminder state while an offline write is queued.
+    // MainScreen owns the persistent queue banner and failed-sync status.
     if (success && !queuedOffline) {
       await _loadMedicationReminders();
     }
