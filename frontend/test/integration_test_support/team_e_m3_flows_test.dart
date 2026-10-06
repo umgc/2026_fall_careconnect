@@ -26,7 +26,13 @@ void main() {
   test('TC-E2E-005: every flow has a unique case ID, dependencies, steps and '
       'pass criteria', () {
     final ids = teamEFlows.map((f) => f.caseId).toList();
-    expect(ids, ['TC-E2E-001', 'TC-E2E-002', 'TC-E2E-003', 'TC-E2E-004']);
+    expect(ids, [
+      'TC-E2E-001',
+      'TC-E2E-002',
+      'TC-E2E-003',
+      'TC-E2E-004',
+      'TC-E2E-010',
+    ]);
     expect(ids.toSet().length, ids.length);
     for (final f in teamEFlows) {
       expect(f.caseId, matches(RegExp(r'^TC-E2E-\d{3}$')));
