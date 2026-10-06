@@ -14,7 +14,9 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ca.uhn.fhir.model.api.TemporalPrecisionEnum;
 import org.hl7.fhir.r4.model.Coverage;
+import org.hl7.fhir.r4.model.DateTimeType;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -50,14 +52,33 @@ public class EhrCoverageRecord extends Auditable {
         this.patientId = patientId;
         this.sourceId = sourceId;
         this.sourceUpdatedAt = coverage.getMeta().getLastUpdated().toInstant();
-        this.externalCoverageId = coverage.getId();
+        // The id part only: read from a Bundle, getId() is the full URL plus _history/<version>,
+        // so the same coverage would look new each time its version changed.
+        this.externalCoverageId = coverage.getIdElement().getIdPart();
         this.beneficiary = coverage.getBeneficiary().getDisplay();
         this.network = coverage.getNetwork();
         this.payor = coverage.getPayorFirstRep().getDisplay();
-        this.expiresOn = LocalDate.from(coverage.getPeriod().getEnd().toInstant());
-        this.status = coverage.getStatus().getDisplay();
+        this.expiresOn = expiresOn(coverage);
+        this.status = coverage.hasStatus() ? coverage.getStatus().getDisplay() : null;
         this.subscriberId = coverage.getSubscriberId();
         this.coverageType = coverage.getCostToBeneficiaryFirstRep().fhirType();
+    }
+
+    /**
+     * The coverage period's end as a calendar date. Null for coverage that is still open, which
+     * is the usual case for active Medicare coverage, or an end given only to the year or month.
+     * <p>
+     * Not {@code LocalDate.from(getPeriod().getEnd().toInstant())}: an Instant has no calendar
+     * date, so that threw DateTimeException when an end was present and NullPointerException
+     * when it was not.
+     */
+    private static LocalDate expiresOn(Coverage coverage) {
+        DateTimeType end = coverage.getPeriod().getEndElement();
+        if (end == null || end.isEmpty() || end.getPrecision().ordinal() < TemporalPrecisionEnum.DAY.ordinal()) {
+            return null;
+        }
+        // The date as written, in the period's own terms; DateTimeType months are 0-based.
+        return LocalDate.of(end.getYear(), end.getMonth() + 1, end.getDay());
     }
 
     @Id
