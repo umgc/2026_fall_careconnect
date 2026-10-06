@@ -1,5 +1,6 @@
 package com.careconnect.security;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.userinfo.*;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 @Component
+@Slf4j
 public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequest, OAuth2User> {
 
     private final OAuth2UserService<OAuth2UserRequest, OAuth2User> delegate;
@@ -24,6 +26,14 @@ public class CustomOAuth2UserService implements OAuth2UserService<OAuth2UserRequ
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
+        if(Objects.equals(userRequest.getClientRegistration().getRegistrationId(), "medicare")){
+            // Only patients can log into their medicare accounts, so there's only one role option here.
+            return new DefaultOAuth2User(
+                    List.of(new SimpleGrantedAuthority("ROLE_PATIENT")),
+                    delegate.loadUser(userRequest).getAttributes(),
+                    "sub"
+            );
+        }
         OAuth2User oauthUser = delegate.loadUser(userRequest);
 
         String email = oauthUser.getAttribute("email");
