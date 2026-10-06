@@ -992,10 +992,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
   Future<void> _process(String words) async {
     if (!mounted) return;
 
-    // print to screen what you heard for debugging purposes
     final cmd = words.toLowerCase().trim();
-    debugPrint('Heard: $cmd');
-    // end debug print
 
     //Use voice to confirm or cancel the action if we are in the confirming popup/state
     if (_voiceStatus == _VoiceStatus.confirming) {
@@ -1230,7 +1227,6 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
 
     void onHeard(String raw) async {
       final heard = raw.toLowerCase().trim();
-      debugPrint('Gate 1 Confirmation Heard: $heard');
 
       if (heard.contains('confirm') || heard == 'yes' || heard == 'proceed') {
         await _stopListeningBackend();
@@ -1438,7 +1434,6 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
           Future.delayed(const Duration(milliseconds: 350), () async {
             void handleGate2Voice(String spoken) {
               final clean = spoken.toLowerCase().trim();
-              debugPrint('Gate 2 Heard: $clean');
 
               if (clean.contains('confirm') ||
                   clean == 'yes' ||
