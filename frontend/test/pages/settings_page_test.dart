@@ -1,9 +1,13 @@
 // Comprehensive tests for SettingsPage (lib/pages/settings_page.dart).
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
@@ -11,6 +15,8 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/providers/locale_provider.dart';
 import 'package:care_connect_app/providers/theme_provider.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'package:care_connect_app/services/api_service.dart';
 
 import '../mock_user_provider.dart';
 
@@ -42,13 +48,18 @@ Widget _buildApp({required UserProvider provider}) {
 }
 
 /// Build app wrapped with GoRouter so context.go / context.push work.
-Widget _buildAppWithRouter({required UserProvider provider}) {
-  final router = GoRouter(
+Widget _buildAppWithRouter({required UserProvider provider, GoRouter? router}) {
+  router ??= GoRouter(
     initialLocation: '/settings',
     routes: [
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/dashboard',
+        builder: (context, state) =>
+            const Scaffold(body: Text('Dashboard Page')),
       ),
       GoRoute(
         path: '/login',
@@ -133,6 +144,97 @@ void main() {
   // =========================================================================
   // 1. Basic render with null user
   // =========================================================================
+  group('SettingsPage - back navigation', () {
+    testWidgets('TC-HELP-058: root Settings returns to the dashboard safely', (tester) async {
+      await tester.pumpWidget(_buildAppWithRouter(provider: _NullUserProvider()));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Back'), findsOneWidget);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Dashboard Page'), findsOneWidget);
+      expect(find.byType(SettingsPage), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('TC-HELP-059: pushed Settings returns to the previous page', (tester) async {
+      final router = GoRouter(initialLocation: '/previous', routes: [
+        GoRoute(
+          path: '/previous',
+          builder: (context, state) => const Scaffold(body: Text('Previous Page')),
+        ),
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsPage(),
+        ),
+      ]);
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        router.dispose();
+      });
+      await tester.pumpWidget(
+          _buildAppWithRouter(provider: _NullUserProvider(), router: router));
+      await tester.pumpAndSettle();
+      router.push('/settings');
+      await tester.pumpAndSettle();
+      expect(router.canPop(), isTrue);
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Previous Page'), findsOneWidget);
+      expect(router.canPop(), isFalse);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'TC-HELP-065: the Help row sends one allowlisted button_tap and opens /help',
+        (tester) async {
+      final bodies = <Map<String, dynamic>>[];
+      final mock = MockClient((req) async {
+        if (req.method == 'POST' &&
+            req.url.path.contains('telemetry') &&
+            !req.url.path.contains('enabled')) {
+          bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+        }
+        return http.Response(jsonEncode({'enabled': true}), 200);
+      });
+      final router = GoRouter(initialLocation: '/settings', routes: [
+        GoRoute(
+          path: '/settings',
+          builder: (context, state) => const SettingsPage(),
+        ),
+        GoRoute(
+          path: '/help',
+          builder: (context, state) => const Scaffold(body: Text('Help Page')),
+        ),
+      ]);
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        router.dispose();
+      });
+      ApiService.debugSetHttpClient(mock);
+      addTearDown(ApiService.debugResetHttpClient);
+      await http.runWithClient(() async {
+        await Telemetry.setBackendEnabled(true);
+        await tester.pumpWidget(
+            _buildAppWithRouter(provider: _NullUserProvider(), router: router));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(find.text('Help'), 300,
+            scrollable: find.byType(Scrollable).first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Help'));
+        await tester.pumpAndSettle();
+      }, () => mock);
+      expect(find.text('Help Page'), findsOneWidget);
+      final taps = bodies
+          .where((body) =>
+              body['eventName'] == 'button_tap' &&
+              (body['details'] as Map)['target'] == 'help')
+          .toList();
+      expect(taps, hasLength(1));
+      expect(taps.single['details'],
+          {'screen': 'settings', 'target': 'help', 'route': '/help'});
+    });
+  });
+
   group('SettingsPage - null user render', () {
     testWidgets('renders SettingsPage without crashing', (tester) async {
       await tester.pumpWidget(_buildApp(provider: _NullUserProvider()));

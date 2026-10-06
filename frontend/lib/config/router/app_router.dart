@@ -31,6 +31,11 @@ import 'package:care_connect_app/features/tasks/presentation/tasks_screen.dart';
 import 'package:care_connect_app/pages/notetaker_configuration_page.dart';
 import 'package:care_connect_app/pages/profile_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_article_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_glossary_page.dart';
+import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
+import 'package:care_connect_app/features/help/help_routes.dart';
 import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
@@ -1025,6 +1030,29 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     ),
     GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
     GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
+    GoRoute(
+      path: HelpRoutes.home,
+      builder: (_, __) => const HelpCenterPage(),
+      routes: [
+        GoRoute(
+          path: HelpRoutes.topicPattern,
+          builder: (_, state) => HelpTopicPage(
+            categoryId: state.pathParameters['categoryId']!,
+          ),
+        ),
+        GoRoute(
+          path: HelpRoutes.articlePattern,
+          builder: (_, state) => HelpArticlePage(
+            articleId: state.pathParameters['articleId']!,
+          ),
+        ),
+        GoRoute(
+          path: HelpRoutes.glossaryPattern,
+          builder: (_, state) =>
+              HelpGlossaryPage(termId: state.uri.queryParameters['term']),
+        ),
+      ],
+    ),
     GoRoute(
       path: '/file-management',
       builder: (context, state) => FileManagementPage(
