@@ -211,11 +211,13 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       // can't see that query, so forward it to the connect page once.
       redirect: (_, __) {
         if (MedicareConnectPage.returnHandled) return null;
-        final value = Uri.base.queryParameters['medicare'];
-        if (MedicareConnectResult.parse(value) == null) return null;
         MedicareConnectPage.returnHandled = true;
-        return Uri(path: '/medicare-connect', queryParameters: {'medicare': value})
-            .toString();
+        final result =
+            MedicareConnectResult.parse(Uri.base.queryParameters['medicare']);
+        if (result == null) return null;
+        // Keep the result before any sign-in check, then go to the page.
+        MedicareConnectPage.pendingResult = result;
+        return '/medicare-connect';
       },
       builder: (_, __) => const WelcomePage(),
     ),
@@ -232,21 +234,23 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     ),
     GoRoute(
       path: '/medicare-connect',
-      redirect: _requireSignIn,
-      builder: (_, state) {
-        // Result arrives either on the hash route (preferred) or, the first
-        // time only, on the plain page URL the backend returned to.
-        final firstVisit = !MedicareConnectPage.returnHandled;
-        MedicareConnectPage.returnHandled = true;
-        return MedicareConnectPage(
-          result: MedicareConnectResult.parse(
-                  state.uri.queryParameters['medicare']) ??
-              (firstVisit
-                  ? MedicareConnectResult.parse(
-                      Uri.base.queryParameters['medicare'])
-                  : null),
-        );
+      redirect: (context, state) {
+        // Store the ?medicare= result before the sign-in guard can send the
+        // patient to /login, so the outcome isn't lost if the session expired
+        // during the Medicare round trip.
+        final fromRoute =
+            MedicareConnectResult.parse(state.uri.queryParameters['medicare']);
+        if (fromRoute != null) MedicareConnectPage.pendingResult = fromRoute;
+        if (!MedicareConnectPage.returnHandled) {
+          MedicareConnectPage.returnHandled = true;
+          MedicareConnectPage.pendingResult ??=
+              MedicareConnectResult.parse(Uri.base.queryParameters['medicare']);
+        }
+        return _requireSignIn(context, state);
       },
+      builder: (_, __) => MedicareConnectPage(
+        result: MedicareConnectPage.takePendingResult(),
+      ),
     ),
     GoRoute(
       path: '/ui-preview',

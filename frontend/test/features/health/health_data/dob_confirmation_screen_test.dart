@@ -26,16 +26,21 @@ IdentityConflict _dob(int id,
     );
 
 class _FakeConflicts extends IdentityConflictService {
-  _FakeConflicts(this.pending, {this.resolveResult = true, this.throwOnResolve})
+  _FakeConflicts(this.pending,
+      {this.resolveResult = true, this.throwOnResolve, this.throwOnFetch})
       : super(useMock: false);
 
   final List<IdentityConflict> pending;
+  final Object? throwOnFetch;
   final bool resolveResult;
   final Object? throwOnResolve;
   final resolved = <String>[];
 
   @override
-  Future<List<IdentityConflict>> fetchPending() async => pending;
+  Future<List<IdentityConflict>> fetchPending() async {
+    if (throwOnFetch != null) throw throwOnFetch!;
+    return pending;
+  }
 
   @override
   Future<bool> resolve(int conflictId, {required bool accepted}) async {
@@ -65,7 +70,7 @@ void main() {
               canonicalValueBefore: 'female',
               incomingValue: 'unknown'),
         ]));
-    expect(find.text('1 item need your confirmation'), findsOneWidget);
+    expect(find.text('1 item needs your confirmation'), findsOneWidget);
     expect(find.text('Which date of birth is correct?'), findsOneWidget);
     expect(find.text('1980-05-14'), findsOneWidget);
     expect(find.text('1985-05-14'), findsOneWidget);
@@ -160,5 +165,19 @@ void main() {
     await _pump(t, _FakeConflicts([_dob(1)]));
     final low = lowContrastText(t, find.byType(ListView));
     expect(low, isEmpty, reason: low.join('\n'));
+  });
+
+  testWidgets('DOB load failure says so instead of "all caught up", and '
+      'offers Try again (#263 review)', (t) async {
+    await _pump(t, _FakeConflicts([_dob(1)], throwOnFetch: Exception('down')));
+    expect(find.text('We couldn\u2019t check your information'), findsOneWidget);
+    expect(find.textContaining('all caught up'), findsNothing);
+    expect(find.text('Try again'), findsOneWidget);
+  });
+
+  test('with the mock off, resolve never reports a save that did not happen '
+      '(#263 review)', () async {
+    expect(await IdentityConflictService(useMock: false).resolve(1, accepted: true),
+        isFalse);
   });
 }

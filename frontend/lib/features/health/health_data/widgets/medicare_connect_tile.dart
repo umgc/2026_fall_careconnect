@@ -355,7 +355,7 @@ class _Message {
       case MedicareConnectResult.linkExpired:
         return const _Message(_Tone.info,
             'The connection timed out before it finished. '
-            'Press Connect to try again.');
+            'Press Connect Medicare Account to try again.');
       case MedicareConnectResult.alreadyLinked:
         // Backend: ALREADY_LINKED_ELSEWHERE, i.e. a different patient.
         return const _Message(_Tone.error,

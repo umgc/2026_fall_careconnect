@@ -85,6 +85,7 @@ void main() {
     originalConnect = MedicareConnectService.instance;
     MedicareConnectService.instance = _NotConnected();
     MedicareConnectPage.returnHandled = false;
+    MedicareConnectPage.pendingResult = null;
   });
 
   tearDown(() {
@@ -153,5 +154,35 @@ void main() {
     expect(_path(r), '/dob-confirm');
     expect(find.text('Which date of birth is correct?'), findsNothing);
     expect(find.text('05/14/1985'), findsNothing);
+  });
+
+  testWidgets('a ?medicare= result is kept through the sign-in guard and shown '
+      'after signing in (#263 review)', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 1200));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    final previous = FlutterError.onError;
+    FlutterError.onError = (d) {
+      final overflow = d.exceptionAsString().contains('RenderFlex overflowed');
+      if (!overflow) previous?.call(d);
+    };
+    addTearDown(() => FlutterError.onError = previous);
+
+    final r = await _open(t, '/medicare-connect?medicare=cancelled',
+        signedIn: false);
+    expect(_path(r), '/login');
+    expect(MedicareConnectPage.pendingResult, MedicareConnectResult.cancelled);
+
+    await UserRoleStorageService.instance
+        .setUserData(role: 'PATIENT', userId: 1, patientId: 1);
+    r.go('/medicare-connect');
+    for (var i = 0; i < 20; i++) {
+      await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    FlutterError.onError = previous;
+    expect(_path(r), '/medicare-connect');
+    expect(find.textContaining('didn\'t finish connecting'), findsOneWidget);
+    expect(MedicareConnectPage.pendingResult, isNull);
   });
 }

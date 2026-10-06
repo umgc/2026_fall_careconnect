@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../services/api_service.dart';
+import '../../../../services/auth_service.dart';
 import '../../../../config/env_constant.dart';
 
 /// Client for the Medicare (Blue Button) connect flow.
@@ -22,6 +23,12 @@ import '../../../../config/env_constant.dart';
 ///      account is linked to a DIFFERENT CareConnect patient.
 ///   GET  /v1/api/medicare/status     -> { connected, status: LINKED|UNLINKED, connectedAt }
 ///   POST /v1/api/medicare/disconnect
+///
+/// On a 401 every call refreshes the token once and retries, the same rule as
+/// ApiClient, so an expired-but-refreshable token never shows "sign-in
+/// expired" while Health Data loads fine (#263 review). It stays on
+/// package:http so a transport failure is still told apart from a server
+/// error (ApiClient folds both into one "Network error").
 class MedicareConnectService {
   MedicareConnectService();
 
@@ -57,11 +64,25 @@ class MedicareConnectService {
     if (!ok) throw const MedicareConnectException(MedicareConnectError.launch);
   }
 
+  /// Sends a request; on 401 refreshes the token once and retries.
+  static Future<http.Response> _send(
+      Future<http.Response> Function(Map<String, String> headers) request) async {
+    final first = await request(await ApiService.getAuthHeaders());
+    if (first.statusCode != 401) return first;
+    try {
+      final refreshed = await AuthService.forceRefreshToken();
+      if (refreshed == null) return first;
+    } catch (_) {
+      return first;
+    }
+    return request(await ApiService.getAuthHeaders());
+  }
+
   Future<Uri> fetchConnectUrl() async {
     final http.Response resp;
     try {
-      final headers = await ApiService.getAuthHeaders();
-      resp = await http.get(Uri.parse('$_base/connect-url'), headers: headers);
+      resp = await _send(
+          (h) => http.get(Uri.parse('$_base/connect-url'), headers: h));
     } catch (_) {
       throw const MedicareConnectException(MedicareConnectError.network);
     }
@@ -91,9 +112,8 @@ class MedicareConnectService {
   /// patient isn't connected.
   Future<MedicareStatus?> status() async {
     try {
-      final headers = await ApiService.getAuthHeaders();
       final resp =
-          await http.get(Uri.parse('$_base/status'), headers: headers);
+          await _send((h) => http.get(Uri.parse('$_base/status'), headers: h));
       if (resp.statusCode != 200) return null;
       final body = jsonDecode(resp.body);
       return body is Map<String, dynamic> ? MedicareStatus.fromJson(body) : null;
@@ -105,9 +125,8 @@ class MedicareConnectService {
   /// True when the backend confirms the disconnect.
   Future<bool> disconnect() async {
     try {
-      final headers = await ApiService.getAuthHeaders();
-      final resp =
-          await http.post(Uri.parse('$_base/disconnect'), headers: headers);
+      final resp = await _send(
+          (h) => http.post(Uri.parse('$_base/disconnect'), headers: h));
       return resp.statusCode == 200 || resp.statusCode == 204;
     } catch (_) {
       return false;

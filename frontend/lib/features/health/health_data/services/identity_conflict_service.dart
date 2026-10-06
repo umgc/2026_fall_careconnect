@@ -32,7 +32,11 @@ class IdentityConflictService {
     // await ApiClient.instance.postJson(
     //   '/v1/api/ehr/identity-conflicts/$conflictId/resolve',
     //   body: {'status': accepted ? 'ACCEPTED' : 'REJECTED', 'resolvedBy': 'PATIENT'});
-    return true;
+    //
+    // Until then nothing is saved, so never report success: the screen shows
+    // "We couldn't save your choice. Nothing was changed." instead of a false
+    // "Date of birth updated." Wire this together with fetchPending.
+    return false;
   }
 
   static final _mockPending = <IdentityConflict>[

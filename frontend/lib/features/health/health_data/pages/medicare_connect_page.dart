@@ -11,9 +11,23 @@ class MedicareConnectPage extends StatelessWidget {
 
   final MedicareConnectResult? result;
 
-  /// Lets the "/" route forward a base-URL return here exactly once per page
-  /// load, so visiting the welcome page later doesn't bounce back.
+  /// True once the plain page URL (https://app/?medicare=...) has been read,
+  /// so it is used at most once per page load and visiting "/" later doesn't
+  /// bounce back here.
   static bool returnHandled = false;
+
+  /// A ?medicare= result that hasn't been shown yet. It is stored BEFORE the
+  /// sign-in guard runs, so if the session expired during the Medicare round
+  /// trip the patient still sees the outcome after signing in and opening
+  /// this page again (in the same browser session).
+  static MedicareConnectResult? pendingResult;
+
+  /// Returns the pending result once, then forgets it.
+  static MedicareConnectResult? takePendingResult() {
+    final r = pendingResult;
+    pendingResult = null;
+    return r;
+  }
 
   @override
   Widget build(BuildContext context) {

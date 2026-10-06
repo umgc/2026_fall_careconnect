@@ -25,6 +25,7 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
   late final IdentityConflictService _service =
       widget.service ?? IdentityConflictService();
   bool _loading = true;
+  bool _loadFailed = false;
   List<IdentityConflict> _conflicts = [];
   final Set<int> _resolving = {};
 
@@ -35,13 +36,26 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
-    final list = await _service.fetchPending();
-    if (!mounted) return;
     setState(() {
-      _conflicts = list.where((c) => c.isDob && c.isPending).toList();
-      _loading = false;
+      _loading = true;
+      _loadFailed = false;
     });
+    try {
+      final list = await _service.fetchPending();
+      if (!mounted) return;
+      setState(() {
+        _conflicts = list.where((c) => c.isDob && c.isPending).toList();
+        _loading = false;
+      });
+    } catch (_) {
+      // Never show "all caught up" when we couldn't actually check.
+      if (!mounted) return;
+      setState(() {
+        _conflicts = [];
+        _loading = false;
+        _loadFailed = true;
+      });
+    }
   }
 
   Future<void> _resolve(IdentityConflict c, bool accepted) async {
@@ -84,7 +98,9 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: _teal))
-          : _conflicts.isEmpty
+          : _loadFailed
+              ? _loadError()
+              : _conflicts.isEmpty
               ? _allDone()
               : ListView(
                   padding: const EdgeInsets.all(16),
@@ -114,7 +130,9 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${_conflicts.length} item${_conflicts.length == 1 ? '' : 's'} need your confirmation',
+                Text(_conflicts.length == 1
+                    ? '1 item needs your confirmation'
+                    : '${_conflicts.length} items need your confirmation',
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, color: _text)),
                 const SizedBox(height: 4),
@@ -242,6 +260,36 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
             Text('From $source',
                 style: const TextStyle(fontSize: 12, color: _muted)),
         ],
+      ),
+    );
+  }
+
+  Widget _loadError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: _muted, size: 44),
+            const SizedBox(height: 12),
+            const Text('We couldn\u2019t check your information',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: _text)),
+            const SizedBox(height: 6),
+            const Text('Nothing was changed. Please try again.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: _muted, fontSize: 14)),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _load,
+              style: TextButton.styleFrom(
+                  foregroundColor: _teal, minimumSize: const Size(48, 48)),
+              child: const Text('Try again'),
+            ),
+          ],
+        ),
       ),
     );
   }
