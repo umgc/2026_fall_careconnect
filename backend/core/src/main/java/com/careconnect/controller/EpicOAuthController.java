@@ -5,6 +5,7 @@ import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrCredential;
 import com.careconnect.model.ehr.EhrResource;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.security.EpicAccessPolicy;
 import com.careconnect.security.PkceUtil;
 import com.careconnect.service.ConsentService;
 import com.careconnect.service.ehr.EpicAuthStateStore;
@@ -57,6 +58,7 @@ public class EpicOAuthController {
     private final EhrResourceRepository resourceRepo;
     private final ObjectMapper objectMapper;
     private final EpicProperties cfg;
+    private final EpicAccessPolicy epicAccessPolicy;
 
     @GetMapping("/authorize")
     public ResponseEntity<Map<String, String>> authorize(
@@ -64,6 +66,11 @@ public class EpicOAuthController {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // Only the patient links their own Epic account: credentials and mirror rows are only ever
+        // written under a patient's user id. A caregiver (or anyone else) is refused with 403.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         String verifier = PkceUtil.newCodeVerifier();
         String challenge = PkceUtil.s256Challenge(verifier);
@@ -112,6 +119,10 @@ public class EpicOAuthController {
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        // Epic connection lifecycle is the patient's own; a caregiver is refused with 403.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         Optional<EhrCredential> cred = epic.findCredential(me.getId());
         Map<String, Object> body = new HashMap<>();
         body.put("connected", cred.map(c -> c.getStatus() == EhrCredential.Status.ACTIVE).orElse(false));
@@ -133,6 +144,10 @@ public class EpicOAuthController {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // Resync writes mirror rows under the caller's id, so it is patient-only like connect.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         // auto = incremental when we already hold Epic data for this user, else a full import;
         // full/delta force the mode (delta itself degrades to full when no watermark exists).
@@ -164,21 +179,27 @@ public class EpicOAuthController {
     }
 
     /**
-     * Read one mirrored Epic resource for the current user (Epic Phase 2). Scoped to the caller's
-     * own {@code ehr_resource} rows (userId from the JWT, never a client-supplied id) so it cannot
-     * be used to read another patient's data. Backs the Epic citation detail page.
+     * Read one mirrored Epic resource (Epic Phase 2). Targets a patient: the caller's own id by
+     * default, or {@code patientUserId} when given. {@link EpicAccessPolicy#requireEhrReadAccess}
+     * decides who may read — the patient themselves, or a caregiver with an active link and the
+     * patient's {@code EHR_VIEW} consent — and refuses everyone else with a uniform 404. The rows
+     * are always the target patient's (never the caregiver's own). Backs the Epic citation page.
      */
     @GetMapping("/resource/{type}/{id}")
     public ResponseEntity<Map<String, Object>> resource(
             @PathVariable("type") String type,
-            @PathVariable("id") String id) {
+            @PathVariable("id") String id,
+            @RequestParam(value = "patientUserId", required = false) Long patientUserId) {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        final Long target = patientUserId != null ? patientUserId : me.getId();
+        // Throws a uniform 404 for any caller not allowed to read this patient's EHR data.
+        epicAccessPolicy.requireEhrReadAccess(me, target);
         Optional<EhrResource> found = resourceRepo
                 .findByUserIdAndSourceAndResourceTypeAndResourceFhirId(
-                        me.getId(), EpicProperties.SOURCE_EPIC, type, id);
+                        target, EpicProperties.SOURCE_EPIC, type, id);
         if (found.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
@@ -210,6 +231,10 @@ public class EpicOAuthController {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // Only the patient links, so only the patient disconnects; a caregiver is refused with 403.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         epic.disconnect(me.getId());
         consentService.revokeEhrImportConsent(me.getId());

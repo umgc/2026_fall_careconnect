@@ -4,6 +4,7 @@ import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrResource;
 import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.security.Role;
+import com.careconnect.security.EpicAccessPolicy;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +48,9 @@ class EhrResourceControllerTest {
 
     @MockitoBean
     private EhrResourceRepository resourceRepo;
+
+    @MockitoBean
+    private EpicAccessPolicy epicAccessPolicy;
 
     private User user;
 

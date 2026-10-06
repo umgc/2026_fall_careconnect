@@ -5,6 +5,7 @@ import com.careconnect.dto.ehr.EhrResourceListItem;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrResource;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.security.EpicAccessPolicy;
 import com.careconnect.service.ehr.EhrResourceCategory;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,6 +61,7 @@ public class EhrResourceController {
     private final SecurityUtil securityUtil;
     private final EhrResourceRepository resourceRepo;
     private final ObjectMapper objectMapper;
+    private final EpicAccessPolicy epicAccessPolicy;
 
     /**
      * List the caller's mirrored records, filterable by category / free text and sortable. All
@@ -103,15 +105,21 @@ public class EhrResourceController {
             @Parameter(description = "Sort order: latest | earliest | az | za.",
                     schema = @Schema(allowableValues = {"latest", "earliest", "az", "za"},
                             defaultValue = "latest"))
-            @RequestParam(value = "sort", required = false, defaultValue = "latest") final String sort) {
+            @RequestParam(value = "sort", required = false, defaultValue = "latest") final String sort,
+            @Parameter(description = "Patient whose records to read; defaults to the caller. A "
+                    + "caregiver may pass a patient's user id and reads it only with an active link "
+                    + "and the patient's EHR_VIEW consent (otherwise a uniform 404).")
+            @RequestParam(value = "patientUserId", required = false) final Long patientUserId) {
         final User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        final Long target = patientUserId != null ? patientUserId : me.getId();
+        epicAccessPolicy.requireEhrReadAccess(me, target);
         final String src = normalizeSource(source);
         final String qLower = (q == null || q.isBlank()) ? null : q.toLowerCase(Locale.ROOT);
 
-        final List<EhrResourceListItem> items = resourceRepo.findByUserIdAndSource(me.getId(), src).stream()
+        final List<EhrResourceListItem> items = resourceRepo.findByUserIdAndSource(target, src).stream()
                 .filter(r -> !PATIENT_TYPE.equals(r.getResourceType()))
                 .map(r -> toItem(r, src))
                 .filter(it -> category == null || category.isBlank()
@@ -123,7 +131,7 @@ public class EhrResourceController {
                 .sorted(comparatorFor(sort))
                 .collect(Collectors.toList());
 
-        final Instant maxSynced = resourceRepo.findMaxLastSyncedAt(me.getId(), src);
+        final Instant maxSynced = resourceRepo.findMaxLastSyncedAt(target, src);
         final ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
         if (maxSynced != null) {
             builder.header("X-Last-Synced-At", maxSynced.toString());
@@ -157,13 +165,19 @@ public class EhrResourceController {
     public ResponseEntity<Map<String, Object>> patient(
             @Parameter(description = "Source system; defaults to EPIC (the only live source). "
                     + "Case-insensitive — normalized to the stored casing.", example = "EPIC")
-            @RequestParam(value = "source", required = false) final String source) {
+            @RequestParam(value = "source", required = false) final String source,
+            @Parameter(description = "Patient whose demographics to read; defaults to the caller. A "
+                    + "caregiver may pass a patient's user id and reads it only with an active link "
+                    + "and the patient's EHR_VIEW consent (otherwise a uniform 404).")
+            @RequestParam(value = "patientUserId", required = false) final Long patientUserId) {
         final User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        final Long target = patientUserId != null ? patientUserId : me.getId();
+        epicAccessPolicy.requireEhrReadAccess(me, target);
         final String src = normalizeSource(source);
-        final Optional<EhrResource> patientRow = resourceRepo.findByUserIdAndSource(me.getId(), src).stream()
+        final Optional<EhrResource> patientRow = resourceRepo.findByUserIdAndSource(target, src).stream()
                 .filter(r -> PATIENT_TYPE.equals(r.getResourceType()))
                 .findFirst();
         if (patientRow.isEmpty()) {
