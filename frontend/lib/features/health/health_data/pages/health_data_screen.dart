@@ -47,11 +47,25 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     });
   }
 
+  // TODO: Use the patient-confirmed DOB once the DOB confirmation flow
+  // is connected to the unified health data screen.
   String _formatBirthDate(DateTime date) {
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
 
-    return '$month/$day/${date.year}';
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
   @override
