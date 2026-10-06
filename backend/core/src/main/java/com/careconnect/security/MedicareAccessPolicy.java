@@ -1,9 +1,11 @@
 package com.careconnect.security;
 
 import com.careconnect.exception.AppException;
+import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.ConsentGrantRepository;
+import com.careconnect.repository.PatientRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -51,25 +53,42 @@ public class MedicareAccessPolicy {
      */
     public static final String SCOPE_MEDICARE_VIEW = "MEDICARE_VIEW";
 
+    private final PatientRepository patients;
     private final CaregiverPatientLinkRepository caregiverPatientLinks;
     private final ConsentGrantRepository consentGrants;
 
     public MedicareAccessPolicy(
+            final PatientRepository patients,
             final CaregiverPatientLinkRepository caregiverPatientLinks,
             final ConsentGrantRepository consentGrants) {
+        this.patients = Objects.requireNonNull(patients, "patients");
         this.caregiverPatientLinks = Objects.requireNonNull(caregiverPatientLinks, "caregiverPatientLinks");
         this.consentGrants = Objects.requireNonNull(consentGrants, "consentGrants");
     }
 
     /**
-     * Returns normally if {@code caller} may read {@code patientUserId}'s Medicare data, and throws
-     * otherwise.
+     * Returns normally if {@code caller} may read patient {@code patientId}'s Medicare data, and
+     * throws otherwise.
      *
-     * @param caller        the signed-in user, from the JWT; never a value the client supplied
-     * @param patientUserId the user id of the patient whose data is requested
+     * <p>Takes the {@code patient.id}, the id every Medicare table is keyed by
+     * ({@code ehr_patient_crosswalk.patient_id} and the rest), and resolves the patient's user here.
+     * The link and consent tables are keyed by user id instead, and the two ids usually differ, so
+     * accepting a user id would invite callers to pass the id they have in hand, which is the wrong
+     * one. A patient record that does not exist is refused like any other request.
+     *
+     * @param caller    the signed-in user. Load it from the JWT's subject:
+     *                  {@code users.findByEmail(authentication.getName())}, as
+     *                  {@code MedicareConnectionController} does. Not
+     *                  {@code @AuthenticationPrincipal User}: the principal is Spring's
+     *                  {@code UserDetails}, so that parameter would be null and every request refused.
+     *                  Never a value the client supplied.
+     * @param patientId the {@code patient.id} whose data is requested
      * @throws AppException with status 404 for every refusal, with the same message
      */
-    public void requireMedicareAccess(final User caller, final Long patientUserId) {
+    public void requireMedicareAccess(final User caller, final Long patientId) {
+        final Long patientUserId = patientId == null
+                ? null
+                : patients.findById(patientId).map(Patient::getUser).map(User::getId).orElse(null);
         if (!mayAccess(caller, patientUserId)) {
             throw new AppException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
         }
