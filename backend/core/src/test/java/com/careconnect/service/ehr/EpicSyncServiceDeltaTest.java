@@ -2,6 +2,7 @@ package com.careconnect.service.ehr;
 
 import com.careconnect.config.EpicProperties;
 import com.careconnect.indexing.IndexingEventEmitter;
+import com.careconnect.model.Patient;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
 import com.careconnect.repository.ehr.EhrRawPayloadRepository;
@@ -42,6 +43,11 @@ class EpicSyncServiceDeltaTest {
                                        EhrResourceRepository resourceRepo,
                                        EpicOAuthService oauth,
                                        EpicProperties epicProperties) {
+        // syncNow now fails fast when the user has no patient row, so give the mock one.
+        final PatientRepository patientRepository = mock(PatientRepository.class);
+        final Patient patient = new Patient();
+        patient.setId(7L);
+        when(patientRepository.findByUserId(anyLong())).thenReturn(Optional.of(patient));
         return new EpicSyncService(
                 fhirClient,
                 resourceRepo,
@@ -54,7 +60,7 @@ class EpicSyncServiceDeltaTest {
                 mock(ObjectProvider.class),
                 oauth,
                 epicProperties,
-                mock(PatientRepository.class),
+                patientRepository,
                 mock(EhrSourceResolver.class),
                 mock(EhrPatientCrosswalkRepository.class),
                 mock(EhrRawPayloadRepository.class));

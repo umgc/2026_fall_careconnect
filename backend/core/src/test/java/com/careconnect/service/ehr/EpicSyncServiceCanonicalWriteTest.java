@@ -1,6 +1,7 @@
 package com.careconnect.service.ehr;
 
 import com.careconnect.config.EpicProperties;
+import com.careconnect.exception.AppException;
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.Patient;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
@@ -17,10 +18,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpStatus;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -92,6 +95,21 @@ class EpicSyncServiceCanonicalWriteTest {
         service().linkPatientCrosswalk(1L, "epic-patient-abc");
 
         verify(crosswalkRepo, never()).save(any());
+    }
+
+    @Test
+    void syncNow_failsFast_whenUserHasNoPatientRow() {
+        // Epic connect is role-gated to PATIENT and every patient has a patient row, so this never
+        // fires in practice; if it did we refuse rather than write a null-patient (un-reconcilable,
+        // retention-invisible) mirror row.
+        when(patientRepository.findByUserId(1L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().syncNow(1L, EpicSyncService.SyncMode.FULL))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getStatus())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        verify(resourceRepo, never()).save(any(EhrResource.class));
     }
 
     @Test

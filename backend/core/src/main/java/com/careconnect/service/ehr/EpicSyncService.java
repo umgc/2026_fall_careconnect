@@ -1,6 +1,7 @@
 package com.careconnect.service.ehr;
 
 import com.careconnect.config.EpicProperties;
+import com.careconnect.exception.AppException;
 import com.careconnect.indexing.EpicFhirIndexedPayload;
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.Patient;
@@ -21,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -219,15 +221,24 @@ public class EpicSyncService {
         log.info("Epic sync mode={} (requested={}) for user {}{}", effectiveMode, mode, userId,
                 lastUpdatedFilter != null ? " since " + lastUpdatedFilter : "");
 
-        // Canonical dual-write targets (Team E brief S2/S3), resolved once per sync. Null when the
-        // user has no patient row (e.g. a caregiver) or the EPIC source is unseeded — the canonical
-        // writes (crosswalk + raw payload) are then skipped and only the interim ehr_resource mirror
-        // is written, so Ask AI still works and nothing in the existing flow breaks.
-        final Long patientId = patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        // Fail fast if the connecting user has no patient row: every ehr_resource (and raw-payload)
+        // row must carry a patient_id, or it is un-reconcilable AND invisible to the retention purge
+        // (which keys on patient_id + the patient's DOB). Epic connect is role-gated to PATIENT and
+        // every patient has a patient row, so this should never fire; if it does, it is a data-integrity
+        // problem and we refuse rather than write a null-patient mirror. (Was previously a warn-and-write.)
+        final Long patientId = patientRepository.findByUserId(userId)
+                .map(Patient::getId)
+                .orElseThrow(() -> new AppException(
+                        HttpStatus.CONFLICT,
+                        "Cannot sync Epic data: no patient record for this account. "
+                                + "Only a provisioned patient may connect Epic."));
+        // sourceId can still be null when the EPIC source row is unseeded (an environment issue, not
+        // a per-user one): the canonical crosswalk/raw-payload writes are then skipped, but the mirror
+        // is still written with its (non-null) patient_id, so Ask AI and retention keep working.
         final Long sourceId = sourceResolver.idForCode(EpicProperties.SOURCE_EPIC);
-        if (patientId == null || sourceId == null) {
-            log.warn("Epic canonical dual-write disabled for user {} (patientId={}, sourceId={}); "
-                    + "writing interim ehr_resource only", userId, patientId, sourceId);
+        if (sourceId == null) {
+            log.warn("Epic canonical dual-write disabled for user {} (EPIC sourceId unseeded); "
+                    + "writing interim ehr_resource only", userId);
         } else {
             // Self-heal the crosswalk each sync (idempotent); the primary write is on connect.
             upsertCrosswalk(patientId, sourceId, oauth.patientFhirId(userId));
