@@ -920,4 +920,49 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  testWidgets(
+      'TC-HELP-066: the window title follows Back within Help and does not outlive Help',
+      (tester) async {
+    final labels = <String>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemChrome.setApplicationSwitcherDescription') {
+        labels.add((call.arguments as Map)['label'] as String);
+      }
+      return null;
+    });
+    addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    await _withoutNetwork((_) async {
+      final router = await _pumpProductionRoutes(tester);
+      await openHelpFromSettings(tester);
+      await tester.pumpAndSettle();
+      expect(labels.last, 'Help Center | CareConnect Help');
+      await tester.tap(find.text('Viewing medications and recording a dose'));
+      await tester.pumpAndSettle();
+      expect(labels.last,
+          'Viewing medications and recording a dose | CareConnect Help');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(HelpCenterPage), findsOneWidget);
+      expect(labels.last, 'Help Center | CareConnect Help',
+          reason: 'Back to Help Center names Help Center, not the article.');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsPage), findsOneWidget);
+      expect(labels.last, isNot(endsWith('| CareConnect Help')),
+          reason: 'Settings must not keep a Help page title.');
+      // A direct link installs Help Center and the article together.
+      router.go(HelpRoutes.article('missing-article'));
+      await tester.pumpAndSettle();
+      expect(labels.last, 'Article not found | CareConnect Help');
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(HelpCenterPage), findsOneWidget);
+      expect(labels.last, 'Help Center | CareConnect Help');
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

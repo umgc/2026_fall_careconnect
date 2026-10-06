@@ -9,6 +9,7 @@ import 'package:care_connect_app/features/help/presentation/pages/help_article_p
 import 'package:care_connect_app/features/help/presentation/pages/help_center_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_glossary_page.dart';
 import 'package:care_connect_app/features/help/presentation/pages/help_topic_page.dart';
+import 'package:care_connect_app/features/help/presentation/widgets/help_accessibility.dart';
 import 'package:care_connect_app/features/help/presentation/widgets/help_article_tile.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -203,7 +204,9 @@ void main() {
             expect(data.headingLevel, 1, reason: location);
             expect(data.locale, const Locale('en'), reason: location);
             expect(data.label, isNotEmpty);
-            final pageTitle = tester.widgetList<Title>(find.byType(Title)).last;
+            final pageTitle = tester
+                .widgetList<HelpPageTitle>(find.byType(HelpPageTitle))
+                .last;
             expect(pageTitle.title, '${data.label} | CareConnect Help');
             final media = MediaQuery.of(tester.element(heading));
             expect(media.textScaler, layout.value.$2);

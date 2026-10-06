@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/help/help_routes.dart';
@@ -19,6 +20,8 @@ class AppTextScaling extends StatefulWidget {
 // does not: Back updates it without notifying, and a push leaves it at the
 // page underneath, so read the top-most route from the delegate instead.
 class _AppTextScalingState extends State<AppTextScaling> {
+  bool _wasHelp = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +64,16 @@ class _AppTextScalingState extends State<AppTextScaling> {
         : router.state.uri.path;
     final isHelp =
         path == HelpRoutes.home || path.startsWith('${HelpRoutes.home}/');
+    // Help names the window after its page; give the app title back on exit.
+    if (_wasHelp && !isHelp) {
+      final app = context.findAncestorWidgetOfExactType<Title>();
+      if (app != null) {
+        SystemChrome.setApplicationSwitcherDescription(
+            ApplicationSwitcherDescription(
+                label: app.title, primaryColor: app.color.toARGB32()));
+      }
+    }
+    _wasHelp = isHelp;
     return MediaQuery(
         data: media.copyWith(
             textScaler: isHelp

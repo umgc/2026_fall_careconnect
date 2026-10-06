@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The bundled Help content and all current Help label fallbacks are English.
 /// Keep the language explicit for screen readers when the app locale differs.
@@ -23,11 +24,57 @@ class HelpAccessibility extends StatelessWidget {
         data: theme,
         child: pageTitle == null
             ? content
-            : Title(
+            : HelpPageTitle(
                 title: '$pageTitle | CareConnect Help',
                 color: theme.colorScheme.primary,
                 child: content));
   }
+}
+
+/// Names the window after the Help page the user is on. Material's [Title]
+/// reports whenever a page is built, including a page built beneath the
+/// current one, and not again when Back makes a page current; report only
+/// while this page's route is the current one.
+class HelpPageTitle extends StatefulWidget {
+  const HelpPageTitle(
+      {super.key,
+      required this.title,
+      required this.color,
+      required this.child});
+  final String title;
+  final Color color;
+  final Widget child;
+
+  @override
+  State<HelpPageTitle> createState() => _HelpPageTitleState();
+}
+
+class _HelpPageTitleState extends State<HelpPageTitle> {
+  bool _current = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (current && !_current) _report();
+    _current = current;
+  }
+
+  @override
+  void didUpdateWidget(HelpPageTitle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_current &&
+        (oldWidget.title != widget.title || oldWidget.color != widget.color)) {
+      _report();
+    }
+  }
+
+  void _report() => SystemChrome.setApplicationSwitcherDescription(
+      ApplicationSwitcherDescription(
+          label: widget.title, primaryColor: widget.color.toARGB32()));
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Contrast, readable type, targets and visible keyboard focus across Help.
