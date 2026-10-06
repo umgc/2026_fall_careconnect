@@ -53,6 +53,42 @@ void main() {
       expect(l10n.medicarehelp_connected, 'Medicare account connected');
     });
 
+    testWidgets('the connect help names the button by its exact label',
+        (tester) async {
+      final l10n = await _l10n(tester);
+      expect(l10n.medicarehelp_connectButton, 'Connect Medicare Account');
+      expect(l10n.medicarehelp_connectBody,
+          contains('Tap ${l10n.medicarehelp_connectButton}.'));
+    });
+
+    testWidgets(
+        'the mismatch help says only date of birth asks first, as the reconciler does',
+        (tester) async {
+      final l10n = await _l10n(tester);
+      final body = l10n.medicarehelp_reconcileBody;
+      expect(
+          body,
+          contains(
+              'If Medicare has a different date of birth, CareConnect asks you before changing it.'));
+      expect(body, contains('update automatically, and we let you know'));
+      expect(body, isNot(contains('before changing anything')));
+    });
+
+    testWidgets(
+        'the disconnect help says what is deleted and what stays (A1-Q1)',
+        (tester) async {
+      final l10n = await _l10n(tester);
+      final body = l10n.medicarehelp_disconnectBody;
+      expect(
+          body,
+          contains(
+              'deletes your Medicare connection and the Medicare records it brought in'));
+      expect(
+          body,
+          contains(
+              'details already updated in your profile, like your address, stay'));
+    });
+
     testWidgets(
         'a help card shows its topic with the heading marked as a heading',
         (tester) async {
