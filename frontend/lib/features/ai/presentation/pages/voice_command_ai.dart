@@ -194,9 +194,28 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         entity: 'patient list'),
     _CommandMatch(
         phrase: 'show my patients', intent: 'navigate', entity: 'patients'),
-    _CommandMatch(phrase: 'open evv', intent: 'navigate', entity: 'evv'),
     _CommandMatch(
-        phrase: 'open notetaker', intent: 'navigate', entity: 'notetaker'),
+        phrase: 'patient list', intent: 'navigate', entity: 'patients'),
+    _CommandMatch(phrase: 'open evv', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'evv', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'e v v', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'ee vee vee', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'e.v.v.', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'e-v-v', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'open e v v', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'open ee vee vee', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'electronic visit verification', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'open electronic visit verification', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'visit verification', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'start evv', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'clock in', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'clock out', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(
+        phrase: 'open note taker', intent: 'navigate', entity: 'notetaker'),
+    _CommandMatch(
+        phrase: 'take me to note taker', intent: 'navigate', entity: 'notetaker'),
+     _CommandMatch(
+        phrase: 'note taker', intent: 'navigate', entity: 'notetaker'),
     _CommandMatch(
         phrase: 'open invoice assistant',
         intent: 'navigate',
