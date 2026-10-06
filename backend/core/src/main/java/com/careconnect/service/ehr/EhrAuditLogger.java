@@ -6,6 +6,7 @@ import com.careconnect.repository.ehr.EhrAuditEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.OffsetDateTime;
 import java.util.Map;
 
 /**
@@ -30,6 +31,23 @@ public class EhrAuditLogger {
                     final Long actorUserId,
                     final Integer recordCount,
                     final Map<String, Object> details) {
+        log(patientId, source, resourceType, outcome, actorUserId, recordCount, details, null);
+    }
+
+    /**
+     * As above, with the time the attempt started. A caller that reads changes "since the last
+     * retrieval" from this log passes the time captured before it asked the source, so a record
+     * the source updates while the request is in flight is asked for again next time (DEF-MCR-16).
+     * Null means now.
+     */
+    public void log(final Long patientId,
+                    final String source,
+                    final String resourceType,
+                    final EhrRetrievalOutcome outcome,
+                    final Long actorUserId,
+                    final Integer recordCount,
+                    final Map<String, Object> details,
+                    final OffsetDateTime attemptedAt) {
         repo.save(EhrAuditEvent.builder()
                 .patientId(patientId)
                 .source(source)
@@ -38,6 +56,7 @@ public class EhrAuditLogger {
                 .actorUserId(actorUserId)
                 .recordCount(recordCount)
                 .details(details)
+                .eventTime(attemptedAt)
                 .build());
     }
 }

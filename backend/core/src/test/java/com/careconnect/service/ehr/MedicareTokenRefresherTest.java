@@ -74,7 +74,7 @@ class MedicareTokenRefresherTest {
     }
 
     @Test
-    @DisplayName("sends grant_type=refresh_token with HTTP Basic client credentials and returns the new tokens")
+    @DisplayName("TC-MCR-LINK-021: sends grant_type=refresh_token with HTTP Basic client credentials and returns the new tokens")
     void refreshes() {
         responseBody = "{\"access_token\":\"new-access\",\"expires_in\":3600,\"refresh_token\":\"new-refresh\",\"token_type\":\"Bearer\"}";
 
@@ -88,7 +88,7 @@ class MedicareTokenRefresherTest {
     }
 
     @Test
-    @DisplayName("a response without a new refresh token or expiry still refreshes")
+    @DisplayName("TC-MCR-LINK-022: a response without a new refresh token or expiry still refreshes")
     void refreshWithoutRotation() {
         responseBody = "{\"access_token\":\"new-access\"}";
 
@@ -96,7 +96,7 @@ class MedicareTokenRefresherTest {
     }
 
     @Test
-    @DisplayName("400 invalid_grant is Rejected: the grant is gone and the patient must link again")
+    @DisplayName("TC-MCR-LINK-023: 400 invalid_grant is Rejected: the grant is gone and the patient must link again")
     void invalidGrantIsRejected() {
         status = 400;
         responseBody = "{\"error\":\"invalid_grant\"}";
@@ -105,7 +105,7 @@ class MedicareTokenRefresherTest {
     }
 
     @Test
-    @DisplayName("a server error is Failed, not Rejected, so the stored tokens are kept")
+    @DisplayName("TC-MCR-LINK-024: a server error is Failed, not Rejected, so the stored tokens are kept")
     void serverErrorIsFailed() {
         status = 503;
 
@@ -113,7 +113,7 @@ class MedicareTokenRefresherTest {
     }
 
     @Test
-    @DisplayName("a 200 without an access token is Failed")
+    @DisplayName("TC-MCR-LINK-025: a 200 without an access token is Failed")
     void missingAccessTokenIsFailed() {
         responseBody = "{\"token_type\":\"Bearer\"}";
 

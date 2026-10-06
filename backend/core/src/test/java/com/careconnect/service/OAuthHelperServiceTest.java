@@ -75,7 +75,7 @@ class OAuthHelperServiceTest {
     }
 
     @Test
-    @DisplayName("a Medicare callback completes the link with the session's link token, then discards the client and session")
+    @DisplayName("TC-MCR-LINK-026: a Medicare callback completes the link with the session's link token, then discards the client and session")
     void successCompletesLink() throws Exception {
         final Instant expires = Instant.parse("2026-10-04T12:00:00Z");
         when(authorizedClients.loadAuthorizedClient("medicare", BENEFICIARY)).thenReturn(client(expires, "refresh"));
@@ -90,7 +90,7 @@ class OAuthHelperServiceTest {
     }
 
     @Test
-    @DisplayName("the outcome code reaches the app, e.g. a Medicare account already linked to someone else")
+    @DisplayName("TC-MCR-LINK-027: the outcome code reaches the app, e.g. a Medicare account already linked to someone else")
     void outcomeIsPassedOn() throws Exception {
         when(authorizedClients.loadAuthorizedClient("medicare", BENEFICIARY)).thenReturn(client(null, null));
         when(connections.completeLink("link-token", BENEFICIARY, "access", null, null)).thenReturn(LinkOutcome.ALREADY_LINKED_ELSEWHERE);
@@ -101,7 +101,7 @@ class OAuthHelperServiceTest {
     }
 
     @Test
-    @DisplayName("a callback for any other registration links nothing, but still cleans up")
+    @DisplayName("TC-MCR-LINK-028: a callback for any other registration links nothing, but still cleans up")
     void otherRegistrationLinksNothing() throws Exception {
         handler.onAuthenticationSuccess(request, response, login("google"));
 
@@ -112,7 +112,7 @@ class OAuthHelperServiceTest {
     }
 
     @Test
-    @DisplayName("FR-MCR-05: the patient denying at Medicare abandons the link and reports 'cancelled'")
+    @DisplayName("TC-MCR-LINK-029: FR-MCR-05: the patient denying at Medicare abandons the link and reports 'cancelled'")
     void deniedIsCancelled() throws Exception {
         handler.onAuthenticationFailure(request, response,
                 new OAuth2AuthenticationException(new OAuth2Error("access_denied")));
@@ -123,7 +123,7 @@ class OAuthHelperServiceTest {
     }
 
     @Test
-    @DisplayName("FR-MCR-08: any other failure, such as the token exchange, abandons the link and reports 'failed'")
+    @DisplayName("TC-MCR-LINK-030: FR-MCR-08: any other failure, such as the token exchange, abandons the link and reports 'failed'")
     void otherFailureIsFailed() throws Exception {
         handler.onAuthenticationFailure(request, response,
                 new OAuth2AuthenticationException(new OAuth2Error("invalid_token_response")));

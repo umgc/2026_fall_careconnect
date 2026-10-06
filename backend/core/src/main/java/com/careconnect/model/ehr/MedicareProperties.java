@@ -37,8 +37,25 @@ public class MedicareProperties {
         return mode == null ? MODE_MOCK : mode.toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * True while live retrieval talks to the CMS sandbox. Its beneficiaries are synthetic, so data
+     * from it is synthetic even in live mode. Set {@code careconnect.medicare.sandbox=false} only
+     * once an environment is connected to production Blue Button.
+     */
+    @Value("${careconnect.medicare.sandbox:true}")
+    private boolean sandbox;
+
     /** True when responses are fixture-backed and must be labelled synthetic to callers. */
     public boolean isMock() {
         return MODE_MOCK.equals(getMode());
+    }
+
+    /**
+     * True when the data is not a real beneficiary's record: fixtures (mock mode) or the CMS
+     * sandbox. This is what the envelope's {@code synthetic} flag, and the app's synthetic-data
+     * banner, must follow.
+     */
+    public boolean isSynthetic() {
+        return isMock() || sandbox;
     }
 }

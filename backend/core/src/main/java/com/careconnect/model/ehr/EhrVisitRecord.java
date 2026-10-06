@@ -55,10 +55,12 @@ public class EhrVisitRecord extends Auditable {
         this.patientId = patientId;
         this.sourceUpdatedAt = eob.getMeta().getLastUpdated().toInstant();
         this.sourceId = sourceId;
-        this.externalVisitId = eob.getId();
+        // The id part only: read from a Bundle, getId() is the full URL plus _history/<version>.
+        this.externalVisitId = eob.getIdElement().getIdPart();
         this.careTeam = eob.getCareTeamFirstRep().getProvider().getDisplay();
         this.accident = eob.getAccident().getType().getText();
-        this.serviceDate = eob.getCreated().toInstant();
+        // Required in FHIR R4, but one malformed EOB must not fail the whole visit list.
+        this.serviceDate = eob.hasCreated() ? eob.getCreated().toInstant() : null;
         this.diagnosis = eob.getDiagnosisFirstRep().getType().toString();
         this.disposition = eob.getDisposition();
         this.facility = eob.getFacility().getDisplay();
@@ -66,7 +68,7 @@ public class EhrVisitRecord extends Auditable {
         this.procedurePerformed = eob.getProcedureFirstRep().toString();
         this.notes = eob.getProcessNoteFirstRep().getText();
         this.referral = eob.getReferral().getDisplay();
-        this.status = eob.getStatus().getDisplay();
+        this.status = eob.hasStatus() ? eob.getStatus().getDisplay() : null;
         this.visitType = eob.getType().getText();
     }
     @Id

@@ -83,7 +83,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("a user is mapped to their patient id, not their user id")
+    @DisplayName("TC-MCR-LINK-001: a user is mapped to their patient id, not their user id")
     void patientIdIsNotUserId() {
         final Patient patient = Patient.builder().id(PATIENT_ID).build();
         when(patients.findByUserId(USER_ID)).thenReturn(Optional.of(patient));
@@ -93,7 +93,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("starting a link stores the patient id, a fresh link token, a 15-minute expiry, and no external id")
+    @DisplayName("TC-MCR-LINK-002: starting a link stores the patient id, a fresh link token, a 15-minute expiry, and no external id")
     void startLinkCreatesPendingRow() {
         when(crosswalks.findByPatientIdAndSourceId(PATIENT_ID, MEDICARE_SOURCE)).thenReturn(Optional.empty());
 
@@ -110,7 +110,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("re-linking keeps the existing link working until the new sign-in completes")
+    @DisplayName("TC-MCR-LINK-003: re-linking keeps the existing link working until the new sign-in completes")
     void reLinkKeepsExistingToken() {
         final EhrPatientCrosswalk linked = pending(null, null);
         linked.setToken(cryptor.encrypt("old-access"));
@@ -124,14 +124,14 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("each start issues a different link token")
+    @DisplayName("TC-MCR-LINK-004: each start issues a different link token")
     void linkTokensAreUnique() {
         when(crosswalks.findByPatientIdAndSourceId(PATIENT_ID, MEDICARE_SOURCE)).thenReturn(Optional.empty());
         assertThat(service.startLink(PATIENT_ID)).isNotEqualTo(service.startLink(PATIENT_ID));
     }
 
     @Test
-    @DisplayName("an expired, unknown or blank link token is not a pending link")
+    @DisplayName("TC-MCR-LINK-005: an expired, unknown or blank link token is not a pending link")
     void expiredOrUnknownTokenIsRefused() {
         when(crosswalks.findByLinkToken("expired")).thenReturn(Optional.of(pending("expired", NOW.minusSeconds(1))));
         when(crosswalks.findByLinkToken("unknown")).thenReturn(Optional.empty());
@@ -143,7 +143,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("completing a link stores encrypted tokens, the external id, and clears the link token to null")
+    @DisplayName("TC-MCR-LINK-006: completing a link stores encrypted tokens, the external id, and clears the link token to null")
     void completeLinkStoresEncryptedTokens() {
         final EhrPatientCrosswalk row = pending("lt", NOW.plusSeconds(60));
         when(crosswalks.findByLinkToken("lt")).thenReturn(Optional.of(row));
@@ -165,7 +165,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("an expired link token at the callback stores nothing")
+    @DisplayName("TC-MCR-LINK-007: an expired link token at the callback stores nothing")
     void completeLinkWithExpiredTokenStoresNothing() {
         when(crosswalks.findByLinkToken("lt")).thenReturn(Optional.of(pending("lt", NOW.minusSeconds(1))));
 
@@ -174,7 +174,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("a Medicare account already linked to another patient is refused, and the pending row removed")
+    @DisplayName("TC-MCR-LINK-008: a Medicare account already linked to another patient is refused, and the pending row removed")
     void alreadyLinkedElsewhereIsRefused() {
         final EhrPatientCrosswalk row = pending("lt", NOW.plusSeconds(60));
         final EhrPatientCrosswalk someoneElse = EhrPatientCrosswalk.builder().id(99L).patientId(1L)
@@ -189,7 +189,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("abandoning a link removes a row that was only pending, but keeps an existing link")
+    @DisplayName("TC-MCR-LINK-009: abandoning a link removes a row that was only pending, but keeps an existing link")
     void abandonLink() {
         final EhrPatientCrosswalk onlyPending = pending("p", NOW.plusSeconds(60));
         final EhrPatientCrosswalk relinking = pending("r", NOW.plusSeconds(60));
@@ -206,7 +206,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("status reports linked only once a token is on file; a pending link is not linked")
+    @DisplayName("TC-MCR-LINK-010: status reports linked only once a token is on file; a pending link is not linked")
     void status() {
         final EhrPatientCrosswalk linked = pending(null, null);
         linked.setToken(cryptor.encrypt("a"));
@@ -223,7 +223,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("disconnect revokes at Blue Button, then deletes the Medicare data and the connection in one transaction")
+    @DisplayName("TC-MCR-LINK-011: disconnect revokes at Blue Button, then deletes the Medicare data and the connection in one transaction")
     void disconnectDeletesMedicareData() {
         final EhrPatientCrosswalk linked = pending(null, null);
         linked.setToken(cryptor.encrypt("access-to-revoke"));
@@ -244,7 +244,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("disconnect of a link that never finished deletes without trying to revoke")
+    @DisplayName("TC-MCR-LINK-012: disconnect of a link that never finished deletes without trying to revoke")
     void disconnectPendingLinkSkipsRevoke() {
         when(crosswalks.findByPatientIdAndSourceId(PATIENT_ID, MEDICARE_SOURCE)).thenReturn(Optional.of(pending("x", NOW.plusSeconds(60))));
 
@@ -255,7 +255,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("disconnect with nothing linked is a no-op, not an error")
+    @DisplayName("TC-MCR-LINK-013: disconnect with nothing linked is a no-op, not an error")
     void disconnectWithNothingLinked() {
         when(crosswalks.findByPatientIdAndSourceId(PATIENT_ID, MEDICARE_SOURCE)).thenReturn(Optional.empty());
 
@@ -274,14 +274,14 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("a token well before expiry is used as is, with no refresh")
+    @DisplayName("TC-MCR-LINK-014: a token well before expiry is used as is, with no refresh")
     void freshTokenIsNotRefreshed() {
         assertThat(service.accessToken(linkedExpiringAt(NOW.plusSeconds(1800)))).contains("old-access");
         verifyNoInteractions(refresher);
     }
 
     @Test
-    @DisplayName("STP-M3-E-12: a token at expiry is refreshed without the patient, and the new tokens are stored encrypted")
+    @DisplayName("TC-MCR-LINK-015: a token at expiry is refreshed without the patient, and the new tokens are stored encrypted")
     void expiredTokenIsRefreshed() {
         final EhrPatientCrosswalk row = linkedExpiringAt(NOW.plusSeconds(30));
         when(refresher.refresh("old-refresh")).thenReturn(
@@ -296,7 +296,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("a refresh that does not rotate the refresh token keeps the old one")
+    @DisplayName("TC-MCR-LINK-016: a refresh that does not rotate the refresh token keeps the old one")
     void refreshWithoutRotationKeepsRefreshToken() {
         final EhrPatientCrosswalk row = linkedExpiringAt(NOW.minusSeconds(5));
         when(refresher.refresh("old-refresh")).thenReturn(new MedicareTokenRefresher.Refreshed("new-access", null, null));
@@ -307,7 +307,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("FR-MCR-09: a rejected refresh sets the link to Unlinked and gives no token; the Medicare data stays")
+    @DisplayName("TC-MCR-LINK-017: FR-MCR-09: a rejected refresh sets the link to Unlinked and gives no token; the Medicare data stays")
     void rejectedRefreshUnlinks() {
         final EhrPatientCrosswalk row = linkedExpiringAt(NOW.minusSeconds(5));
         when(refresher.refresh("old-refresh")).thenReturn(new MedicareTokenRefresher.Rejected(400));
@@ -321,7 +321,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("a refresh that merely fails leaves the tokens alone and returns the current one")
+    @DisplayName("TC-MCR-LINK-018: a refresh that merely fails leaves the tokens alone and returns the current one")
     void failedRefreshKeepsCurrentToken() {
         final EhrPatientCrosswalk row = linkedExpiringAt(NOW.minusSeconds(5));
         when(refresher.refresh("old-refresh")).thenReturn(new MedicareTokenRefresher.Failed("timeout"));
@@ -331,7 +331,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("requireAccessToken throws ERR-MCR-05 when there is no working link")
+    @DisplayName("TC-MCR-LINK-019: requireAccessToken throws ERR-MCR-05 when there is no working link")
     void requireAccessTokenWithoutLink() {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.requireAccessToken(pending("x", NOW.plusSeconds(60))))
                 .isInstanceOf(MedicareConnectionService.MedicareNotConnectedException.class)
@@ -339,7 +339,7 @@ class MedicareConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("FR-MCR-09: a token Blue Button rejected marks the link Unlinked without deleting data")
+    @DisplayName("TC-MCR-LINK-020: FR-MCR-09: a token Blue Button rejected marks the link Unlinked without deleting data")
     void markTokenRejected() {
         final EhrPatientCrosswalk row = linkedExpiringAt(NOW.plusSeconds(1800));
         when(crosswalks.findByPatientIdAndSourceId(PATIENT_ID, MEDICARE_SOURCE)).thenReturn(Optional.of(row));

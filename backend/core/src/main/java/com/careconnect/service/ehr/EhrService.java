@@ -2,9 +2,9 @@ package com.careconnect.service.ehr;
 
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
+import ca.uhn.fhir.rest.client.apache.ApacheRestfulClientFactory;
 import com.careconnect.model.ehr.EhrCoverageRecord;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
-import com.careconnect.model.ehr.EhrRawPayload;
 import com.careconnect.model.ehr.EhrVisitRecord;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.hl7.fhir.r4.model.Coverage;
 import org.hl7.fhir.r4.model.ExplanationOfBenefit;
 import org.hl7.fhir.r4.model.Patient;
@@ -24,7 +25,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.time.OffsetDateTime;
 import java.util.Optional;
 
 @Service
@@ -47,8 +47,25 @@ public class EhrService {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public static final FhirContext ctxR4 = FhirContext.forR4();
+    public static final FhirContext ctxR4 = blueButtonContext();
     private static final IParser parser = ctxR4.newJsonParser().setPrettyPrint(true);
+
+    /**
+     * The R4 context, with Apache HttpClient's own retries turned off. {@link BlueButtonRetryPolicy}
+     * owns retrying; HttpClient would otherwise resend a dropped request up to 3 more times inside
+     * each attempt, 12 requests where NFR-DEG-02 allows 3 (DEF-MCR-06, first fixed on #223).
+     * HAPI's timeouts and connection pool stay as they are.
+     */
+    private static FhirContext blueButtonContext() {
+        final FhirContext ctx = FhirContext.forR4();
+        ctx.setRestfulClientFactory(new ApacheRestfulClientFactory(ctx) {
+            @Override
+            protected HttpClientBuilder getHttpClientBuilder() {
+                return super.getHttpClientBuilder().disableAutomaticRetries();
+            }
+        });
+        return ctx;
+    }
     public String patientToJSON(Patient patient) {
         return parser.encodeResourceToString(patient);
     }
@@ -66,39 +83,6 @@ public class EhrService {
     public JsonNode coverageToNode(Coverage coverage) throws JsonProcessingException {return objectMapper.readTree(coverageToJSON(coverage));}
     public JsonNode eobToNode(ExplanationOfBenefit eob) throws JsonProcessingException {return objectMapper.readTree(EOBtoJSON(eob));}
 
-    public EhrRawPayload patientToRawPayload(Patient patient, Long patientId, OffsetDateTime retrievedAt, Long sourceId) {
-        EhrRawPayload toreturn = new EhrRawPayload();
-        toreturn.setPatientId(patientId);
-        toreturn.setPayload(patientToJSON(patient));
-        toreturn.setSourceId(sourceId);
-        toreturn.setResourceType("SourceIdentity");
-        toreturn.setRetrievedAt(retrievedAt);
-        toreturn.setExternalResourceId(patient.getId());
-        return toreturn;
-    }
-
-    public EhrRawPayload coverageToRawPayload(Coverage coverage, Long patientId, OffsetDateTime retrievedAt, Long sourceId) {
-        EhrRawPayload toreturn = new EhrRawPayload();
-        toreturn.setPatientId(patientId);
-        toreturn.setPayload(coverageToJSON(coverage));
-        toreturn.setSourceId(sourceId);
-        toreturn.setResourceType("CoverageRecord");
-        toreturn.setRetrievedAt(retrievedAt);
-        toreturn.setExternalResourceId(coverage.getId());
-        return toreturn;
-    }
-
-    public EhrRawPayload eobToRawPayload(ExplanationOfBenefit eob, Long patientId, OffsetDateTime retrievedAt, Long sourceId) {
-        EhrRawPayload toreturn = new EhrRawPayload();
-        toreturn.setPatientId(patientId);
-        toreturn.setPayload(EOBtoJSON(eob));
-        toreturn.setSourceId(sourceId);
-        toreturn.setResourceType("VisitRecord");
-        toreturn.setRetrievedAt(retrievedAt);
-        toreturn.setExternalResourceId(eob.getId());
-        return toreturn;
-    }
-
     public void updateCoverageRepository(EhrCoverageRecord coverage) {
         // Either update an existing coverage by replacing the id or add this new one to the mix.
         Optional<EhrCoverageRecord> check = ehrCoverageRecordRepository.findByPatientIdAndSourceIdAndExternalCoverageId(coverage.getPatientId(), coverage.getSourceId(), coverage.getExternalCoverageId());
@@ -113,9 +97,14 @@ public class EhrService {
         ehrVisitRecordRepository.save(visit);
     }
 
-
-
-
+    /** The signed-in user's id, for the audit log's acting user. Empty when nobody is signed in. */
+    public Optional<Long> currentUserId() {
+        Authentication currentUserAuth = SecurityContextHolder.getContext().getAuthentication();
+        if (currentUserAuth == null) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmail(currentUserAuth.getName()).map(user -> user.getId());
+    }
 
     /**
      * The signed-in patient's <em>linked</em> crosswalk row for this source. Empty for a user with no
