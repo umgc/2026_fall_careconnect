@@ -1,6 +1,7 @@
 package com.careconnect.controller.ehr;
 
 import com.careconnect.exception.AppException;
+import com.careconnect.model.ehr.MedicareProperties;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.service.OAuthHelperService;
 import com.careconnect.service.ehr.MedicareConnectionService;
@@ -44,14 +45,17 @@ public class MedicareConnectionController {
 
     private final MedicareConnectionService connections;
     private final UserRepository users;
+    private final MedicareProperties properties;
     private final String frontendBaseUrl;
 
     public MedicareConnectionController(
             final MedicareConnectionService connections,
             final UserRepository users,
+            final MedicareProperties properties,
             @Value("${frontend.base-url}") final String frontendBaseUrl) {
         this.connections = connections;
         this.users = users;
+        this.properties = properties;
         this.frontendBaseUrl = frontendBaseUrl;
     }
 
@@ -91,10 +95,19 @@ public class MedicareConnectionController {
     /**
      * {@code { connected, status, connectedAt }}: always 200, so the app can read a not-linked
      * answer without treating it as an error. A user with no patient record is simply not linked.
+     * <p>
+     * In mock mode ({@code careconnect.medicare.mode=mock}) every signed-in user is reported as
+     * linked, because the Medicare reads serve fixture data to every signed-in user without a link.
+     * Otherwise the connect tile would offer "Connect Medicare" next to Medicare records, and connecting
+     * would send the user to the CMS sandbox, which mock mode exists to avoid. {@code connectedAt} is
+     * null: nothing was ever connected.
      */
     @GetMapping("/v1/api/{source}/status")
     public ResponseEntity<ConnectionStatus> status(@PathVariable final String source, final Authentication authentication) {
         requireMedicare(source);
+        if (properties.isMock()) {
+            return ResponseEntity.ok(new ConnectionStatus(true, "LINKED", null));
+        }
         return ResponseEntity.ok(currentPatientId(authentication)
                 .map(connections::status)
                 .orElseGet(() -> new ConnectionStatus(false, "UNLINKED", null)));
