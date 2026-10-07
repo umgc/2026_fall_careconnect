@@ -6,6 +6,7 @@ import com.careconnect.service.ehr.MedicareRecordCache.CachedRead;
 import com.careconnect.service.ehr.MedicareService;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ import java.util.*;
 /**
  * The Medicare reads. Each returns FHIR in a {@link MedicareEnvelope}, served from
  * {@link MedicareRecordCache}: Blue Button is asked again only when the cached data is a day old.
+ * With {@code careconnect.medicare.mode=mock} they are served from {@link MockMedicareSource} instead.
  */
 @RestController
 @Slf4j
@@ -37,6 +39,10 @@ public class EhrController{
     @Autowired
     private MedicareStatusGate statusGate;
 
+    /** Registered only when {@code careconnect.medicare.mode=mock} ({@link MockMedicareSource}). */
+    @Autowired
+    private ObjectProvider<MedicareSource> sources;
+
     private final MedicareResponseMapper mapper = new MedicareResponseMapper();
 
     @GetMapping("/v1/api/{source}/patient")
@@ -44,6 +50,12 @@ public class EhrController{
 
         // To any other teams, just put your Ehr code in an if block like this.
         if(source.equalsIgnoreCase("medicare")){
+            MedicareSource mock = mockSource();
+            if (mock != null) {
+                return ResponseEntity.ok(MedicareEnvelope.ofSingle(
+                        properties.getMode(), properties.isSynthetic(), mapper.toPatientView(mock.fetchPatient()), null));
+            }
+
             Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareService.getId());
             if(crosswalkOpt.isEmpty()){
                 // This person has somehow hit this page without actually being logged in and connected.
@@ -68,6 +80,12 @@ public class EhrController{
 
         // To any other teams, just put your Ehr code in an if block like this.
         if(source.equalsIgnoreCase("medicare")) {
+            MedicareSource mock = mockSource();
+            if (mock != null) {
+                return ResponseEntity.ok(MedicareEnvelope.of(
+                        properties.getMode(), properties.isSynthetic(), mapper.toCoverageView(allowed(mock.fetchCoverage())), null));
+            }
+
             Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareService.getId());
             if(crosswalkOpt.isEmpty()){
                 // This person has somehow hit this page without actually being logged in and connected.
@@ -86,6 +104,12 @@ public class EhrController{
     public ResponseEntity<Object> fetchVisits(@PathVariable String source) {
         // To any other teams, just put your Ehr code in an if block like this.
         if(source.equalsIgnoreCase("medicare")){
+            MedicareSource mock = mockSource();
+            if (mock != null) {
+                return ResponseEntity.ok(MedicareEnvelope.of(
+                        properties.getMode(), properties.isSynthetic(), mapper.toVisitView(allowed(mock.fetchVisits())), null));
+            }
+
             Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareService.getId());
             if(crosswalkOpt.isEmpty()){
                 // This person has somehow hit this page without actually being logged in and connected.
@@ -101,15 +125,15 @@ public class EhrController{
     }
 
     /**
-     * @return the configured source, or {@code null} when Medicare is switched off for this
-     *     environment or the configured mode has no implementation yet
+     * The fixture source in mock mode, which serves every signed-in caller with no Medicare link and no
+     * call to Blue Button. Its envelopes carry {@code fetchedAt: null}, since fixtures are never
+     * retrieved from Medicare.
+     *
+     * @return the mock source, or {@code null} in live mode, where the read goes to the cache and Blue Button
      */
-    /*private MedicareSource resolveSource() {
-        if (!properties.isEnabled()) {
-            return null;
-        }
-        return sources.getIfAvailable();
-    }*/
+    private MedicareSource mockSource() {
+        return properties.isMock() ? sources.getIfAvailable() : null;
+    }
 
     // TODO: figure out what to do with this.
     private ResponseEntity<Object> unavailable(String source) {
