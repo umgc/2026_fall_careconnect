@@ -45,6 +45,13 @@ class VoiceIntentResult {
 class VoiceIntentService {
   static String get _baseUrl => '${getBackendBaseUrl()}/api/voice';
 
+  static const Duration _defaultRequestTimeout = Duration(seconds: 3);
+
+  /// Allows focused service tests to exercise the timeout path without
+  /// introducing a three-second delay into every test run.
+  @visibleForTesting
+  static Duration requestTimeout = _defaultRequestTimeout;
+
   /// Test-only replacement for the intent request.
   ///
   /// The production request normalizes unavailable, timed-out, and failed
@@ -99,7 +106,7 @@ class VoiceIntentService {
             headers: authHeaders,
             body: body,
           )
-          .timeout(const Duration(seconds: 3));
+          .timeout(requestTimeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
