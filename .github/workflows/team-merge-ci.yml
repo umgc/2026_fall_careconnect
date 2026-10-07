@@ -141,7 +141,10 @@ jobs:
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: |
-          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          # --relative: without it git prints repo-root paths (frontend/test/...), which never match
+          # the test/ and lib/ patterns below, so every PR skipped its tests. --diff-filter=d: a
+          # deleted test file must not be passed to flutter test.
+          CHANGED="$(git diff --name-only --relative --diff-filter=d "${DIFF_BASE}" -- .)"
           TEST_FILES=()
           while IFS= read -r f; do
             [ -z "$f" ] && continue
@@ -174,7 +177,8 @@ jobs:
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: backend/core
         run: |
-          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          # --relative and --diff-filter=d: see the Flutter step. Paths must be src/... here.
+          CHANGED="$(git diff --name-only --relative --diff-filter=d "${DIFF_BASE}" -- .)"
           TEST_CLASSES=()
           while IFS= read -r f; do
             [ -z "$f" ] && continue
