@@ -4,7 +4,11 @@ import '../models/health_record.dart';
 import '../models/patient_demographics.dart';
 
 class EhrDataService {
-  Future<List<HealthRecord>> fetchRecords() async {
+  Future<List<HealthRecord>> fetchRecords() async =>
+      await tryFetchRecords() ?? <HealthRecord>[];
+
+  /// The records, or null when the read failed (so the screen can say so).
+  Future<List<HealthRecord>?> tryFetchRecords() async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
 
@@ -23,7 +27,7 @@ class EhrDataService {
           .map(_toHealthRecord)
           .toList();
     } catch (_) {
-      return <HealthRecord>[];
+      return null;
     }
   }
 

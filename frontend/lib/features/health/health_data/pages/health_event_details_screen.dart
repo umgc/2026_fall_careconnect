@@ -60,7 +60,11 @@ class HealthEventDetailsScreen extends StatelessWidget {
                                 .labelMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  // The light theme's primary is 2.85:1 on white.
+                                  color: Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Theme.of(context).colorScheme.primary
+                                      : const Color(0xFF006B80),
                                 ),
                           ),
                           const SizedBox(height: 12),

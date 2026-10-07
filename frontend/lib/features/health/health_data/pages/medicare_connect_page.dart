@@ -37,6 +37,9 @@ class MedicareConnectPage extends StatelessWidget {
         backgroundColor: Colors.white,
         foregroundColor: const Color(0xFF0F172A),
         elevation: 0,
+        // The dark theme's title style is light grey; this bar stays white.
+        titleTextStyle: const TextStyle(
+            color: Color(0xFF0F172A), fontSize: 20, fontWeight: FontWeight.w600),
         title: const Text('Connect Medicare'),
         leading: IconButton(
           tooltip: 'Back to Health Data',

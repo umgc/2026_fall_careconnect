@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../../services/api_client.dart';
 import '../models/health_record.dart';
 
@@ -9,14 +11,33 @@ class MedicareFetchResult {
   /// out). The screen then shows ERR-MCR-03 instead of silently showing less.
   final bool complete;
 
+  /// Why Medicare could not be read, when it could not.
+  final MedicareReadProblem? problem;
+
   const MedicareFetchResult(
-      {required this.records, this.synthetic = false, this.complete = true});
+      {required this.records,
+      this.synthetic = false,
+      this.complete = true,
+      this.problem});
+}
+
+/// What the screen tells the patient when a Medicare read fails.
+enum MedicareReadProblem {
+  /// 409 ERR-MCR-05: Medicare rejected the stored link (FR-MCR-09).
+  linkExpired,
+
+  /// 404: the patient has no Medicare link (AC-MCR-11-2).
+  notLinked,
+
+  /// Anything else: ERR-MCR-03 (FR-MCR-24).
+  unreachable,
 }
 
 class MedicareDataService {
   Future<MedicareFetchResult> fetchRecords() async {
-    final visits = await _getEnvelope('/v1/api/medicare/visits');
-    final coverage = await _getEnvelope('/v1/api/medicare/coverage');
+    final failures = <int?>[];
+    final visits = await _getEnvelope('/v1/api/medicare/visits', failures);
+    final coverage = await _getEnvelope('/v1/api/medicare/coverage', failures);
     final synthetic =
         (visits?['synthetic'] == true) || (coverage?['synthetic'] == true);
     final records = <HealthRecord>[
@@ -27,17 +48,32 @@ class MedicareDataService {
       records: records,
       synthetic: synthetic,
       complete: visits != null && coverage != null,
+      problem: failures.isEmpty
+          ? null
+          : failures.contains(409)
+              ? MedicareReadProblem.linkExpired
+              : failures.contains(404)
+                  ? MedicareReadProblem.notLinked
+                  : MedicareReadProblem.unreachable,
     );
   }
 
-  Future<Map<String, dynamic>?> _getEnvelope(String path) async {
+  /// The envelope, or null with the HTTP status (null when none) in [failures].
+  Future<Map<String, dynamic>?> _getEnvelope(
+      String path, List<int?> failures) async {
     try {
       return await ApiClient.instance.getJson<Map<String, dynamic>>(
         path,
         parser: (json) =>
             json is Map<String, dynamic> ? json : <String, dynamic>{},
       );
+    } on DioException catch (e) {
+      final inner = e.error;
+      failures.add(e.response?.statusCode ??
+          (inner is ApiException ? inner.status : null));
+      return null;
     } catch (_) {
+      failures.add(null);
       return null;
     }
   }

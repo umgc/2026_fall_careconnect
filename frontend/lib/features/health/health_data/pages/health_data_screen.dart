@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../models/health_record.dart';
 import '../models/patient_demographics.dart';
 import '../services/medicare_data_service.dart';
@@ -19,7 +20,6 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   static const _teal = Color(0xFF006B80);
   static const _text = Color(0xFF0F172A);
   static const _muted = Color(0xFF4B5563);
-  static const _green = Color(0xFF047857);
   // Darker green for text on the tinted status chip: 4.22:1 -> 5.89:1.
   static const _greenText = Color(0xFF065F46);
   static const _warning = Color(0xFFF59E0B);
@@ -27,9 +27,29 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   static const bool _showConfirmationSection = false;
   static const bool _showConnectedProvidersSection = false;
 
+  // The app's light-theme primary (00A7C8) is 2.85:1 as text on white, so text
+  // that would use it uses _teal instead; the dark theme's primary is fine.
+  Color _accent(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.primary
+          : _teal;
+
+  Color _onAccent(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.onPrimary
+          : Colors.white;
+
+  // _muted is for light surfaces; on the dark page use the theme's own.
+  Color _mutedText(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark
+          ? Theme.of(context).colorScheme.onSurfaceVariant
+          : _muted;
+
   bool _loading = true;
   bool _synthetic = false;
   bool _medicareUnreachable = false;
+  MedicareReadProblem? _medicareProblem;
+  bool _ehrUnavailable = false;
   bool _medicareEmpty = false;
   List<HealthRecord> _ehr = [];
   List<HealthRecord> _medicare = [];
@@ -87,9 +107,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   Future<void> _load() async {
     // Each source loads on its own, so one failing never hides the others.
     final ehrService = EhrDataService();
-    List<HealthRecord> ehrRecords = [];
+    List<HealthRecord>? ehrRecords;
     try {
-      ehrRecords = await ehrService.fetchRecords();
+      ehrRecords = await ehrService.tryFetchRecords();
     } catch (_) {}
     PatientDemographics? demographics;
     try {
@@ -103,7 +123,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     if (!mounted) return;
     setState(() {
-      _ehr = ehrRecords;
+      _ehr = ehrRecords ?? [];
+      _ehrUnavailable = ehrRecords == null;
+      _medicareProblem = medicare.problem;
       _medicare = medicare.records;
       _patientDemographics = demographics;
       _synthetic = medicare.synthetic;
@@ -193,14 +215,14 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         title: const Text('Health Data'),
       ),
       body: _loading
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: _teal),
-                  SizedBox(height: 16),
+                  const CircularProgressIndicator(color: _teal),
+                  const SizedBox(height: 16),
                   Text('Loading your health data…',
-                      style: TextStyle(color: _muted)),
+                      style: TextStyle(color: _mutedText(context))),
                 ],
               ),
             )
@@ -208,11 +230,29 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 if (_synthetic) _syntheticBanner(),
-                if (_medicareUnreachable)
+                if (_medicareProblem == MedicareReadProblem.linkExpired)
+                  _noticeBanner(
+                    Icons.link_off,
+                    // SRS ERR-MCR-05 (FR-MCR-09, AC-MCR-09-1), exact wording.
+                    'Your Medicare connection has expired. Connect again to see current records.',
+                    action: _connectMedicareButton(),
+                  )
+                else if (_medicareProblem == MedicareReadProblem.notLinked)
+                  _noticeBanner(
+                    Icons.link_off,
+                    'Medicare isn\'t connected yet.',
+                    action: _connectMedicareButton(),
+                  )
+                else if (_medicareUnreachable)
                   _noticeBanner(
                     Icons.cloud_off_outlined,
                     // SRS ERR-MCR-03 (FR-MCR-24, AC-MCR-24-2), exact wording.
                     'Showing your saved records. We couldn\'t check Medicare for updates.',
+                  ),
+                if (_ehrUnavailable)
+                  _noticeBanner(
+                    Icons.cloud_off_outlined,
+                    'We couldn\'t load records from your other providers. Showing what we could.',
                   ),
                 if (_medicareEmpty)
                   _noticeBanner(
@@ -220,9 +260,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     // SRS AC-MCR-28-1 (FR-MCR-28).
                     'No Medicare records found.',
                   ),
-                const Text(
+                Text(
                   'One searchable health history from all of your connected healthcare providers.',
-                  style: TextStyle(color: _muted),
+                  style: TextStyle(color: _mutedText(context)),
                 ),
                 const SizedBox(height: 16),
                 Card(
@@ -636,22 +676,20 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           label: Text(label),
           selected: selected,
           backgroundColor: Theme.of(context).colorScheme.surface,
-          selectedColor: Theme.of(context).colorScheme.primary,
+          selectedColor: _accent(context),
           labelStyle: TextStyle(
-            color: selected
-                ? Theme.of(context).colorScheme.onPrimary
-                : Theme.of(context).colorScheme.primary,
+            color: selected ? _onAccent(context) : _accent(context),
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),
           side: BorderSide(
-            color: Theme.of(context).colorScheme.primary,
+            color: _accent(context),
             width: 1,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
           showCheckmark: selected,
-          checkmarkColor: Theme.of(context).colorScheme.onPrimary,
+          checkmarkColor: _onAccent(context),
           padding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 8,
@@ -733,7 +771,17 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
-  Widget _noticeBanner(IconData icon, String text) {
+  Widget _connectMedicareButton() {
+    return TextButton(
+      onPressed: () => GoRouter.of(context).push('/medicare-connect'),
+      style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF006B80),
+          minimumSize: const Size(48, 48)),
+      child: const Text('Connect Medicare Account'),
+    );
+  }
+
+  Widget _noticeBanner(IconData icon, String text, {Widget? action}) {
     return Semantics(
       liveRegion: true,
       child: Container(
@@ -754,6 +802,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   style: const TextStyle(
                       fontSize: 14, color: Color(0xFF0F172A), height: 1.4)),
             ),
+            if (action != null) ...[const SizedBox(width: 8), action],
           ],
         ),
       ),
@@ -761,11 +810,16 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   }
 
   Widget _syntheticBanner() {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: const Row(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFD1D5DB)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(12),
+        child: Row(
           children: [
             Icon(
               Icons.warning_amber_rounded,
@@ -999,14 +1053,14 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                       Text(
                         'View details',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: _accent(context),
                               fontWeight: FontWeight.w600,
                             ),
                       ),
                       const Spacer(),
                       Icon(
                         Icons.chevron_right,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: _accent(context),
                       ),
                     ],
                   ),
@@ -1021,7 +1075,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: _green.withValues(alpha: 0.12),
+        color: const Color(0xFFD1FAE5),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(status,
