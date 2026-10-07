@@ -1,4 +1,5 @@
 import 'package:care_connect_app/features/tasks/utils/task_type_manager.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,27 @@ import 'package:provider/provider.dart';
 ///
 /// Used at the top of the Calendar Assistant screen.
 class FiltersPanel extends StatelessWidget {
+  String _localizedTypeName(AppLocalizations t, String type) {
+    switch (type.toLowerCase()) {
+      case 'medication':
+        return t.calendarTypeMedication;
+      case 'appointment':
+        return t.calendarTypeAppointment;
+      case 'exercise':
+        return t.calendarTypeExercise;
+      case 'general':
+        return t.calendarTypeGeneral;
+      case 'lab':
+        return t.calendarTypeLab;
+      case 'pharmacy':
+        return t.calendarTypePharmacy;
+      case 'imported':
+        return t.calendarTypeImported;
+      default:
+        return type[0].toUpperCase() + type.substring(1);
+    }
+  }
+
   /// Whether the panel is expanded (shows filters) or collapsed.
   final bool expanded;
 
@@ -59,6 +81,7 @@ class FiltersPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final isCaregiver =
         Provider.of<UserProvider>(context, listen: false).user?.isCaregiver ??
         false;
@@ -81,7 +104,7 @@ class FiltersPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ListTile(
-                    title: const Text("Filters"),
+                    title: Text(t.calendarFilters),
                     trailing: IconButton(
                       icon: Icon(
                         expanded ? Icons.expand_more : Icons.chevron_right,
@@ -96,7 +119,7 @@ class FiltersPanel extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                       child: Text(
-                        "Task Types",
+                        t.calendarTaskTypes,
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
@@ -114,7 +137,7 @@ class FiltersPanel extends StatelessWidget {
                           return FilterChip(
                             avatar: Icon(icon, color: color, size: 18),
                             label: Text(
-                              type[0].toUpperCase() + type.substring(1),
+                              _localizedTypeName(t, type),
                               style: TextStyle(
                                 color: selectedTypes.contains(type)
                                     ? color
@@ -137,7 +160,7 @@ class FiltersPanel extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                         child: Text(
-                          "Patients",
+                          t.calendarPatients,
                           style: Theme.of(context).textTheme.labelLarge
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
@@ -165,7 +188,7 @@ class FiltersPanel extends StatelessWidget {
                       alignment: Alignment.centerRight,
                       child: TextButton.icon(
                         icon: const Icon(Icons.clear),
-                        label: const Text("Clear"),
+                        label: Text(t.calendarClear),
                         onPressed: onClear,
                       ),
                     ),
@@ -179,7 +202,7 @@ class FiltersPanel extends StatelessWidget {
           // -----------------------
           ElevatedButton.icon(
             icon: const Icon(Icons.today),
-            label: const Text("Today"),
+            label: Text(t.calendarToday),
             onPressed: onTodayPressed,
           ),
         ],
