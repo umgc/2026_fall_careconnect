@@ -27,7 +27,9 @@ public class UserAIConfig {
     public enum AIProvider {
         DEFAULT,
         OPENAI,
-        DEEPSEEK;
+        DEEPSEEK,
+        OLLAMA,
+        COLIBRI;
 
         public static AIProvider resolve(String value) {
             if (value == null) return OPENAI;
@@ -48,6 +50,12 @@ public class UserAIConfig {
 
     @Column(name = "deepseek_model")
     private String deepseekModel;
+
+    @Column(name = "ollama_model")
+    private String ollamaModel;
+
+    @Column(name = "colibri_model")
+    private String colibriModel;
 
     @Column(name = "max_tokens")
     private Integer maxTokens;

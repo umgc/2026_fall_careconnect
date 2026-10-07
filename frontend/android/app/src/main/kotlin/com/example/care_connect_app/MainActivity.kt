@@ -7,5 +7,6 @@ class MainActivity: FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         OcrHandler.register(this, flutterEngine.dartExecutor.binaryMessenger)
+        MediaPipeLlmHandler.register(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 }

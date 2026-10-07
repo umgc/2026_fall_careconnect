@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import '../services/ai_chat_service.dart';
+import '../services/colibri_service.dart';
+import '../services/mediapipe_llm_service.dart';
 import '../config/theme/app_theme.dart';
 import '../shared/widgets/disclaimer_banner.dart';
 import 'package:provider/provider.dart';
@@ -1200,9 +1203,93 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           : null;
       if (!_isCurrentEpoch(epoch)) return;
 
-      final Map<String, dynamic>? response = useGroundedAsk
-          ? null
-          : await AIChatService.sendMessage(
+      Map<String, dynamic>? response;
+      if (!useGroundedAsk) {
+        if (uploadedFilesJson != null && uploadedFilesJson.isNotEmpty) {
+          response = await AIChatService.sendMessage(
+            message: userMessage.isNotEmpty
+                ? userMessage
+                : 'Please analyze the uploaded files',
+            patientId: currentPatientId,
+            userId: currentUserId,
+            conversationId:
+                _conversationId.isNotEmpty ? _conversationId : null,
+            uploadedFiles: uploadedFilesJson,
+            includeVitals: true,
+            includeMedications: true,
+            includeNotes: true,
+            includeMoodPainLogs: true,
+            includeAllergies: true,
+          );
+        } else if (ColibriService.shouldEscalateToCloud(userMessage)) {
+          // Escalated immediately due to clinical dosage safety / external clinic directory lookup
+          response = await AIChatService.sendMessage(
+            message: userMessage,
+            patientId: currentPatientId,
+            userId: currentUserId,
+            conversationId:
+                _conversationId.isNotEmpty ? _conversationId : null,
+            includeVitals: true,
+            includeMedications: true,
+            includeNotes: true,
+            includeMoodPainLogs: true,
+            includeAllergies: true,
+          );
+        } else {
+          // Attempt fast local edge inference first (MediaPipe on Android, Colibri on Desktop)
+          Map<String, dynamic>? edgeResult;
+
+          // 1. If on Android, attempt native Google MediaPipe / LiteRT on-device inference
+          if (!kIsWeb && Platform.isAndroid) {
+            try {
+              final mediaPipe = MediaPipeLlmService();
+              final availability = await mediaPipe.checkAvailability();
+              if (availability['available'] == true) {
+                edgeResult = await mediaPipe.queryLocalClinicalAssistant(
+                  question: userMessage,
+                );
+              }
+            } catch (_) {
+              edgeResult = null;
+            }
+          }
+
+          // 2. If not on Android or MediaPipe model not loaded, attempt desktop Colibri MoE
+          if (edgeResult == null || edgeResult['success'] != true) {
+            final colibri = ColibriService();
+            try {
+              final models = await colibri.checkHealth();
+              if (models.isNotEmpty) {
+                final activeModel = models.contains('olmoe-colibri')
+                    ? 'olmoe-colibri'
+                    : models.first;
+                edgeResult = await colibri.queryLocalClinicalAssistant(
+                  question: userMessage,
+                  model: activeModel,
+                );
+              }
+            } catch (_) {
+              // Edge model offline
+            }
+          }
+
+          if (edgeResult != null &&
+              edgeResult['success'] == true &&
+              edgeResult['escalateToCloud'] != true &&
+              (edgeResult['content'] as String? ?? '').trim().isNotEmpty) {
+            final latency = edgeResult['latencyMs'] ?? 0;
+            response = {
+              'success': true,
+              'aiResponse': edgeResult['content'],
+              'modelUsed': '${edgeResult['model'] ?? 'on-device-slm'} (Local Edge)',
+              'conversationId': _conversationId.isNotEmpty
+                  ? _conversationId
+                  : 'local-${DateTime.now().millisecondsSinceEpoch}',
+              'processingTimeMs': latency,
+            };
+          } else {
+            // Edge model offline or outputted [ESCALATE_TO_CLINICAL_CLOUD] -> seamlessly fallback to Cloud
+            response = await AIChatService.sendMessage(
               message: userMessage.isNotEmpty
                   ? userMessage
                   : 'Please analyze the uploaded files',
@@ -1210,13 +1297,15 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               userId: currentUserId,
               conversationId:
                   _conversationId.isNotEmpty ? _conversationId : null,
-              uploadedFiles: uploadedFilesJson,
               includeVitals: true,
               includeMedications: true,
               includeNotes: true,
               includeMoodPainLogs: true,
               includeAllergies: true,
             );
+          }
+        }
+      }
       if (!_isCurrentEpoch(epoch)) return;
 
       // Better error handling - show actual error messages instead of generic "No response"
@@ -1300,14 +1389,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
       }
       // Update conversationId for next request (legacy only)
-      bool isNewConversation = false;
       if (!_isGrounded &&
           response != null &&
           response['conversationId'] != null &&
           response['conversationId'] is String) {
-        if (_conversationId.isEmpty) {
-          isNewConversation = true;
-        }
         _conversationId = response['conversationId'];
       }
       if (!_safeSetState(epoch, () {
@@ -1338,11 +1423,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         return;
       }
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
-
-      // If this was a new conversation, load any existing history (legacy only)
-      if (!_isGrounded && isNewConversation) {
-        await _loadConversationHistory();
-      }
     } catch (e) {
       if (!_isCurrentEpoch(epoch)) return;
       _safeSetState(epoch, () {

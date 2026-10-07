@@ -1164,13 +1164,13 @@ class _PatientDashboardState extends State<PatientDashboard> {
               height: sheetHeight,
               child: AIChat(
                 key: ValueKey(
-                  'ai-chat-${AiChatMode.groundedRecords.name}-${user?.patientId ?? 'none'}',
+                  'ai-chat-${AiChatMode.legacyGeneral.name}-${user?.patientId ?? 'none'}',
                 ),
                 role: 'patient',
                 isModal: true,
                 patientId: user?.patientId, // Pass the actual patient ID
                 userId: user?.id,
-                mode: AiChatMode.groundedRecords,
+                mode: AiChatMode.legacyGeneral,
               ),
             ),
           );
