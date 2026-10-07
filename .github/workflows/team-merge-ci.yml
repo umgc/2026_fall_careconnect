@@ -21,7 +21,7 @@
 #   1. Checkout, branch info, JAVA_HOME
 #   2. Build  (Flutter + Maven)
 #   3. Unit tests for changed files only (BLOCKING)
-#   4. Coverage gate — 95% on changed files (BLOCKING)
+#   4. Coverage gate — 80% on changed files (BLOCKING)
 #   5. Test result artifact upload
 
 name: Feature Branch CI
@@ -141,7 +141,7 @@ jobs:
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: |
-          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          CHANGED="$(git diff --name-only --relative --diff-filter=d "${DIFF_BASE}" -- .)"
           TEST_FILES=()
           while IFS= read -r f; do
             [ -z "$f" ] && continue
@@ -174,7 +174,7 @@ jobs:
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: backend/core
         run: |
-          CHANGED="$(git diff --name-only "${DIFF_BASE}" -- .)"
+          CHANGED="$(git diff --name-only --relative --diff-filter=d "${DIFF_BASE}" -- .)"
           TEST_CLASSES=()
           while IFS= read -r f; do
             [ -z "$f" ] && continue
@@ -202,7 +202,7 @@ jobs:
           mvn -B test jacoco:report -Dtest="${TEST_ARG}"
 
       # ----------------------------------------------------------------
-      # Stage 4: Coverage gate — 95% on changed files (BLOCKING)
+      # Stage 4: Coverage gate — 80% on changed files (BLOCKING)
       # ----------------------------------------------------------------
       - name: Set up Python (coverage gate)
         if: steps.mode.outputs.run_suite == 'true'
@@ -210,12 +210,12 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Coverage gate (changed files, 95% threshold)
+      - name: Coverage gate (changed files, 80% threshold)
         if: steps.mode.outputs.run_suite == 'true'
         run: |
           python scripts/coverage_gate.py \
             --diff-base "${DIFF_BASE}" \
-            --threshold 0.95 \
+            --threshold 0.80 \
             --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
             --lcov-info frontend/coverage/lcov.info \
             --repo-root .

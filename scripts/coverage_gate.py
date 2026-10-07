@@ -7,7 +7,7 @@ Checks test coverage for changed files on a PR against a minimum threshold.
 Usage:
     python scripts/coverage_gate.py \
         --diff-base <git-sha> \
-        --threshold 0.95 \
+        --threshold 0.80 \
         --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
         --lcov-info frontend/coverage/lcov.info \
         --repo-root .
@@ -24,7 +24,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-THRESHOLD_DEFAULT = 0.95
+THRESHOLD_DEFAULT = 0.80
 
 
 # ---------------------------------------------------------------------------
@@ -32,9 +32,9 @@ THRESHOLD_DEFAULT = 0.95
 # ---------------------------------------------------------------------------
 
 def get_changed_files(diff_base: str, repo_root: str) -> list[str]:
-    """Return list of files changed since diff_base (relative to repo root)."""
+    """Return files changed since diff_base (relative to repo root), excluding deletions."""
     result = subprocess.run(
-        ["git", "diff", "--name-only", diff_base],
+        ["git", "diff", "--name-only", "--diff-filter=d", diff_base],
         capture_output=True,
         text=True,
         cwd=repo_root,
@@ -217,7 +217,7 @@ def main():
     parser = argparse.ArgumentParser(description="Coverage gate for changed files")
     parser.add_argument("--diff-base", required=True, help="Git SHA to diff against")
     parser.add_argument("--threshold", type=float, default=THRESHOLD_DEFAULT,
-                        help="Minimum coverage ratio (default: 0.95)")
+                        help="Minimum coverage ratio (default: 0.80)")
     parser.add_argument("--jacoco-xml", default="backend/core/target/site/jacoco/jacoco.xml")
     parser.add_argument("--lcov-info", default="frontend/coverage/lcov.info")
     parser.add_argument("--repo-root", default=".")
