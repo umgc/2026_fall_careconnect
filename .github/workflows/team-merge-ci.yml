@@ -20,7 +20,8 @@
 # Stages (single job, sequential steps):
 #   1. Checkout, branch info, JAVA_HOME
 #   2. Build  (Flutter + Maven)
-#   3. Unit tests for changed files only (BLOCKING)
+#   3. Unit tests for changed files only (BLOCKING) — a changed source
+#      file with no same-name test fails (scripts/test-exemptions.txt)
 #   4. Coverage gate — 80% on changed files (BLOCKING)
 #   5. Test result artifact upload
 
@@ -123,13 +124,21 @@ jobs:
       # ----------------------------------------------------------------
       # Stage 3: Unit tests for changed files only (BLOCKING)
       #
-      # Maps changed source files to their test counterparts by naming
-      # convention:
+      # scripts/test_mapping.py maps changed source files to their tests
+      # by naming convention:
       #   lib/foo/bar.dart        → test/foo/bar_test.dart
       #   src/main/java/Foo.java  → src/test/java/FooTest.java
-      # Also picks up any test files changed directly.
-      # If nothing maps, the step skips gracefully (exit 0).
+      # and also picks up test files changed directly. A changed source
+      # file with no test at its expected path FAILS this stage, unless
+      # it is listed in scripts/test-exemptions.txt or has no executable
+      # code (interfaces, export-only Dart files).
       # ----------------------------------------------------------------
+      - name: Set up Python (test mapping + coverage gate)
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Determine diff base
         if: steps.mode.outputs.run_suite == 'true'
         run: |
@@ -137,88 +146,45 @@ jobs:
           git fetch origin "+${TARGET}:refs/remotes/origin/${TARGET}"
           echo "DIFF_BASE=$(git merge-base HEAD "origin/${TARGET}")" >> "$GITHUB_ENV"
 
+      - name: Map changed files to unit tests
+        if: steps.mode.outputs.run_suite == 'true'
+        run: |
+          python scripts/test_mapping.py             --diff-base "${DIFF_BASE}"             --frontend-out "${RUNNER_TEMP}/frontend-tests.txt"             --backend-out "${RUNNER_TEMP}/backend-tests.txt"             --repo-root .
+
       - name: Flutter unit tests (changed files only)
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: frontend
         run: |
-          CHANGED="$(git diff --name-only --relative --diff-filter=d "${DIFF_BASE}" -- .)"
-          TEST_FILES=()
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              test/*_test.dart)
-                TEST_FILES+=("$f")
-                ;;
-              lib/*.dart)
-                candidate="test/${f#lib/}"
-                candidate="${candidate%.dart}_test.dart"
-                [ -f "$candidate" ] && TEST_FILES+=("$candidate")
-                ;;
-            esac
-          done <<< "$CHANGED"
-
+          mapfile -t TEST_FILES < "${RUNNER_TEMP}/frontend-tests.txt"
           if [ ${#TEST_FILES[@]} -eq 0 ]; then
-            echo "No frontend test files map to changed code; skipping."
+            echo "No frontend tests map to changed code; skipping."
             exit 0
           fi
-          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_FILES[@]}" | sort -u)
-          echo "Running: ${UNIQUE[*]}"
-          flutter test \
-            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
-            --coverage \
-            --exclude-tags integration \
-            --reporter expanded \
-            "${UNIQUE[@]}"
+          flutter test             --concurrency="${FLUTTER_TEST_CONCURRENCY}"             --coverage             --exclude-tags integration             --reporter expanded             "${TEST_FILES[@]}"
 
       - name: Maven unit tests (changed files only)
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: backend/core
         run: |
-          CHANGED="$(git diff --name-only --relative --diff-filter=d "${DIFF_BASE}" -- .)"
-          TEST_CLASSES=()
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              src/test/java/*Test.java)
-                rel="${f#src/test/java/}"
-                TEST_CLASSES+=("${rel%.java}")
-                ;;
-              src/main/java/*.java)
-                rel="${f#src/main/java/}"
-                base="${rel%.java}"
-                candidate="src/test/java/${base}Test.java"
-                [ -f "$candidate" ] && TEST_CLASSES+=("${base}Test")
-                ;;
-            esac
-          done <<< "$CHANGED"
-
+          mapfile -t TEST_CLASSES < "${RUNNER_TEMP}/backend-tests.txt"
           if [ ${#TEST_CLASSES[@]} -eq 0 ]; then
-            echo "No backend test classes map to changed code; skipping."
+            echo "No backend tests map to changed code; skipping."
             exit 0
           fi
-          mapfile -t UNIQUE < <(printf '%s\n' "${TEST_CLASSES[@]}" | sort -u | tr '/' '.')
-          TEST_ARG="$(IFS=,; echo "${UNIQUE[*]}")"
+          TEST_ARG="$(IFS=,; echo "${TEST_CLASSES[*]}")"
           echo "Running: ${TEST_ARG}"
           mvn -B test jacoco:report -Dtest="${TEST_ARG}"
 
       # ----------------------------------------------------------------
       # Stage 4: Coverage gate — 80% on changed files (BLOCKING)
+      #
+      # A changed source file missing from the coverage report (no tests
+      # ran for it) counts as 0%; a missing report is not a pass.
       # ----------------------------------------------------------------
-      - name: Set up Python (coverage gate)
-        if: steps.mode.outputs.run_suite == 'true'
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: Coverage gate (changed files, 80% threshold)
         if: steps.mode.outputs.run_suite == 'true'
         run: |
-          python scripts/coverage_gate.py \
-            --diff-base "${DIFF_BASE}" \
-            --threshold 0.80 \
-            --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
-            --lcov-info frontend/coverage/lcov.info \
-            --repo-root .
+          python scripts/coverage_gate.py             --diff-base "${DIFF_BASE}"             --threshold 0.80             --jacoco-xml backend/core/target/site/jacoco/jacoco.xml             --lcov-info frontend/coverage/lcov.info             --repo-root .
 
       # ----------------------------------------------------------------
       # Stage 5: Test result artifact upload

@@ -12,37 +12,24 @@ Usage:
         --lcov-info frontend/coverage/lcov.info \
         --repo-root .
 
+Files listed in scripts/test-exemptions.txt, and files with no executable
+code, are skipped. A changed source file with no coverage report at all
+(no tests ran) counts as 0%.
+
 Exit codes:
     0  All changed files meet the coverage threshold (or no changed files found)
     1  One or more changed files are below the threshold
 """
 
 import argparse
-import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from test_mapping import get_changed_files, load_exemptions, needs_test
+
 
 THRESHOLD_DEFAULT = 0.80
-
-
-# ---------------------------------------------------------------------------
-# Git helpers
-# ---------------------------------------------------------------------------
-
-def get_changed_files(diff_base: str, repo_root: str) -> list[str]:
-    """Return files changed since diff_base (relative to repo root), excluding deletions."""
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=d", diff_base],
-        capture_output=True,
-        text=True,
-        cwd=repo_root,
-    )
-    if result.returncode != 0:
-        print(f"ERROR: git diff failed: {result.stderr}", file=sys.stderr)
-        sys.exit(1)
-    return [f.strip() for f in result.stdout.splitlines() if f.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +80,7 @@ def check_java_coverage(
     jacoco_coverage: dict[str, float],
     threshold: float,
     repo_root: str,
+    exemptions: list[str],
 ) -> list[tuple[str, float | None]]:
     """
     For each changed Java source file, look up its coverage in jacoco_coverage.
@@ -101,10 +89,8 @@ def check_java_coverage(
     failures = []
 
     for f in changed_files:
-        # Only check Java source files in src/main/java
-        if not f.endswith(".java") or "src/main/java/" not in f:
-            continue
-        if "src/test/java/" in f:
+        # Only check backend source files that need their own test
+        if not f.endswith(".java") or not needs_test(f, exemptions, repo_root):
             continue
 
         # Convert file path to JaCoCo class key
@@ -165,8 +151,8 @@ def parse_lcov(lcov_info: str) -> dict[str, float]:
                 lines_hit = int(line[3:])
             elif line == "end_of_record" and current_file:
                 ratio = (lines_hit / lines_found) if lines_found > 0 else None
-                # Normalize path: strip leading "./" or absolute prefix
-                key = current_file.lstrip("./")
+                # Normalize path: Windows separators, leading "./"
+                key = current_file.replace("\\", "/").removeprefix("./")
                 coverage[key] = ratio
                 current_file = None
 
@@ -177,6 +163,8 @@ def check_flutter_coverage(
     changed_files: list[str],
     lcov_coverage: dict[str, float],
     threshold: float,
+    repo_root: str,
+    exemptions: list[str],
 ) -> list[tuple[str, float | None]]:
     """
     For each changed Dart lib file, look up its coverage in lcov_coverage.
@@ -185,9 +173,7 @@ def check_flutter_coverage(
     failures = []
 
     for f in changed_files:
-        if not f.endswith(".dart"):
-            continue
-        if not f.startswith("frontend/lib/"):
+        if not f.endswith(".dart") or not needs_test(f, exemptions, repo_root):
             continue
 
         # lcov paths are relative to frontend/ directory
@@ -239,21 +225,26 @@ def main():
 
     all_failures = []
 
+    exemptions = load_exemptions(args.repo_root)
+
+    # A missing report is not a pass: any changed source file absent from
+    # the (empty) report is scored 0% below.
+
     # --- Java ---
     jacoco = parse_jacoco(args.jacoco_xml)
-    if jacoco:
-        java_failures = check_java_coverage(changed, jacoco, threshold, args.repo_root)
-        all_failures.extend(java_failures)
-    else:
-        print("No JaCoCo report found — skipping Java coverage check.")
+    if not jacoco:
+        print("No JaCoCo report found — changed backend sources count as 0%.")
+    all_failures.extend(
+        check_java_coverage(changed, jacoco, threshold, args.repo_root, exemptions)
+    )
 
     # --- Flutter ---
     lcov = parse_lcov(args.lcov_info)
-    if lcov:
-        flutter_failures = check_flutter_coverage(changed, lcov, threshold)
-        all_failures.extend(flutter_failures)
-    else:
-        print("No lcov report found — skipping Flutter coverage check.")
+    if not lcov:
+        print("No lcov report found — changed frontend sources count as 0%.")
+    all_failures.extend(
+        check_flutter_coverage(changed, lcov, threshold, args.repo_root, exemptions)
+    )
 
     # --- Report ---
     if not all_failures:
