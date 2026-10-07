@@ -20,6 +20,10 @@ public class UserAIConfigDTO {
     private String openaiModel = "gpt-4";
     @Builder.Default
     private String deepseekModel = "deepseek-chat";
+    @Builder.Default
+    private String ollamaModel = "llama3.2:1b";
+    @Builder.Default
+    private String colibriModel = "olmoe-colibri";
     @Min(value = 100, message = "Max tokens must be at least 100")
     @Max(value = 8000, message = "Max tokens cannot exceed 8000")
     @Builder.Default
@@ -55,6 +59,8 @@ public class UserAIConfigDTO {
     public AIProvider getAiProvider() { return aiProvider; }
     public String getOpenaiModel() { return openaiModel; }
     public String getDeepseekModel() { return deepseekModel; }
+    public String getOllamaModel() { return ollamaModel; }
+    public String getColibriModel() { return colibriModel; }
     public Integer getMaxTokens() { return maxTokens; }
     public Double getTemperature() { return temperature; }
     public Integer getConversationHistoryLimit() { return conversationHistoryLimit; }

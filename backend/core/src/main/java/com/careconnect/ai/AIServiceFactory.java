@@ -2,6 +2,8 @@ package com.careconnect.ai;
 
 import com.careconnect.service.DeepSeekService;
 import com.careconnect.service.BedrockAIChatService;
+import com.careconnect.service.OllamaService;
+import com.careconnect.service.ColibriService;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -16,14 +18,20 @@ public class AIServiceFactory {
 
     private final DeepSeekService deepSeekService;
     private final BedrockAIChatService bedrockService;
+    private final OllamaService ollamaService;
+    private final ColibriService colibriService;
 
     @Value("${careconnect.ai.provider:bedrock}")
     private String provider;
 
     public AIServiceFactory(ObjectProvider<DeepSeekService> deepSeekServiceProvider,
-                        ObjectProvider<BedrockAIChatService> bedrockServiceProvider) {
+                            ObjectProvider<BedrockAIChatService> bedrockServiceProvider,
+                            ObjectProvider<OllamaService> ollamaServiceProvider,
+                            ObjectProvider<ColibriService> colibriServiceProvider) {
         this.deepSeekService = deepSeekServiceProvider.getIfAvailable();
         this.bedrockService = bedrockServiceProvider.getIfAvailable();
+        this.ollamaService = ollamaServiceProvider.getIfAvailable();
+        this.colibriService = colibriServiceProvider.getIfAvailable();
     }
 
     @PostConstruct
@@ -54,10 +62,26 @@ public class AIServiceFactory {
                     log.error("DeepSeek provider selected but DeepSeekService is not available.");
                 }
             }
+            case "ollama" -> {
+                log.info("======================================");
+                log.info("Using Local Ollama Inference (HIPAA-Safe / On-Premise)");
+                log.info("======================================");
+                if (ollamaService == null) {
+                    log.error("Ollama provider selected but OllamaService is not available. Ensure careconnect.ai.provider=ollama.");
+                }
+            }
+            case "colibri" -> {
+                log.info("======================================");
+                log.info("Using Local Colibri MoE Inference (HIPAA-Safe / NVMe-Streamed)");
+                log.info("======================================");
+                if (colibriService == null) {
+                    log.error("Colibri provider selected but ColibriService is not available. Ensure careconnect.ai.provider=colibri.");
+                }
+            }
             default -> {
                 log.error("======================================");
                 log.error("CONFIGURATION ERROR: Unknown AI provider '{}'", provider);
-                log.error("Valid values: 'bedrock', 'deepseek'");
+                log.error("Valid values: 'bedrock', 'deepseek', 'ollama', 'colibri'");
                 log.error("Defaulting will NOT occur - AI features will fail at runtime.");
                 log.error("======================================");
             }
@@ -89,9 +113,27 @@ public class AIServiceFactory {
                 }
                 yield bedrockService;
             }
+            case "ollama" -> {
+                if (ollamaService == null) {
+                    throw new IllegalStateException(
+                        "AI provider is configured as 'ollama' but OllamaService " +
+                        "is not available. Check that careconnect.ai.provider=ollama is set."
+                    );
+                }
+                yield ollamaService;
+            }
+            case "colibri" -> {
+                if (colibriService == null) {
+                    throw new IllegalStateException(
+                        "AI provider is configured as 'colibri' but ColibriService " +
+                        "is not available. Check that careconnect.ai.provider=colibri is set."
+                    );
+                }
+                yield colibriService;
+            }
             default -> throw new IllegalStateException(
                 "Unknown AI provider '" + provider + "'. " +
-                "Valid values are: 'bedrock', 'deepseek'. " +
+                "Valid values are: 'bedrock', 'deepseek', 'ollama', 'colibri'. " +
                 "Set AI_MODEL_PROVIDER environment variable to a valid value."
             );
         };
