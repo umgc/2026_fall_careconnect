@@ -1142,7 +1142,9 @@ void main() {
       await _pumpRouterApp(tester, router);
       await tester.pumpAndSettle();
 
-      expect(find.text('Invalid note ID or missing note data'), findsOneWidget);
+      // No ?patientId= for the deep link: shown in the body and a SnackBar.
+      expect(find.text('Invalid note ID or missing patient context'),
+          findsWidgets);
     });
   });
 
