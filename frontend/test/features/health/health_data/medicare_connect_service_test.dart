@@ -10,9 +10,11 @@
 
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
 
@@ -187,5 +189,95 @@ void main() {
     expect(MedicareConnectResult.parse('ALREADY_LINKED'),
         MedicareConnectResult.alreadyLinked);
     expect(MedicareConnectResult.parse(''), isNull);
+  });
+
+  // ---- 401: refresh the CareConnect token once and retry (#263 review) ----
+  group('a 401 refreshes the sign-in once', () {
+    const secure = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    final store = <String, String>{};
+    // Unsigned test JWTs: only the payload's exp is read, to keep them "valid".
+    String jwt(String sub) =>
+        'e30.${base64Url.encode(utf8.encode('{"sub":"$sub","exp":4102444800}')).replaceAll('=', '')}.sig';
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      store
+        ..clear()
+        ..['jwt_token'] = jwt('old')
+        ..['token_expiry'] = '4102444800';
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(secure, (call) async {
+        final args = (call.arguments as Map?) ?? const {};
+        final key = args['key'] as String?;
+        switch (call.method) {
+          case 'read':
+            return store[key];
+          case 'write':
+            store[key!] = args['value'] as String;
+            return null;
+          case 'delete':
+            store.remove(key);
+            return null;
+          case 'deleteAll':
+            store.clear();
+            return null;
+          case 'containsKey':
+            return store.containsKey(key);
+          case 'readAll':
+            return Map<String, String>.of(store);
+        }
+        return null;
+      });
+    });
+    tearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(secure, null));
+
+    test(
+        'TC-MCR-CONN-033: a 401 with a refreshable sign-in refreshes once and '
+        'retries with the new token', () async {
+      final seen = <http.Request>[];
+      final uri = await _with(() => MedicareConnectService().fetchConnectUrl(),
+          (req) async {
+        if (req.url.path.endsWith('/refresh-token')) {
+          return http.Response(
+              jsonEncode({'id': 1, 'email': 'p@example.test', 'role': 'PATIENT',
+                  'token': jwt('new')}),
+              200);
+        }
+        final auth = req.headers['Authorization'] ?? '';
+        return auth.contains(jwt('new').split('.')[1])
+            ? http.Response(jsonEncode({'url': 'https://x.test/connect?l=1'}), 200)
+            : http.Response('{}', 401);
+      }, seen: seen);
+      expect(uri.toString(), 'https://x.test/connect?l=1');
+      expect(seen.map((r) => '${r.method} ${r.url.path}'), [
+        'GET /v1/api/medicare/connect-url',
+        'POST /v1/api/auth/refresh-token',
+        'GET /v1/api/medicare/connect-url',
+      ]);
+      expect(seen.first.headers['Authorization'], 'Bearer ${jwt('old')}');
+      expect(seen.last.headers['Authorization'], 'Bearer ${jwt('new')}');
+    });
+
+    test(
+        'TC-MCR-CONN-034: when the refresh is refused the call reports signed '
+        'out after one refresh attempt, with no second retry', () async {
+      final seen = <http.Request>[];
+      MedicareConnectError? error;
+      try {
+        await _with(() => MedicareConnectService().fetchConnectUrl(),
+            (req) async => req.url.path.endsWith('/refresh-token')
+                ? http.Response('{}', 401)
+                : http.Response('{}', 401),
+            seen: seen);
+      } on MedicareConnectException catch (e) {
+        error = e.error;
+      }
+      expect(error, MedicareConnectError.signedOut);
+      expect(seen.map((r) => '${r.method} ${r.url.path}'), [
+        'GET /v1/api/medicare/connect-url',
+        'POST /v1/api/auth/refresh-token',
+      ]);
+    });
   });
 }

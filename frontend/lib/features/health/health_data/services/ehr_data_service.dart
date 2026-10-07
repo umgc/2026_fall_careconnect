@@ -14,8 +14,12 @@ class EhrDataService {
         parser: (json) => json is List ? json : <dynamic>[],
       );
 
+      // A resource whose source the app does not know is dropped, never
+      // relabelled as another source: provenance shown to a patient must be
+      // the real one (DEF-MCR-22, as DEF-MCR-14 for HealthRecord.fromJson).
       return resources
           .whereType<Map<String, dynamic>>()
+          .where((r) => _sourceFrom(r['source']) != null)
           .map(_toHealthRecord)
           .toList();
     } catch (_) {
@@ -42,7 +46,7 @@ class EhrDataService {
   HealthRecord _toHealthRecord(Map<String, dynamic> resource) {
     return HealthRecord.single(
       id: (resource['resourceId'] ?? '').toString(),
-      source: _sourceFrom(resource['source']),
+      source: _sourceFrom(resource['source'])!,
       type: _recordTypeFrom(resource['category']),
       title: _stringOrNull(resource['title']) ?? 'Health record',
       date: _parseDate(resource['occurredAt']),
@@ -50,17 +54,18 @@ class EhrDataService {
     );
   }
 
-  RecordSource _sourceFrom(dynamic source) {
-    switch (source?.toString().toUpperCase()) {
+  RecordSource? _sourceFrom(dynamic source) {
+    switch (source?.toString().trim().toUpperCase()) {
+      case 'EPIC':
+        return RecordSource.epic;
       case 'CERNER':
         return RecordSource.cerner;
       case 'ATHENA':
         return RecordSource.athena;
       case 'MEDICARE':
         return RecordSource.medicare;
-      case 'EPIC':
       default:
-        return RecordSource.epic;
+        return null;
     }
   }
 

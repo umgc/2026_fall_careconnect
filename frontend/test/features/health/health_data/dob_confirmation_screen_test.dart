@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:care_connect_app/config/theme/app_theme.dart';
+
 import 'package:care_connect_app/features/health/health_data/models/identity_conflict.dart';
 import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
 import 'package:care_connect_app/features/health/health_data/services/identity_conflict_service.dart';
@@ -160,14 +162,24 @@ void main() {
     expect(IdentityConflict.fromJson({'status': 'PENDING'}).isPending, isTrue);
   });
 
-  testWidgets('TC-EHR-REC-039: every text on the screen has at least 4.5:1 '
-      'contrast against what is behind it (WCAG 2.1 SC 1.4.3)', (t) async {
-    await _pump(t, _FakeConflicts([_dob(1)]));
-    final low = lowContrastText(t, find.byType(ListView));
-    expect(low, isEmpty, reason: low.join('\n'));
-  });
+  for (final theme in {
+    'default': null,
+    'light': AppTheme.lightTheme,
+    'dark': AppTheme.darkTheme,
+  }.entries) {
+    testWidgets('TC-EHR-REC-039: every text on the screen has at least 4.5:1 '
+        'contrast against what is behind it, in the ${theme.key} theme '
+        '(WCAG 2.1 SC 1.4.3)', (t) async {
+      await t.pumpWidget(MaterialApp(
+          theme: theme.value,
+          home: DobConfirmationScreen(service: _FakeConflicts([_dob(1)]))));
+      await t.pumpAndSettle();
+      final low = lowContrastText(t, find.byType(ListView));
+      expect(low, isEmpty, reason: low.join('\n'));
+    });
+  }
 
-  testWidgets('DOB load failure says so instead of "all caught up", and '
+  testWidgets('TC-EHR-REC-045: DOB load failure says so instead of "all caught up", and '
       'offers Try again (#263 review)', (t) async {
     await _pump(t, _FakeConflicts([_dob(1)], throwOnFetch: Exception('down')));
     expect(find.text('We couldn\u2019t check your information'), findsOneWidget);
@@ -175,7 +187,7 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
   });
 
-  test('with the mock off, resolve never reports a save that did not happen '
+  test('TC-EHR-REC-046: with the mock off, resolve never reports a save that did not happen '
       '(#263 review)', () async {
     expect(await IdentityConflictService(useMock: false).resolve(1, accepted: true),
         isFalse);

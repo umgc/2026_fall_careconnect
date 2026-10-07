@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:care_connect_app/config/theme/app_theme.dart';
+import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
 import 'package:care_connect_app/features/health/health_data/widgets/medicare_connect_tile.dart';
+
+import 'health_data_test_support.dart';
 
 class _FakeService extends MedicareConnectService {
   _FakeService({
@@ -317,4 +321,25 @@ void main() {
     expect(find.widgetWithText(ElevatedButton, 'Connect Medicare Account'),
         findsOneWidget);
   });
+
+  for (final theme in {
+    'light': AppTheme.lightTheme,
+    'dark': AppTheme.darkTheme,
+  }.entries) {
+    testWidgets('TC-MCR-CONN-035: every text on the Connect Medicare page has '
+        'at least 4.5:1 contrast, in the app\'s ${theme.key} theme (WCAG 2.1 '
+        'SC 1.4.3)', (t) async {
+      final previous = MedicareConnectService.instance;
+      MedicareConnectService.instance =
+          _FakeService(statusResult: const MedicareStatus(connected: false));
+      addTearDown(() => MedicareConnectService.instance = previous);
+      await t.pumpWidget(MaterialApp(
+          theme: theme.value,
+          home: const MedicareConnectPage(
+              result: MedicareConnectResult.cancelled)));
+      await t.pumpAndSettle();
+      final low = lowContrastText(t, find.byType(Scaffold)).toSet();
+      expect(low, isEmpty, reason: low.join('\n'));
+    });
+  }
 }

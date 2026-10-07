@@ -40,10 +40,14 @@ String envelope(List<Map<String, dynamic>> resources, {bool synthetic = true}) =
 /// Dio adapter answering by path suffix. A missing route is a connection
 /// error; a route can also return a status code or wait on a completer.
 class RouteAdapter implements HttpClientAdapter {
-  RouteAdapter(this.routes, {this.status = const {}, this.gate});
+  RouteAdapter(this.routes,
+      {this.status = const {}, this.statusBodies = const {}, this.gate});
 
   final Map<String, String> routes;
   final Map<String, int> status;
+
+  /// Body for a [status] route; defaults to the mock's 503 body.
+  final Map<String, String> statusBodies;
   final Completer<void>? gate;
   final List<String> paths = [];
 
@@ -54,7 +58,8 @@ class RouteAdapter implements HttpClientAdapter {
     if (gate != null) await gate!.future;
     for (final e in status.entries) {
       if (options.path.endsWith(e.key)) {
-        return ResponseBody.fromString('{"error":"medicare_unavailable"}', e.value,
+        return ResponseBody.fromString(
+            statusBodies[e.key] ?? '{"error":"medicare_unavailable"}', e.value,
             headers: {
               Headers.contentTypeHeader: [Headers.jsonContentType]
             });

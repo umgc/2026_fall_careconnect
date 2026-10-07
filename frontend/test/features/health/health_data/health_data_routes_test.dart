@@ -156,7 +156,7 @@ void main() {
     expect(find.text('05/14/1985'), findsNothing);
   });
 
-  testWidgets('a ?medicare= result is kept through the sign-in guard and shown '
+  testWidgets('TC-MCR-CONN-032: a ?medicare= result is kept through the sign-in guard and shown '
       'after signing in (#263 review)', (t) async {
     await t.binding.setSurfaceSize(const Size(800, 1200));
     addTearDown(() => t.binding.setSurfaceSize(null));
