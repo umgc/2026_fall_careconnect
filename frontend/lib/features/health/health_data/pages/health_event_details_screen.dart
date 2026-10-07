@@ -105,6 +105,27 @@ class HealthEventDetailsScreen extends StatelessWidget {
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
                           ],
+                          // Source is de-emphasized on the list (M2 feedback)
+                          // but always findable here, e.g. for conflicts and
+                          // to tell Medicare claims from clinical records.
+                          const SizedBox(height: 24),
+                          Text(
+                            'Where this came from',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            record.sources.map((s) => s.label).join(', '),
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
                           if (record.details.isNotEmpty) ...[
                             const SizedBox(height: 24),
                             const Divider(),

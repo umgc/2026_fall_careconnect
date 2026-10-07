@@ -4,7 +4,13 @@ import '../models/health_record.dart';
 class MedicareFetchResult {
   final List<HealthRecord> records;
   final bool synthetic;
-  const MedicareFetchResult({required this.records, this.synthetic = false});
+
+  /// False when either Medicare call failed (unreachable, disabled, signed
+  /// out). The screen then shows ERR-MCR-03 instead of silently showing less.
+  final bool complete;
+
+  const MedicareFetchResult(
+      {required this.records, this.synthetic = false, this.complete = true});
 }
 
 class MedicareDataService {
@@ -17,7 +23,11 @@ class MedicareDataService {
       ..._mapVisits(visits),
       ..._mapCoverage(coverage),
     ];
-    return MedicareFetchResult(records: records, synthetic: synthetic);
+    return MedicareFetchResult(
+      records: records,
+      synthetic: synthetic,
+      complete: visits != null && coverage != null,
+    );
   }
 
   Future<Map<String, dynamic>?> _getEnvelope(String path) async {

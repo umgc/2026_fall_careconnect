@@ -102,6 +102,11 @@ Color backgroundOf(Element e) {
       if (c != null) layers.add(c);
     } else if (w is Material && w.color != null && w.type != MaterialType.transparency) {
       layers.add(w.color!);
+    } else if (w is RawChip) {
+      // A chip paints its fill itself (no DecoratedBox/Material in the tree),
+      // so read the colour it was given for its current state.
+      final c = w.selected ? w.selectedColor : w.backgroundColor;
+      if (c != null) layers.add(c);
     }
     return true;
   });

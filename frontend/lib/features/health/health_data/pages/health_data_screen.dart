@@ -20,6 +20,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   static const _text = Color(0xFF0F172A);
   static const _muted = Color(0xFF4B5563);
   static const _green = Color(0xFF047857);
+  // Darker green for text on the tinted status chip: 4.22:1 -> 5.89:1.
+  static const _greenText = Color(0xFF065F46);
   static const _warning = Color(0xFFF59E0B);
   // Hidden until these sections are backed by real patient data.
   static const bool _showConfirmationSection = false;
@@ -27,6 +29,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   bool _loading = true;
   bool _synthetic = false;
+  bool _medicareUnreachable = false;
+  bool _medicareEmpty = false;
   List<HealthRecord> _ehr = [];
   List<HealthRecord> _medicare = [];
   PatientDemographics? _patientDemographics;
@@ -81,25 +85,32 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   }
 
   Future<void> _load() async {
+    // Each source loads on its own, so one failing never hides the others.
+    final ehrService = EhrDataService();
+    List<HealthRecord> ehrRecords = [];
     try {
-      final ehrService = EhrDataService();
-      final ehrRecords = await ehrService.fetchRecords();
-      final patientDemographics = await ehrService.fetchPatientDemographics();
-      final medicareResult = await MedicareDataService().fetchRecords();
+      ehrRecords = await ehrService.fetchRecords();
+    } catch (_) {}
+    PatientDemographics? demographics;
+    try {
+      demographics = await ehrService.fetchPatientDemographics();
+    } catch (_) {}
+    MedicareFetchResult medicare =
+        const MedicareFetchResult(records: [], complete: false);
+    try {
+      medicare = await MedicareDataService().fetchRecords();
+    } catch (_) {}
 
-      if (!mounted) return;
-
-      setState(() {
-        _ehr = ehrRecords;
-        _medicare = medicareResult.records;
-        _patientDemographics = patientDemographics;
-        _synthetic = medicareResult.synthetic;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-    }
+    if (!mounted) return;
+    setState(() {
+      _ehr = ehrRecords;
+      _medicare = medicare.records;
+      _patientDemographics = demographics;
+      _synthetic = medicare.synthetic;
+      _medicareUnreachable = !medicare.complete;
+      _medicareEmpty = medicare.complete && medicare.records.isEmpty;
+      _loading = false;
+    });
   }
 
   @override
@@ -197,6 +208,18 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               padding: const EdgeInsets.all(16),
               children: [
                 if (_synthetic) _syntheticBanner(),
+                if (_medicareUnreachable)
+                  _noticeBanner(
+                    Icons.cloud_off_outlined,
+                    // SRS ERR-MCR-03 (FR-MCR-24, AC-MCR-24-2), exact wording.
+                    'Showing your saved records. We couldn\'t check Medicare for updates.',
+                  ),
+                if (_medicareEmpty)
+                  _noticeBanner(
+                    Icons.info_outline,
+                    // SRS AC-MCR-28-1 (FR-MCR-28).
+                    'No Medicare records found.',
+                  ),
                 const Text(
                   'One searchable health history from all of your connected healthcare providers.',
                   style: TextStyle(color: _muted),
@@ -710,6 +733,33 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
+  Widget _noticeBanner(IconData icon, String text) {
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFD1D5DB)),
+        ),
+        child: Row(
+          children: [
+            ExcludeSemantics(
+                child: Icon(icon, size: 20, color: const Color(0xFF4B5563))),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(text,
+                  style: const TextStyle(
+                      fontSize: 14, color: Color(0xFF0F172A), height: 1.4)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _syntheticBanner() {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
@@ -976,7 +1026,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
       ),
       child: Text(status,
           style: const TextStyle(
-              fontSize: 11, color: _green, fontWeight: FontWeight.w600)),
+              fontSize: 11, color: _greenText, fontWeight: FontWeight.w600)),
     );
   }
 }

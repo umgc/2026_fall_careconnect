@@ -67,7 +67,8 @@ void main() {
   });
 
   testWidgets('TC-HDATA-010: loaded mock data shows the demo-data banner and '
-      'each Medicare record with a From Medicare badge', (t) async {
+      'each Medicare record, and the details screen says where it came from',
+      (t) async {
     await t.binding.setSurfaceSize(const Size(800, 3000));
     addTearDown(() => t.binding.setSurfaceSize(null));
     await pump(t, fixtures());
@@ -81,12 +82,26 @@ void main() {
       'Simple pneumonia and pleurisy with CC',
       'Medicare Part A (Hospital Insurance)',
     ]) {
-      await t.scrollUntilVisible(find.text(title), 200);
+      await t.scrollUntilVisible(find.text(title), 200,
+          scrollable: find
+              .descendant(of: find.byType(ListView), matching: find.byType(Scrollable))
+              .first);
       expect(find.text(title), findsOneWidget);
     }
     expect(find.text('Duplicate Submission Clinic', skipOffstage: false),
         findsNothing);
-    expect(find.text('From Medicare', skipOffstage: false), findsNWidgets(5));
+    // Source is de-emphasized on the cards (M2 feedback) and shown on the
+    // details screen instead (#263 review, replaces the "From Medicare" badge).
+    final details = find.text('View details', skipOffstage: false);
+    expect(details, findsWidgets);
+    await t.scrollUntilVisible(details.first, 200,
+          scrollable: find
+              .descendant(of: find.byType(ListView), matching: find.byType(Scrollable))
+              .first);
+    await t.tap(details.first);
+    await t.pumpAndSettle();
+    expect(find.text('Where this came from'), findsOneWidget);
+    expect(find.text('Medicare'), findsOneWidget);
   });
 
   testWidgets('TC-HDATA-011: when Medicare cannot be reached the screen says '
@@ -113,8 +128,8 @@ void main() {
     expect(find.textContaining(_noRecords), findsOneWidget);
   });
 
-  testWidgets('TC-HDATA-013: records that are not the patient\'s (built-in '
-      'samples) are labelled as samples on the card', (t) async {
+  testWidgets('TC-HDATA-013: no built-in sample records are shown as the '
+      'patient\'s own (#256 removed them; #263 review)', (t) async {
     await t.binding.setSurfaceSize(const Size(800, 3000));
     addTearDown(() => t.binding.setSurfaceSize(null));
     await pump(t, fixtures());
@@ -124,19 +139,8 @@ void main() {
       'Primary Care Follow-Up',
       'Annual Wellness Visit',
     ]) {
-      // The card is the nearest Column around the title.
-      final card = find
-          .ancestor(
-              of: find.text(title, skipOffstage: false),
-              matching: find.byType(Column))
-          .first;
-      // Some text in the same card must say it is sample / demo data.
-      final disclosed = find.descendant(
-          of: card,
-          matching: find.textContaining(
-              RegExp('sample|demo', caseSensitive: false),
-              skipOffstage: false));
-      expect(disclosed, findsWidgets, reason: '$title has no sample label');
+      expect(find.text(title, skipOffstage: false), findsNothing,
+          reason: '$title is a sample record');
     }
   });
 
