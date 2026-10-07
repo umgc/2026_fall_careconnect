@@ -46,6 +46,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -159,9 +160,14 @@ class MedicareReadIntegrationTest {
         return saved;
     }
 
+    /**
+     * A fresh context, not {@code getContext().setAuthentication(...)}: an earlier test class in the
+     * same JVM thread can leave a mocked {@code SecurityContext} installed (ConfigControllerTest does),
+     * and writing into that mock would leave nobody signed in here.
+     */
     private static void signIn(final Patient p) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(p.getUser().getEmail(), null, List.of()));
+        SecurityContextHolder.setContext(new SecurityContextImpl(
+                new UsernamePasswordAuthenticationToken(p.getUser().getEmail(), null, List.of())));
     }
 
     private static <R extends Resource> List<R> fixture(final String file, final Class<R> type) {
