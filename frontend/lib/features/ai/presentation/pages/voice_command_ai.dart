@@ -100,6 +100,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
   String _recognizedText = '';
   _VoiceStatus _voiceStatus = _VoiceStatus.idle;
   String _statusDetail = '';
+  bool _isDisposed = false;
 
   String? _pendingDestination;
   String? _pendingDetail;
@@ -194,9 +195,28 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         entity: 'patient list'),
     _CommandMatch(
         phrase: 'show my patients', intent: 'navigate', entity: 'patients'),
-    _CommandMatch(phrase: 'open evv', intent: 'navigate', entity: 'evv'),
     _CommandMatch(
-        phrase: 'open notetaker', intent: 'navigate', entity: 'notetaker'),
+        phrase: 'patient list', intent: 'navigate', entity: 'patients'),
+    _CommandMatch(phrase: 'open evv', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'evv', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'e v v', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'ee vee vee', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'e.v.v.', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'e-v-v', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'open e v v', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'open ee vee vee', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'electronic visit verification', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'open electronic visit verification', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'visit verification', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'start evv', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'clock in', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(phrase: 'clock out', intent: 'navigate', entity: 'evv'),
+    _CommandMatch(
+        phrase: 'open note taker', intent: 'navigate', entity: 'notetaker'),
+    _CommandMatch(
+        phrase: 'take me to note taker', intent: 'navigate', entity: 'notetaker'),
+     _CommandMatch(
+        phrase: 'note taker', intent: 'navigate', entity: 'notetaker'),
     _CommandMatch(
         phrase: 'open invoice assistant',
         intent: 'navigate',
@@ -346,6 +366,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
   }
 
   void _updateMicPulse(bool isActive) {
+    if (_isDisposed) return;
     if (!_currentThemeModel.isFuturistic) {
       _micPulseController.stop();
       _micPulseController.value = 0;
@@ -366,12 +387,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
   }
 
   void _setAudioInputDetected(bool isActive) {
+    if (_isDisposed) return;
     if (isActive) {
       _audioPulseTimer?.cancel();
       _audioInputDetected = true;
       _updateMicPulse(true);
       _audioPulseTimer = Timer(const Duration(milliseconds: 220), () {
-        if (!mounted) return;
+        if (!mounted || _isDisposed) return;
         _audioInputDetected = false;
         _updateMicPulse(false);
       });
@@ -386,12 +408,13 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
   Widget _buildMicAura() {
     final isAudioActive = _audioInputDetected || _wakeDetected;
     final isFuturistic = _currentThemeModel.isFuturistic;
+    final micColor = _wakeDetected ? Colors.red : Colors.grey;
 
     if (!isFuturistic) {
       return Icon(
         _wakeDetected ? Icons.mic : Icons.mic_none,
         size: 64,
-        color: _wakeDetected ? _accentColor() : _mutedColor(),
+        color: micColor,
       );
     }
 
@@ -445,7 +468,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
                   child: Icon(
                     _wakeDetected ? Icons.mic : Icons.mic_none,
                     size: 42,
-                    color: _wakeDetected ? _accentColor() : _mutedColor(),
+                    color: _wakeDetected ? Colors.red : Colors.grey,
                   ),
                 ),
               ),
@@ -1357,6 +1380,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
 
   Future<void> _resetAfterDelay() async {
     await Future.delayed(_statusDisplayDelay);
+    if (_isDisposed || !mounted) return;
     _reset();
   }
 
@@ -1392,6 +1416,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
   }
 
   void _reset() {
+    if (_isDisposed) return;
     _timeoutTimer?.cancel();
     _audioPulseTimer?.cancel();
     unawaited(_stopListeningBackend());
@@ -1674,10 +1699,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
 
   @override
   void dispose() {
+    _isDisposed = true;
     _timeoutTimer?.cancel();
+    _audioPulseTimer?.cancel();
     _porcupine?.stop();
     _porcupine?.delete();
-    _micPulseController.stop();
+    if (!_micPulseController.isAnimating) {
+      _micPulseController.value = 0;
+    } else {
+      _micPulseController.stop();
+    }
     _micPulseController.dispose();
     unawaited(_stopListeningBackend());
     super.dispose();
