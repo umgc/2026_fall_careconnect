@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/services/voice_intent_service.dart';
+import 'package:care_connect_app/services/voice_intent_registry.dart';
 
 /// Matches debug-mode status display delay in VoiceCommandAI (5s + buffer).
 const _statusSettleDelay = Duration(milliseconds: 5050);
@@ -3336,4 +3337,174 @@ testWidgets('WBS 5.2.73 opens informed delivery through voice command',
       await _tearDown(tester);
     });
   });
-}
+
+  // ──────────────── Gate 2 High-Risk Voice & Button Tests ────────────────
+
+  group('VoiceCommandAI Gate 2 High-Risk Confirmation', () {
+    setUp(setupDefaultMocks);
+    tearDown(() {
+      VoiceIntentService.testOverride = null;
+      clearMocks();
+    });
+
+
+    // Verifies secondary high-risk modal aborts execution and resets state
+    // when the user explicitly taps the modal's Cancel button,
+    // confirming physical touch interaction as an alternate modality to voice
+    testWidgets(
+        'Gate 2 dialog renders for high-risk intent and aborts when Cancel is tapped',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Start listening and speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Confirm Gate 1 inline action
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 3. Verify Gate 2 AlertDialog modal appears
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.textContaining('Confirm'), findsWidgets);
+
+      // 4. Tap Cancel inside Gate 2 dialog
+      final cancelBtn = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Cancel'),
+      );
+      await tester.tap(cancelBtn);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 5. Verify dialog closes and status indicates cancelled
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.textContaining('cancelled'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+
+    // Verifies secondary high-risk modal completes and executes the action handler
+    // when the user explicitly taps the modal's primary confirmation button,
+    // confirming physical touch interaction as an alternate modality to voice
+    testWidgets(
+        'Gate 2 confirms high-risk dialog when Confirm button is tapped',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Tap Gate 1 Confirm
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 3. Verify Gate 2 modal appears
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // 4. Tap the Confirm button inside Gate 2 AlertDialog
+      final confirmBtn = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(ElevatedButton),
+      );
+      await tester.tap(confirmBtn);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 5. Verify dialog is dismissed
+      expect(find.byType(AlertDialog), findsNothing);
+
+      await _tearDown(tester);
+    }); //end of Gate 2 confirm and click cancel test
+
+
+    // Verifies secondary high-risk modal dismisses and aborts execution 
+    // when receiving spoken verbal cancellation 'cancel'
+    // without requiring physical touch interaction.
+    testWidgets(
+        'Gate 2 dialog aborts when "cancel" is spoken verbally',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Start listening and speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Confirm Gate 1 inline action
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      
+      // Wait for dialog route animation to settle, then clear listener delay
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
+    
+
+      // 3. Verify Gate 2 AlertDialog modal appears
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // 4. Speak "cancel" (NO button tap)
+      await _sendSpeechResult(tester, 'cancel', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 5. Verify dialog closes and status indicates cancelled
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.textContaining('cancelled'), findsOneWidget);
+
+      await _tearDown(tester);
+    }); //end of verbal cancel test
+
+
+    // Verifies secondary high-risk modal completes and executes the action handler
+    // when receiving spoken verbal confirmation 'confirm'
+    // without requiring physical touch interaction.
+    testWidgets(
+        'Gate 2 dialog executes intent handler when "confirm" is spoken verbally',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Start listening and speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Confirm Gate 1 inline action
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      
+      // Let the dialog open and settle its route animation
+      await tester.pumpAndSettle();
+      // Advance past the 350ms listener start timer
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // 3. Verify Gate 2 AlertDialog modal is visible
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // 4. Send verbal 'confirm'
+      await _sendSpeechResult(tester, 'confirm', isFinal: true);
+      await tester.pumpAndSettle();
+
+      // 5. Verify the dialog dismisses upon voice confirmation
+      expect(find.byType(AlertDialog), findsNothing);
+
+      await _tearDown(tester);
+    }); //end of verbal confirm test
+
+  }); //end of group
+
+} //end main
