@@ -1,0 +1,28 @@
+requirements:
+  - M3-REQ-04
+scenarios:
+  - M3-SC-MAP-015
+  - M3-SC-SVC-012
+origin: sanitized-sandbox-capture
+sandbox: oracle-health-open-fhir-r4
+capturedAt: "2026-10-02"
+capturedBy: Tiffany Obi
+captureRequest: AllergyIntolerance?_id=<synthetic-resource-id>
+httpStatus: 200
+derivedFrom: null
+purpose: >-
+  Verify that a valid FHIR searchset Bundle with no entry elements produces a
+  successful empty allergy result rather than an error or fabricated record.
+sanitizationChanges:
+  - Replaced the generated Bundle UUID with a stable synthetic identifier.
+  - Replaced the Oracle Health sandbox base URL and tenant identifier with example.test.
+  - Replaced the searched resource identifier with a clearly synthetic missing value.
+expectedBehaviorSummary: >-
+  Return a successful empty domain result. The exact normalized JSON and API
+  response shape remain provisional until the canonical model and OpenAPI 1.0
+  contract are approved.
+expectedOutputStatus: pending-canonical-model-and-openapi-1.0
+reviewedBy: TBD
+consumers:
+  - TBD AllergyIntolerance mapper empty-Bundle test
+  - TBD Cerner retrieval service empty-search test
