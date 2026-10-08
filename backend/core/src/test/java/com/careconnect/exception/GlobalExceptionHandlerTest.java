@@ -8,6 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 
 import java.util.List;
 import java.util.Map;
@@ -99,6 +101,24 @@ class GlobalExceptionHandlerTest {
         @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertNotNull(body);
         assertEquals("An unexpected error occurred", body.get("error"));
+    }
+
+    // ── handleAccessDeniedException ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("handleAccessDeniedException returns 403 for a @PreAuthorize denial instead of the catch-all 500")
+    void handleAccessDeniedException_preAuthorizeDenial_returns403() throws Exception {
+        // AuthorizationDeniedException is what @PreAuthorize throws. It extends AccessDeniedException,
+        // so this is the case that previously fell through to handleOtherExceptions as a 500.
+        final AuthorizationDeniedException ex = new AuthorizationDeniedException(
+                "Access Denied", new AuthorizationDecision(false));
+
+        final ResponseEntity<?> response = handler.handleAccessDeniedException(ex);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Access Denied", body.get("error"));
     }
 
 // ── handleUnauthorizedException ────────────────────────────────────────────
