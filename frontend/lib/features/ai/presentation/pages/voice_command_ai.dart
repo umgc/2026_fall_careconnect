@@ -1271,8 +1271,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
     if (kIsWeb) {
       await _webSpeech.listen(
         localeId: localeTag,
-        onStatus: (status) => debugPrint('Web Confirmation Status: $status'),
-        onError: (err) => debugPrint('Web Confirmation Error: $err'),
+        onStatus: (status) {
+          if (kDebugMode) {
+            debugPrint('Web Confirmation Status: $status');
+          }
+        },
+        onError: (err) {
+          if (kDebugMode) {
+            debugPrint('Web Confirmation Error: $err');
+          }
+        },
         onResult: (words, finalResult) {
           if (words.trim().isNotEmpty) {
             onHeard(words);
@@ -1480,8 +1488,16 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
             if (kIsWeb) {
               await _webSpeech.listen(
                 localeId: localeTag,
-                onStatus: (s) => debugPrint('Gate 2 Web Status: $s'),
-                onError: (e) => debugPrint('Gate 2 Web Error: $e'),
+                onStatus: (s) {
+                  if (kDebugMode) {
+                    debugPrint('Gate 2 Web Status: $s');
+                  }
+                },
+                onError: (e) {
+                  if (kDebugMode) {
+                    debugPrint('Gate 2 Web Error: $e');
+                  }
+                },
                 onResult: (words, _) {
                   if (words.trim().isNotEmpty) handleGate2Voice(words);
                 },
@@ -2140,5 +2156,3 @@ class _VoiceThemeModel {
     this.surfaceColor,
     this.useThemeSurface = false,
     this.isFuturistic = false,
-  });
-}
