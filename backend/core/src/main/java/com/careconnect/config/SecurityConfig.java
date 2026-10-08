@@ -100,7 +100,8 @@ public class SecurityConfig {
                                 "/oauth/**",
                                 "/ws/**",
                                 "/api/notifications/demo/**",
-                                "/api/internal/chime/**"
+                                "/api/internal/chime/**",
+                                "/api/internal/ws/**"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */

@@ -1,5 +1,9 @@
 package com.careconnect.websocket;
 
+import com.careconnect.model.User;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -10,37 +14,77 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentMap;
 
+/**
+ * Plain-text notification channel. Clients authenticate with
+ * {@code {"type":"authenticate","token":"<jwt>"}}; the user id is taken from the token.
+ */
 @Component
 public class NotificationWebSocketHandler extends TextWebSocketHandler {
     private static final Logger logger = LoggerFactory.getLogger(NotificationWebSocketHandler.class);
+    private static final String LEGACY_REGISTER_PREFIX = "REGISTER_USER:";
+
+    private final WebSocketJwtAuthenticator authenticator;
+    private final ObjectMapper objectMapper = new ObjectMapper();
     // sessionId -> session
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     // userId -> sessionId
     private final ConcurrentMap<String, String> userSessionMap = new ConcurrentHashMap<>();
 
+    public NotificationWebSocketHandler(WebSocketJwtAuthenticator authenticator) {
+        this.authenticator = authenticator;
+    }
+
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         sessions.put(session.getId(), session);
         logger.info("WebSocket connection established: {}", session.getId());
-        // Expect client to send userId as first message
+        // Expect client to send an authenticate message first
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        logger.info("Received message from {}: {}", session.getId(), message.getPayload());
-        // If this is the first message, treat it as userId registration
         String payload = message.getPayload();
-        if (payload.startsWith("REGISTER_USER:")) {
-            String userId = payload.substring("REGISTER_USER:".length());
-            userSessionMap.put(userId, session.getId());
-            logger.info("Registered user {} to session {}", userId, session.getId());
-            session.sendMessage(new TextMessage("User registered: " + userId));
+        Map<String, Object> json = parseJson(payload);
+        if ("authenticate".equals(json.get("type"))) {
+            handleAuthenticate(session, json);
+        } else if (payload.startsWith(LEGACY_REGISTER_PREFIX)) {
+            // Unauthenticated registration let any client claim any user id.
+            sendJson(session, Map.of(
+                    "type", "authentication-failed",
+                    "message", "REGISTER_USER is no longer supported; send authenticate with a token"));
         } else {
             // Echo for other messages
             session.sendMessage(new TextMessage("Echo: " + payload));
         }
+    }
+
+    private void handleAuthenticate(WebSocketSession session, Map<String, Object> json) throws Exception {
+        Optional<User> user = authenticator.authenticate(json.get("token"));
+        if (user.isEmpty()) {
+            sendJson(session, Map.of("type", "authentication-failed", "message", "Invalid or missing token"));
+            session.close(CloseStatus.NOT_ACCEPTABLE.withReason("Authentication failed"));
+            return;
+        }
+        String userId = user.get().getId().toString();
+        userSessionMap.put(userId, session.getId());
+        logger.info("Registered user {} to session {}", userId, session.getId());
+        sendJson(session, Map.of("type", "authentication-success", "userId", userId));
+    }
+
+    private Map<String, Object> parseJson(String payload) {
+        try {
+            Map<String, Object> parsed = objectMapper.readValue(payload, new TypeReference<Map<String, Object>>() { });
+            return parsed == null ? Map.of() : parsed;
+        } catch (JsonProcessingException e) {
+            return Map.of();
+        }
+    }
+
+    private void sendJson(WebSocketSession session, Map<String, Object> body) throws Exception {
+        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(body)));
     }
 
     @Override
