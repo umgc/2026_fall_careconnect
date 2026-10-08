@@ -7,12 +7,14 @@ import com.careconnect.repository.PatientNoteRepository;
 import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.UspsMailpieceRepository;
 import com.careconnect.repository.VisitSummaryRepository;
+import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.repository.indexing.IndexingOutboxRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.CallTranscriptService;
 import com.careconnect.service.ai.embedding.ChunkEmbeddingService;
 import com.careconnect.service.ai.indexing.chunker.ClinicalNoteChunker;
 import com.careconnect.service.ai.indexing.chunker.DocumentChunker;
+import com.careconnect.service.ai.indexing.chunker.EpicResourceChunker;
 import com.careconnect.service.ai.indexing.chunker.MailpieceChunker;
 import com.careconnect.service.ai.indexing.chunker.SummaryChunker;
 import com.careconnect.service.ai.indexing.chunker.TranscriptSegmentChunker;
@@ -47,6 +49,7 @@ class IndexWorkerConfigTest {
             .withBean(UserFileRepository.class, () -> mock(UserFileRepository.class))
             .withBean(RetrievalIndexChunkRepository.class,
                     () -> mock(RetrievalIndexChunkRepository.class))
+            .withBean(EhrResourceRepository.class, () -> mock(EhrResourceRepository.class))
             .withBean(ChunkEmbeddingService.class, () -> mock(ChunkEmbeddingService.class))
             .withBean(ObjectMapper.class, ObjectMapper::new)
             .withBean(SummaryChunker.class, () -> new SummaryChunker(new ObjectMapper()))
@@ -54,6 +57,7 @@ class IndexWorkerConfigTest {
             .withBean(MailpieceChunker.class, MailpieceChunker::new)
             .withBean(ClinicalNoteChunker.class, ClinicalNoteChunker::new)
             .withBean(DocumentChunker.class, DocumentChunker::new)
+            .withBean(EpicResourceChunker.class, () -> mock(EpicResourceChunker.class))
             .withBean(PlatformTransactionManager.class, ImmediateTransactionManager::new)
             .withUserConfiguration(
                     RetrievalIndexService.class,

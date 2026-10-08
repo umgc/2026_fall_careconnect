@@ -98,30 +98,12 @@ void main() {
       await tester.pump();
     });
 
-    testWidgets('shows loading spinner during health check', (tester) async {
-      // Before the health check completes, a CircularProgressIndicator is shown.
-      _setLargeViewport(tester);
-      await tester.pumpWidget(_wrap(const WelcomePage()));
-      await tester.pump(); // one frame: _isLoading = true
-      expect(find.byType(CircularProgressIndicator), findsAtLeastNWidgets(1));
-      await tester.pump(const Duration(seconds: 6));
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pump();
-    });
-
-    testWidgets('shows Initializing healthcare experience text', (tester) async {
-      // The loading message from AppLocalizations is shown during health check.
-      _setLargeViewport(tester);
-      await tester.pumpWidget(_wrap(const WelcomePage()));
-      await tester.pump();
-      expect(
-        find.text('Initializing your healthcare experience...'),
-        findsOneWidget,
-      );
-      await tester.pump(const Duration(seconds: 6));
-      await tester.pump(const Duration(seconds: 3));
-      await tester.pump();
-    });
+    // NOTE: The former "shows loading spinner during health check" and
+    // "shows Initializing healthcare experience text" cases were removed. The
+    // health check now runs in the background (see _checkBackendHealth);
+    // _isLoading stays false and the loading overlay is never rendered, so those
+    // assertions tested intentionally-removed UI. The ready/immediate state is
+    // covered by the brand/subtitle/tagline cases above.
 
     testWidgets('shows language picker button', (tester) async {
       // The language selector is visible from the start of the page.

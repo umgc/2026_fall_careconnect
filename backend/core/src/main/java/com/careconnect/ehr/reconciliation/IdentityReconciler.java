@@ -25,6 +25,14 @@ public interface IdentityReconciler {
      * so a failure partway through leaves already-processed fields correctly committed rather than
      * rolling back the whole snapshot.
      *
+     * <p><b>Precondition: the caller has already upserted this snapshot into
+     * {@code ehr_source_identity}</b> for the same {@code (patientId, sourceId)}. Nothing enforces
+     * it. The audit and provenance rows written here carry a foreign key to {@code patient} and to
+     * {@code ehr_source}, but none to {@code ehr_source_identity}, so a call made without the upsert
+     * succeeds and leaves decisions on record with no stored snapshot to explain them. A composite
+     * foreign key to {@code ehr_source_identity} would enforce it; there is none today (raised in
+     * the PR #216 review, where it was judged possibly too tight for Phase 1).
+     *
      * <p>{@code date_of_birth} is the one field that can come back with
      * {@link ReconciliationOutcome.Decision#PENDING_PATIENT_CONFIRMATION} instead of a final decision
      * (2026-09-26 partial reversal — see the implementation plan's Decisions log). Every other field

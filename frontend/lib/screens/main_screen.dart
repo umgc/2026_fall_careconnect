@@ -854,6 +854,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           // Flyout mode keeps users in context instead of route-switching to a
           // dedicated voice page, which reduces navigation side effects.
           presentationMode: VoiceCommandPresentation.flyout,
+          theme: VoiceCommandTheme.classic,
           onCloseRequested: () {
             if (overlayNavigator.canPop()) {
               overlayNavigator.pop();

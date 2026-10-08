@@ -155,7 +155,7 @@ Medication _med({
   int patientId = 1,
   String name = 'Aspirin',
   bool isActive = true,
-  MedicationType type = MedicationType.OTC,
+  MedicationType type = MedicationType.OVER_THE_COUNTER,
 }) =>
     Medication(
       id: id,
