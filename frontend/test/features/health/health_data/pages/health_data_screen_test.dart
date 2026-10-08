@@ -12,7 +12,7 @@ import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
 import 'package:care_connect_app/services/api_client.dart';
 
-import 'health_data_test_support.dart';
+import '../health_data_test_support.dart';
 
 /// SRS 1.4 §8.6, ERR-MCR-03 (FR-MCR-24, AC-MCR-24-2).
 const _errMcr03 =
