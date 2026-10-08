@@ -29,6 +29,7 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Epic SMART-on-FHIR connect surface (Phase 0 / doc 1_8).
@@ -123,9 +124,15 @@ public class EpicOAuthController {
     }
 
     /**
-     * DIAGNOSTIC: re-run the initial Epic sync synchronously for the current user and return the
-     * result (or the underlying error, including Epic's HTTP status and response body). The normal
-     * sync runs async on connect and only records "ERROR" in the audit; this surfaces the cause.
+     * DIAGNOSTIC: re-run the initial Epic sync synchronously for the current user. The normal sync
+     * runs async on connect and only records "ERROR" in the audit; this surfaces the cause.
+     *
+     * <p>On failure the full cause is always logged server-side against a correlation id, and a real
+     * error status is returned (502 when Epic itself failed, 500 otherwise) rather than 200 so
+     * callers can branch. The verbose cause (exception type/message, root cause, and Epic's HTTP
+     * status + response body) is only echoed to the caller when {@code epic.oauth.diagnostics-verbose}
+     * is enabled (dev/sandbox); production returns just {@code error=sync_failed} plus the correlation
+     * id, which the caller can quote to an operator who reads the detail from the log.
      */
     @GetMapping("/resync")
     public ResponseEntity<Map<String, Object>> resync(
@@ -147,19 +154,35 @@ public class EpicOAuthController {
             out.put("ok", true);
             return ResponseEntity.ok(out);
         } catch (Exception ex) {
-            out.put("ok", false);
-            out.put("error", ex.getClass().getName());
-            out.put("message", ex.getMessage());
+            // Always log the full cause server-side, tagged with a correlation id the caller can quote.
+            final String correlationId = UUID.randomUUID().toString();
+            log.warn("Epic resync failed for user {} [correlationId={}]", me.getId(), correlationId, ex);
+
             Throwable cause = ex;
             while (cause.getCause() != null && cause.getCause() != cause) {
                 cause = cause.getCause();
             }
-            out.put("rootCause", cause.getClass().getName() + ": " + cause.getMessage());
-            if (cause instanceof org.springframework.web.client.RestClientResponseException rce) {
-                out.put("httpStatus", rce.getStatusCode().value());
-                out.put("responseBody", rce.getResponseBodyAsString());
+            final boolean upstream = cause instanceof org.springframework.web.client.RestClientResponseException;
+            // 502 when Epic itself returned an error, 500 for anything on our side.
+            final HttpStatus status = upstream ? HttpStatus.BAD_GATEWAY : HttpStatus.INTERNAL_SERVER_ERROR;
+
+            out.put("ok", false);
+            out.put("mode", syncMode.name());
+            out.put("correlationId", correlationId);
+            if (cfg.isDiagnosticsVerbose()) {
+                // Dev/sandbox only: echo the cause, including Epic's HTTP status and response body.
+                out.put("error", ex.getClass().getName());
+                out.put("message", ex.getMessage());
+                out.put("rootCause", cause.getClass().getName() + ": " + cause.getMessage());
+                if (cause instanceof org.springframework.web.client.RestClientResponseException rce) {
+                    out.put("httpStatus", rce.getStatusCode().value());
+                    out.put("responseBody", rce.getResponseBodyAsString());
+                }
+            } else {
+                // Production: no internals leak to the caller; the correlation id links to the log.
+                out.put("error", "sync_failed");
             }
-            return ResponseEntity.ok(out);
+            return ResponseEntity.status(status).body(out);
         }
     }
 
