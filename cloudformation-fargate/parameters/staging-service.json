@@ -1,7 +1,7 @@
 [
   { "ParameterKey": "Environment", "ParameterValue": "staging" },
   { "ParameterKey": "BackendImageUri", "ParameterValue": "REPLACE_ME_WITH_FULL_ECR_IMAGE_URI" },
-  { "ParameterKey": "SpringProfile", "ParameterValue": "prod" },
+  { "ParameterKey": "SpringProfile", "ParameterValue": "dev" },
   { "ParameterKey": "CareConnectAiEnabled", "ParameterValue": "true" },
   { "ParameterKey": "AiProvider", "ParameterValue": "bedrock" },
   { "ParameterKey": "AiModel", "ParameterValue": "amazon.nova-lite-v1:0" },
