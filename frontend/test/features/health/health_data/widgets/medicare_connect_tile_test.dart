@@ -8,7 +8,7 @@ import 'package:care_connect_app/features/health/health_data/pages/medicare_conn
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
 import 'package:care_connect_app/features/health/health_data/widgets/medicare_connect_tile.dart';
 
-import 'health_data_test_support.dart';
+import '../health_data_test_support.dart';
 
 class _FakeService extends MedicareConnectService {
   _FakeService({

@@ -9,7 +9,7 @@ import 'package:care_connect_app/features/health/health_data/models/health_recor
 import 'package:care_connect_app/features/health/health_data/services/ehr_data_service.dart';
 import 'package:care_connect_app/services/api_client.dart';
 
-import 'health_data_test_support.dart';
+import '../health_data_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

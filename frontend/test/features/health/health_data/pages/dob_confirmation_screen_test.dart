@@ -11,7 +11,7 @@ import 'package:care_connect_app/features/health/health_data/models/identity_con
 import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
 import 'package:care_connect_app/features/health/health_data/services/identity_conflict_service.dart';
 
-import 'health_data_test_support.dart';
+import '../health_data_test_support.dart';
 
 IdentityConflict _dob(int id,
         {String before = '1980-05-14',
