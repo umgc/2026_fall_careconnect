@@ -1,6 +1,7 @@
 package com.careconnect.websocket;
 
 import com.careconnect.model.Message;
+import com.careconnect.model.User;
 import com.careconnect.repository.MessageRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>
  * Connection Flow:
  * 1. Client connects to /ws/chat
- * 2. Sends authentication message with userId
+ * 2. Sends authentication message with its JWT; the user id is taken from the token
  * 3. Handler routes incoming messages to recipient's WebSocket session
  * 4. If recipient offline, messages are persisted in database
  */
@@ -29,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
 
     private final MessageRepository messageRepository;
+    private final WebSocketJwtAuthenticator authenticator;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Track active connections: userId (String) -> WebSocketSession
@@ -81,7 +83,7 @@ public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
             }
         } catch (Exception e) {
             log.error("Error handling chat message", e);
-            sendError(session, "Error processing message: " + e.getMessage());
+            sendError(session, "Error processing message");
         }
     }
 
@@ -89,11 +91,17 @@ public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
      * Authenticate user and register their WebSocket session
      */
     private void handleAuthenticate(WebSocketSession session, Map<String, Object> payload) throws Exception {
-        String userId = (String) payload.get("userId");
-        if (userId == null || userId.isEmpty()) {
-            sendError(session, "Missing userId in authentication message");
+        Optional<User> user = authenticator.authenticate(payload.get("token"));
+        if (user.isEmpty()) {
+            Map<String, Object> failure = Map.of(
+                    "type", "authentication-failed",
+                    "message", "Invalid or missing token"
+            );
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(failure)));
+            session.close(CloseStatus.NOT_ACCEPTABLE.withReason("Authentication failed"));
             return;
         }
+        String userId = user.get().getId().toString();
 
         // Register this session
         userSessions.put(userId, session);

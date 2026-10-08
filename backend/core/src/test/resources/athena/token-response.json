@@ -1,0 +1,6 @@
+{
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "access_token": "REDACTED_FOR_FIXTURE",
+  "scope": "system/Patient.read"
+}

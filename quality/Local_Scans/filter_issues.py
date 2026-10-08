@@ -33,8 +33,8 @@ INVENTORY = {
     # Video Calling — frontend tests
     "frontend/test/services/video_call_service_web_test.dart",
     "frontend/test/services/hybrid_video_call_service_test.dart",
-    "frontend/test/video_call/video_call_service_test.dart",
-    "frontend/test/video_call/hybrid_video_call_widget_test.dart",
+    "frontend/test/services/video_call_service_test.dart",
+    "frontend/test/widgets/hybrid_video_call_widget_test.dart",
     "frontend/test/pages/video_call_test_page_test.dart",
     "frontend/integration_test/video_call_e2e_test.dart",
     # Conference Calls — frontend source
@@ -58,7 +58,7 @@ INVENTORY = {
     "frontend/lib/widgets/sentiment_dashboard_widget.dart",
     "frontend/lib/config/theme/sentiment_colors.dart",
     # Sentiment Analysis — frontend tests
-    "frontend/test/sentiment_dashboard_widget_test.dart",
+    "frontend/test/widgets/sentiment_dashboard_widget_test.dart",
     # Telemetry — frontend source
     "frontend/lib/widgets/post_call_telemetry_summary_screen.dart",
     "frontend/lib/features/telemetry/telemetry.dart",
@@ -67,7 +67,7 @@ INVENTORY = {
     # Telemetry — frontend tests
     "frontend/test/features/telemetry/telemetry_settings_test.dart",
     "frontend/test/features/telemetry/telemetry_guardrails_test.dart",
-    "frontend/test/post_call_telemetry_summary_screen_test.dart",
+    "frontend/test/widgets/post_call_telemetry_summary_screen_test.dart",
     # Conference Calls — backend
     "backend/core/src/main/java/com/careconnect/controller/CallController.java",
     "backend/core/src/main/java/com/careconnect/websocket/CallNotificationHandler.java",

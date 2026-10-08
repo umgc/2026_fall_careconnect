@@ -8,12 +8,24 @@ import 'package:web_socket_channel/status.dart' as status;
 import '../widgets/incoming_call_popup.dart';
 import '../config/env_constant.dart';
 import '../services/auth_token_manager.dart';
+import '../utils/websocket_keep_alive.dart';
 
 /// Service to handle real-time call notifications for caregivers
 class CallNotificationService {
   static WebSocketChannel? _channel;
   static StreamSubscription<dynamic>? _subscription;
   static bool _isConnected = false;
+  static String? _websocketUrl;
+
+  /// Reconnects after the socket drops (API Gateway closes idle sockets,
+  /// 2-hour-old sockets, and all sockets on a backend redeploy) and sends
+  /// heartbeats while connected.
+  static final WebSocketKeepAlive _keepAlive = WebSocketKeepAlive();
+
+  /// Opens the socket. Replaceable in tests so no network is needed.
+  @visibleForTesting
+  static WebSocketChannel Function(Uri uri) connectChannel =
+      WebSocketChannel.connect;
   static String? _currentUserId;
   static String? _currentUserRole;
   static String? _currentUserDisplayName;
@@ -66,72 +78,131 @@ class CallNotificationService {
         dispose();
       }
 
-      final token = await AuthTokenManager.getJwtToken();
-      if (token == null || token.isEmpty) {
-        debugPrint('❌ Cannot initialize call notifications: missing JWT token');
-        return false;
-      }
-
-      // Connect to backend call WebSocket endpoint
-      final String wsUrl = websocketUrl ?? getCallNotificationWebSocketUrl();
-      debugPrint('Connecting to notification WebSocket: $wsUrl');
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-      final authCompleter = Completer<bool>();
-
-      // Attach listener before sending auth (required on Flutter web).
-      await _subscription?.cancel();
-      _subscription = _channel!.stream.listen(
-        (message) {
-          final data = _decode(message);
-          if (data == null || data.isEmpty) return;
-          final type = data['type'] as String?;
-          if (type == 'authentication-success' && !authCompleter.isCompleted) {
-            authCompleter.complete(true);
-          } else if (type == 'authentication-failed' &&
-              !authCompleter.isCompleted) {
-            authCompleter.complete(false);
-          }
-          _processNotificationMessage(data);
-        },
-        onDone: () {
-          _isConnected = false;
-          if (!authCompleter.isCompleted) {
-            authCompleter.complete(false);
-          }
-          debugPrint('❌ CallNotificationService WebSocket closed');
-        },
-        onError: (e) {
-          _isConnected = false;
-          if (!authCompleter.isCompleted) {
-            authCompleter.complete(false);
-          }
-          debugPrint('❌ CallNotificationService WebSocket error: $e');
-        },
-      );
-
-      await _channel!.ready;
-
-      // Authenticate and join user room after the socket is open.
-      _channel!.sink.add(_encode({'type': 'authenticate', 'token': token}));
-      _channel!.sink.add(_encode({'type': 'join-user-room'}));
-
-      final authed = await authCompleter.future.timeout(
-        const Duration(seconds: 8),
-        onTimeout: () => false,
-      );
-      if (!authed) {
-        debugPrint('❌ Call notification WebSocket authentication failed');
-        dispose();
-        return false;
-      }
-
-      _isConnected = true;
-      debugPrint('✅ CallNotificationService connected and authenticated');
-      return true;
+      _websocketUrl = websocketUrl;
+      return await _connect(isReconnect: false);
     } catch (e) {
       debugPrint('❌ Error initializing CallNotificationService: $e');
       return false;
     }
+  }
+
+  /// Opens and authenticates the socket for the current user.
+  ///
+  /// A first connection that fails disposes the service (as before). A
+  /// reconnect that fails for any reason other than the backend rejecting the
+  /// token schedules another attempt.
+  static Future<bool> _connect({required bool isReconnect}) async {
+    final token = await AuthTokenManager.getJwtToken();
+    if (token == null || token.isEmpty) {
+      debugPrint('❌ Cannot initialize call notifications: missing JWT token');
+      return false;
+    }
+
+    // Connect to backend call WebSocket endpoint
+    final String wsUrl = _websocketUrl ?? getCallNotificationWebSocketUrl();
+    debugPrint('Connecting to notification WebSocket: $wsUrl');
+    final channel = connectChannel(Uri.parse(wsUrl));
+    _channel = channel;
+    final authCompleter = Completer<bool>();
+    var authRejected = false;
+
+    // Attach listener before sending auth (required on Flutter web).
+    await _subscription?.cancel();
+    _subscription = channel.stream.listen(
+      (message) {
+        final data = _decode(message);
+        if (data == null || data.isEmpty) return;
+        final type = data['type'] as String?;
+        if (type == 'authentication-success' && !authCompleter.isCompleted) {
+          authCompleter.complete(true);
+        } else if (type == 'authentication-failed' &&
+            !authCompleter.isCompleted) {
+          authRejected = true;
+          authCompleter.complete(false);
+        }
+        _processNotificationMessage(data);
+      },
+      onDone: () => _onSocketClosed(channel, authCompleter, 'closed'),
+      onError: (e) => _onSocketClosed(channel, authCompleter, 'error: $e'),
+    );
+
+    await channel.ready;
+
+    // Authenticate and join user room after the socket is open.
+    channel.sink.add(_encode({'type': 'authenticate', 'token': token}));
+    channel.sink.add(_encode({'type': 'join-user-room'}));
+
+    final authed = await authCompleter.future.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () => false,
+    );
+    if (!authed) {
+      debugPrint('❌ Call notification WebSocket authentication failed');
+      if (isReconnect && !authRejected) {
+        _closeChannel();
+        _keepAlive.scheduleReconnect(_reconnect);
+      } else {
+        dispose();
+      }
+      return false;
+    }
+
+    _isConnected = true;
+    _keepAlive.onConnected((message) => _channel?.sink.add(message));
+    debugPrint('✅ CallNotificationService connected and authenticated');
+    return true;
+  }
+
+  /// Handles the socket closing. While connecting, [_connect] decides what
+  /// happens next; once connected, a drop schedules a reconnect.
+  static void _onSocketClosed(
+    WebSocketChannel channel,
+    Completer<bool> authCompleter,
+    String reason,
+  ) {
+    debugPrint('❌ CallNotificationService WebSocket $reason');
+    if (!identical(channel, _channel)) {
+      return; // An older socket, already replaced or disposed.
+    }
+    _isConnected = false;
+    if (!authCompleter.isCompleted) {
+      authCompleter.complete(false);
+      return;
+    }
+    _closeChannel();
+    if (_currentUserId != null) {
+      _keepAlive.scheduleReconnect(_reconnect);
+    }
+  }
+
+  static void _reconnect() {
+    if (_currentUserId == null || _channel != null) {
+      return; // Disposed, or already reconnected.
+    }
+    unawaited(
+      _connect(isReconnect: true).catchError((Object e) {
+        debugPrint('❌ CallNotificationService reconnect failed: $e');
+        _closeChannel();
+        if (_currentUserId != null) {
+          _keepAlive.scheduleReconnect(_reconnect);
+        }
+        return false;
+      }),
+    );
+  }
+
+  /// Closes the current socket without forgetting the user.
+  static void _closeChannel() {
+    final subscription = _subscription;
+    _subscription = null;
+    unawaited(subscription?.cancel());
+
+    final channel = _channel;
+    _channel = null;
+    channel?.sink.close(status.normalClosure);
+
+    _isConnected = false;
+    _keepAlive.onDisconnected();
   }
 
   static void _processNotificationMessage(Map<String, dynamic> data) {
@@ -784,14 +855,10 @@ class CallNotificationService {
   static void dispose() {
     debugPrint('🧹 Disposing CallNotificationService');
 
-    final subscription = _subscription;
-    _subscription = null;
-    unawaited(subscription?.cancel());
+    _keepAlive.stop();
+    _closeChannel();
+    _websocketUrl = null;
 
-    _channel?.sink.close(status.normalClosure);
-    _channel = null;
-
-    _isConnected = false;
     _currentUserId = null;
     _currentUserRole = null;
     _currentUserDisplayName = null;
