@@ -56,6 +56,15 @@ public class EpicProperties {
     @Value("${epic.sync.delta-safety-margin-hours:24}")
     private long deltaSafetyMarginHours;
 
+    /**
+     * When true, the diagnostic {@code /api/epic/resync} endpoint returns the underlying failure
+     * detail (exception type/message, root cause, and Epic's HTTP status + response body) to the
+     * caller. Dev/sandbox only — defaults to {@code false} so production returns a generic error
+     * with a correlation id and keeps the detail in the server log (information-disclosure review).
+     */
+    @Value("${epic.oauth.diagnostics-verbose:false}")
+    private boolean diagnosticsVerbose;
+
     /** Discriminator stored on credentials, chunks (source_kind) and audit rows. */
     public static final String SOURCE_EPIC = "EPIC";
 
@@ -68,6 +77,7 @@ public class EpicProperties {
     public String getAppReturnDeepLink() { return appReturnDeepLink; }
     public String getWebReturnUrl() { return webReturnUrl; }
     public Duration getDeltaSafetyMargin() { return Duration.ofHours(deltaSafetyMarginHours); }
+    public boolean isDiagnosticsVerbose() { return diagnosticsVerbose; }
 
     public boolean isConfidentialClient() {
         return clientSecret != null && !clientSecret.isBlank();
