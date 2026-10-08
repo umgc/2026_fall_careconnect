@@ -1,0 +1,236 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "CareConnect Video Call Lifecycle",
+    "output": "docs/guides/VIDEO_CALL_LIFECYCLE_DIAGRAM.html",
+    "viewBox": [1040, 648],
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "phase-rail",
+        "label": "Phase rail",
+        "focus": ["created", "ringing", "active", "terminating", "ended"],
+        "note": "The durable CallSession row from POST /sessions to a fenced Ended that cannot be rejoined."
+      },
+      {
+        "id": "live-capture",
+        "label": "Live capture",
+        "focus": ["active", "sentiment", "telemetry"],
+        "note": "Sentiment is captured from the patient only and pushed to caregivers only."
+      },
+      {
+        "id": "deferred-artifacts",
+        "label": "Deferred artifacts",
+        "focus": ["terminating", "stopRec", "mp4", "ended", "transcribe", "summary"],
+        "note": "Recording teardown can park and retry; transcription and the real summary land after the call."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "main", "label": "CallSession phases" },
+    { "id": "capture", "label": "Capture + transcription" },
+    { "id": "recovery", "label": "Recording teardown" },
+    { "id": "terminal", "label": "Durable artifacts" }
+  ],
+  "states": [
+    {
+      "id": "created",
+      "type": "start",
+      "label": "Created",
+      "sublabel": "POST /sessions",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "tag": "initiator only"
+    },
+    {
+      "id": "ringing",
+      "type": "waiting",
+      "label": "Ringing",
+      "sublabel": "WebSocket invitation",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "tag": "8s window"
+    },
+    {
+      "id": "active",
+      "type": "active",
+      "label": "Active",
+      "sublabel": "joined, Chime media live",
+      "lane": "main",
+      "col": 2,
+      "step": "03",
+      "tag": "POST /join"
+    },
+    {
+      "id": "terminating",
+      "type": "active",
+      "label": "Terminating",
+      "sublabel": "four fenced steps",
+      "lane": "main",
+      "col": 3,
+      "step": "04",
+      "tag": "one owner"
+    },
+    {
+      "id": "ended",
+      "type": "success",
+      "label": "Ended",
+      "sublabel": "rejoin fenced off",
+      "lane": "main",
+      "col": 4,
+      "step": "05",
+      "tag": "terminal"
+    },
+    {
+      "id": "sentiment",
+      "type": "active",
+      "label": "Live Sentiment",
+      "sublabel": "voice, video, transcript",
+      "lane": "capture",
+      "col": 0,
+      "tag": "patient source"
+    },
+    {
+      "id": "transcribe",
+      "type": "external",
+      "label": "Post-call Transcribe",
+      "sublabel": "KVS to WAV per attendee",
+      "lane": "capture",
+      "col": 2,
+      "tag": "scheduled job"
+    },
+    {
+      "id": "stopRec",
+      "type": "failure",
+      "label": "Stopping Recording",
+      "sublabel": "delete pipeline, concatenate",
+      "lane": "recovery",
+      "col": 1,
+      "tag": "retryable"
+    },
+    {
+      "id": "telemetry",
+      "type": "success",
+      "label": "Sentiment Stored",
+      "sublabel": "telemetry events",
+      "lane": "terminal",
+      "col": 0,
+      "tag": "durable"
+    },
+    {
+      "id": "mp4",
+      "type": "success",
+      "label": "Recording Ready",
+      "sublabel": "concatenated MP4",
+      "lane": "terminal",
+      "col": 1,
+      "tag": "presigned"
+    },
+    {
+      "id": "summary",
+      "type": "success",
+      "label": "Summary Ready",
+      "sublabel": "regenerated on first read",
+      "lane": "terminal",
+      "col": 2,
+      "tag": "on demand"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "capture-start",
+      "from": "active",
+      "to": "sentiment",
+      "variant": "default",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "sentiment-persist",
+      "from": "sentiment",
+      "to": "telemetry",
+      "variant": "default",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "teardown-start",
+      "from": "terminating",
+      "to": "stopRec",
+      "variant": "security",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "teardown-retry",
+      "from": "stopRec",
+      "to": "terminating",
+      "variant": "emphasis",
+      "fromSide": "left",
+      "toSide": "top",
+      "via": [[479, 307], [479, 80], [556, 80]]
+    },
+    {
+      "id": "recording-finalized",
+      "from": "stopRec",
+      "to": "mp4",
+      "variant": "default",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "transcription-queued",
+      "from": "ended",
+      "to": "transcribe",
+      "variant": "dashed",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "summary-written",
+      "from": "transcribe",
+      "to": "summary",
+      "variant": "default",
+      "route": "straight",
+      "fromSide": "bottom",
+      "toSide": "top"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Phase Rail",
+      "items": [
+        "Only the initiator creates the session; the receiver joins an existing one",
+        "Durable join is written before Chime, and reverted if attendee creation fails",
+        "The second joiner wins the recording-start election, not the caller"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Role Split",
+      "items": [
+        "Sentiment is captured from the patient and shown only to caregivers",
+        "Only the recording owner or an admin may stop a recording",
+        "In a one-to-one call, either party hanging up ends it for both"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Deferred Truth",
+      "items": [
+        "Stopped is not playable; concatenation produces the MP4 afterwards",
+        "The first summary is often NO_TRANSCRIPT and is replaced later",
+        "Speaker identity comes from the KVS stream, not from diarization"
+      ]
+    }
+  ]
+}

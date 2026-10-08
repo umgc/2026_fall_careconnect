@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
   CareConnect ECS Fargate service with API Gateway HTTP API, VPC Link,
-  Cloud Map service discovery, ACM certificate, and Route 53 custom domain.
+  Cloud Map service discovery, ACM certificate, Route 53 custom domain, and an
+  API Gateway WebSocket API reaching the service through an internal NLB.
 
 Parameters:
   # Environment name must match the networking, data, and platform stacks.
@@ -66,13 +67,6 @@ Parameters:
     Type: String
     Default: noreply@careconnect.com
 
-  # Optional. Leave empty until a real WebSocket API Gateway endpoint is available.
-  # A placeholder string would be treated as a fake URL by the app/AWS client.
-  WebSocketApiGatewayEndpoint:
-    Type: String
-    Default: ''
-    Description: API Gateway WebSocket API endpoint URL (wss://...). Leave empty if not provisioned yet.
-
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
     Type: String
@@ -88,10 +82,22 @@ Parameters:
     Type: Number
     Default: 8081
 
-  # Start small for demo. Scale later by updating the stack.
+  # Second backend port that only the internal WebSocket NLB can reach. The API Gateway
+  # WebSocket API calls back here; the public HTTP API never reaches it.
+  InternalWebSocketPort:
+    Type: Number
+    Default: 8082
+
+  # Start small for demo. Must stay 1 while websocket sessions live in task memory
+  # (ApiGatewaySessionRegistry): every message for a connection has to reach the same task.
   DesiredCount:
     Type: Number
     Default: 1
+    MinValue: 0
+    MaxValue: 1
+    ConstraintDescription: >-
+      Must be 0 or 1. Websocket sessions are held in task memory; scaling out first needs
+      the session registry moved to the database.
 
   # ECS/Fargate task sizing.
   TaskCpu:
@@ -279,6 +285,221 @@ Resources:
         HostedZoneId: !GetAtt ApiDomainName.RegionalHostedZoneId
 
   # ---------------------------------------------------------------------------
+  # API Gateway WebSocket API.
+  # HTTP APIs cannot carry websocket traffic, so websockets use a separate
+  # WebSocket API. API Gateway holds the client sockets and turns each
+  # connect / message / disconnect into an HTTP POST to the backend's internal
+  # port. WebSocket APIs reach a VPC only through a VPC Link V1, which only
+  # targets an NLB — hence the internal NLB below.
+  # Clients connect to wss://<api-id>.execute-api.<region>.amazonaws.com/<env>?channel=<name>.
+  # ---------------------------------------------------------------------------
+
+  # NLB security group: may only send to the tasks (internal port + health check).
+  # Inbound PrivateLink traffic from API Gateway is not evaluated (see NLB below).
+  WsNlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Internal websocket NLB to ECS tasks
+      VpcId:
+        Fn::ImportValue: !Sub careconnect-${Environment}-VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: !Ref InternalWebSocketPort
+          ToPort: !Ref InternalWebSocketPort
+          DestinationSecurityGroupId:
+            Fn::ImportValue: !Sub careconnect-${Environment}-EcsTaskSecurityGroupId
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          DestinationSecurityGroupId:
+            Fn::ImportValue: !Sub careconnect-${Environment}-EcsTaskSecurityGroupId
+      Tags:
+        - Key: Name
+          Value: !Sub careconnect-${Environment}-ws-nlb-sg
+
+  # Tasks accept the websocket callbacks only from the NLB.
+  EcsTaskIngressFromWsNlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Fn::ImportValue: !Sub careconnect-${Environment}-EcsTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref InternalWebSocketPort
+      ToPort: !Ref InternalWebSocketPort
+      SourceSecurityGroupId: !Ref WsNlbSecurityGroup
+      Description: API Gateway websocket callbacks via internal NLB
+
+  # NLB health checks hit the public health endpoint on the main port.
+  EcsTaskHealthCheckFromWsNlb:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId:
+        Fn::ImportValue: !Sub careconnect-${Environment}-EcsTaskSecurityGroupId
+      IpProtocol: tcp
+      FromPort: !Ref ContainerPort
+      ToPort: !Ref ContainerPort
+      SourceSecurityGroupId: !Ref WsNlbSecurityGroup
+      Description: Websocket NLB health checks
+
+  # Internal (no public IPs) NLB in the private subnets. Security-group evaluation
+  # of PrivateLink traffic is off, as AWS requires for API Gateway VPC Links.
+  WsNlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub careconnect-${Environment}-ws-nlb
+      Type: network
+      Scheme: internal
+      Subnets:
+        - Fn::ImportValue: !Sub careconnect-${Environment}-PrivateDbSubnetAId
+        - Fn::ImportValue: !Sub careconnect-${Environment}-PrivateDbSubnetBId
+      SecurityGroups:
+        - !Ref WsNlbSecurityGroup
+      EnforceSecurityGroupInboundRulesOnPrivateLinkTraffic: 'off'
+      LoadBalancerAttributes:
+        - Key: load_balancing.cross_zone.enabled
+          Value: 'true'
+
+  # Targets are the task IPs on the internal port; health is the main port's health path.
+  WsTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub careconnect-${Environment}-ws-tg
+      TargetType: ip
+      Protocol: TCP
+      Port: !Ref InternalWebSocketPort
+      VpcId:
+        Fn::ImportValue: !Sub careconnect-${Environment}-VpcId
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: !Sub '${ContainerPort}'
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '30'
+
+  WsNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref WsNlb
+      Port: !Ref InternalWebSocketPort
+      Protocol: TCP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref WsTargetGroup
+
+  # VPC Link V1 (REST-style). Creation takes several minutes.
+  WsVpcLink:
+    Type: AWS::ApiGateway::VpcLink
+    Properties:
+      Name: !Sub careconnect-${Environment}-ws-vpc-link
+      Description: API Gateway WebSocket API to the internal websocket NLB
+      TargetArns:
+        - !Ref WsNlb
+
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub careconnect-${Environment}-ws
+      ProtocolType: WEBSOCKET
+      Description: !Sub CareConnect ${Environment} websocket API
+      # Only $connect/$default/$disconnect are used; the backend dispatches on the
+      # message's own "type" field, so no custom route keys are needed.
+      RouteSelectionExpression: $request.body.action
+
+  # Each integration forwards to the backend callback endpoint, adding the
+  # connection id (and, on connect, the requested channel) as headers.
+  WsConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: POST
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref WsVpcLink
+      IntegrationUri: !Sub http://${WsNlb.DNSName}:${InternalWebSocketPort}/api/internal/ws/connect
+      RequestParameters:
+        integration.request.header.X-Ws-Connection-Id: context.connectionId
+        integration.request.header.X-Ws-Channel: route.request.querystring.channel
+
+  WsMessageIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: POST
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref WsVpcLink
+      IntegrationUri: !Sub http://${WsNlb.DNSName}:${InternalWebSocketPort}/api/internal/ws/message
+      RequestParameters:
+        integration.request.header.X-Ws-Connection-Id: context.connectionId
+
+  WsDisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketApi
+      IntegrationType: HTTP_PROXY
+      IntegrationMethod: POST
+      ConnectionType: VPC_LINK
+      ConnectionId: !Ref WsVpcLink
+      IntegrationUri: !Sub http://${WsNlb.DNSName}:${InternalWebSocketPort}/api/internal/ws/disconnect
+      RequestParameters:
+        integration.request.header.X-Ws-Connection-Id: context.connectionId
+
+  # The channel query string is required; the backend also rejects unknown values.
+  WsConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      RequestParameters:
+        route.request.querystring.channel:
+          Required: true
+      Target: !Sub integrations/${WsConnectIntegration}
+
+  WsDefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $default
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WsMessageIntegration}
+
+  WsDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target: !Sub integrations/${WsDisconnectIntegration}
+
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebSocketApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  # Lets the backend push to and close connections (@connections API) on this stage only.
+  WebSocketManageConnectionsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub careconnect-${Environment}-ws-manage-connections
+      Roles:
+        - !Sub careconnect-${Environment}-ecsTaskRole
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: execute-api:ManageConnections
+            Resource: !Sub arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${Environment}/*/@connections/*
+
+  # ---------------------------------------------------------------------------
   # ECS Task Definition and Service.
   # ---------------------------------------------------------------------------
 
@@ -309,6 +530,10 @@ Resources:
               Protocol: tcp
               AppProtocol: http
               Name: backend-port
+            - ContainerPort: !Ref InternalWebSocketPort
+              HostPort: !Ref InternalWebSocketPort
+              Protocol: tcp
+              Name: websocket-callback-port
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -350,11 +575,16 @@ Resources:
               Value: !If [IsProdProfile, 'sendgrid', 'console']
             - Name: FROM_EMAIL
               Value: !If [IsProdProfile, !Ref FromEmail, 'dev@localhost']
-            # Prod profile WebSocket (application-prod.properties AWS mode)
+            # Prod profile WebSocket (application-prod.properties AWS mode): the
+            # @connections callback URL of the WebSocket API stage above.
             - Name: WEBSOCKET_ENABLED
               Value: !If [IsProdProfile, 'true', 'false']
+            - Name: WEBSOCKET_MODE
+              Value: aws
             - Name: AWS_WEBSOCKET_API_GATEWAY_ENDPOINT
-              Value: !Ref WebSocketApiGatewayEndpoint
+              Value: !Sub https://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+            - Name: WEBSOCKET_INTERNAL_PORT
+              Value: !Sub '${InternalWebSocketPort}'
             # Production schema: Flyway off; SchemaPatchRunner + Hibernate ddl-auto=update at startup.
             - Name: SPRING_FLYWAY_ENABLED
               Value: 'false'
@@ -380,9 +610,11 @@ Resources:
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
 
-  # ECS Fargate service registered with Cloud Map for API Gateway discovery.
+  # ECS Fargate service registered with Cloud Map for API Gateway discovery
+  # and with the websocket NLB target group for the WebSocket API.
   EcsService:
     Type: AWS::ECS::Service
+    DependsOn: WsNlbListener
     Properties:
       ServiceName: !Sub careconnect-${Environment}-backend
       Cluster:
@@ -390,6 +622,12 @@ Resources:
       LaunchType: FARGATE
       DesiredCount: !Ref DesiredCount
       TaskDefinition: !Ref TaskDefinition
+      # Spring Boot startup takes a while; don't let NLB health checks kill new tasks.
+      HealthCheckGracePeriodSeconds: 240
+      LoadBalancers:
+        - ContainerName: cc-backend
+          ContainerPort: !Ref InternalWebSocketPort
+          TargetGroupArn: !Ref WsTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
@@ -502,3 +740,11 @@ Outputs:
     Value: !Ref HttpApi
     Export:
       Name: !Sub careconnect-${Environment}-HttpApiId
+
+  # Base URL for the Flutter build (--dart-define=WEBSOCKET_GATEWAY_URL=...).
+  # Clients append ?channel=calls|careconnect|notifications|chat.
+  WebSocketUrl:
+    Description: API Gateway WebSocket API URL (frontend WEBSOCKET_GATEWAY_URL)
+    Value: !Sub wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub careconnect-${Environment}-WebSocketUrl

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:care_connect_app/services/local_db/app_database.dart';
+import 'package:care_connect_app/services/local_db/offline_sync_row.dart';
 import 'package:care_connect_app/services/local_db/offline_sync_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -268,6 +269,36 @@ void main() {
       expect(row.lastError, contains('Invalid queued URL'));
       await verifyDb.deleteOfflineSyncById('bad-url-item');
       await verifyDb.closeDb();
+    });
+
+    test('failed replay remains one failed row instead of being re-enqueued',
+        () async {
+      // Arrange
+      final isolatedService = OfflineSyncService.forTesting(
+        replayClient: _ThrowingClient(TimeoutException('offline')),
+      );
+      await isolatedService.initialize();
+      addTearDown(() async {
+        await _clearQueue(isolatedService);
+        await isolatedService.close();
+      });
+      final queuedId = await isolatedService.enqueueRequest(
+        method: 'POST',
+        uri: Uri.parse('https://example.org/v1/api/tasks/patient/1'),
+        headers: <String, String>{'Content-Type': 'application/json'},
+        body: '{"title":"Replay once"}',
+      );
+
+      // Act
+      final synced = await isolatedService.syncQueuedRequestById(queuedId);
+      final queue = await isolatedService.getPendingQueue(limit: 10);
+
+      // Assert
+      expect(synced, isFalse);
+      expect(queue, hasLength(1));
+      expect(queue.single.id, queuedId);
+      expect(queue.single.status, OfflineSyncStatus.failed);
+      expect(queue.single.retryCount, 1);
     });
 
     test('user case: syncPendingQueue summary counts deterministic malformed rows as failed', () async {
