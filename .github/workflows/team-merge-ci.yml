@@ -149,7 +149,11 @@ jobs:
       - name: Map changed files to unit tests
         if: steps.mode.outputs.run_suite == 'true'
         run: |
-          python scripts/test_mapping.py             --diff-base "${DIFF_BASE}"             --frontend-out "${RUNNER_TEMP}/frontend-tests.txt"             --backend-out "${RUNNER_TEMP}/backend-tests.txt"             --repo-root .
+          python scripts/test_mapping.py \
+            --diff-base "${DIFF_BASE}" \
+            --frontend-out "${RUNNER_TEMP}/frontend-tests.txt" \
+            --backend-out "${RUNNER_TEMP}/backend-tests.txt" \
+            --repo-root .
 
       - name: Flutter unit tests (changed files only)
         if: steps.mode.outputs.run_suite == 'true'
@@ -160,7 +164,12 @@ jobs:
             echo "No frontend tests map to changed code; skipping."
             exit 0
           fi
-          flutter test             --concurrency="${FLUTTER_TEST_CONCURRENCY}"             --coverage             --exclude-tags integration             --reporter expanded             "${TEST_FILES[@]}"
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --coverage \
+            --exclude-tags integration \
+            --reporter expanded \
+            "${TEST_FILES[@]}"
 
       - name: Maven unit tests (changed files only)
         if: steps.mode.outputs.run_suite == 'true'
@@ -173,7 +182,9 @@ jobs:
           fi
           TEST_ARG="$(IFS=,; echo "${TEST_CLASSES[*]}")"
           echo "Running: ${TEST_ARG}"
-          mvn -B test jacoco:report -Dtest="${TEST_ARG}"
+          # failIfNoSpecifiedTests=false: a changed abstract *Test base class
+          # matches no runnable test and would otherwise error out.
+          mvn -B test jacoco:report -Dtest="${TEST_ARG}" -Dsurefire.failIfNoSpecifiedTests=false
 
       # ----------------------------------------------------------------
       # Stage 4: Coverage gate — 80% on changed files (BLOCKING)
@@ -184,7 +195,12 @@ jobs:
       - name: Coverage gate (changed files, 80% threshold)
         if: steps.mode.outputs.run_suite == 'true'
         run: |
-          python scripts/coverage_gate.py             --diff-base "${DIFF_BASE}"             --threshold 0.80             --jacoco-xml backend/core/target/site/jacoco/jacoco.xml             --lcov-info frontend/coverage/lcov.info             --repo-root .
+          python scripts/coverage_gate.py \
+            --diff-base "${DIFF_BASE}" \
+            --threshold 0.80 \
+            --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
+            --lcov-info frontend/coverage/lcov.info \
+            --repo-root .
 
       # ----------------------------------------------------------------
       # Stage 5: Test result artifact upload
