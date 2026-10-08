@@ -1,4 +1,5 @@
 import 'package:care_connect_app/features/tasks/utils/task_type_manager.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +15,27 @@ import 'package:provider/provider.dart';
 ///     showDialog(context: context, builder: (_) => const LegendEditor());
 ///   })
 class Legend extends StatelessWidget {
+  String _localizedTypeName(AppLocalizations t, String type) {
+    switch (type.toLowerCase()) {
+      case 'medication':
+        return t.calendarTypeMedication;
+      case 'appointment':
+        return t.calendarTypeAppointment;
+      case 'exercise':
+        return t.calendarTypeExercise;
+      case 'general':
+        return t.calendarTypeGeneral;
+      case 'lab':
+        return t.calendarTypeLab;
+      case 'pharmacy':
+        return t.calendarTypePharmacy;
+      case 'imported':
+        return t.calendarTypeImported;
+      default:
+        return type[0].toUpperCase() + type.substring(1);
+    }
+  }
+
   /// Optional: show a "Manage" icon in the header and invoke this callback.
   final VoidCallback? onManage;
 
@@ -34,6 +56,7 @@ class Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     final manager = context.watch<TaskTypeManager>();
     final taskTypes = manager.taskTypeColors.keys.toList();
 
@@ -51,14 +74,14 @@ class Legend extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    "Task Types",
+                    t.calendarTaskTypes,
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   if (showManageButton)
                     IconButton(
-                      tooltip: "Manage Task Types",
+                      tooltip: t.calendarManageTaskTypes,
                       icon: const Icon(Icons.edit, size: 20),
                       onPressed: onManage,
                     ),
@@ -83,7 +106,7 @@ class Legend extends StatelessWidget {
                       Icon(icon, color: color, size: 18),
                       const SizedBox(width: 4),
                       Text(
-                        type[0].toUpperCase() + type.substring(1),
+                        _localizedTypeName(t, type),
                         style: Theme.of(
                           context,
                         ).textTheme.bodyMedium?.copyWith(color: color),

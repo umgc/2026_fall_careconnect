@@ -1,6 +1,7 @@
 import 'package:calendar_view/calendar_view.dart';
 import 'package:care_connect_app/features/tasks/models/task_model.dart';
 import 'package:care_connect_app/features/tasks/utils/task_type_manager.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +24,7 @@ class EventTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
     // Nothing to show if no events in this slot
     if (events.isEmpty) return const SizedBox.shrink();
 
@@ -49,7 +51,7 @@ class EventTile extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              task?.name ?? "Task",
+              task?.name ?? t.calendarTask,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,

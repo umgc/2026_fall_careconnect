@@ -181,6 +181,7 @@ dependencies:
   flutter_local_notifications: ^17.2.1
   video_player: ^2.11.1
   chewie: ^1.13.1
+  calendar_view: ^1.4.0
 
   # Team D - Dependencies End
 dependency_overrides:

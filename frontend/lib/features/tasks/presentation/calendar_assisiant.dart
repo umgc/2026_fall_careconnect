@@ -8,6 +8,7 @@ import 'package:calendar_view/calendar_view.dart';
 import 'package:care_connect_app/features/tasks/models/task_model.dart';
 import 'package:care_connect_app/features/tasks/utils/recurrence_utils.dart';
 import 'package:care_connect_app/features/tasks/utils/task_utils.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
@@ -93,7 +94,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
       final user = Provider.of<UserProvider>(context, listen: false).user;
       if (user == null) {
         setState(() {
-          error = "User not logged in.";
+          error = AppLocalizations.of(context)!.pleaseLogIn;
           isLoading = false;
         });
         return;
@@ -179,7 +180,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
       });
     } catch (e) {
       setState(() {
-        error = "Error: $e";
+        error = '${AppLocalizations.of(context)!.calendarTask}: $e';
         isLoading = false;
       });
     }
@@ -242,10 +243,12 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
   /// - Renders filter panel, calendar, legend, and task list
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (isLoading) {
       return Scaffold(
         drawer: const CommonDrawer(currentRoute: '/calendar'),
-        appBar: AppBarHelper.createAppBar(context, title: 'Calendar Assistant'),
+        appBar: AppBarHelper.createAppBar(context, title: t.calendarAssistant),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -255,7 +258,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
         drawer: const CommonDrawer(currentRoute: '/calendar'),
         appBar: AppBarHelper.createAppBar(
           context,
-          title: 'Calendar Assistant',
+          title: t.calendarAssistant,
           additionalActions: [
             AddTaskButton(onPressed: _addTask),
             ImportIcsButton(
@@ -340,18 +343,18 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
                           );
                         }
                       },
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: CalendarViewType.month,
-                          child: Text("Monthly"),
+                          child: Text(t.calendarMonthly),
                         ),
                         DropdownMenuItem(
                           value: CalendarViewType.week,
-                          child: Text("Weekly"),
+                          child: Text(t.calendarWeekly),
                         ),
                         DropdownMenuItem(
                           value: CalendarViewType.day,
-                          child: Text("Daily"),
+                          child: Text(t.calendarDaily),
                         ),
                       ],
                     ),
@@ -409,8 +412,9 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
                               ),
                             ),
                             headerBuilder: (date) {
-                              final formatted = DateFormat(
-                                'MMM yyyy',
+                              final locale = Localizations.localeOf(context);
+                              final formatted = DateFormat.yMMM(
+                                locale.toString(),
                               ).format(date);
 
                               return Row(
@@ -798,7 +802,10 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text("Failed to add task: ${response.statusCode}"),
+              content: Text(
+                '${AppLocalizations.of(context)!.calendarAddTaskFailed}: '
+                '${response.statusCode}',
+              ),
             ),
           );
           continue;
@@ -813,7 +820,9 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
       if (savedCount == 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to add task")),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.calendarAddTaskFailed),
+          ),
         );
         return;
       }
@@ -1042,7 +1051,10 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text("Failed to update task: ${response.statusCode}"),
+              content: Text(
+                '${AppLocalizations.of(context)!.calendarUpdateTaskFailed}: '
+                '${response.statusCode}',
+              ),
             ),
           );
           continue;
@@ -1057,7 +1069,11 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
       if (updatedCount == 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Failed to update task")),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.calendarUpdateTaskFailed,
+            ),
+          ),
         );
         return;
       }
