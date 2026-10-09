@@ -2156,3 +2156,5 @@ class _VoiceThemeModel {
     this.surfaceColor,
     this.useThemeSurface = false,
     this.isFuturistic = false,
+  });
+}
