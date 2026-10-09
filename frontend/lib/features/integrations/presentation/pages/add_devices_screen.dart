@@ -12,6 +12,7 @@ import 'package:health/health.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+//import 'package:care_connect_app/l10n/app_localizations.dart';
 
 class ConnectedDevice {
   final String id;
@@ -92,39 +93,59 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
   // Platform-specific health platforms
   List<Map<String, dynamic>> get healthPlatforms {
+    final isSpanish = Localizations.localeOf(context).languageCode == 'es';
+
     List<Map<String, dynamic>> platforms = [
       {
         'id': 'fitbit',
         'name': 'Fitbit',
-        'description':
-            'Connect Fitbit using Google Health (Health Connect on Android)',
+        'description': isSpanish
+            ? 'Conectar Fitbit mediante Google Health (Health Connect en Android)'
+            : 'Connect Fitbit using Google Health (Health Connect on Android)',
         'icon': Icons.fitness_center,
         'color': Colors.green,
-        'features': [
-          'Steps',
-          'Heart Rate',
-          'Blood Pressure (Diastolic)',
-          'Blood Pressure (Systolic)'
-        ],
+        'features': isSpanish
+            ? [
+                'Pasos',
+                'Frecuencia cardíaca',
+                'Presión arterial (diastólica)',
+                'Presión arterial (sistólica)',
+              ]
+            : [
+                'Steps',
+                'Heart Rate',
+                'Blood Pressure (Diastolic)',
+                'Blood Pressure (Systolic)',
+              ],
       },
     ];
-
     // Add Apple Health only for iOS
     if (!kIsWeb && Platform.isIOS) {
       platforms.add({
         'id': 'apple_health',
         'name': 'Apple Health',
-        'description': 'Sync health data from Apple Health app',
+        'description': isSpanish
+            ? 'Sincronizar datos de salud desde Apple Health'
+            : 'Sync health data from Apple Health app',
         'icon': Icons.favorite,
         'color': Colors.red,
-        'features': [
-          'Steps',
-          'Calories',
-          'Heart Rate',
-          'Blood Glucose',
-          'Blood Pressure (Diastolic)',
-          'Blood Pressure (Systolic)'
-        ],
+        'features': isSpanish
+            ? [
+                'Pasos',
+                'Calorías',
+                'Frecuencia cardíaca',
+                'Glucosa en sangre',
+                'Presión arterial (diastólica)',
+                'Presión arterial (sistólica)',
+              ]
+            : [
+                'Steps',
+                'Calories',
+                'Heart Rate',
+                'Blood Glucose',
+                'Blood Pressure (Diastolic)',
+                'Blood Pressure (Systolic)',
+              ],
       });
     }
 
@@ -313,10 +334,13 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isSpanish = Localizations.localeOf(context).languageCode == 'es';
+
     return Scaffold(
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'Add Health Platform',
+        title:
+            isSpanish ? 'Agregar plataforma de salud' : 'Add Health Platform',
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -330,11 +354,23 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
             padding: const EdgeInsets.all(20),
             child: Row(
               children: [
-                _buildStepIndicator(0, 'Select', currentStep >= 0),
+                _buildStepIndicator(
+                  0,
+                  isSpanish ? 'Seleccionar' : 'Select',
+                  currentStep >= 0,
+                ),
                 _buildStepLine(currentStep >= 1),
-                _buildStepIndicator(1, 'Connect', currentStep >= 1),
+                _buildStepIndicator(
+                  1,
+                  isSpanish ? 'Conectar' : 'Connect',
+                  currentStep >= 1,
+                ),
                 _buildStepLine(currentStep >= 2),
-                _buildStepIndicator(2, 'Complete', currentStep >= 2),
+                _buildStepIndicator(
+                  2,
+                  isSpanish ? 'Completar' : 'Complete',
+                  currentStep >= 2,
+                ),
               ],
             ),
           ),
@@ -416,23 +452,30 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   }
 
   Widget _buildSelectPlatformStep() {
+    final isSpanish = Localizations.localeOf(context).languageCode == 'es';
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Choose Health Platform',
-            style: TextStyle(
+          Text(
+            isSpanish ? 'Elegir plataforma de salud' : 'Choose Health Platform',
+            style: const TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: AppTheme.primary,
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Select which health platform you\'d like to connect for health monitoring.',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
+          Text(
+            isSpanish
+                ? 'Selecciona la plataforma de salud que deseas conectar para monitorear tu salud.'
+                : 'Select which health platform you\'d like to connect for health monitoring.',
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
           ),
           const SizedBox(height: 24),
           Expanded(
@@ -565,7 +608,9 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                                   ),
                               ],
                             ),
+
                             const SizedBox(height: 12),
+
                             // Features list
                             Container(
                               width: double.infinity,
@@ -574,7 +619,11 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Health Metrics:',
+                                    Localizations.localeOf(context)
+                                                .languageCode ==
+                                            'es'
+                                        ? 'Métricas de salud:'
+                                        : 'Health Metrics:',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -587,28 +636,30 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                                     runSpacing: 4,
                                     children: (platform['features']
                                             as List<String>)
-                                        .map((feature) => Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 6,
-                                                      vertical: 2),
-                                              decoration: BoxDecoration(
+                                        .map(
+                                          (feature) => Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 6,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color:
+                                                  (platform['color'] as Color)
+                                                      .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(
+                                              feature,
+                                              style: TextStyle(
+                                                fontSize: 10,
                                                 color:
-                                                    (platform['color'] as Color)
-                                                        .withValues(alpha: 0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(6),
+                                                    platform['color'] as Color,
+                                                fontWeight: FontWeight.w500,
                                               ),
-                                              child: Text(
-                                                feature,
-                                                style: TextStyle(
-                                                  fontSize: 10,
-                                                  color: platform['color']
-                                                      as Color,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
-                                              ),
-                                            ))
+                                            ),
+                                          ),
+                                        )
                                         .toList(),
                                   ),
                                 ],

@@ -1346,7 +1346,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
