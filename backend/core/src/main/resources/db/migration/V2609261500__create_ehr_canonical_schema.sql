@@ -40,11 +40,19 @@ CREATE TABLE IF NOT EXISTS ehr_patient_crosswalk (
     id                  BIGSERIAL    PRIMARY KEY,
     patient_id          BIGINT       NOT NULL REFERENCES patient (id) ON DELETE CASCADE,
     source_id           BIGINT       NOT NULL REFERENCES ehr_source (id),
-    external_patient_id VARCHAR(255) NOT NULL,
+    external_patient_id VARCHAR(255),          -- null while a link is pending
     created_at          TIMESTAMPTZ,
     updated_at          TIMESTAMPTZ,
+    token               VARCHAR(255),          -- encrypted at rest (TokenCryptor)
+    refresh_token       VARCHAR(255),          -- encrypted at rest (TokenCryptor)
+    token_expires_at    TIMESTAMPTZ,
+    last_logged_in      TIMESTAMP,
+    last_refreshed      TIMESTAMP,
+    link_token          VARCHAR(255),          -- one-time, null once the link completes
+    link_token_expires_at TIMESTAMPTZ,
     CONSTRAINT uq_ehr_crosswalk_source_external UNIQUE (source_id, external_patient_id),
-    CONSTRAINT uq_ehr_crosswalk_patient_source  UNIQUE (patient_id, source_id)
+    CONSTRAINT uq_ehr_crosswalk_patient_source  UNIQUE (patient_id, source_id),
+    CONSTRAINT uq_ehr_crosswalk_link_token      UNIQUE (link_token)
 );
 
 CREATE INDEX IF NOT EXISTS idx_ehr_crosswalk_patient

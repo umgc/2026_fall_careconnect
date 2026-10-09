@@ -14,9 +14,15 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import ca.uhn.fhir.model.api.TemporalPrecisionEnum;
+import org.hl7.fhir.r4.model.ContactPoint;
+import org.hl7.fhir.r4.model.DateType;
+import org.hl7.fhir.r4.model.Patient;
+import org.hl7.fhir.r4.model.StringType;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * What one external source currently believes about a patient's identity — the demographic
@@ -55,6 +61,56 @@ import java.time.LocalDate;
                 name = "idx_ehr_source_identity_patient",
                 columnList = "patient_id"))
 public class EhrSourceIdentity extends Auditable {
+
+    public EhrSourceIdentity(Long patientId, Patient patient, Long sourceId){
+        this.patientId = patientId;
+        this.sourceId = sourceId;
+        this.sourceUpdatedAt = patient.getMeta().getLastUpdated().toInstant();
+        this.givenName = patient.getNameFirstRep().getGivenAsSingleString();
+        this.familyName = patient.getNameFirstRep().getFamily();
+
+        this.gender = patient.hasGender() ? patient.getGender().getDisplay() : null;
+        this.dateOfBirth = dateOfBirth(patient);
+
+
+        for(ContactPoint point: patient.getTelecom()){
+            if(ContactPoint.ContactPointSystem.PHONE.equals(point.getSystem())){
+                this.phone = point.getValue();
+            }else{
+                if(ContactPoint.ContactPointSystem.EMAIL.equals(point.getSystem())){
+                    this.email = point.getValue();
+                }
+            }
+        }
+
+        this.managingOrg = patient.getManagingOrganization().getDisplay();
+        this.language = patient.getCommunicationFirstRep().getLanguage().getText();
+        this.memberId = patient.getIdentifierFirstRep().getValue();
+        // An address may have one line, or none.
+        List<StringType> lines = patient.getAddressFirstRep().getLine();
+        this.addressLine1 = lines.size() > 0 ? lines.get(0).getValue() : null;
+        this.addressLine2 = lines.size() > 1 ? lines.get(1).getValue() : null;
+        this.city = patient.getAddressFirstRep().getCity();
+        this.state = patient.getAddressFirstRep().getState();
+        this.postalCode = patient.getAddressFirstRep().getPostalCode();
+    }
+
+    /**
+     * The birth date as FHIR states it, with no time zone involved. Null when it is missing or
+     * not a full date (FHIR allows a year, or a year and month, alone).
+     * <p>
+     * Not {@code LocalDate.from(getBirthDate().toInstant())}: an Instant has no calendar date, so
+     * that throws DateTimeException for every patient.
+     */
+    private static LocalDate dateOfBirth(Patient patient) {
+        DateType birthDate = patient.getBirthDateElement();
+        if (birthDate == null || birthDate.isEmpty() || birthDate.getPrecision() != TemporalPrecisionEnum.DAY) {
+            return null;
+        }
+        // DateType months are 0-based, as in java.util.Calendar.
+        return LocalDate.of(birthDate.getYear(), birthDate.getMonth() + 1, birthDate.getDay());
+    }
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

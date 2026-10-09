@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_page.dart';
@@ -38,6 +39,27 @@ Future<void> _pumpSettled(WidgetTester tester) async {
 
 Future<void> _triggerCameraCheck(WidgetTester tester) async {
   await tester.tap(find.byType(FloatingActionButton));
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
+/// The page inside a router, so the Unified Health Data card (#263) can navigate.
+Future<void> _pumpWithRouter(WidgetTester tester) async {
+  final router = GoRouter(
+    initialLocation: '/virtual-checkin',
+    routes: [
+      GoRoute(path: '/virtual-checkin', builder: (_, __) => const PatientVirtualCheckIn()),
+      GoRoute(
+        path: '/health-data',
+        builder: (_, __) => const Scaffold(body: Text('health data screen')),
+      ),
+    ],
+  );
+  await tester.pumpWidget(ChangeNotifierProvider<UserProvider>.value(
+    value: _LoggedOutUserProvider(),
+    child: MaterialApp.router(routerConfig: router),
+  ));
   for (var i = 0; i < 10; i++) {
     await tester.pump(const Duration(milliseconds: 50));
   }
@@ -211,6 +233,30 @@ void main() {
       await tester.pump();
 
       expect(find.text('Check-in submitted (mock)!'), findsOneWidget);
+    });
+  });
+
+  group('PatientVirtualCheckIn – Unified Health Data card (#263)', () {
+    testWidgets('the card is on the page, with its description', (tester) async {
+      await _pumpWithRouter(tester);
+      final card = find.text('Unified Health Data');
+      await tester.scrollUntilVisible(card, 200, scrollable: find.byType(Scrollable).first);
+
+      expect(card, findsOneWidget);
+      expect(find.text('View health records from connected sources'), findsOneWidget);
+    });
+
+    testWidgets('tapping the card opens Health Data', (tester) async {
+      await _pumpWithRouter(tester);
+      final card = find.text('Unified Health Data');
+      await tester.scrollUntilVisible(card, 200, scrollable: find.byType(Scrollable).first);
+
+      await tester.tap(card);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(find.text('health data screen'), findsOneWidget);
     });
   });
 }
