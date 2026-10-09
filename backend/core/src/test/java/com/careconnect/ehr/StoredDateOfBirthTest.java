@@ -7,10 +7,11 @@ import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** Test IDs TC-EHR-RAW-014..015 are permanent. Never renumber, never reuse. */
 class StoredDateOfBirthTest {
 
     @Test
-    @DisplayName("both shapes the application writes parse to the same date")
+    @DisplayName("TC-EHR-RAW-014: both shapes the application writes parse to the same date")
     void parsesIsoAndUsShapes() {
         assertThat(StoredDateOfBirth.parse("1950-03-09")).contains(LocalDate.of(1950, 3, 9));
         assertThat(StoredDateOfBirth.parse("03/09/1950")).contains(LocalDate.of(1950, 3, 9));
@@ -18,7 +19,7 @@ class StoredDateOfBirthTest {
     }
 
     @Test
-    @DisplayName("null, blank and anything else are unknown, not a guessed date")
+    @DisplayName("TC-EHR-RAW-015: null, blank and anything else are unknown, not a guessed date")
     void unknownIsEmpty() {
         assertThat(StoredDateOfBirth.parse(null)).isEmpty();
         assertThat(StoredDateOfBirth.parse("   ")).isEmpty();

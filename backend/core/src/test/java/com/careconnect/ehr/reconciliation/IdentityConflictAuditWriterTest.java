@@ -17,11 +17,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The audit-writer port's own types. The library's enums have to line up with what the JPA layer can
  * store, since {@code JpaIdentityConflictAuditWriter} maps one to the other; a value added on one side
  * only would have nowhere to go.
+ * <p>
+ * Test IDs TC-EHR-REC-051..053 are permanent. Never renumber, never reuse.
  */
 class IdentityConflictAuditWriterTest {
 
     @Test
-    @DisplayName("every Outcome has a stored status of the same name (and PENDING is the only status that isn't an outcome)")
+    @DisplayName("TC-EHR-REC-051: every Outcome has a stored status of the same name (and PENDING is the only status that isn't an outcome)")
     void outcomesMatchStoredStatuses() {
         for (final Outcome outcome : Outcome.values()) {
             assertThat(EhrConflictStatus.valueOf(outcome.name())).isNotNull();
@@ -31,7 +33,7 @@ class IdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("every ResolvedBy has a stored resolver of the same name, and nothing else")
+    @DisplayName("TC-EHR-REC-052: every ResolvedBy has a stored resolver of the same name, and nothing else")
     void resolversMatchStoredResolvers() {
         assertThat(Arrays.stream(ResolvedBy.values()).map(Enum::name))
                 .containsExactlyInAnyOrderElementsOf(
@@ -39,7 +41,7 @@ class IdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("a PendingConflict compares by value")
+    @DisplayName("TC-EHR-REC-053: a PendingConflict compares by value")
     void pendingConflictValueEquality() {
         final Instant at = Instant.parse("2026-09-01T10:00:00Z");
 

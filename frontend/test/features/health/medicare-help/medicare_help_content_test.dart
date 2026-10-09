@@ -1,4 +1,5 @@
 // WBS 6.4.33: Medicare help content and in-app guidance.
+// Test IDs TC-MCR-HELP-001..010 are permanent. Never renumber, never reuse.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -23,7 +24,8 @@ Future<AppLocalizations> _l10n(WidgetTester tester) async {
 
 void main() {
   group('Medicare help content (6.4.33)', () {
-    testWidgets('every topic has a heading and body text', (tester) async {
+    testWidgets('TC-MCR-HELP-001: every topic has a heading and body text',
+        (tester) async {
       final l10n = await _l10n(tester);
       for (final topic in MedicareHelpTopic.values) {
         final text = medicareHelpText(l10n, topic);
@@ -32,7 +34,8 @@ void main() {
       }
     });
 
-    testWidgets('error messages use the exact SRS 8.6 text', (tester) async {
+    testWidgets('TC-MCR-HELP-002: error messages use the exact SRS 8.6 text',
+        (tester) async {
       final l10n = await _l10n(tester);
       expect(medicareErrorMessage(l10n, 'ERR-MCR-01'),
           "We couldn't reach Medicare. Try connecting again in a few minutes.");
@@ -48,12 +51,14 @@ void main() {
       expect(medicareErrorMessage(l10n, ''), isNull);
     });
 
-    testWidgets('the connected confirmation matches FR-MCR-04', (tester) async {
+    testWidgets('TC-MCR-HELP-003: the connected confirmation matches FR-MCR-04',
+        (tester) async {
       final l10n = await _l10n(tester);
       expect(l10n.medicarehelp_connected, 'Medicare account connected');
     });
 
-    testWidgets('the connect help names the button by its exact label',
+    testWidgets(
+        'TC-MCR-HELP-004: the connect help names the button by its exact label',
         (tester) async {
       final l10n = await _l10n(tester);
       expect(l10n.medicarehelp_connectButton, 'Connect Medicare Account');
@@ -62,7 +67,7 @@ void main() {
     });
 
     testWidgets(
-        'the mismatch help says only date of birth asks first, as the reconciler does',
+        'TC-MCR-HELP-005: the mismatch help says only date of birth asks first, as the reconciler does',
         (tester) async {
       final l10n = await _l10n(tester);
       final body = l10n.medicarehelp_reconcileBody;
@@ -75,7 +80,7 @@ void main() {
     });
 
     testWidgets(
-        'the disconnect help says what is deleted and what stays (A1-Q1)',
+        'TC-MCR-HELP-006: the disconnect help says what is deleted and what stays (A1-Q1)',
         (tester) async {
       final l10n = await _l10n(tester);
       final body = l10n.medicarehelp_disconnectBody;
@@ -90,7 +95,7 @@ void main() {
     });
 
     testWidgets(
-        'a help card shows its topic with the heading marked as a heading',
+        'TC-MCR-HELP-007: a help card shows its topic with the heading marked as a heading',
         (tester) async {
       final handle = tester.ensureSemantics();
       await tester.pumpWidget(
@@ -106,7 +111,8 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('the help list shows every topic under one heading',
+    testWidgets(
+        'TC-MCR-HELP-008: the help list shows every topic under one heading',
         (tester) async {
       final l10n = await _l10n(tester);
       await tester.pumpWidget(_app(const MedicareHelpList()));
@@ -119,7 +125,8 @@ void main() {
       }
     });
 
-    testWidgets('the help list fits at 200% text size without overflow',
+    testWidgets(
+        'TC-MCR-HELP-009: the help list fits at 200% text size without overflow',
         (tester) async {
       tester.platformDispatcher.textScaleFactorTestValue = 2.0;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -129,7 +136,8 @@ void main() {
       expect(find.text('Help with Medicare'), findsOneWidget);
     });
 
-    testWidgets('a locale without translations falls back to readable text',
+    testWidgets(
+        'TC-MCR-HELP-010: a locale without translations falls back to readable text',
         (tester) async {
       await tester.pumpWidget(_app(
         const MedicareHelpCard(topic: MedicareHelpTopic.connect),

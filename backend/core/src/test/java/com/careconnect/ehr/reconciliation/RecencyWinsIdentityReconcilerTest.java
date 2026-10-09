@@ -23,6 +23,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * ({@code InMemoryContractTest}, {@code JpaContractPostgresTest}); this covers what the class promises on
  * its own: required collaborators, blank values never being authoritative, a fixed field order, and the
  * main recency decisions.
+ * <p>
+ * Test IDs TC-EHR-REC-054..057 are permanent. Never renumber, never reuse.
  */
 class RecencyWinsIdentityReconcilerTest {
 
@@ -50,7 +52,7 @@ class RecencyWinsIdentityReconcilerTest {
     }
 
     @Test
-    @DisplayName("every collaborator is required")
+    @DisplayName("TC-EHR-REC-054: every collaborator is required")
     void collaboratorsRequired() {
         final InMemoryTransactionRunner tx = new InMemoryTransactionRunner();
         assertThatThrownBy(() -> new RecencyWinsIdentityReconciler(null, patient, audit, tx))
@@ -64,7 +66,7 @@ class RecencyWinsIdentityReconcilerTest {
     }
 
     @Test
-    @DisplayName("an empty field is filled from the source")
+    @DisplayName("TC-EHR-REC-055: an empty field is filled from the source")
     void emptyFieldIsFilled() {
         final List<ReconciliationOutcome> outcomes = reconcile(NEW, Map.of(IdentityFieldNames.PHONE, "555-0102"));
 
@@ -74,7 +76,7 @@ class RecencyWinsIdentityReconcilerTest {
     }
 
     @Test
-    @DisplayName("a blank or missing incoming value is skipped: no outcome, and the patient's value is untouched")
+    @DisplayName("TC-EHR-REC-056: a blank or missing incoming value is skipped: no outcome, and the patient's value is untouched")
     void blankIncomingIsNeverAuthoritative() {
         patient.seedCurrentValue(PATIENT, IdentityFieldNames.EMAIL, "jane@example.test");
         final Map<String, String> fields = new HashMap<>();
@@ -86,7 +88,7 @@ class RecencyWinsIdentityReconcilerTest {
     }
 
     @Test
-    @DisplayName("fields are processed in sorted name order whatever order the map gives, so lock order is fixed")
+    @DisplayName("TC-EHR-REC-057: fields are processed in sorted name order whatever order the map gives, so lock order is fixed")
     void fieldsProcessedInSortedOrder() {
         final List<ReconciliationOutcome> outcomes = reconcile(NEW, Map.of(
                 IdentityFieldNames.PHONE, "555-0102",

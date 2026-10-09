@@ -1,6 +1,7 @@
 // MedicareConnectPage (/medicare-connect): hosts the connect tile, keeps the
 // ?medicare= result for exactly one showing, and always offers a way back,
 // even when the patient arrived by a full-page redirect from Medicare.
+// Test IDs TC-MCR-CONN-037..040 are permanent. Never renumber, never reuse.
 
 import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
@@ -49,14 +50,14 @@ void main() {
     MedicareConnectPage.pendingResult = null;
   });
 
-  test('a pending ?medicare= result is handed out once, then forgotten', () {
+  test('TC-MCR-CONN-037: a pending ?medicare= result is handed out once, then forgotten', () {
     MedicareConnectPage.pendingResult = MedicareConnectResult.connected;
 
     expect(MedicareConnectPage.takePendingResult(), MedicareConnectResult.connected);
     expect(MedicareConnectPage.takePendingResult(), isNull);
   });
 
-  testWidgets('shows the title, the explanation and the tile, passing the result to the tile', (t) async {
+  testWidgets('TC-MCR-CONN-038: shows the title, the explanation and the tile, passing the result to the tile', (t) async {
     await t.pumpWidget(MaterialApp.router(routerConfig: _router('/medicare-connect')));
     await t.pumpAndSettle();
 
@@ -66,7 +67,7 @@ void main() {
     expect(tile.result, MedicareConnectResult.cancelled);
   });
 
-  testWidgets('arriving by redirect (nothing to go back to), Back goes to Health Data', (t) async {
+  testWidgets('TC-MCR-CONN-039: arriving by redirect (nothing to go back to), Back goes to Health Data', (t) async {
     final router = _router('/medicare-connect');
     await t.pumpWidget(MaterialApp.router(routerConfig: router));
     await t.pumpAndSettle();
@@ -77,7 +78,7 @@ void main() {
     expect(_path(router), '/health-data');
   });
 
-  testWidgets('arriving from Health Data, Back returns there', (t) async {
+  testWidgets('TC-MCR-CONN-040: arriving from Health Data, Back returns there', (t) async {
     final router = _router('/health-data');
     await t.pumpWidget(MaterialApp.router(routerConfig: router));
     await t.pumpAndSettle();
