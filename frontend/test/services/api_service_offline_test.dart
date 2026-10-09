@@ -86,7 +86,8 @@ void main() {
       expect(_eventNames(events), isEmpty);
     });
 
-    test('syncQueuedRequestById emits sync_started and sync_completed for unknown id',
+    test(
+        'syncQueuedRequestById emits sync_started and sync_completed for unknown id',
         () async {
       final events = await _captureTelemetryEvents(() async {
         final ok = await ApiServiceOffline.syncQueuedRequestById('missing-id');
@@ -114,7 +115,8 @@ void main() {
       await db.closeDb();
 
       final events = await _captureTelemetryEvents(() async {
-        final ok = await ApiServiceOffline.syncQueuedRequestById('bad-url-item');
+        final ok =
+            await ApiServiceOffline.syncQueuedRequestById('bad-url-item');
         expect(ok, isFalse);
       });
 
@@ -132,7 +134,8 @@ void main() {
       await verifyDb.closeDb();
     });
 
-    test('syncPendingQueue emits sync_completed and sync_failed for batch failures',
+    test(
+        'syncPendingQueue emits sync_completed and sync_failed for batch failures',
         () async {
       final db = AppDatabase();
       await db.ensureOfflineSyncTable();

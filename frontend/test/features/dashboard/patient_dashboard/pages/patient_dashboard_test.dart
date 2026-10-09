@@ -26,7 +26,7 @@ import 'package:care_connect_app/features/dashboard/patient_dashboard/pages/pati
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 
-import '../../mock_user_provider.dart';
+import '../../../../mock_user_provider.dart';
 
 late Future<http.Response> Function(http.Request) _httpHandler;
 
@@ -37,12 +37,12 @@ Future<http.Response> _defaultHandler(http.Request request) async {
 Widget _wrap({MockUserProvider? provider}) {
   final p = provider ??
       MockUserProvider(
-        mockUser:
-            MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
+        mockUser: MockUser(
+            id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
       );
   return MaterialApp(
-    locale: Locale('en'), 
-    localizationsDelegates: AppLocalizations.localizationsDelegates, 
+    locale: Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: p,
@@ -208,7 +208,8 @@ void _setupMethodChannels() {
         if (key == 'jwt_token') return true;
         return false;
       }
-      if (methodCall.method == 'write' || methodCall.method == 'delete') return null;
+      if (methodCall.method == 'write' || methodCall.method == 'delete')
+        return null;
       return null;
     },
   );
@@ -356,7 +357,8 @@ void main() {
       ApiService.debugResetHttpClient();
     });
 
-    testWidgets('renders mood widget with score after data loads', (tester) async {
+    testWidgets('renders mood widget with score after data loads',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
@@ -373,7 +375,8 @@ void main() {
       expect(find.text('Recent Check-Ins'), findsOneWidget);
     });
 
-    testWidgets('renders check-in status text from mood history', (tester) async {
+    testWidgets('renders check-in status text from mood history',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
@@ -446,7 +449,8 @@ void main() {
       expect(find.text('No past visits found.'), findsOneWidget);
     });
 
-    testWidgets('renders SOS Emergency button after data loads', (tester) async {
+    testWidgets('renders SOS Emergency button after data loads',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       _setupMockClient();
@@ -455,7 +459,8 @@ void main() {
       expect(find.text('SOS Emergency'), findsOneWidget);
     });
 
-    testWidgets('renders Send SMS to Caregiver button after data loads', (tester) async {
+    testWidgets('renders Send SMS to Caregiver button after data loads',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       _setupMockClient();
@@ -538,7 +543,8 @@ void main() {
       expect(find.text('🙂'), findsWidgets);
     });
 
-    testWidgets('tapping SMS button with no caregiver phone shows snackbar', (tester) async {
+    testWidgets('tapping SMS button with no caregiver phone shows snackbar',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       _setupMockClient();
@@ -547,7 +553,8 @@ void main() {
       await tester.ensureVisible(find.text('Send SMS to Caregiver'));
       await tester.tap(find.text('Send SMS to Caregiver'));
       await tester.pump();
-      expect(find.text('No caregiver with phone number found.'), findsOneWidget);
+      expect(
+          find.text('No caregiver with phone number found.'), findsOneWidget);
     });
 
     testWidgets('renders appointment type for provider', (tester) async {
@@ -616,7 +623,8 @@ void main() {
       _setupMockClient();
       await tester.pumpWidget(_wrap());
       await _pumpUntilSettled(tester);
-      expect(find.textContaining('sarah.mitchell@careconnect.com'), findsOneWidget);
+      expect(find.textContaining('sarah.mitchell@careconnect.com'),
+          findsOneWidget);
     });
 
     testWidgets('renders schedule icon in EVV refresh', (tester) async {
@@ -641,7 +649,8 @@ void main() {
       ApiService.debugResetHttpClient();
     });
 
-    testWidgets('renders tablet layout with two columns when width > 600', (tester) async {
+    testWidgets('renders tablet layout with two columns when width > 600',
+        (tester) async {
       _setTabletViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
@@ -787,7 +796,8 @@ void main() {
       expect(find.text('Video Call'), findsOneWidget);
     });
 
-    testWidgets('contact provider bottom sheet shows phone number', (tester) async {
+    testWidgets('contact provider bottom sheet shows phone number',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
@@ -809,7 +819,8 @@ void main() {
       expect(find.text('sarah.mitchell@careconnect.com'), findsWidgets);
     });
 
-    testWidgets('contact provider bottom sheet shows phone icon', (tester) async {
+    testWidgets('contact provider bottom sheet shows phone icon',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
@@ -822,7 +833,8 @@ void main() {
       expect(find.byIcon(Icons.video_call), findsOneWidget);
     });
 
-    testWidgets('contact provider bottom sheet shows Video Call subtitle', (tester) async {
+    testWidgets('contact provider bottom sheet shows Video Call subtitle',
+        (tester) async {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_wrap());
@@ -876,11 +888,12 @@ void main() {
       _setLargeViewport(tester);
       addTearDown(tester.view.reset);
       final p = MockUserProvider(
-        mockUser: MockUser(id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
+        mockUser: MockUser(
+            id: 1, role: 'PATIENT', patientId: 1, name: 'Test Patient'),
       );
       final widget = MaterialApp(
-        locale: Locale('en'), 
-        localizationsDelegates: AppLocalizations.localizationsDelegates, 
+        locale: Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: ChangeNotifierProvider<UserProvider>.value(
           value: p,
