@@ -1,10 +1,15 @@
-// Tests for CallNotificationService incoming-popup dismiss behavior (L2d).
-// Uses @visibleForTesting hooks — no live WebSocket required.
+// Tests for CallNotificationService incoming-popup dismiss behavior (L2d) and
+// connection lifecycle (authenticate, reconnect after a dropped socket).
+// Uses @visibleForTesting hooks and an in-memory socket — no live WebSocket.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/services/call_notification_service.dart';
 import 'package:care_connect_app/widgets/incoming_call_popup.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../test_support/fake_web_socket_channel.dart';
 
 const _incomingCallPayload = {
   'type': 'incoming-video-call',
@@ -172,6 +177,155 @@ void main() {
       await tester.pump();
 
       expect(find.byType(IncomingCallPopup), findsOneWidget);
+    });
+  });
+
+  // ─── Connection lifecycle (API Gateway drops sockets) ────────────────────
+  //
+  // Sockets come from an in-memory FakeWebSocketChannel through the
+  // connectChannel seam, and the JWT from mocked secure storage, so no network
+  // or platform channel is used. testWidgets' fake clock drives the reconnect
+  // backoff (first retry after 1s).
+  group('CallNotificationService reconnect', () {
+    late List<FakeWebSocketChannel> sockets;
+    late List<String?> authReplies;
+
+    setUp(() {
+      final expiry = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 3600;
+      FlutterSecureStorage.setMockInitialValues({
+        'jwt_token': 'test-jwt',
+        'token_expiry': '$expiry',
+      });
+      sockets = [];
+      // Reply for the n-th socket opened; later sockets reuse the last reply.
+      authReplies = ['authentication-success'];
+      CallNotificationService.connectChannel = (_) {
+        final reply =
+            authReplies[sockets.length.clamp(0, authReplies.length - 1)];
+        final socket = FakeWebSocketChannel(authReply: reply);
+        sockets.add(socket);
+        return socket;
+      };
+    });
+
+    tearDown(() {
+      CallNotificationService.connectChannel = WebSocketChannel.connect;
+    });
+
+    Future<bool> connect(WidgetTester tester) async {
+      late BuildContext hostContext;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              hostContext = context;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+      return CallNotificationService.initialize(
+        userId: '42',
+        userRole: 'CAREGIVER',
+        context: hostContext,
+      );
+    }
+
+    testWidgets('authenticates with the stored JWT', (tester) async {
+      expect(await connect(tester), isTrue);
+
+      expect(CallNotificationService.isConnected, isTrue);
+      expect(sockets.single.sentOfType('authenticate').single['token'],
+          'test-jwt');
+      expect(sockets.single.sentOfType('join-user-room'), hasLength(1));
+    });
+
+    testWidgets('a dropped socket reconnects and re-authenticates',
+        (tester) async {
+      // Arrange
+      await connect(tester);
+
+      // Act: the server (API Gateway) closes the socket
+      sockets.first.serverClose();
+      await tester.pump();
+      final connectedWhileDown = CallNotificationService.isConnected;
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+
+      // Assert: down until the 1s backoff, then a new authenticated socket
+      expect(connectedWhileDown, isFalse);
+      expect(sockets, hasLength(2));
+      expect(sockets.last.sentOfType('authenticate'), hasLength(1));
+      expect(CallNotificationService.isConnected, isTrue);
+    });
+
+    testWidgets('a reconnect that cannot authenticate retries with backoff',
+        (tester) async {
+      // Arrange: the second socket gets no auth reply, the third succeeds
+      authReplies = ['authentication-success', null, 'authentication-success'];
+      await connect(tester);
+
+      // Act: drop, wait out the 8s auth timeout on socket 2, then the 2s backoff
+      sockets.first.serverClose();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 8));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+
+      // Assert
+      expect(sockets, hasLength(3));
+      expect(sockets[1].closedByClient, isTrue);
+      expect(CallNotificationService.isConnected, isTrue);
+    });
+
+    testWidgets('a rejected token stops reconnecting', (tester) async {
+      // Arrange: the backend refuses the token on reconnect
+      authReplies = ['authentication-success', 'authentication-failed'];
+      await connect(tester);
+
+      // Act
+      sockets.first.serverClose();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(minutes: 5));
+
+      // Assert: one failed retry, then the service gives up (user must re-login)
+      expect(sockets, hasLength(2));
+      expect(CallNotificationService.isConnected, isFalse);
+    });
+
+    testWidgets('dispose closes the socket and does not reconnect',
+        (tester) async {
+      await connect(tester);
+
+      CallNotificationService.dispose();
+      sockets.first.serverClose();
+      await tester.pump(const Duration(minutes: 5));
+
+      expect(sockets.single.closedByClient, isTrue);
+      expect(sockets, hasLength(1));
+    });
+
+    testWidgets('a reconnect that throws schedules another attempt',
+        (tester) async {
+      // Arrange: opening the second socket throws (e.g. network down)
+      await connect(tester);
+      final working = CallNotificationService.connectChannel;
+      var attempts = 0;
+      CallNotificationService.connectChannel = (uri) {
+        attempts++;
+        if (attempts == 1) throw StateError('network down');
+        return working(uri);
+      };
+
+      // Act: drop, fail at 1s, retry at +2s
+      sockets.first.serverClose();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+
+      // Assert
+      expect(attempts, 2);
+      expect(CallNotificationService.isConnected, isTrue);
     });
   });
 }

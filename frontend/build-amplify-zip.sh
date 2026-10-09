@@ -4,7 +4,7 @@
 # the existing manual Amplify drag-and-drop upload flow documented in
 # frontend/README.md and cloudformation-fargate/DEPLOY_2026_SUMMER.md §5.
 #
-# All three --dart-define values are optional. Leave them blank to reproduce
+# All --dart-define values are optional. Leave them blank to reproduce
 # the plain `flutter build web` documented in frontend/README.md (falls back
 # to http://localhost:8080 at runtime); set BACKEND_URL to point the build at
 # a real deployed backend instead.
@@ -14,6 +14,7 @@ set -euo pipefail
 BACKEND_URL=""
 APP_DOMAIN=""
 APP_PORT=""
+WEBSOCKET_GATEWAY_URL=""
 OUTPUT_ZIP=""
 
 while [[ $# -gt 0 ]]; do
@@ -28,6 +29,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --app-port)
       APP_PORT="$2"
+      shift 2
+      ;;
+    -w|--websocket-url)
+      WEBSOCKET_GATEWAY_URL="$2"
       shift 2
       ;;
     -o|--output)
@@ -49,6 +54,9 @@ Options:
                               a real deployed backend
       --app-port <port>     --dart-define=APP_PORT (typically 443 for a real
                               deployed backend)
+  -w, --websocket-url <url> --dart-define=WEBSOCKET_GATEWAY_URL: the stack's
+                              WebSocketUrl output (wss://...). Needed for
+                              realtime calls, chat and notifications in AWS
   -o, --output <path>       Zip output path (default: ../manual-amplify.zip,
                               i.e. one level above the git repo, matching the
                               existing manual deploy convention)
@@ -94,6 +102,9 @@ if [[ -n "$APP_DOMAIN" ]]; then
 fi
 if [[ -n "$APP_PORT" ]]; then
   BUILD_ARGS+=(--dart-define="APP_PORT=${APP_PORT}")
+fi
+if [[ -n "$WEBSOCKET_GATEWAY_URL" ]]; then
+  BUILD_ARGS+=(--dart-define="WEBSOCKET_GATEWAY_URL=${WEBSOCKET_GATEWAY_URL}")
 fi
 
 echo "Running: flutter ${BUILD_ARGS[*]}"

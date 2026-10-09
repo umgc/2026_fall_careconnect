@@ -19,7 +19,7 @@ frontend:
         - cp -R ../ui-integration/mobile-app/dist/. web/ui-preview/
         - echo "Building Flutter Web App..."
         - flutter pub get
-        - flutter build web --release --dart-define=BACKEND_URL=$BACKEND_URL --dart-define=APP_DOMAIN=$APP_DOMAIN --dart-define=APP_PORT=$APP_PORT
+        - flutter build web --release --dart-define=BACKEND_URL=$BACKEND_URL --dart-define=APP_DOMAIN=$APP_DOMAIN --dart-define=APP_PORT=$APP_PORT --dart-define=WEBSOCKET_GATEWAY_URL=$WEBSOCKET_GATEWAY_URL
   artifacts:
     baseDirectory: build/web
     files:
