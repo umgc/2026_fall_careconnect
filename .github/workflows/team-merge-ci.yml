@@ -164,6 +164,8 @@ jobs:
         env:
           TARGET_BRANCH: ${{ github.base_ref }}
           HEAD_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           skip_changed_file_coverage=false
           target="${TARGET_BRANCH}"
@@ -172,7 +174,15 @@ jobs:
           if [[ "$target" =~ ^team-([a-z0-9-]+)-develop$ ]]; then
             team="${BASH_REMATCH[1]}"
             if [[ "$head" =~ ^chore/${team}-sync-develop-[0-9]{8}$ ]]; then
-              mapfile -t merge_commits < <(git rev-list --first-parent --merges "${DIFF_BASE}..HEAD")
+              # actions/checkout checks out GitHub's temporary PR merge commit
+              # for merge-result validation. Inspect the submitted branch head
+              # instead; otherwise that temporary commit appears as a second
+              # first-parent merge and rejects every legitimate sync.
+              git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr-head"
+              sync_head="$(git rev-parse origin/pr-head)"
+              if [ "${sync_head}" = "${PR_HEAD_SHA}" ]; then
+                mapfile -t merge_commits < <(git rev-list --first-parent --merges "${DIFF_BASE}..${sync_head}")
+              fi
               if [ "${#merge_commits[@]}" -eq 1 ]; then
                 read -r -a parents <<< "$(git show -s --format=%P "${merge_commits[0]}")"
                 git fetch origin "+develop:refs/remotes/origin/develop"
