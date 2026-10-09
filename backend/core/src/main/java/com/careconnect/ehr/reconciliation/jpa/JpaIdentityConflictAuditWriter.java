@@ -142,6 +142,17 @@ public class JpaIdentityConflictAuditWriter implements IdentityConflictAuditWrit
                         row.getDetectedAt()));
     }
 
+    @Override
+    public boolean patientHasDeclined(Long patientId, Long sourceId, String fieldName, String incomingValue) {
+        return repository.existsByPatientIdAndSourceIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
+                Objects.requireNonNull(patientId, "patientId"),
+                Objects.requireNonNull(sourceId, "sourceId"),
+                requireFieldName(fieldName),
+                Objects.requireNonNull(incomingValue, "incomingValue"),
+                EhrConflictStatus.REJECTED,
+                EhrConflictResolver.PATIENT);
+    }
+
     /**
      * Resolves the open row in place rather than writing a second one. The pending row <em>is</em> the
      * record of this conflict; closing it by insert would leave the original looking permanently

@@ -719,6 +719,14 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 foreignKeyIfMissing("fk_ehr_raw_payload_source", "ehr_raw_payload",
                         "source_id", "ehr_source", "id", "")
         );
+
+        // A crosswalk row now exists while a link is pending, before the source has said who the
+        // patient is. ddl-auto never relaxes a constraint, so databases created when the column
+        // was NOT NULL need it dropped here. A no-op where it is already nullable.
+        applyRequiredPatch(
+                "V2610041200a - ehr_patient_crosswalk.external_patient_id nullable while a link is pending",
+                "ALTER TABLE ehr_patient_crosswalk ALTER COLUMN external_patient_id DROP NOT NULL"
+        );
     }
 
     /**
