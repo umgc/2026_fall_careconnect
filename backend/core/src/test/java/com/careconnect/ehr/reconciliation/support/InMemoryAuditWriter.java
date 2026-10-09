@@ -58,6 +58,13 @@ public final class InMemoryAuditWriter implements IdentityConflictAuditWriter {
     }
 
     @Override
+    public boolean patientHasDeclined(Long patientId, Long sourceId, String fieldName, String incomingValue) {
+        return rows.stream().anyMatch(r -> r.status() == Status.REJECTED && r.resolvedBy() == ResolvedBy.PATIENT
+                && r.patientId().equals(patientId) && r.sourceId().equals(sourceId) && r.fieldName().equals(fieldName)
+                && r.incomingValue().equals(incomingValue));
+    }
+
+    @Override
     public void resolvePendingConflict(Long patientId, String fieldName, Outcome outcome, ResolvedBy resolvedBy,
                                         Instant resolvedAt) {
         for (int i = 0; i < rows.size(); i++) {

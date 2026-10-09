@@ -2,9 +2,11 @@ package com.careconnect.service.ehr;
 
 import com.careconnect.ehr.StoredDateOfBirth;
 import com.careconnect.repository.ehr.EhrAuditEventRepository;
+import com.careconnect.repository.ehr.EhrCoverageRecordRepository;
 import com.careconnect.repository.ehr.EhrIdentityConflictRepository;
 import com.careconnect.repository.ehr.EhrRawPayloadRepository;
 import com.careconnect.repository.ehr.EhrSourceIdentityRepository;
+import com.careconnect.repository.ehr.EhrVisitRecordRepository;
 import com.careconnect.repository.ehr.PatientDateOfBirth;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +56,9 @@ import java.util.function.Function;
  *       snapshot. A snapshot purged for a patient who is still syncing is simply written again by
  *       the next sync.</li>
  *   <li>{@code ehr_audit_event}: {@code event_time}.</li>
+ *   <li>{@code ehr_coverage_record} and {@code ehr_visit_record}: {@code updated_at}, as for
+ *       {@code ehr_source_identity}. Rows still being synced are rewritten, so they do not age
+ *       out.</li>
  * </ul>
  * Each of those dates is at or after the moment the record was made, so nothing is purged early.
  * <p>
@@ -100,6 +105,8 @@ public class EhrRetentionWorker {
             final EhrIdentityConflictRepository conflicts,
             final EhrSourceIdentityRepository sourceIdentities,
             final EhrAuditEventRepository auditEvents,
+            final EhrCoverageRecordRepository coverages,
+            final EhrVisitRecordRepository visits,
             @Value("${careconnect.ehr.retention.years:7}") final int retentionYears,
             @Value("${careconnect.ehr.retention.retain-until-age:25}") final int retainUntilAge) {
         if (retainUntilAge < 0) {
@@ -120,7 +127,13 @@ public class EhrRetentionWorker {
                         (cutoff, ids) -> sourceIdentities.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)),
                 new Target("ehr_audit_event",
                         auditEvents::findPatientsWithEventBefore,
-                        auditEvents::deleteEventsBeforeForPatients));
+                        auditEvents::deleteEventsBeforeForPatients),
+                new Target("ehr_coverage_record",
+                        cutoff -> coverages.findPatientsWithCoverageUpdatedBefore(auditableTime(cutoff)),
+                        (cutoff, ids) -> coverages.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)),
+                new Target("ehr_visit_record",
+                        cutoff -> visits.findPatientsWithVisitUpdatedBefore(auditableTime(cutoff)),
+                        (cutoff, ids) -> visits.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)));
         if (retentionYears <= 0) {
             log.warn("EHR retention purge is OFF (careconnect.ehr.retention.years={}); the ehr_* tables "
                     + "hold PHI and nothing will be purged (issue #214)", retentionYears);
