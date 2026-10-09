@@ -667,10 +667,11 @@ Write-Step "Checking prerequisites"
     }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 
-    # Print the final API Gateway endpoint so the frontend or health checks can use it.
+    # Print the final API Gateway endpoints so the frontend or health checks can use them.
     Write-Step "Reading final API endpoint"
     $script:CurrentOperation = "Reading final API endpoint"
     $ApiEndpoint = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "ApiEndpoint").Trim()
+    $WebSocketUrl = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "WebSocketUrl").Trim()
     $script:CurrentStackName = $null
     $script:CurrentOperation = $null
 
@@ -681,6 +682,7 @@ Write-Step "Checking prerequisites"
     Write-Host "Image URI:     $ImageUri"
     Write-Host "API Endpoint:  $ApiEndpoint"
     Write-Host "Health check:  $ApiEndpoint/v1/api/test/health"
+    Write-Host "WebSocket URL: $WebSocketUrl   (frontend WEBSOCKET_GATEWAY_URL)"
     Write-Host "Elapsed time:  $(Get-ElapsedTimeText)"
 }
 catch {

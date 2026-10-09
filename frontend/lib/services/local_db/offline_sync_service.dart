@@ -69,6 +69,15 @@ class OfflineSyncService {
 
   factory OfflineSyncService.instance() => _instance;
 
+  @visibleForTesting
+  factory OfflineSyncService.forTesting({
+    required http.Client replayClient,
+  }) {
+    return OfflineSyncService._internal(
+      replayClient: replayClient,
+    );
+  }
+
   bool isQueueableMethod(String method) {
     return _queueableMethods.contains(method.toUpperCase());
   }
@@ -132,9 +141,7 @@ class OfflineSyncService {
     if (row == null) {
       return true;
     }
-    if (row.status != 'pending' &&
-        row.status != 'failed' &&
-        row.status != 'syncing') {
+    if (!OfflineSyncStatus.actionable.contains(row.status)) {
       return false;
     }
     return _syncRow(row);
@@ -237,8 +244,9 @@ class OfflineSyncService {
         headers['Authorization'] = authorization;
       }
     } catch (_) {}
-    headers[replayHeader] = 'true';
-
+    // Replays use the dedicated raw client, not OfflineQueueHttpClient, so a
+    // network failure cannot enqueue a second copy. A browser-visible replay
+    // header is intentionally avoided because it triggers a CORS preflight.
     final request = http.Request(row.method, uri);
     request.headers.addAll(headers);
     if (row.bodyJson != null && row.bodyJson!.isNotEmpty) {

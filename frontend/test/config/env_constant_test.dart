@@ -31,9 +31,9 @@ void main() {
       expect(url, anyOf(contains('localhost'), contains('10.0.2.2')));
     });
 
-    test('returns URL with port 8081', () {
+    test('returns URL with port 8080', () {
       final url = getBackendBaseUrl();
-      expect(url, contains('8081'));
+      expect(url, contains('8080'));
     });
 
     test('result is consistent across multiple calls', () {
@@ -577,6 +577,69 @@ void main() {
       expect(uri.scheme, anyOf('ws', 'wss'));
       expect(uri.host, isNotEmpty);
       expect(uri.path, isNotEmpty);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Channel URLs without WEBSOCKET_GATEWAY_URL (local Spring paths)
+  // ---------------------------------------------------------------
+  group('local websocket channel URLs', () {
+    // No --dart-define is set in tests, so every channel uses its local path.
+    test('gateway mode is off', () {
+      expect(isWebSocketGatewayEnabled(), isFalse);
+    });
+
+    test('each channel maps to its Spring endpoint path', () {
+      expect(getCallNotificationWebSocketUrl(), endsWith('/ws/calls-ws'));
+      expect(getChatWebSocketUrl(), endsWith('/ws/chat'));
+      expect(getWebSocketNotificationUrl(), endsWith('/ws/notifications'));
+      expect(getCareConnectWebSocketUrl(), endsWith('/ws/careconnect'));
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // buildGatewayWebSocketUrl (deployed API Gateway WebSocket API)
+  // ---------------------------------------------------------------
+  group('buildGatewayWebSocketUrl', () {
+    // A realistic stage URL: API Gateway serves every channel from it.
+    const gateway = 'wss://abc123.execute-api.us-east-1.amazonaws.com/dev';
+
+    test('selects the channel with a query parameter on the stage URL', () {
+      final uri = Uri.parse(
+        buildGatewayWebSocketUrl(gateway, 'chat', releaseMode: true),
+      );
+      expect(uri.scheme, 'wss');
+      expect(uri.path, '/dev');
+      expect(uri.queryParameters['channel'], 'chat');
+    });
+
+    test('drops trailing slashes and whitespace', () {
+      expect(
+        buildGatewayWebSocketUrl('$gateway// ', 'calls', releaseMode: true),
+        '$gateway?channel=calls',
+      );
+    });
+
+    test('rejects an insecure URL in release builds', () {
+      expect(
+        () => buildGatewayWebSocketUrl(
+          'ws://localhost:9000/dev',
+          'chat',
+          releaseMode: true,
+        ),
+        throwsException,
+      );
+    });
+
+    test('allows an insecure URL in debug builds', () {
+      expect(
+        buildGatewayWebSocketUrl(
+          'ws://localhost:9000/dev',
+          'chat',
+          releaseMode: false,
+        ),
+        'ws://localhost:9000/dev?channel=chat',
+      );
     });
   });
 }

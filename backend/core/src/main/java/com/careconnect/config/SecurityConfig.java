@@ -103,7 +103,8 @@ public class SecurityConfig {
                                 "/api/internal/chime/**",
                                 // Epic SMART redirect target — unauthenticated; user is recovered
                                 // from the signed, single-use state (Epic Phase 0).
-                                "/api/epic/callback"
+                                "/api/epic/callback",
+                                "/api/internal/ws/**"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */

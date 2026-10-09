@@ -2,6 +2,7 @@ package com.careconnect.websocket;
 
 import com.careconnect.model.Message;
 import com.careconnect.repository.MessageRepository;
+import com.careconnect.testsupport.fixtures.UserFixtures;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,8 @@ class ChatMessageWebSocketHandlerTest {
     @Mock
     private MessageRepository messageRepository;
     @Mock
+    private WebSocketJwtAuthenticator authenticator;
+    @Mock
     private WebSocketSession session;
     @Mock
     private WebSocketSession recipientSession;
@@ -57,18 +60,24 @@ class ChatMessageWebSocketHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new ChatMessageWebSocketHandler(messageRepository);
+        handler = new ChatMessageWebSocketHandler(messageRepository, authenticator);
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────
 
     /**
      * Sends an authenticate message so that the given session is registered as the specified userId.
+     *
+     * <p>The JWT check is mocked: the token {@code "token-<userId>"} resolves to that user, so each
+     * test controls which user a session belongs to without a real signing key.
      */
     private void authenticate(WebSocketSession sess, String sessionId, String userId)
             throws Exception {
         lenient().when(sess.getId()).thenReturn(sessionId);
-        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate", "userId", userId));
+        String token = "token-" + userId;
+        lenient().when(authenticator.authenticate(token))
+                .thenReturn(Optional.of(UserFixtures.userWithId(Long.valueOf(userId))));
+        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate", "token", token));
         handler.handleTextMessage(sess, new TextMessage(json));
     }
 
@@ -133,15 +142,13 @@ class ChatMessageWebSocketHandlerTest {
     // ─── authenticate ─────────────────────────────────────────────────────────
 
     @Test
-    void authenticate_validUserId_sendsAuthenticatedResponse() throws Exception {
-        when(session.getId()).thenReturn("s1");
-        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate", "userId", "42"));
+    void authenticate_validToken_sendsAuthenticatedResponseWithTokenUserId() throws Exception {
+        // Arrange: the token resolves to user 42
+        authenticate(session, "s1", "42");
 
-        handler.handleTextMessage(session, new TextMessage(json));
-
+        // Assert
         ArgumentCaptor<TextMessage> captor = ArgumentCaptor.forClass(TextMessage.class);
         verify(session, atLeast(1)).sendMessage(captor.capture());
-        // The second message (after connection-established if any) should be the auth confirmation
         Map<String, Object> payload =
                 MAPPER.readValue(captor.getValue().getPayload(), new TypeReference<>() {
                 });
@@ -149,26 +156,54 @@ class ChatMessageWebSocketHandlerTest {
         assertThat(payload.get("userId")).isEqualTo("42");
     }
 
+    /**
+     * A client-supplied userId must be ignored; only the token decides who the session is.
+     */
     @Test
-    void authenticate_missingUserId_sendsError() throws Exception {
+    void authenticate_clientSuppliedUserIdIsIgnored() throws Exception {
+        // Arrange: the token belongs to user 7, but the client claims to be user 99
         when(session.getId()).thenReturn("s1");
-        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate"));
+        when(authenticator.authenticate("token-7"))
+                .thenReturn(Optional.of(UserFixtures.userWithId(7L)));
+        String json = MAPPER.writeValueAsString(
+                Map.of("type", "authenticate", "token", "token-7", "userId", "99"));
 
+        // Act
         handler.handleTextMessage(session, new TextMessage(json));
 
-        Map<String, Object> payload = captureLastPayload(session);
-        assertThat(payload.get("type")).isEqualTo("error");
+        // Assert
+        assertThat(captureLastPayload(session).get("userId")).isEqualTo("7");
     }
 
     @Test
-    void authenticate_emptyUserId_sendsError() throws Exception {
+    void authenticate_missingToken_sendsAuthenticationFailedAndCloses() throws Exception {
+        // Arrange: no token → the authenticator rejects it
         when(session.getId()).thenReturn("s1");
-        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate", "userId", ""));
+        when(authenticator.authenticate(null)).thenReturn(Optional.empty());
+        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate"));
 
+        // Act
         handler.handleTextMessage(session, new TextMessage(json));
 
-        Map<String, Object> payload = captureLastPayload(session);
-        assertThat(payload.get("type")).isEqualTo("error");
+        // Assert
+        assertThat(captureLastPayload(session).get("type")).isEqualTo("authentication-failed");
+        verify(session).close(any(CloseStatus.class));
+        assertThat(handler.getActiveUsersCount()).isZero();
+    }
+
+    @Test
+    void authenticate_invalidToken_sendsAuthenticationFailedAndCloses() throws Exception {
+        // Arrange
+        when(session.getId()).thenReturn("s1");
+        when(authenticator.authenticate("forged")).thenReturn(Optional.empty());
+        String json = MAPPER.writeValueAsString(Map.of("type", "authenticate", "token", "forged"));
+
+        // Act
+        handler.handleTextMessage(session, new TextMessage(json));
+
+        // Assert
+        assertThat(captureLastPayload(session).get("type")).isEqualTo("authentication-failed");
+        verify(session).close(any(CloseStatus.class));
     }
 
     @Test
