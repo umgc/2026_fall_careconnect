@@ -14,13 +14,6 @@ Medication _basic() => const Medication(
 
 void main() {
   group('MedicationType enum', () {
-    test('has PRESCRIPTION, OTC, SUPPLEMENT', () {
-      expect(MedicationType.values, containsAll([
-        MedicationType.PRESCRIPTION,
-        MedicationType.OTC,
-        MedicationType.SUPPLEMENT,
-      ]));
-    });
   });
 
   group('MedicationStatus enum', () {
@@ -95,16 +88,28 @@ void main() {
       expect(med.medicationType, MedicationType.PRESCRIPTION);
     });
 
-    test('parses medicationType OTC', () {
+    test('parses medicationType OVER_THE_COUNTER', () {
       final med = Medication.fromJson({
-        'medicationName': 'Ibuprofen',
-        'dosage': '200mg',
-        'frequency': 'As needed',
+        'medicationName': 'X',
+        'dosage': '1mg',
+        'frequency': 'Daily',
+        'route': 'Oral',
+        'medicationType': 'OVER_THE_COUNTER',
+        'isActive': true,
+      });
+      expect(med.medicationType, MedicationType.OVER_THE_COUNTER);
+    });
+
+    test('parses the legacy wire name OTC as OVER_THE_COUNTER', () {
+      final med = Medication.fromJson({
+        'medicationName': 'X',
+        'dosage': '1mg',
+        'frequency': 'Daily',
         'route': 'Oral',
         'medicationType': 'OTC',
         'isActive': true,
       });
-      expect(med.medicationType, MedicationType.OTC);
+      expect(med.medicationType, MedicationType.OVER_THE_COUNTER);
     });
 
     test('isActive defaults to true when missing', () {

@@ -301,7 +301,7 @@ class _MedicationBlockState extends State<_MedicationBlock> {
                 child: _kv(
                   context,
                   'Type',
-                  widget.med.medicationType?.name.toUpperCase() ?? 'N/A',
+                  widget.med.medicationType?.label ?? 'N/A',
                 ),
               ),
             ],
