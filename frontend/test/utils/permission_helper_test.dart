@@ -3,7 +3,7 @@ import 'package:care_connect_app/utils/permission_helper.dart';
 
 void main() {
   group('PermissionHelper Tests', () {
-    test('Admin has all 27 permissions', () {
+    test('Admin has all 29 permissions', () {
       final permissions = [
         'VIEW_ALL_USERS',
         'MANAGE_USERS',
@@ -21,6 +21,8 @@ void main() {
         'VIEW_HEALTH_DATA',
         'RECORD_HEALTH_DATA',
         'EXPORT_HEALTH_DATA',
+        'VIEW_MEDICATIONS',
+        'MANAGE_MEDICATIONS',
         'VIEW_BILLING',
         'MANAGE_SUBSCRIPTIONS',
         'SEND_MESSAGES',
@@ -42,10 +44,10 @@ void main() {
         );
       }
 
-      expect(PermissionHelper.getPermissionCount('ADMIN'), 27);
+      expect(PermissionHelper.getPermissionCount('ADMIN'), 29);
     });
 
-    test('Caregiver has exactly 20 permissions', () {
+    test('Caregiver has exactly 22 permissions', () {
       final caregiverPermissions = [
         'VIEW_ASSIGNED_PATIENTS',
         'CREATE_PATIENTS',
@@ -58,6 +60,8 @@ void main() {
         'VIEW_HEALTH_DATA',
         'RECORD_HEALTH_DATA',
         'EXPORT_HEALTH_DATA',
+        'VIEW_MEDICATIONS',
+        'MANAGE_MEDICATIONS',
         'VIEW_BILLING',
         'MANAGE_SUBSCRIPTIONS',
         'SEND_MESSAGES',
@@ -77,17 +81,23 @@ void main() {
         );
       }
 
-      expect(PermissionHelper.getPermissionCount('CAREGIVER'), 20);
-      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 20);
+      expect(PermissionHelper.getPermissionCount('CAREGIVER'), 22);
+      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 22);
     });
 
     test('Caregiver does NOT have admin-only permissions', () {
-      expect(PermissionHelper.hasPermission('CAREGIVER', 'VIEW_ALL_USERS'), false);
-      expect(PermissionHelper.hasPermission('CAREGIVER', 'MANAGE_USERS'), false);
-      expect(PermissionHelper.hasPermission('CAREGIVER', 'ASSIGN_ROLES'), false);
-      expect(PermissionHelper.hasPermission('CAREGIVER', 'VIEW_ALL_PATIENTS'), false);
-      expect(PermissionHelper.hasPermission('CAREGIVER', 'DELETE_PATIENTS'), false);
-      expect(PermissionHelper.hasPermission('CAREGIVER', 'VIEW_AUDIT_LOGS'), false);
+      expect(
+          PermissionHelper.hasPermission('CAREGIVER', 'VIEW_ALL_USERS'), false);
+      expect(
+          PermissionHelper.hasPermission('CAREGIVER', 'MANAGE_USERS'), false);
+      expect(
+          PermissionHelper.hasPermission('CAREGIVER', 'ASSIGN_ROLES'), false);
+      expect(PermissionHelper.hasPermission('CAREGIVER', 'VIEW_ALL_PATIENTS'),
+          false);
+      expect(PermissionHelper.hasPermission('CAREGIVER', 'DELETE_PATIENTS'),
+          false);
+      expect(PermissionHelper.hasPermission('CAREGIVER', 'VIEW_AUDIT_LOGS'),
+          false);
     });
 
     test('Patient has exactly 7 permissions including USE_AI_FEATURES', () {
@@ -113,12 +123,22 @@ void main() {
     });
 
     test('Task 2.2: Patient has USE_AI_FEATURES but not MANAGE_DEVICES', () {
-      expect(PermissionHelper.hasPermission('PATIENT', 'USE_AI_FEATURES'), true);
-      expect(PermissionHelper.hasPermission('PATIENT', 'MANAGE_DEVICES'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'USE_AI_FEATURES'), true);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'MANAGE_DEVICES'), false);
+      // Medications are caregiver/admin only (backend RolePermissionService).
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'VIEW_MEDICATIONS'), false);
+      expect(
+        PermissionHelper.hasPermission('FAMILY_MEMBER', 'MANAGE_MEDICATIONS'),
+        false,
+      );
     });
 
     test('Task 2.2: Family Member does not have USE_AI_FEATURES', () {
-      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'USE_AI_FEATURES'), false);
+      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'USE_AI_FEATURES'),
+          false);
     });
 
     test('Family Member has exactly 3 permissions', () {
@@ -140,10 +160,15 @@ void main() {
     });
 
     test('Family Member cannot modify data', () {
-      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'CREATE_TASKS'), false);
-      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'DELETE_TASKS'), false);
-      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'RECORD_HEALTH_DATA'), false);
-      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'CREATE_PATIENTS'), false);
+      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'CREATE_TASKS'),
+          false);
+      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'DELETE_TASKS'),
+          false);
+      expect(
+          PermissionHelper.hasPermission('FAMILY_MEMBER', 'RECORD_HEALTH_DATA'),
+          false);
+      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'CREATE_PATIENTS'),
+          false);
     });
 
     test('hasAnyPermission works correctly', () {
@@ -202,23 +227,31 @@ void main() {
     });
 
     test('FAMILY_LINK shares permissions with CAREGIVER', () {
-      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 20);
-      expect(PermissionHelper.hasPermission('FAMILY_LINK', 'CREATE_TASKS'), true);
-      expect(PermissionHelper.hasPermission('FAMILY_LINK', 'DELETE_PATIENTS'), false);
+      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 22);
+      expect(
+          PermissionHelper.hasPermission('FAMILY_LINK', 'CREATE_TASKS'), true);
+      expect(PermissionHelper.hasPermission('FAMILY_LINK', 'DELETE_PATIENTS'),
+          false);
     });
 
     test('Patient does not have caregiver permissions', () {
-      expect(PermissionHelper.hasPermission('PATIENT', 'CREATE_PATIENTS'), false);
-      expect(PermissionHelper.hasPermission('PATIENT', 'UPDATE_PATIENTS'), false);
-      expect(PermissionHelper.hasPermission('PATIENT', 'VIEW_ANALYTICS'), false);
-      expect(PermissionHelper.hasPermission('PATIENT', 'EXPORT_REPORTS'), false);
-      expect(PermissionHelper.hasPermission('PATIENT', 'MANAGE_DEVICES'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'CREATE_PATIENTS'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'UPDATE_PATIENTS'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'VIEW_ANALYTICS'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'EXPORT_REPORTS'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'MANAGE_DEVICES'), false);
     });
 
     test('hasAnyPermission with mixed permissions', () {
       // Patient has VIEW_TASKS but not CREATE_TASKS
       expect(
-        PermissionHelper.hasAnyPermission('PATIENT', ['CREATE_TASKS', 'VIEW_TASKS']),
+        PermissionHelper.hasAnyPermission(
+            'PATIENT', ['CREATE_TASKS', 'VIEW_TASKS']),
         true,
       );
     });
@@ -226,7 +259,8 @@ void main() {
     test('hasAllPermissions fails when missing one', () {
       // Patient has VIEW_TASKS but not CREATE_TASKS
       expect(
-        PermissionHelper.hasAllPermissions('PATIENT', ['VIEW_TASKS', 'CREATE_TASKS']),
+        PermissionHelper.hasAllPermissions(
+            'PATIENT', ['VIEW_TASKS', 'CREATE_TASKS']),
         false,
       );
     });
