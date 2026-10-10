@@ -151,13 +151,16 @@ jobs:
           echo "DIFF_BASE=$(git merge-base HEAD "origin/${TARGET}")" >> "$GITHUB_ENV"
 
       # A develop-to-team sync makes every imported upstream file appear changed
-      # relative to the team branch. Unit tests still run, but re-applying this
-      # feature-branch-only per-file coverage gate would require the syncing
-      # team to retroactively raise coverage for unrelated upstream work.
+      # relative to the team branch. Unit tests still run, but re-applying the
+      # feature-branch-only same-name-test rule and per-file coverage gate would
+      # require the syncing team to retroactively add tests and raise coverage
+      # for unrelated upstream work.
       #
       # This is intentionally strict: it accepts only the documented sync
-      # branch name, exactly one first-parent merge after the team base, and a
-      # second merge parent reachable from current origin/develop.
+      # branch name, and a branch head that is either
+      #   - itself a commit on origin/develop (a fast-forward sync), or
+      #   - exactly one first-parent merge after the team base, whose second
+      #     parent is reachable from current origin/develop (a --no-ff sync).
       - name: Detect validated develop sync
         id: upstream_sync
         if: steps.mode.outputs.run_suite == 'true'
@@ -179,13 +182,19 @@ jobs:
               # instead; otherwise that temporary commit appears as a second
               # first-parent merge and rejects every legitimate sync.
               git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr-head"
+              git fetch origin "+develop:refs/remotes/origin/develop"
               sync_head="$(git rev-parse origin/pr-head)"
+              merge_commits=()
               if [ "${sync_head}" = "${PR_HEAD_SHA}" ]; then
-                mapfile -t merge_commits < <(git rev-list --first-parent --merges "${DIFF_BASE}..${sync_head}")
+                if git merge-base --is-ancestor "${sync_head}" origin/develop; then
+                  skip_changed_file_coverage=true
+                  echo "Verified develop sync: ${sync_head} is already on develop (fast-forward)."
+                else
+                  mapfile -t merge_commits < <(git rev-list --first-parent --merges "${DIFF_BASE}..${sync_head}")
+                fi
               fi
               if [ "${#merge_commits[@]}" -eq 1 ]; then
                 read -r -a parents <<< "$(git show -s --format=%P "${merge_commits[0]}")"
-                git fetch origin "+develop:refs/remotes/origin/develop"
                 if [ "${#parents[@]}" -eq 2 ] \
                   && [ "${parents[0]}" = "${DIFF_BASE}" ] \
                   && git merge-base --is-ancestor "${parents[1]}" origin/develop; then
@@ -200,12 +209,19 @@ jobs:
 
       - name: Map changed files to unit tests
         if: steps.mode.outputs.run_suite == 'true'
+        env:
+          VERIFIED_SYNC: ${{ steps.upstream_sync.outputs.skip_changed_file_coverage }}
         run: |
+          # A verified sync still runs every mapped test; it only stops
+          # failing on upstream sources that have no same-name test.
+          extra=()
+          if [ "${VERIFIED_SYNC}" = "true" ]; then extra=(--allow-missing); fi
           python scripts/test_mapping.py \
             --diff-base "${DIFF_BASE}" \
             --frontend-out "${RUNNER_TEMP}/frontend-tests.txt" \
             --backend-out "${RUNNER_TEMP}/backend-tests.txt" \
-            --repo-root .
+            --repo-root . \
+            "${extra[@]}"
 
       - name: Flutter unit tests (changed files only)
         if: steps.mode.outputs.run_suite == 'true'

@@ -12,7 +12,9 @@
 #     regression safety net for the merge of multiple features.
 #   - Does NOT run E2E or integration tests -- those run one stage later,
 #     on develop -> staging.
-#   - Does NOT run SAST/SCA/secrets scanning, including `flutter analyze`
+#   - Does NOT run SCA/secrets scanning or `flutter analyze`. The one
+#     exception is SpotBugs/PMD, which pom.xml binds to `verify` (see the
+#     backend step).
 #     -- build-and-analyze.yml (the `quality-gate` check) already runs
 #     on every PR regardless of target branch, currently report-only
 #     (quality/ci/gate/policy.yaml) (team-merge-ci.yml also already ran it
@@ -31,8 +33,8 @@
 #     for status to be reported."
 #
 # Stages (parallel jobs):
-#   backend:         mvn -B clean verify, SpotBugs/PMD skipped (BLOCKING: compile + full test
-#                    suite + package + jacoco report, in one invocation)
+#   backend:         mvn -B clean verify (BLOCKING: compile + full test suite
+#                    + package + jacoco report + SpotBugs/PMD High, in one invocation)
 #                    + coverage regression gate
 #   frontend-test:   flutter test full suite (BLOCKING), sharded across
 #                    FLUTTER_TEST_SHARDS matrix runners -- the suite is
@@ -124,18 +126,15 @@ jobs:
       # to `verify`, enforces the existing per-package thresholds
       # already defined in pom.xml). No separate `mvn test` call.
       #
-      # pom.xml also binds SpotBugs and PMD/CPD `check` to `verify` with
-      # failOnError/failOnViolation=true. They are skipped here, in line
-      # with this pipeline not running SAST (see header): the existing
-      # backlog (1,048 SpotBugs findings at threshold=low, ~89% of them
-      # EI_EXPOSE_REP*) would block every merge. Earlier runs never got
-      # this far because the test phase failed first.
-      # TODO(milestone end): re-enable with an exclude filter for the
-      # EI_EXPOSE_REP* false positives and a higher threshold.
-      - name: Maven full verify (compile + test + package + jacoco)
+      # pom.xml also binds SpotBugs `check` and PMD `check` to `verify`, and
+      # they block here. Only High findings fail for now: SpotBugs
+      # threshold=High with spotbugs-exclude.xml, and PMD failurePriority=1
+      # with pmd-exclude.properties. CPD is report-only. Lower priorities
+      # are still written to target/ for the milestone ratchet.
+      - name: Maven full verify (compile + test + package + jacoco + SpotBugs/PMD)
         if: steps.mode.outputs.run_suite == 'true'
         working-directory: backend/core
-        run: mvn -B clean verify -Dspotbugs.skip=true -Dpmd.skip=true -Dcpd.skip=true
+        run: mvn -B clean verify
 
       - name: Set up Python (coverage regression gate)
         if: steps.mode.outputs.run_suite == 'true'

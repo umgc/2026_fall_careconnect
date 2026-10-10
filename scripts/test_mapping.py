@@ -192,6 +192,11 @@ def main():
     parser.add_argument("--frontend-out", required=True)
     parser.add_argument("--backend-out", required=True)
     parser.add_argument("--repo-root", default=".")
+    parser.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="Report sources without a test but exit 0 (verified develop syncs only)",
+    )
     args = parser.parse_args()
 
     changed = get_changed_files(args.diff_base, args.repo_root)
@@ -212,10 +217,16 @@ def main():
         print("\n✅ Every changed source file has a matching unit test.")
         sys.exit(0)
 
-    print(f"\n❌ {len(missing)} changed source file(s) have no matching unit test:\n")
+    mark = "⚠️" if args.allow_missing else "❌"
+    print(f"\n{mark} {len(missing)} changed source file(s) have no matching unit test:\n")
     for src, test in sorted(missing):
         print(f"  {src}")
         print(f"    expected: {test}")
+    if args.allow_missing:
+        # A verified develop sync imports other teams' already-reviewed code;
+        # the syncing team is not asked to backfill tests for it.
+        print("\nAllowed: these files arrive through a verified develop sync.")
+        sys.exit(0)
     print(
         "\nAdd a test at the expected path (same directory, same name + "
         "_test.dart / Test.java). If the file genuinely needs no unit test, "
