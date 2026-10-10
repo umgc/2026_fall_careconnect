@@ -100,6 +100,24 @@ class SecurityConfigFilterChainTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void epicCallback_IsAccessibleWithoutJwt() throws Exception {
+        // The external Epic SMART redirect cannot carry the application's JWT.
+        // The callback instead validates its signed, single-use state in the
+        // controller flow, so this narrowly scoped endpoint must precede the
+        // authenticated /api/** catch-all.
+        mockMvc.perform(get("/api/epic/callback"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void otherEpicEndpoints_RequireAuthentication() throws Exception {
+        // Only the callback is public; the general /api/** matcher protects
+        // all remaining Epic endpoints.
+        mockMvc.perform(get("/api/epic/protected"))
+                .andExpect(status().isUnauthorized());
+    }
+
     // -------------------------------------------------
     // 1. Public auth endpoint → 200 (permitAll)
     // -------------------------------------------------
@@ -191,6 +209,16 @@ class SecurityConfigFilterChainTest {
 
         @GetMapping("/v1/api/patients/ping")
         String protectedPing() throws Exception {
+            return "ok";
+        }
+
+        @GetMapping("/api/epic/callback")
+        String epicCallback() {
+            return "ok";
+        }
+
+        @GetMapping("/api/epic/protected")
+        String protectedEpicEndpoint() {
             return "ok";
         }
     }

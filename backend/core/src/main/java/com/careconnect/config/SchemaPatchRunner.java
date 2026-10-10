@@ -1394,6 +1394,21 @@ public class SchemaPatchRunner implements CommandLineRunner {
         );
         applyCatalogPatch("2607191400-summary-citation-replay");
         applyCatalogPatch("2607191500-summary-chunk-ownership-correction");
+        // Epic FHIR indexing: the ck_retrieval_source_kind check constraint created by the
+        // summary-citation-replay patch above only permits CALL_SUMMARY / VISIT_SUMMARY, so every
+        // EPIC_FHIR_INDEXED insert (source_kind='epic') is rejected on a fresh DB and Epic records
+        // never reach Ask AI. Widen it to admit the Epic discriminator. Both casings are allowed:
+        // the chunk writer stores lowercase 'epic' while EpicProperties.SOURCE_EPIC is 'EPIC', and
+        // existing rows must keep validating. Required (a missing allow-list value silently drops
+        // every Epic chunk); runs right after the constraint is created so the DROP/ADD is ordered.
+        applyRequiredPatch(
+                "V2609160100 – allow EPIC source_kind on retrieval_index_chunk",
+                "ALTER TABLE retrieval_index_chunk "
+                        + "  DROP CONSTRAINT IF EXISTS ck_retrieval_source_kind; "
+                        + "ALTER TABLE retrieval_index_chunk "
+                        + "  ADD CONSTRAINT ck_retrieval_source_kind "
+                        + "  CHECK (source_kind IS NULL OR source_kind IN ("
+                        + "    'CALL_SUMMARY', 'VISIT_SUMMARY', 'EPIC', 'epic'))");
         ensureIndex(
                 "V2607190100 – fair source replay claim index",
                 "idx_summary_replay_claim_fair",
@@ -1549,6 +1564,18 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 "V2607142130b – usps_mailpiece importance index",
                 "CREATE INDEX IF NOT EXISTS idx_usps_mailpiece_patient_importance " +
                         "  ON usps_mailpiece (patient_id, importance_level, digest_date)"
+        );
+        // ehr_resource.content_hash holds an algorithm-prefixed digest ("sha256:" + 64 hex = 71
+        // chars), which overflowed the original VARCHAR(64) and rolled back the whole Epic sync
+        // (SQLState 22001, value too long). Widen it; resource_fhir_id is widened defensively since
+        // real-world Epic FHIR logical ids can exceed 64 chars.
+        applyPatch(
+            "V2609131200 – widen ehr_resource.content_hash for algorithm-prefixed digest",
+            "ALTER TABLE ehr_resource ALTER COLUMN content_hash TYPE VARCHAR(128)"
+        );
+        applyPatch(
+            "V2609131201 – widen ehr_resource.resource_fhir_id for long Epic FHIR ids",
+            "ALTER TABLE ehr_resource ALTER COLUMN resource_fhir_id TYPE VARCHAR(255)"
         );
     }
 

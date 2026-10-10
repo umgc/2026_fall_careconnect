@@ -23,6 +23,7 @@ Widget _wrapWithPatientId(int? patientId) {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: patientId),
   );
   return MaterialApp(
+    locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
@@ -46,7 +47,8 @@ void main() {
       expect(find.byType(SafeArea), findsOneWidget);
     });
 
-    testWidgets('shows medication_outlined icon in header area', (tester) async {
+    testWidgets('shows medication_outlined icon in header area',
+        (tester) async {
       await tester.pumpWidget(_wrapWithPatientId(null));
       await tester.pump();
       expect(find.byIcon(Icons.medication_outlined), findsWidgets);
@@ -121,8 +123,7 @@ void main() {
       expect(find.text('No medications found'), findsNothing);
     });
 
-    testWidgets(
-        'does not show "Add your first medication" when in error state',
+    testWidgets('does not show "Add your first medication" when in error state',
         (tester) async {
       await tester.pumpWidget(_wrapWithPatientId(null));
       await tester.pump();
