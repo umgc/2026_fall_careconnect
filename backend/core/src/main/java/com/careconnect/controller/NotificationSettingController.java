@@ -1,8 +1,5 @@
 package com.careconnect.controller;
 
-import com.careconnect.security.Permission;
-import com.careconnect.security.RequirePermission;
-
 import com.careconnect.dto.NotificationSettingDTO;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
@@ -29,24 +26,24 @@ public class NotificationSettingController {
     @Autowired
     private NotificationSettingService notificationSettingService;
 
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
-
-
     @GetMapping("/{userId}")
     @Operation(summary = "Get notification settings for a user")
     public ResponseEntity<NotificationSettingDTO> getSettings(@PathVariable Long userId) throws UnauthorizedException {
+        // Authorization is enforced by requireSelfOrAdmin below (a user reads their own settings,
+        // an admin reads anyone's). No @RequirePermission here: the previous VIEW_ASSIGNED_PATIENTS
+        // guard was a caregiver permission that wrongly blocked patients from reading their own
+        // settings (AccessDeniedException -> 500).
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireSelfOrAdmin(currentUser, userId);
 
         return ResponseEntity.ok(notificationSettingService.getByUserId(userId));
     }
 
-    @RequirePermission(Permission.CREATE_TASKS)
-
-
     @PostMapping
     @Operation(summary = "Create or update notification settings for a user")
     public ResponseEntity<NotificationSettingDTO> createOrUpdate(@RequestBody NotificationSettingDTO dto) throws UnauthorizedException {
+        // Same as getSettings: requireSelfOrAdmin is the gate. The previous CREATE_TASKS guard was
+        // unrelated to notification settings and blocked users from saving their own preferences.
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireSelfOrAdmin(currentUser, dto.userId());
 

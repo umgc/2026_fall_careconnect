@@ -6,6 +6,7 @@ import '../providers/user_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/api_service.dart';
+import '../config/env_constant.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -442,7 +443,7 @@ class CallIntegrationHelper {
       debugPrint('📡 Sending SOS request to API: $sosRequest');
 
       final response = await http.post(
-        Uri.parse('http://localhost:8080/api/websocket/sos-call'),
+        Uri.parse('${getBackendBaseUrl()}/api/websocket/sos-call'),
         headers: {...authHeaders, 'Content-Type': 'application/json'},
         body: jsonEncode(sosRequest),
       );

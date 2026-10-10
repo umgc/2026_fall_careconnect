@@ -21,7 +21,9 @@ public class VoiceIntentService {
             "dashboard", "/dashboard",
             "calendar", "/calendar",
             "symptoms", "/symptoms",
-            "symptom tracker", "/symptoms"
+            "symptom tracker", "/symptoms",
+            "medication", "/medication",
+            "medications", "/medication"
     );
     private static final String PROMPT_TEMPLATE = """
             You are a voice command intent classifier for the CareConnect healthcare app.
@@ -29,7 +31,7 @@ public class VoiceIntentService {
             Respond ONLY with valid JSON, no other text.
             
             Supported intents:
-            - "navigate": user wants to go to a screen. Entities: {"destination": "home|calendar|symptoms|dashboard"}
+            - "navigate": user wants to go to a screen. Entities: {"destination": "home|calendar|symptoms|medication|medications|dashboard"}
             - "call": user wants to call someone. Entities: {"target": "<person name or role>"}
             - "schedule": user wants to schedule an appointment. Entities: {"target": "<person>", "date": "<date if mentioned>"}
             - "unknown": cannot determine intent
@@ -64,7 +66,7 @@ public class VoiceIntentService {
 
             return parseAIResponse(chatResponse.getAiResponse());
         } catch (Exception e) {
-            log.error("Voice intent extraction failed: {}", e.getMessage(), e);
+            log.error("Voice intent extraction failed: {}", e.getClass().getSimpleName());
             return VoiceIntentResponse.error("Voice intent service is temporarily unavailable.");
         }
     }
@@ -88,7 +90,7 @@ public class VoiceIntentService {
 
             return buildResponse(intent, entities, confidence);
         } catch (Exception e) {
-            log.warn("Failed to parse AI response as JSON: {}", aiResponse, e);
+            log.warn("Failed to parse AI response as JSON: {}", e.getClass().getSimpleName());
             return VoiceIntentResponse.unknown();
         }
     }

@@ -164,6 +164,7 @@ String getBackendBaseUrl() {
     } else {
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
+          // 10.0.2.2 is the Android emulator's alias for the host loopback.
           resolved = 'http://10.0.2.2:8080';
           break;
         default:

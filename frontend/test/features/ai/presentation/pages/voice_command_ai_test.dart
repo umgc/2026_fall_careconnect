@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/services/voice_intent_service.dart';
+import 'package:care_connect_app/services/voice_intent_registry.dart';
 
 /// Matches debug-mode status display delay in VoiceCommandAI (5s + buffer).
 const _statusSettleDelay = Duration(milliseconds: 5050);
@@ -711,6 +712,23 @@ void main() {
       await tester.pump();
 
       expect(find.text('Symptoms Page'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('bare command aliases do not match inside other words',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'open homework', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Command not recognized — please try again.'),
+          findsOneWidget);
 
       await _tearDown(tester);
     });
@@ -1762,7 +1780,7 @@ void main() {
       await _sendSpeechResult(tester, 'take me to', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Calendar'));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Status: Confirm command'), findsOneWidget);
@@ -1783,7 +1801,7 @@ void main() {
       await _sendSpeechResult(tester, 'vaya al', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.tap(find.widgetWithText(ActionChip, 'el Calendario'));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Estado: Confirmar comando'), findsOneWidget);
@@ -1884,7 +1902,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Pick "Symptom Tracker" from clarification
-      await tester.tap(find.byKey(const Key('voice_clarify_/symptoms')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Symptom Tracker'));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Now confirm
@@ -2030,7 +2048,7 @@ void main() {
       await _sendSpeechResult(tester, 'take me to', isFinal: true);
       await tester.pump(const Duration(milliseconds: 100));
 
-      await tester.tap(find.byKey(const Key('voice_clarify_/calendar')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Calendar'));
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Status: Confirm command'), findsOneWidget);
@@ -2111,7 +2129,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       // Pick "Symptom Tracker" from clarification
-      await tester.tap(find.byKey(const Key('voice_clarify_/symptoms')));
+      await tester.tap(find.widgetWithText(ActionChip, 'Symptom Tracker'));
       await tester.pump(const Duration(milliseconds: 100));
 
       // Now confirm
@@ -2594,6 +2612,13 @@ void main() {
       await tester.tap(find.text('Confirm'));
       await tester.pump(const Duration(milliseconds: 200));
 
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(ElevatedButton, 'Confirm Call Contact'),
+      ));
+      await tester.pump(const Duration(milliseconds: 200));
+
       expect(find.textContaining('not yet available'), findsOneWidget);
 
       VoiceIntentService.testOverride = null;
@@ -2832,11 +2857,13 @@ void main() {
 
   group('VoiceCommandAI final flow tests', () {
     setUp(() {
+      setupDefaultMocks();
       VoiceIntentService.testOverride = null;
     });
 
     tearDown(() {
       VoiceIntentService.testOverride = null;
+      clearMocks();
     });
 
     testWidgets('happy path: AI intent through registry to navigation',
@@ -2916,6 +2943,238 @@ void main() {
       await _tearDown(tester);
     });
 
+    testWidgets('known command falls back when the intent service returns unknown',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => VoiceIntentResult(intent: 'unknown', success: true);
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'open calendar');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Calendar'), findsWidgets);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(find.text('Calendar Page'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('known command falls back when the intent service is unsuccessful',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => VoiceIntentResult(intent: 'unknown', success: false);
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'open symptoms');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Symptom Tracker'), findsWidgets);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(find.text('Symptoms Page'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+    testWidgets('known command falls back when the intent service times out',
+        (tester) async {
+      VoiceIntentService.testOverride = ({
+        required String utterance,
+        String locale = 'en',
+        String? screenId,
+      }) => Future<VoiceIntentResult?>.error(TimeoutException('intent request timed out'));
+
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+      await _sendSpeechResult(tester, 'open medications');
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.textContaining('Confirm command'), findsOneWidget);
+      expect(find.textContaining('Medication'), findsWidgets);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(find.text('Medication Page'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+testWidgets('WBS 5.2.71 opens invoice assistant through voice command',
+    (tester) async {
+  String? navigatedTo;
+
+  VoiceIntentService.testOverride = ({
+    required String utterance,
+    String locale = 'en',
+    String? screenId,
+  }) =>
+      null;
+
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: VoiceCommandAI(
+        onNavigateRequested: (destination) {
+          navigatedTo = destination;
+        },
+      ),
+    ),
+  );
+
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tap(find.byType(FloatingActionButton));
+  await tester.pump(const Duration(milliseconds: 200));
+
+  await _sendSpeechResult(tester, 'open invoice assistant');
+  await tester.pump(const Duration(milliseconds: 200));
+
+  expect(find.textContaining('Confirm command'), findsOneWidget);
+
+  await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+  await tester.pump(const Duration(milliseconds: 100));
+
+  expect(navigatedTo, '/invoice-assistant');
+
+  await _tearDown(tester);
+});
+
+testWidgets('WBS 5.2.72 opens file management through voice command',
+    (tester) async {
+  String? navigatedTo;
+
+  VoiceIntentService.testOverride = ({
+    required String utterance,
+    String locale = 'en',
+    String? screenId,
+  }) =>
+      null;
+
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: VoiceCommandAI(
+        onNavigateRequested: (destination) {
+          navigatedTo = destination;
+        },
+      ),
+    ),
+  );
+
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tap(find.byType(FloatingActionButton));
+  await tester.pump(const Duration(milliseconds: 200));
+
+  await _sendSpeechResult(tester, 'open file management');
+  await tester.pump(const Duration(milliseconds: 200));
+
+  expect(find.textContaining('Confirm command'), findsOneWidget);
+
+  await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+  await tester.pump(const Duration(milliseconds: 100));
+
+  expect(navigatedTo, '/file-management');
+
+  await _tearDown(tester);
+});
+
+testWidgets('WBS 5.2.73 supports open information delivery (Issue #193)',
+    (tester) async {
+  String? navigatedTo;
+
+  VoiceIntentService.testOverride = ({
+    required String utterance,
+    String locale = 'en',
+    String? screenId,
+  }) =>
+      null;
+
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: VoiceCommandAI(
+        onNavigateRequested: (destination) {
+          navigatedTo = destination;
+        },
+      ),
+    ),
+  );
+
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tap(find.byType(FloatingActionButton));
+  await tester.pump(const Duration(milliseconds: 200));
+
+  await _sendSpeechResult(tester, 'open information delivery');
+  await tester.pump(const Duration(milliseconds: 200));
+
+  expect(find.textContaining('Confirm command'), findsOneWidget);
+
+  await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+  await tester.pump(const Duration(milliseconds: 100));
+
+  expect(navigatedTo, '/informed-delivery');
+
+  await _tearDown(tester);
+});
+
+testWidgets('WBS 5.2.73 opens informed delivery through voice command',
+    (tester) async {
+  String? navigatedTo;
+
+  VoiceIntentService.testOverride = ({
+    required String utterance,
+    String locale = 'en',
+    String? screenId,
+  }) =>
+      null;
+
+  await tester.pumpWidget(
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: VoiceCommandAI(
+        onNavigateRequested: (destination) {
+          navigatedTo = destination;
+        },
+      ),
+    ),
+  );
+
+  await tester.pump(const Duration(milliseconds: 100));
+  await tester.tap(find.byType(FloatingActionButton));
+  await tester.pump(const Duration(milliseconds: 200));
+
+  await _sendSpeechResult(tester, 'open informed delivery');
+  await tester.pump(const Duration(milliseconds: 200));
+
+  expect(find.textContaining('Confirm command'), findsOneWidget);
+
+  await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+  await tester.pump(const Duration(milliseconds: 100));
+
+  expect(navigatedTo, '/informed-delivery');
+
+  await _tearDown(tester);
+});
+    
     testWidgets('failure path: unrecognized through full fallback',
         (tester) async {
       VoiceIntentService.testOverride = ({
@@ -3078,4 +3337,174 @@ void main() {
       await _tearDown(tester);
     });
   });
-}
+
+  // ──────────────── Gate 2 High-Risk Voice & Button Tests ────────────────
+
+  group('VoiceCommandAI Gate 2 High-Risk Confirmation', () {
+    setUp(setupDefaultMocks);
+    tearDown(() {
+      VoiceIntentService.testOverride = null;
+      clearMocks();
+    });
+
+
+    // Verifies secondary high-risk modal aborts execution and resets state
+    // when the user explicitly taps the modal's Cancel button,
+    // confirming physical touch interaction as an alternate modality to voice
+    testWidgets(
+        'Gate 2 dialog renders for high-risk intent and aborts when Cancel is tapped',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Start listening and speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Confirm Gate 1 inline action
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 3. Verify Gate 2 AlertDialog modal appears
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.textContaining('Confirm'), findsWidgets);
+
+      // 4. Tap Cancel inside Gate 2 dialog
+      final cancelBtn = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Cancel'),
+      );
+      await tester.tap(cancelBtn);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 5. Verify dialog closes and status indicates cancelled
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.textContaining('cancelled'), findsOneWidget);
+
+      await _tearDown(tester);
+    });
+
+
+    // Verifies secondary high-risk modal completes and executes the action handler
+    // when the user explicitly taps the modal's primary confirmation button,
+    // confirming physical touch interaction as an alternate modality to voice
+    testWidgets(
+        'Gate 2 confirms high-risk dialog when Confirm button is tapped',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Tap Gate 1 Confirm
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 3. Verify Gate 2 modal appears
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // 4. Tap the Confirm button inside Gate 2 AlertDialog
+      final confirmBtn = find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(ElevatedButton),
+      );
+      await tester.tap(confirmBtn);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 5. Verify dialog is dismissed
+      expect(find.byType(AlertDialog), findsNothing);
+
+      await _tearDown(tester);
+    }); //end of Gate 2 confirm and click cancel test
+
+
+    // Verifies secondary high-risk modal dismisses and aborts execution 
+    // when receiving spoken verbal cancellation 'cancel'
+    // without requiring physical touch interaction.
+    testWidgets(
+        'Gate 2 dialog aborts when "cancel" is spoken verbally',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Start listening and speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Confirm Gate 1 inline action
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      
+      // Wait for dialog route animation to settle, then clear listener delay
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 500));
+    
+
+      // 3. Verify Gate 2 AlertDialog modal appears
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // 4. Speak "cancel" (NO button tap)
+      await _sendSpeechResult(tester, 'cancel', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 5. Verify dialog closes and status indicates cancelled
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.textContaining('cancelled'), findsOneWidget);
+
+      await _tearDown(tester);
+    }); //end of verbal cancel test
+
+
+    // Verifies secondary high-risk modal completes and executes the action handler
+    // when receiving spoken verbal confirmation 'confirm'
+    // without requiring physical touch interaction.
+    testWidgets(
+        'Gate 2 dialog executes intent handler when "confirm" is spoken verbally',
+        (tester) async {
+      await tester.pumpWidget(_buildVoiceRouterApp());
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // 1. Start listening and speak 'emergency'
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump(const Duration(milliseconds: 200));
+
+      await _sendSpeechResult(tester, 'emergency', isFinal: true);
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // 2. Confirm Gate 1 inline action
+      expect(find.byKey(const Key('voice_confirm_btn')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('voice_confirm_btn')));
+      
+      // Let the dialog open and settle its route animation
+      await tester.pumpAndSettle();
+      // Advance past the 350ms listener start timer
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // 3. Verify Gate 2 AlertDialog modal is visible
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      // 4. Send verbal 'confirm'
+      await _sendSpeechResult(tester, 'confirm', isFinal: true);
+      await tester.pumpAndSettle();
+
+      // 5. Verify the dialog dismisses upon voice confirmation
+      expect(find.byType(AlertDialog), findsNothing);
+
+      await _tearDown(tester);
+    }); //end of verbal confirm test
+
+  }); //end of group
+
+} //end main

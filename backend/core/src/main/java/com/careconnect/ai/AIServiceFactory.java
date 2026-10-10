@@ -20,6 +20,9 @@ public class AIServiceFactory {
     @Value("${careconnect.ai.provider:bedrock}")
     private String provider;
 
+    @Value("${careconnect.ai.model:}")
+    private String model;
+
     public AIServiceFactory(ObjectProvider<DeepSeekService> deepSeekServiceProvider,
                             ObjectProvider<BedrockAIChatService> bedrockServiceProvider) {
         this.deepSeekService = deepSeekServiceProvider.getIfAvailable();
@@ -33,7 +36,7 @@ public class AIServiceFactory {
 
         switch (provider.toLowerCase()) {
             case "bedrock" -> {
-                log.info("Using AWS Bedrock (Nova Lite / Claude)");
+                log.info("Using AWS Bedrock (model: {})", model.isBlank() ? "default" : model);
                 if (bedrockService == null) {
                     log.error("======================================");
                     log.error("CONFIGURATION ERROR: AI provider is set to 'bedrock'");

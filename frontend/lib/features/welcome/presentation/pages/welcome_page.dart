@@ -19,7 +19,12 @@ class WelcomePage extends StatefulWidget {
 }
 
 class _WelcomePageState extends State<WelcomePage> {
-  bool _isLoading = true;
+  // Render the welcome UI immediately instead of gating it behind the backend
+  // health check. Blocking here made the app appear to "hang on the logo" on
+  // every (re)start while the health probe ran (up to ~35s if the backend was
+  // briefly unreachable). The check now runs in the background and only drives
+  // the "backend not healthy" warning banner.
+  bool _isLoading = false;
   bool _isBackendHealthy = true;
 
   @override
@@ -29,47 +34,42 @@ class _WelcomePageState extends State<WelcomePage> {
   }
 
   Future<void> _checkBackendHealth() async {
-  try {
+    // Retry a few times: the backend can take up to ~60-70s to boot, and a
+    // single attempt during that window would wrongly flag it as unhealthy.
+    const int maxAttempts = 5;
     final String baseUrl = getBackendBaseUrl();
-
     print('BASE URL: $baseUrl');
 
-    final response = await http
-        .get(Uri.parse('$baseUrl/v1/api/test/health'))
-        .timeout(const Duration(seconds: 5));
+    bool healthy = false;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse('$baseUrl/v1/api/test/health'))
+            .timeout(const Duration(seconds: 5));
 
-    print('STATUS CODE: ${response.statusCode}');
-    print('BODY: ${response.body}');
-
-    if (mounted) {
-      setState(() {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          print('PARSED STATUS: ${data['status']}');
-
-          _isBackendHealthy = data['status'] == 'healthy';
-        } else {
-          _isBackendHealthy = false;
+          if (data['status'] == 'healthy') {
+            healthy = true;
+            break;
+          }
         }
-      });
+      } catch (e) {
+        print('Health check attempt $attempt/$maxAttempts failed: $e');
+      }
+
+      if (attempt < maxAttempts) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
-  } catch (e) {
-    print('ERROR: $e');
 
     if (mounted) {
       setState(() {
-        _isBackendHealthy = false;
-      });
-    }
-  } finally {
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() {
+        _isBackendHealthy = healthy;
         _isLoading = false;
       });
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
