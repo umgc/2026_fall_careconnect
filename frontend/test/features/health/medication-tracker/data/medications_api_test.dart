@@ -1,17 +1,21 @@
-// Tests for fetchMedicationsFromEnhancedProfile
+// Tests for fetchMedicationsFromEnhancedProfile and the error mapping in
+// extractMedicationPhoto
 // (lib/features/health/medication-tracker/data/medications_api.dart).
 //
-// Uses http.runWithClient() to intercept top-level http.get calls with a
-// MockClient. No real network traffic occurs.
+// Uses http.runWithClient() to intercept top-level http.get calls, and an
+// injected MockClient for the photo upload. No real network traffic occurs.
 
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/features/health/medication-tracker/data/medications_api.dart';
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/health/medication-tracker/models/medication_photo_extraction.dart';
 
 // -- Constants ----------------------------------------------------------------
 
@@ -302,6 +306,53 @@ void main() {
           allOf(contains('502'), contains('bad gateway')),
         )),
       );
+    });
+  });
+
+  // ---------- extractMedicationPhoto error mapping ----------
+
+  group('extractMedicationPhoto error mapping', () {
+    // AuthTokenManager reads secure storage and preferences for the auth
+    // header; stub those channels so the call reaches the MockClient.
+    setUpAll(() {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      SharedPreferences.setMockInitialValues({});
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+        (call) async => null,
+      );
+    });
+
+    const unreadable =
+        'The photo could not be read. Please enter the medication manually.';
+
+    Future<MedicationPhotoExtractionResult> extract(MockClient client) =>
+        extractMedicationPhoto(
+          patientId: _patientId,
+          imageBytes: Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0]),
+          fileName: 'label.jpg',
+          client: client,
+        );
+
+    test(
+        'TC-MED-PHOTO-092: a JSON error that is not a 400, or a 400 with no message, shows the generic manual-entry message',
+        () async {
+      // Arrange
+      final server500 = MockClient((_) async => http.Response(
+          jsonEncode({'message': 'NullPointerException in OCR step'}), 500));
+      final bare400 =
+          MockClient((_) async => http.Response(jsonEncode({}), 400));
+
+      // Act
+      final from500 = await extract(server500);
+      final from400 = await extract(bare400);
+
+      // Assert: only a 400 message is user-facing; server internals are not
+      expect(from500.manualEntryRequired, isTrue);
+      expect(from500.message, unreadable);
+      expect(from400.manualEntryRequired, isTrue);
+      expect(from400.message, unreadable);
     });
   });
 }

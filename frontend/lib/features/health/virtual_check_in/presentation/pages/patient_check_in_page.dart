@@ -8,6 +8,7 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/checkin_service.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
@@ -405,6 +406,48 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                 ],
               ),
 
+              // Unified Health Data entry point
+              Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: InkWell(
+                  onTap: () => context.push('/health-data'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.health_and_safety_outlined,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Unified Health Data',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'View health records from connected sources',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
               // Video call widget
               if(showVideoCall)
                 Card(
@@ -506,6 +549,9 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                         physics: const NeverScrollableScrollPhysics(),
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
+                        // Cells taller than wide so the emoji + label fit without
+                        // a bottom overflow (emoji glyphs render taller than 28px).
+                        childAspectRatio: 0.8,
                         children: moodOptions.map((mood) {
                           final isSelected = selectedMood == mood["value"];
                           return GestureDetector(

@@ -22,6 +22,7 @@ import 'package:care_connect_app/features/social/presentation/pages/chat_room_sc
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/transcript_outbox/encrypted_transcript_outbox.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';

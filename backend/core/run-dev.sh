@@ -117,6 +117,25 @@ echo "Starting Spring Boot application..."
 export SPRING_PROFILES_ACTIVE=dev
 export CARECONNECT_DATABASE_USE_AWS_CONFIG=false
 export JAVA_TOOL_OPTIONS='-Dspring.mvc.log-request-details=true -Dlogging.level.org.hibernate.type.descriptor.sql=TRACE -Dlogging.level.org.hibernate.type.descriptor.sql.BasicBinder=TRACE -Dlogging.level.org.springframework.web=DEBUG'
+
+# Norton Antivirus intercepts TLS on this machine (Web/Mail Shield), so outbound HTTPS from the
+# JVM (Epic SMART-on-FHIR token exchange, AWS Bedrock SDK) fails PKIX cert validation with a
+# ResourceAccessException unless the JVM trusts Norton's intercepting root. Point the JVM at a
+# truststore that includes it when one is present (built once; see run-local-bedrock.ps1).
+TRUSTSTORE="$HOME/.aws/careconnect-truststore.jks"
+if [ -f "$TRUSTSTORE" ]; then
+    # The Windows JVM needs a Windows-style path; a git-bash path like /c/Users/... would be
+    # resolved by Java to C:\c\Users\... (nonexistent) and JSSE would silently fall back to an
+    # EMPTY trust store, failing ALL outbound TLS. Convert with cygpath when available.
+    if command -v cygpath >/dev/null 2>&1; then
+        TRUSTSTORE_JVM="$(cygpath -m "$TRUSTSTORE")"
+    else
+        TRUSTSTORE_JVM="$TRUSTSTORE"
+    fi
+    echo "- TLS: using JVM truststore with intercepting root ($TRUSTSTORE_JVM)"
+    export JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTIONS -Djavax.net.ssl.trustStore=$TRUSTSTORE_JVM -Djavax.net.ssl.trustStorePassword=changeit"
+fi
+
 ./mvnw spring-boot:run -Dspring.profiles.active=dev
 
 echo "Application stopped."

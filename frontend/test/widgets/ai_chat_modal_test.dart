@@ -22,6 +22,7 @@ class _NullUserProvider extends MockUserProvider {
 Widget _wrap() {
   final provider = _NullUserProvider();
   return MaterialApp(
+    locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
@@ -102,6 +103,7 @@ void main() {
       );
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: ChangeNotifierProvider<UserProvider>.value(

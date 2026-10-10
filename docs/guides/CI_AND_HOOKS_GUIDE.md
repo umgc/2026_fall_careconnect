@@ -26,11 +26,11 @@ The merge flow is `feature/* → team-*-develop → develop → staging → main
 | `team-merge-ci.yml` | `team-*-develop` | Build + unit tests + 95% coverage | Changed files only |
 | `develop-merge-ci.yml` | `develop` | Build + full unit/widget suite + coverage regression | Whole repo |
 | `staging-merge-ci.yml` | `staging` | E2E + integration tests | Placeholder — not implemented yet (Team A) |
-| `branch-source-gate.yml` | `develop`, `main` | Source branch matches the expected prior stage | N/A |
+| `branch-source-gate.yml` | `develop`, `staging`, `main` | Source branch matches the expected prior stage | N/A |
 
 Both `team-merge-ci.yml` and `develop-merge-ci.yml` skip their build/test steps (but still report a passing status) for PRs sourced from `team-a-develop`, since that team only adds E2E tests and never touches other teams' source or unit tests.
 
-> **Known gap:** `branch-source-gate.yml` does not currently have a rule for PRs into `staging` (only `develop` and `main` are covered), and its `main` rule still expects `develop` as the source rather than `staging`. In practice this means `staging → develop` is blocked as a side effect of the `develop` rule (only `team-*-develop` sources are allowed), but nothing yet enforces that PRs into `staging` come from `develop`, or that PRs into `main` come from `staging`. Not fixed as of this writing — flagged here so it isn't mistaken for intentional.
+> `branch-source-gate.yml` enforces the promotion path described above: `team-*-develop → develop`, `develop → staging`, and `staging → main`.
 
 > Team D's `build-and-analyze.yml` runs security/SAST scans on **all PRs** repo-wide, regardless of target branch. It is separate from these pipelines and not duplicated in any of them.
 

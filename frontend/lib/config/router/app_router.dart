@@ -21,6 +21,10 @@ import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_p
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/features/summary/summary_confirmation_list.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
+import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
+import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
+import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
+import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
 import 'package:care_connect_app/features/tasks/presentation/assign_task_screen.dart';
@@ -33,6 +37,8 @@ import 'package:care_connect_app/pages/profile_page.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:care_connect_app/pages/ai_configuration_page.dart';
 import 'package:care_connect_app/pages/file_management_page.dart';
+import 'package:care_connect_app/pages/epic_resource_detail_page.dart';
+import 'package:care_connect_app/pages/epic_linked_return_page.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/widgets/menu/menu_page.dart';
 import 'package:care_connect_app/widgets/post_call_telemetry_summary_screen.dart';
@@ -192,12 +198,62 @@ Future<void> navigateToDashboard(
   );
 }
 
+/// Patient health screens are for a signed-in user only.
+Future<String?> _requireSignIn(BuildContext _, GoRouterState __) async =>
+    await UserRoleStorageService.instance.isLoggedIn() ? null : '/login';
+
 final GoRouter appRouter = _appRouterRef = GoRouter(
   initialLocation: '/',
   observers: [_telemetryGoRouterObserver],
   routes: [
-    GoRoute(path: '/', builder: (_, __) => const WelcomePage()),
+    GoRoute(
+      path: '/',
+      // The Medicare connect flow may return to the plain base URL
+      // (https://app/?medicare=connected). With HashUrlStrategy the router
+      // can't see that query, so forward it to the connect page once.
+      redirect: (_, __) {
+        if (MedicareConnectPage.returnHandled) return null;
+        MedicareConnectPage.returnHandled = true;
+        final result =
+            MedicareConnectResult.parse(Uri.base.queryParameters['medicare']);
+        if (result == null) return null;
+        // Keep the result before any sign-in check, then go to the page.
+        MedicareConnectPage.pendingResult = result;
+        return '/medicare-connect';
+      },
+      builder: (_, __) => const WelcomePage(),
+    ),
     GoRoute(path: '/voice', builder: (_, __) => const VoiceCommandAI()),
+    GoRoute(
+      path: '/health-data',
+      redirect: _requireSignIn,
+      builder: (_, __) => const HealthDataScreen(),
+    ),
+    GoRoute(
+      path: '/dob-confirm',
+      redirect: _requireSignIn,
+      builder: (_, __) => const DobConfirmationScreen(),
+    ),
+    GoRoute(
+      path: '/medicare-connect',
+      redirect: (context, state) {
+        // Store the ?medicare= result before the sign-in guard can send the
+        // patient to /login, so the outcome isn't lost if the session expired
+        // during the Medicare round trip.
+        final fromRoute =
+            MedicareConnectResult.parse(state.uri.queryParameters['medicare']);
+        if (fromRoute != null) MedicareConnectPage.pendingResult = fromRoute;
+        if (!MedicareConnectPage.returnHandled) {
+          MedicareConnectPage.returnHandled = true;
+          MedicareConnectPage.pendingResult ??=
+              MedicareConnectResult.parse(Uri.base.queryParameters['medicare']);
+        }
+        return _requireSignIn(context, state);
+      },
+      builder: (_, __) => MedicareConnectPage(
+        result: MedicareConnectPage.takePendingResult(),
+      ),
+    ),
     GoRoute(
       path: '/ui-preview',
       builder: (_, __) => const UiPreviewScreen(),
@@ -753,6 +809,24 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         final error = state.uri.queryParameters['error'];
         return OAuthCallbackPage(token: token, user: user, error: error);
       },
+    ),
+    // Epic connect web return target (Epic Phase 0). The backend callback redirects the browser
+    // here (?status=ok|error) when the connect flow was started on web with returnMode=web; mobile
+    // uses the careconnect://epic/linked deep link instead. See EpicOAuthController.callback.
+    GoRoute(
+      path: '/epic-linked',
+      builder: (context, state) => EpicLinkedReturnPage(
+        status: state.uri.queryParameters['status'],
+      ),
+    ),
+    // Epic citation deep-link target: /epic/{resourceType}/{id}?patientId=... (Epic Phase 2).
+    GoRoute(
+      path: '/epic/:type/:id',
+      builder: (context, state) => EpicResourceDetailPage(
+        resourceType: state.pathParameters['type'] ?? '',
+        resourceId: state.pathParameters['id'] ?? '',
+        patientId: state.uri.queryParameters['patientId'],
+      ),
     ),
     GoRoute(path: '/wearables', builder: (_, __) => const WearablesScreen()),
     GoRoute(
