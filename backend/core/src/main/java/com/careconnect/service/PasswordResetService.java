@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -23,6 +24,8 @@ import com.careconnect.repository.PasswordResetTokenRepo;
 
 @Service
 public class PasswordResetService {
+
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static final Duration TTL = Duration.ofHours(3);  // Increased to 3 hours
     private final UserRepository users;
@@ -73,7 +76,7 @@ public class PasswordResetService {
 
         // SIMPLIFIED FLOW: Generate a base64 encoded user ID
         String encodedUserId = Base64.getUrlEncoder().encodeToString(
-                user.getId().toString().getBytes());
+                user.getId().toString().getBytes(StandardCharsets.UTF_8));
 
         // SIMPLIFIED FLOW: Create the reset link using 'token' parameter for client compatibility
         // but the value will actually be the encoded user ID
@@ -85,7 +88,7 @@ public class PasswordResetService {
     public void finalizeReset(String rawToken, String newPassword) {
         try {
             // SIMPLIFIED FLOW: Treat the rawToken as the encoded user ID
-            String userIdStr = new String(Base64.getUrlDecoder().decode(rawToken));
+            String userIdStr = new String(Base64.getUrlDecoder().decode(rawToken), StandardCharsets.UTF_8);
             Long userId = Long.parseLong(userIdStr);
 
             User user = users.findById(userId)
@@ -145,7 +148,7 @@ public class PasswordResetService {
     public boolean isTokenValid(String encodedUserId) {
         // SIMPLIFIED FLOW: Just check if the user exists
         try {
-            String userIdStr = new String(Base64.getUrlDecoder().decode(encodedUserId));
+            String userIdStr = new String(Base64.getUrlDecoder().decode(encodedUserId), StandardCharsets.UTF_8);
             Long userId = Long.parseLong(userIdStr);
             return users.findById(userId).isPresent();
 
@@ -162,7 +165,7 @@ public class PasswordResetService {
     /* ---------- helpers ------------------------------------------------ */
     private String generateSecureRandomString(int len) {
         byte[] bytes = new byte[len];
-        new SecureRandom().nextBytes(bytes);
+        SECURE_RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 

@@ -32,6 +32,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import java.nio.charset.StandardCharsets;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.time.LocalDateTime;
@@ -424,7 +425,7 @@ public class AuthController {
 
         try {
             String base64Credentials = authHeader.substring("Basic ".length());
-            String decoded = new String(Base64.getDecoder().decode(base64Credentials));
+            String decoded = new String(Base64.getDecoder().decode(base64Credentials), StandardCharsets.UTF_8);
             String[] parts = decoded.split(":", 2);
             String clientId = parts[0];
             String clientSecret = parts.length > 1 ? parts[1] : "";

@@ -327,7 +327,6 @@ public class EmailService {
 
             // Print outgoing request details for debugging
             System.out.println("\n==== SENDGRID OUTGOING REQUEST ====");
-            System.out.println("API KEY: " + (sendgridApiKey != null ? sendgridApiKey.substring(0, 8) + "..." : "null"));
             System.out.println("From: " + fromEmail);
             System.out.println("To: " + recipientEmail);
             System.out.println("Subject: " + subject);

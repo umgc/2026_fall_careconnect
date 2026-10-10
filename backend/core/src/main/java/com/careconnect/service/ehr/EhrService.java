@@ -72,7 +72,7 @@ public class EhrService {
     public String coverageToJSON(Coverage coverage) {
         return parser.encodeResourceToString(coverage);
     }
-    public String EOBtoJSON(ExplanationOfBenefit eob) {
+    public String eobToJson(ExplanationOfBenefit eob) {
         return parser.encodeResourceToString(eob);
     }
     public Patient jsonToPatient(String patient){return parser.parseResource(Patient.class, patient);}
@@ -81,7 +81,7 @@ public class EhrService {
 
     public JsonNode patientToNode(Patient patient) throws JsonProcessingException {return objectMapper.readTree(patientToJSON(patient));}
     public JsonNode coverageToNode(Coverage coverage) throws JsonProcessingException {return objectMapper.readTree(coverageToJSON(coverage));}
-    public JsonNode eobToNode(ExplanationOfBenefit eob) throws JsonProcessingException {return objectMapper.readTree(EOBtoJSON(eob));}
+    public JsonNode eobToNode(ExplanationOfBenefit eob) throws JsonProcessingException {return objectMapper.readTree(eobToJson(eob));}
 
     public void updateCoverageRepository(EhrCoverageRecord coverage) {
         // Either update an existing coverage by replacing the id or add this new one to the mix.

@@ -9,6 +9,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.apache.commons.codec.digest.DigestUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 
 import org.slf4j.Logger;
@@ -178,7 +179,7 @@ public class UserPasswordService {
 
         try {
             // Try to decode the token as a base64-encoded user ID
-            String decodedUserId = new String(java.util.Base64.getUrlDecoder().decode(resetToken));
+            String decodedUserId = new String(java.util.Base64.getUrlDecoder().decode(resetToken), StandardCharsets.UTF_8);
             long tokenUserId = Long.parseLong(decodedUserId);
 
             // Verify the encoded user ID matches the requested user

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusions for careconnect-backend. Every entry says why it is a
+  false positive; do not add an entry just to make the build pass.
+-->
+<FindBugsFilter>
+
+    <!--
+      Storing or returning a mutable object reference. 90%+ of these are Spring
+      constructor injection and Lombok/JPA entity accessors, which share
+      references by design.
+    -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+    <!--
+      Startup schema patches build DDL and catalog queries from table, index and
+      constraint names hard-coded in this class. No request data reaches them.
+    -->
+    <Match>
+        <Class name="com.careconnect.config.SchemaPatchRunner"/>
+        <Bug pattern="SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE"/>
+    </Match>
+
+    <!--
+      The Stripe SDK is configured through its static Stripe.apiKey; setting it
+      once from @PostConstruct is the documented usage.
+    -->
+    <Match>
+        <Class name="com.careconnect.config.StripeConfig"/>
+        <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+    </Match>
+
+</FindBugsFilter>

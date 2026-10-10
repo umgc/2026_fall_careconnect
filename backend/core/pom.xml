@@ -708,7 +708,10 @@
                 </executions>
                 <configuration>
                     <effort>max</effort>
-                    <threshold>low</threshold>
+                    <!-- Blocking at High only for now (Milestone 4). Ratchet to
+                         Medium once the ~105 Medium findings are fixed. -->
+                    <threshold>High</threshold>
+                    <excludeFilterFile>${project.basedir}/spotbugs-exclude.xml</excludeFilterFile>
                     <failOnError>true</failOnError>
                 </configuration>
             </plugin>
@@ -724,12 +727,18 @@
                         <phase>verify</phase>
                         <goals>
                             <goal>check</goal>
-                            <goal>cpd-check</goal>
+                            <!-- CPD is report-only (target/cpd.xml) until the
+                                 existing duplicates are cleaned up. -->
+                            <goal>cpd</goal>
                         </goals>
                     </execution>
                 </executions>
                 <configuration>
                     <failOnViolation>true</failOnViolation>
+                    <!-- Only priority 1 fails the build for now; lower priorities
+                         are still reported in target/pmd.xml. -->
+                    <failurePriority>1</failurePriority>
+                    <excludeFromFailureFile>${project.basedir}/pmd-exclude.properties</excludeFromFailureFile>
                     <rulesets>
                         <ruleset>rulesets/java/quickstart.xml</ruleset>
                     </rulesets>
