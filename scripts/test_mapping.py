@@ -3,7 +3,8 @@
 scripts/test_mapping.py
 -----------------------
 Maps files changed on a PR to their unit tests by naming convention, and
-requires every changed, non-exempt source file to have one:
+requires every changed, non-exempt source file that gains new lines to have
+one (a file whose diff only deletes lines needs no test):
 
     frontend/lib/foo/bar.dart
         -> frontend/test/foo/bar_test.dart
@@ -25,7 +26,7 @@ Outputs:
     --backend-out   one test class per line (com.careconnect.FooTest)
 
 Exit codes:
-    0  Every changed source file has a test (or is exempt)
+    0  Every changed source file has a test (or is exempt, or only lost lines)
     1  One or more changed source files have no same-name test
 """
 
@@ -61,6 +62,43 @@ def get_changed_files(diff_base: str, repo_root: str) -> list[str]:
         print(f"ERROR: git diff failed: {result.stderr}", file=sys.stderr)
         sys.exit(1)
     return [f.strip() for f in result.stdout.splitlines() if f.strip()]
+
+
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def get_added_lines(diff_base: str, repo_root: str) -> dict[str, set[int]]:
+    """
+    Return {path: line numbers added or modified since diff_base} for files
+    that still exist. A file whose diff only deletes lines maps to an empty set.
+    """
+    result = subprocess.run(
+        ["git", "diff", "-U0", "--no-color", "--diff-filter=d", diff_base],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=repo_root,
+    )
+    if result.returncode != 0:
+        print(f"ERROR: git diff failed: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    added: dict[str, set[int]] = {}
+    current = None
+    for line in result.stdout.splitlines():
+        if line.startswith("+++ "):
+            target = line[4:]
+            current = target[2:] if target.startswith("b/") else None
+            if current is not None:
+                added.setdefault(current, set())
+        elif current is not None and line.startswith("@@"):
+            m = _HUNK.match(line)
+            if m:
+                start = int(m.group(1))
+                count = int(m.group(2)) if m.group(2) is not None else 1
+                added[current].update(range(start, start + count))
+    return added
 
 
 def load_exemptions(repo_root: str) -> list[str]:
@@ -145,10 +183,18 @@ def expected_test(path: str) -> str | None:
 # Test selection
 # ---------------------------------------------------------------------------
 
-def select_tests(changed: list[str], patterns: list[str], repo_root: str):
+def select_tests(
+    changed: list[str],
+    patterns: list[str],
+    repo_root: str,
+    added_lines: dict[str, set[int]] | None = None,
+):
     """
     Returns (frontend_tests, backend_tests, missing) where missing is a list
     of (source, expected_test) for changed sources with no test.
+
+    With added_lines, a source whose diff only deletes lines is not reported
+    as missing: there is no new code for a test to cover.
     """
     root = Path(repo_root)
     tests: set[str] = set()
@@ -169,7 +215,7 @@ def select_tests(changed: list[str], patterns: list[str], repo_root: str):
         candidate = expected_test(f)
         if (root / candidate).is_file():
             tests.add(candidate)
-        else:
+        elif added_lines is None or added_lines.get(f):
             missing.append((f, candidate))
 
     frontend = sorted(
@@ -201,7 +247,8 @@ def main():
 
     changed = get_changed_files(args.diff_base, args.repo_root)
     patterns = load_exemptions(args.repo_root)
-    frontend, backend, missing = select_tests(changed, patterns, args.repo_root)
+    added = get_added_lines(args.diff_base, args.repo_root)
+    frontend, backend, missing = select_tests(changed, patterns, args.repo_root, added)
 
     Path(args.frontend_out).write_text("".join(f"{t}\n" for t in frontend))
     Path(args.backend_out).write_text("".join(f"{t}\n" for t in backend))

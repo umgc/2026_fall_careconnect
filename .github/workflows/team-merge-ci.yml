@@ -21,8 +21,10 @@
 #   1. Checkout, branch info, JAVA_HOME
 #   2. Build  (Flutter + Maven)
 #   3. Unit tests for changed files only (BLOCKING) — a changed source
-#      file with no same-name test fails (scripts/test-exemptions.txt)
-#   4. Coverage gate — 80% on changed files (BLOCKING), except a verified
+#      file that gains lines but has no same-name test fails
+#      (scripts/test-exemptions.txt); deletion-only edits need no test
+#   4. Diff coverage gate — 80% of the changed executable lines in each
+#      changed source file (BLOCKING), except a verified
 #      develop-to-team synchronization whose imported develop history is
 #      governed by its own upstream branch policy
 #   5. Test result artifact upload
@@ -255,14 +257,16 @@ jobs:
           mvn -B test jacoco:report -Dtest="${TEST_ARG}" -Dsurefire.failIfNoSpecifiedTests=false
 
       # ----------------------------------------------------------------
-      # Stage 4: Coverage gate — 80% on changed files (BLOCKING)
+      # Stage 4: Diff coverage gate — 80% of changed lines (BLOCKING)
       #
-      # A changed source file missing from the coverage report (no tests
-      # ran for it) counts as 0%; a missing report is not a pass. A verified
+      # Only the lines a PR adds or modifies are scored, so a small fix to a
+      # large, poorly covered file is judged on the fix. A changed source
+      # file missing from the coverage report (no test ran it) fails; a
+      # missing report is not a pass. A verified
       # upstream sync above still builds and runs every mapped unit test, but
       # skips this per-file threshold for already-integrated develop history.
       # ----------------------------------------------------------------
-      - name: Coverage gate (changed files, 80% threshold)
+      - name: Diff coverage gate (changed lines, 80% threshold)
         if: steps.mode.outputs.run_suite == 'true' && steps.upstream_sync.outputs.skip_changed_file_coverage != 'true'
         run: |
           python scripts/coverage_gate.py \

@@ -2,7 +2,8 @@
 """
 scripts/coverage_gate.py
 ------------------------
-Checks test coverage for changed files on a PR against a minimum threshold.
+Diff coverage gate: of the executable lines a PR adds or modifies in source
+files, at least --threshold must be covered by tests.
 
 Usage:
     python scripts/coverage_gate.py \
@@ -12,13 +13,18 @@ Usage:
         --lcov-info frontend/coverage/lcov.info \
         --repo-root .
 
+Only changed lines are scored, so a small edit to a large, poorly covered
+file is judged on the edit, and a file whose diff only deletes lines is not
+scored at all. Lines the coverage tool does not instrument (comments, blank
+lines, declarations) are ignored.
+
 Files listed in scripts/test-exemptions.txt, and files with no executable
-code, are skipped. A changed source file with no coverage report at all
-(no tests ran) counts as 0%.
+code, are skipped. A changed source file missing from its coverage report
+(no test ran it) fails, unless its diff only deletes lines.
 
 Exit codes:
-    0  All changed files meet the coverage threshold (or no changed files found)
-    1  One or more changed files are below the threshold
+    0  Every changed source file meets the threshold on its changed lines
+    1  One or more changed source files are below the threshold
 """
 
 import argparse
@@ -26,172 +32,106 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from test_mapping import get_changed_files, load_exemptions, needs_test
+from test_mapping import get_added_lines, get_changed_files, load_exemptions, needs_test
 
 
 THRESHOLD_DEFAULT = 0.80
 
+# {repo-relative source path -> {line number -> covered?}} for instrumented lines
+LineCoverage = dict[str, dict[int, bool]]
+
 
 # ---------------------------------------------------------------------------
-# Java / JaCoCo
+# Report parsing
 # ---------------------------------------------------------------------------
 
-def parse_jacoco(jacoco_xml: str) -> dict[str, float]:
+def parse_jacoco(jacoco_xml: str) -> LineCoverage:
     """
-    Parse JaCoCo XML and return a dict of:
-        { "com/example/Foo" -> line_coverage_ratio }
-    where line_coverage_ratio is between 0.0 and 1.0.
-    Returns empty dict if file doesn't exist.
+    Per-line coverage from JaCoCo XML, keyed by repo path
+    (backend/core/src/main/java/com/example/Foo.java). Inner classes share
+    their outer class's source file, so they are included automatically.
+    Returns an empty dict if the report doesn't exist.
     """
     path = Path(jacoco_xml)
     if not path.exists():
         return {}
 
-    coverage = {}
-    tree = ET.parse(path)
-    root = tree.getroot()
-
+    coverage: LineCoverage = {}
+    root = ET.parse(path).getroot()
     for package in root.findall("package"):
-        pkg_name = package.attrib.get("name", "")
-        for cls in package.findall("class"):
-            cls_name = cls.attrib.get("name", "")
-            # cls_name is like "com/example/Foo" (may include inner classes with $)
-            # Skip inner classes — they are covered by their outer class test
-            if "$" in cls_name:
-                continue
-
-            missed = 0
-            covered = 0
-            for counter in cls.findall("counter"):
-                if counter.attrib.get("type") == "LINE":
-                    missed = int(counter.attrib.get("missed", 0))
-                    covered = int(counter.attrib.get("covered", 0))
-                    break
-
-            total = missed + covered
-            ratio = (covered / total) if total > 0 else None
-            coverage[cls_name] = ratio
-
+        pkg = package.attrib.get("name", "")
+        for source in package.findall("sourcefile"):
+            key = f"backend/core/src/main/java/{pkg}/{source.attrib['name']}"
+            lines = coverage.setdefault(key, {})
+            for line in source.findall("line"):
+                nr = int(line.attrib["nr"])
+                lines[nr] = int(line.attrib.get("ci", 0)) > 0
     return coverage
 
 
-def check_java_coverage(
-    changed_files: list[str],
-    jacoco_coverage: dict[str, float],
-    threshold: float,
-    repo_root: str,
-    exemptions: list[str],
-) -> list[tuple[str, float | None]]:
+def parse_lcov(lcov_info: str) -> LineCoverage:
     """
-    For each changed Java source file, look up its coverage in jacoco_coverage.
-    Returns list of (file, coverage) tuples for files that fail the threshold.
-    """
-    failures = []
-
-    for f in changed_files:
-        # Only check backend source files that need their own test
-        if not f.endswith(".java") or not needs_test(f, exemptions, repo_root):
-            continue
-
-        # Convert file path to JaCoCo class key
-        # e.g. backend/core/src/main/java/com/careconnect/service/FooService.java
-        #   -> com/careconnect/service/FooService
-        try:
-            after_java = f.split("src/main/java/")[1]
-            class_key = after_java.replace(".java", "")
-        except IndexError:
-            continue
-
-        if class_key not in jacoco_coverage:
-            # Class not in report — likely not executed by any test
-            # Treat as 0% coverage (no tests ran for it)
-            failures.append((f, 0.0))
-            continue
-
-        ratio = jacoco_coverage[class_key]
-        if ratio is None:
-            # No executable lines (e.g. interface) — skip
-            continue
-
-        if ratio < threshold:
-            failures.append((f, ratio))
-
-    return failures
-
-
-# ---------------------------------------------------------------------------
-# Dart / Flutter (lcov)
-# ---------------------------------------------------------------------------
-
-def parse_lcov(lcov_info: str) -> dict[str, float]:
-    """
-    Parse lcov.info and return a dict of:
-        { "lib/features/foo/bar.dart" -> line_coverage_ratio }
-    Returns empty dict if file doesn't exist.
+    Per-line coverage from lcov.info (DA:<line>,<hits>), keyed by repo path
+    (frontend/lib/foo/bar.dart). Returns an empty dict if the file doesn't exist.
     """
     path = Path(lcov_info)
     if not path.exists():
         return {}
 
-    coverage = {}
-    current_file = None
-    lines_found = 0
-    lines_hit = 0
-
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
+    coverage: LineCoverage = {}
+    current = None
+    with open(path, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
             if line.startswith("SF:"):
-                current_file = line[3:]
-                lines_found = 0
-                lines_hit = 0
-            elif line.startswith("LF:"):
-                lines_found = int(line[3:])
-            elif line.startswith("LH:"):
-                lines_hit = int(line[3:])
-            elif line == "end_of_record" and current_file:
-                ratio = (lines_hit / lines_found) if lines_found > 0 else None
-                # Normalize path: Windows separators, leading "./"
-                key = current_file.replace("\\", "/").removeprefix("./")
-                coverage[key] = ratio
-                current_file = None
-
+                # lcov paths are relative to frontend/; normalize separators and "./"
+                rel = line[3:].replace("\\", "/").removeprefix("./")
+                current = coverage.setdefault(f"frontend/{rel}", {})
+            elif line.startswith("DA:") and current is not None:
+                nr, hits = line[3:].split(",")[:2]
+                current[int(nr)] = int(hits) > 0
+            elif line == "end_of_record":
+                current = None
     return coverage
 
 
-def check_flutter_coverage(
+# ---------------------------------------------------------------------------
+# Gate
+# ---------------------------------------------------------------------------
+
+def check_diff_coverage(
     changed_files: list[str],
-    lcov_coverage: dict[str, float],
+    added_lines: dict[str, set[int]],
+    coverage: LineCoverage,
     threshold: float,
     repo_root: str,
     exemptions: list[str],
-) -> list[tuple[str, float | None]]:
+) -> list[tuple[str, float, int, int]]:
     """
-    For each changed Dart lib file, look up its coverage in lcov_coverage.
-    Returns list of (file, coverage) tuples for files that fail the threshold.
+    Returns (file, ratio, covered, executable) for each changed source file
+    whose changed executable lines are below the threshold.
     """
     failures = []
-
     for f in changed_files:
-        if not f.endswith(".dart") or not needs_test(f, exemptions, repo_root):
+        if not needs_test(f, exemptions, repo_root):
+            continue
+        changed = added_lines.get(f, set())
+        if not changed:
+            continue  # deletion-only diff: no new code to cover
+
+        if f not in coverage:
+            # No test executed this file at all.
+            failures.append((f, 0.0, 0, len(changed)))
             continue
 
-        # lcov paths are relative to frontend/ directory
-        # e.g. "frontend/lib/features/foo/bar.dart" -> "lib/features/foo/bar.dart"
-        lcov_key = f.removeprefix("frontend/")
-
-        if lcov_key not in lcov_coverage:
-            # File not in coverage report — no tests ran for it
-            failures.append((f, 0.0))
-            continue
-
-        ratio = lcov_coverage[lcov_key]
-        if ratio is None:
-            continue  # No executable lines
-
+        file_lines = coverage[f]
+        executable = [n for n in changed if n in file_lines]
+        if not executable:
+            continue  # only comments, blank lines or declarations changed
+        covered = sum(1 for n in executable if file_lines[n])
+        ratio = covered / len(executable)
         if ratio < threshold:
-            failures.append((f, ratio))
-
+            failures.append((f, ratio, covered, len(executable)))
     return failures
 
 
@@ -200,17 +140,17 @@ def check_flutter_coverage(
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Coverage gate for changed files")
+    parser = argparse.ArgumentParser(description="Diff coverage gate for changed lines")
     parser.add_argument("--diff-base", required=True, help="Git SHA to diff against")
     parser.add_argument("--threshold", type=float, default=THRESHOLD_DEFAULT,
-                        help="Minimum coverage ratio (default: 0.80)")
+                        help="Minimum coverage ratio of changed lines (default: 0.80)")
     parser.add_argument("--jacoco-xml", default="backend/core/target/site/jacoco/jacoco.xml")
     parser.add_argument("--lcov-info", default="frontend/coverage/lcov.info")
     parser.add_argument("--repo-root", default=".")
     args = parser.parse_args()
 
     threshold = args.threshold
-    print(f"\nCoverage gate — threshold: {threshold:.0%}")
+    print(f"\nDiff coverage gate — threshold: {threshold:.0%} of changed executable lines")
     print(f"Diff base: {args.diff_base}\n")
 
     changed = get_changed_files(args.diff_base, args.repo_root)
@@ -223,43 +163,34 @@ def main():
         print(f"  {f}")
     print()
 
-    all_failures = []
-
     exemptions = load_exemptions(args.repo_root)
+    added = get_added_lines(args.diff_base, args.repo_root)
 
-    # A missing report is not a pass: any changed source file absent from
-    # the (empty) report is scored 0% below.
-
-    # --- Java ---
+    # A missing report is not a pass: changed sources absent from it fail below.
     jacoco = parse_jacoco(args.jacoco_xml)
     if not jacoco:
-        print("No JaCoCo report found — changed backend sources count as 0%.")
-    all_failures.extend(
-        check_java_coverage(changed, jacoco, threshold, args.repo_root, exemptions)
-    )
-
-    # --- Flutter ---
+        print("No JaCoCo report found — changed backend lines count as uncovered.")
     lcov = parse_lcov(args.lcov_info)
     if not lcov:
-        print("No lcov report found — changed frontend sources count as 0%.")
-    all_failures.extend(
-        check_flutter_coverage(changed, lcov, threshold, args.repo_root, exemptions)
+        print("No lcov report found — changed frontend lines count as uncovered.")
+
+    failures = check_diff_coverage(
+        changed, added, {**jacoco, **lcov}, threshold, args.repo_root, exemptions
     )
 
-    # --- Report ---
-    if not all_failures:
-        print(f"✅ All changed files meet the {threshold:.0%} coverage threshold.")
+    if not failures:
+        print(f"✅ Changed lines in every changed source file meet the {threshold:.0%} threshold.")
         sys.exit(0)
 
-    print(f"❌ {len(all_failures)} file(s) below the {threshold:.0%} coverage threshold:\n")
-    for file_path, ratio in sorted(all_failures):
-        if ratio == 0.0:
-            coverage_str = "0% (no tests ran for this file)"
+    print(f"❌ {len(failures)} file(s) below {threshold:.0%} coverage on their changed lines:\n")
+    for file_path, ratio, covered, executable in sorted(failures):
+        if covered == 0 and ratio == 0.0 and file_path not in {**jacoco, **lcov}:
+            detail = "no test ran this file"
         else:
-            coverage_str = f"{ratio:.1%}"
-        print(f"  {file_path}: {coverage_str}")
+            detail = f"{covered}/{executable} changed lines covered"
+        print(f"  {file_path}: {ratio:.1%} ({detail})")
 
-    print(f"\nAdd or update tests for the files above to reach {threshold:.0%} line coverage.")
+    print(f"\nAdd or update tests that exercise the changed lines to reach {threshold:.0%}.")
     sys.exit(1)
 
 

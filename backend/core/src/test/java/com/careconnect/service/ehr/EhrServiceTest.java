@@ -11,7 +11,9 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.ehr.EhrCoverageRecordRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
 import com.careconnect.repository.ehr.EhrVisitRecordRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.hl7.fhir.r4.model.Coverage;
+import org.hl7.fhir.r4.model.ExplanationOfBenefit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -206,6 +208,19 @@ class EhrServiceTest {
 
         assertThat(back.getIdElement().getIdPart()).isEqualTo("part-a");
         assertThat(back.getStatus()).isEqualTo(Coverage.CoverageStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("an ExplanationOfBenefit serializes to JSON and to a Jackson tree")
+    void eobToJsonAndNode() throws Exception {
+        final ExplanationOfBenefit eob = new ExplanationOfBenefit();
+        eob.setId("claim-1");
+        eob.setStatus(ExplanationOfBenefit.ExplanationOfBenefitStatus.ACTIVE);
+
+        assertThat(service.jsonToEOB(service.eobToJson(eob)).getIdElement().getIdPart()).isEqualTo("claim-1");
+        final JsonNode node = service.eobToNode(eob);
+        assertThat(node.get("resourceType").asText()).isEqualTo("ExplanationOfBenefit");
+        assertThat(node.get("status").asText()).isEqualTo("active");
     }
 
     @Test
