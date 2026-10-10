@@ -207,8 +207,8 @@ class MedicareReadIntegrationTest {
         signIn(patient1);
         blueButtonServesFixtures();
 
-        final ResponseEntity<Object> first = controller.fetchCoverage("medicare");
-        final ResponseEntity<Object> second = controller.fetchCoverage("medicare");
+        final ResponseEntity<Object> first = controller.fetchCoverage("medicare", null);
+        final ResponseEntity<Object> second = controller.fetchCoverage("medicare", null);
 
         assertThat(first.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(second.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -241,9 +241,9 @@ class MedicareReadIntegrationTest {
         signIn(patient1);
         blueButtonServesFixtures();
 
-        final JsonNode patient = body(controller.fetchIdentity("medicare"));
-        final JsonNode coverage = body(controller.fetchCoverage("medicare"));
-        final JsonNode visitsBody = body(controller.fetchVisits("medicare"));
+        final JsonNode patient = body(controller.fetchIdentity("medicare", null));
+        final JsonNode coverage = body(controller.fetchCoverage("medicare", null));
+        final JsonNode visitsBody = body(controller.fetchVisits("medicare", null));
 
         assertThat(patient.get("total").asInt()).isEqualTo(1);
         assertThat(patient.at("/resources/0/resourceType").asText()).isEqualTo("Patient");
@@ -266,15 +266,15 @@ class MedicareReadIntegrationTest {
     @DisplayName("TC-MCR-CACHE-028: no link, a pending link or another source gives 404, and Blue Button is not asked")
     void unlinkedPendingOrUnknownSourceIs404() {
         signIn(patient1);
-        assertThat(controller.fetchCoverage("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
         link(patient1, null); // started, never completed: no token
-        assertThat(controller.fetchVisits("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchIdentity("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("athenahealth").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchVisits("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchIdentity("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("athenahealth", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 
         SecurityContextHolder.clearContext();
-        assertThat(controller.fetchCoverage("medicare").getStatusCode()).as("nobody signed in").isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("medicare", null).getStatusCode()).as("nobody signed in").isEqualTo(HttpStatus.NOT_FOUND);
         verify(medicare, never()).requestMedicareCoverageInfo(anyString());
         verifyNoInteractions(connections);
     }
@@ -285,14 +285,14 @@ class MedicareReadIntegrationTest {
         link(patient1, "enc");
         signIn(patient1);
         blueButtonServesFixtures();
-        controller.fetchCoverage("medicare");
+        controller.fetchCoverage("medicare", null);
 
         signIn(patient2);
-        assertThat(controller.fetchCoverage("medicare").getStatusCode()).as("patient2 unlinked").isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("medicare", null).getStatusCode()).as("patient2 unlinked").isEqualTo(HttpStatus.NOT_FOUND);
 
         link(patient2, "enc2");
         when(medicare.requestMedicareCoverageInfo(anyString())).thenReturn(List.of());
-        final JsonNode own = body(controller.fetchCoverage("medicare"));
+        final JsonNode own = body(controller.fetchCoverage("medicare", null));
         assertThat(own.get("total").asInt()).as("patient2 sees only their own (empty) coverage").isZero();
         assertThat(audits(patient2, "Coverage")).singleElement()
                 .satisfies(e -> assertThat(e.getOutcome()).isEqualTo(EhrRetrievalOutcome.EMPTY));
@@ -305,7 +305,7 @@ class MedicareReadIntegrationTest {
         signIn(patient1);
         when(medicare.requestMedicareEOBInfo(anyString())).thenThrow(new InternalErrorException("HTTP 500 synthetic"));
 
-        assertThatThrownBy(() -> controller.fetchVisits("medicare")).isInstanceOf(InternalErrorException.class);
+        assertThatThrownBy(() -> controller.fetchVisits("medicare", null)).isInstanceOf(InternalErrorException.class);
 
         assertThat(rawPayloads.findAll()).isEmpty();
         assertThat(audits(patient1, "ExplanationOfBenefit")).singleElement().satisfies(e -> {
@@ -321,8 +321,8 @@ class MedicareReadIntegrationTest {
         final EhrPatientCrosswalk first = link(patient1, "enc");
         signIn(patient1);
         blueButtonServesFixtures();
-        assertThat(body(controller.fetchCoverage("medicare")).get("total").asInt()).isEqualTo(2);
-        assertThat(body(controller.fetchVisits("medicare")).get("total").asInt()).isEqualTo(2);
+        assertThat(body(controller.fetchCoverage("medicare", null)).get("total").asInt()).isEqualTo(2);
+        assertThat(body(controller.fetchVisits("medicare", null)).get("total").asInt()).isEqualTo(2);
 
         // What MedicareConnectionService.disconnect deletes (FR-MCR-11, Addendum A1-Q1); the audit log stays.
         rawPayloads.deleteAllForPatientAndSource(patient1.getId(), medicareId);
@@ -333,8 +333,8 @@ class MedicareReadIntegrationTest {
         crosswalks.flush();
         link(patient1, "enc-relinked");
 
-        assertThat(body(controller.fetchCoverage("medicare")).get("total").asInt()).isEqualTo(2);
-        assertThat(body(controller.fetchVisits("medicare")).get("total").asInt()).isEqualTo(2);
+        assertThat(body(controller.fetchCoverage("medicare", null)).get("total").asInt()).isEqualTo(2);
+        assertThat(body(controller.fetchVisits("medicare", null)).get("total").asInt()).isEqualTo(2);
         verify(medicare, times(2)).requestMedicareCoverageInfo(anyString());
     }
 

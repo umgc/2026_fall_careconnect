@@ -18,6 +18,9 @@ import java.util.*;
  * The Medicare reads. Each returns FHIR in a {@link MedicareEnvelope}, served from
  * {@link MedicareRecordCache}: Blue Button is asked again only when the cached data is a day old.
  * With {@code careconnect.medicare.mode=mock} they are served from {@link MockMedicareSource} instead.
+ * <p>
+ * With no {@code patientId} a read is the caller's own. With one, a linked caregiver or family member reads
+ * that patient's data; anyone else gets a 403 (FR-MCR-16, FR-MCR-17, NFR-SEC-05).
  */
 @RestController
 @Slf4j
@@ -46,17 +49,21 @@ public class EhrController{
     private final MedicareResponseMapper mapper = new MedicareResponseMapper();
 
     @GetMapping("/v1/api/{source}/patient")
-    public ResponseEntity<Object> fetchIdentity(@PathVariable String source) {
+    public ResponseEntity<Object> fetchIdentity(@PathVariable String source,
+            @RequestParam(required = false) Long patientId) {
 
         // To any other teams, just put your Ehr code in an if block like this.
         if(source.equalsIgnoreCase("medicare")){
+            if (patientId != null && !ehrService.canReadMedicareFor(patientId)) {
+                return forbidden();
+            }
             MedicareSource mock = mockSource();
             if (mock != null) {
                 return ResponseEntity.ok(MedicareEnvelope.ofSingle(
                         properties.getMode(), properties.isSynthetic(), mapper.toPatientView(mock.fetchPatient()), null));
             }
 
-            Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareService.getId());
+            Optional<EhrPatientCrosswalk> crosswalkOpt = crosswalkFor(patientId);
             if(crosswalkOpt.isEmpty()){
                 // This person has somehow hit this page without actually being logged in and connected.
                 // I probably should commend their cunning, but instead I'll just 404 them.
@@ -76,17 +83,21 @@ public class EhrController{
     }
 
     @GetMapping("/v1/api/{source}/coverage")
-    public ResponseEntity<Object> fetchCoverage(@PathVariable String source) {
+    public ResponseEntity<Object> fetchCoverage(@PathVariable String source,
+            @RequestParam(required = false) Long patientId) {
 
         // To any other teams, just put your Ehr code in an if block like this.
         if(source.equalsIgnoreCase("medicare")) {
+            if (patientId != null && !ehrService.canReadMedicareFor(patientId)) {
+                return forbidden();
+            }
             MedicareSource mock = mockSource();
             if (mock != null) {
                 return ResponseEntity.ok(MedicareEnvelope.of(
                         properties.getMode(), properties.isSynthetic(), mapper.toCoverageView(allowed(mock.fetchCoverage())), null));
             }
 
-            Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareService.getId());
+            Optional<EhrPatientCrosswalk> crosswalkOpt = crosswalkFor(patientId);
             if(crosswalkOpt.isEmpty()){
                 // This person has somehow hit this page without actually being logged in and connected.
                 // I probably should commend their cunning, but instead I'll just 404 them.
@@ -101,16 +112,20 @@ public class EhrController{
     }
 
     @GetMapping("/v1/api/{source}/visits")
-    public ResponseEntity<Object> fetchVisits(@PathVariable String source) {
+    public ResponseEntity<Object> fetchVisits(@PathVariable String source,
+            @RequestParam(required = false) Long patientId) {
         // To any other teams, just put your Ehr code in an if block like this.
         if(source.equalsIgnoreCase("medicare")){
+            if (patientId != null && !ehrService.canReadMedicareFor(patientId)) {
+                return forbidden();
+            }
             MedicareSource mock = mockSource();
             if (mock != null) {
                 return ResponseEntity.ok(MedicareEnvelope.of(
                         properties.getMode(), properties.isSynthetic(), mapper.toVisitView(allowed(mock.fetchVisits())), null));
             }
 
-            Optional<EhrPatientCrosswalk> crosswalkOpt = ehrService.getCrosswalk(medicareService.getId());
+            Optional<EhrPatientCrosswalk> crosswalkOpt = crosswalkFor(patientId);
             if(crosswalkOpt.isEmpty()){
                 // This person has somehow hit this page without actually being logged in and connected.
                 // I probably should commend their cunning, but instead I'll just 404 them.
@@ -122,6 +137,22 @@ public class EhrController{
                     properties.getMode(), properties.isSynthetic(), mapper.toVisitView(allowed(read.resources())), read.fetchedAt()));
         }
         return ResponseEntity.notFound().build();
+    }
+
+    /**
+     * The crosswalk to read: the caller's own, or, with {@code patientId}, that patient's. A caller asking
+     * for a patient has already passed {@link EhrService#canReadMedicareFor} (FR-MCR-16, FR-MCR-17).
+     */
+    private Optional<EhrPatientCrosswalk> crosswalkFor(final Long patientId) {
+        return patientId == null
+                ? ehrService.getCrosswalk(medicareService.getId())
+                : ehrService.getCrosswalkForPatient(patientId, medicareService.getId());
+    }
+
+    /** A caller who is neither the patient nor linked to them as a caregiver or family member (NFR-SEC-05). */
+    private ResponseEntity<Object> forbidden() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("source", MedicareProperties.SOURCE_MEDICARE, "error", "medicare_forbidden"));
     }
 
     /**
