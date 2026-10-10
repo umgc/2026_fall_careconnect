@@ -10,8 +10,6 @@ import com.careconnect.service.UspsPatientResolver;
 import com.careconnect.util.SecurityUtil;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -40,12 +38,10 @@ public class USPSController {
 
     @GetMapping("/mail")
     public ResponseEntity<USPSDigest> getDigest(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
-        AuthRequestSupport.requireAuthenticated(jwt);
-        User currentUser = securityUtil.resolveCurrentUser();
+        User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 

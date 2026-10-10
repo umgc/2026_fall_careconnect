@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Table(
@@ -41,7 +43,12 @@ public class SummaryMetric extends Auditable {
 
     // createdAt and updatedAt are inherited from Auditable
 
+    /**
+     * When this summary was generated, i.e. its {@code createdAt}. Auditable stamps
+     * {@code createdAt} with {@code LocalDateTime.now()}, so convert in the system zone.
+     */
     public Instant getGeneratedAt() {
-        return getGeneratedAt();
+        final LocalDateTime createdAt = getCreatedAt();
+        return createdAt == null ? null : createdAt.atZone(ZoneId.systemDefault()).toInstant();
     }
 }

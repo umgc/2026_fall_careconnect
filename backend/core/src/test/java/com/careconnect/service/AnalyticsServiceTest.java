@@ -2,12 +2,14 @@ package com.careconnect.service;
 
 import com.careconnect.dto.DashboardDTO;
 import com.careconnect.dto.ExportLinkDTO;
+import com.careconnect.dto.VitalAlertEventDTO;
 import com.careconnect.dto.VitalSampleDTO;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.MoodPainLog;
 import com.careconnect.model.Patient;
 import com.careconnect.model.SummaryMetric;
 import com.careconnect.model.User;
+import com.careconnect.model.VitalAlertEvent;
 import com.careconnect.model.WearableMetric;
 import com.careconnect.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -47,6 +50,8 @@ class AnalyticsServiceTest {
     private UserRepository userRepo;
     @Mock
     private ExportSigner exportSigner;
+    @Mock
+    private VitalAlertEventRepository vitalAlertEventRepository;
     @InjectMocks
     private AnalyticsService analyticsService;
     private Patient testPatient;
@@ -114,6 +119,24 @@ class AnalyticsServiceTest {
             assertEquals(4, result.painEntries());
             assertNotNull(result.periodStart());
             assertNotNull(result.periodEnd());
+        }
+
+        @Test
+        @DisplayName("getDashboard_withRealRecentSummaryMetric_usesCreatedAtAsGeneratedAt")
+        void getDashboard_withRealRecentSummaryMetric_usesCreatedAtAsGeneratedAt() throws Exception {
+            // A real entity, not a mock: getGeneratedAt() used to call itself and overflow the stack.
+            final SummaryMetric agg = SummaryMetric.builder().adherenceRate(85.0).avgHeartRate(72.5).build();
+            agg.setCreatedAt(java.time.LocalDateTime.now());
+
+            when(summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(
+                    eq(PATIENT_USER_ID), any(Instant.class), any(Instant.class))).thenReturn(agg);
+            when(patientRepo.findById(10L)).thenReturn(Optional.of(testPatient));
+
+            final DashboardDTO result = analyticsService.getDashboard(10L, Period.ofDays(7));
+
+            assertEquals(85.0, result.adherenceRate());
+            assertEquals(73.0, result.avgHeartRate());
+            verifyNoInteractions(symptomRepo);
         }
 
         @Test
@@ -618,6 +641,56 @@ class AnalyticsServiceTest {
             assertNull(result.get(0).heartRate());
             assertNull(result.get(0).systolic());
             assertNull(result.get(0).diastolic());
+        }
+    }
+
+    // ==================== getRecentVitalAlertEvents Tests ====================
+
+    @Nested
+    @DisplayName("getRecentVitalAlertEvents tests")
+    class GetRecentVitalAlertEventsTests {
+
+        @Test
+        @DisplayName("maps every event field to the DTO")
+        void mapsEventsToDto() throws Exception {
+            final Instant occurredAt = Instant.parse("2026-10-10T12:00:00Z");
+            final VitalAlertEvent event = VitalAlertEvent.builder()
+                    .id(5L).patientId(10L).patientUserId(PATIENT_USER_ID)
+                    .metricType("HEART_RATE").measuredValue("130").alertLevel("CRITICAL")
+                    .status("SENT").recipientCount(2).successCount(1).failureCount(1)
+                    .failureReason("sms bounced").occurredAt(occurredAt)
+                    .build();
+            when(patientRepo.findById(10L)).thenReturn(Optional.of(testPatient));
+            when(vitalAlertEventRepository.findByPatientIdOrderByOccurredAtDesc(10L, PageRequest.of(0, 5)))
+                    .thenReturn(List.of(event));
+
+            final List<VitalAlertEventDTO> result = analyticsService.getRecentVitalAlertEvents(10L, 5);
+
+            assertEquals(List.of(new VitalAlertEventDTO(5L, 10L, PATIENT_USER_ID, "HEART_RATE", "130",
+                    "CRITICAL", "SENT", 2, 1, 1, "sms bounced", occurredAt)), result);
+        }
+
+        @Test
+        @DisplayName("clamps limit to the 1..20 range")
+        void clampsLimit() throws Exception {
+            when(patientRepo.findById(10L)).thenReturn(Optional.of(testPatient));
+            when(vitalAlertEventRepository.findByPatientIdOrderByOccurredAtDesc(eq(10L), any()))
+                    .thenReturn(List.of());
+
+            analyticsService.getRecentVitalAlertEvents(10L, 0);
+            analyticsService.getRecentVitalAlertEvents(10L, 50);
+
+            verify(vitalAlertEventRepository).findByPatientIdOrderByOccurredAtDesc(10L, PageRequest.of(0, 1));
+            verify(vitalAlertEventRepository).findByPatientIdOrderByOccurredAtDesc(10L, PageRequest.of(0, 20));
+        }
+
+        @Test
+        @DisplayName("unknown patient throws before querying events")
+        void unknownPatient_throws() {
+            when(patientRepo.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(AppException.class, () -> analyticsService.getRecentVitalAlertEvents(99L, 5));
+            verifyNoInteractions(vitalAlertEventRepository);
         }
     }
 }
