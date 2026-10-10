@@ -76,7 +76,7 @@ class EhrControllerMockModeTest {
     void patientIsServedFromTheFixture() {
         mockMode();
 
-        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare", null));
 
         assertThat(body.source()).isEqualTo("MEDICARE");
         assertThat(body.mode()).isEqualTo("mock");
@@ -92,7 +92,7 @@ class EhrControllerMockModeTest {
     void coverageIsGated() {
         mockMode();
 
-        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare", null));
 
         assertThat(body.total()).isEqualTo(2);
         assertThat(body.resources())
@@ -107,7 +107,7 @@ class EhrControllerMockModeTest {
     void visitsAreGated() {
         mockMode();
 
-        final MedicareEnvelope body = envelope(controller.fetchVisits("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchVisits("medicare", null));
 
         assertThat(body.total()).isEqualTo(2);
         assertThat(body.resources())
@@ -121,9 +121,9 @@ class EhrControllerMockModeTest {
     void otherSourceIs404InMockMode() {
         ReflectionTestUtils.setField(properties, "mode", MedicareProperties.MODE_MOCK);
 
-        assertThat(controller.fetchIdentity("epic").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("epic").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchVisits("epic").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchIdentity("epic", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("epic", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchVisits("epic", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         verifyNoInteractions(sources, medicareService, ehrService, cache);
     }
 
@@ -134,7 +134,7 @@ class EhrControllerMockModeTest {
         when(medicareService.getId()).thenReturn(7L);
         when(ehrService.getCrosswalk(7L)).thenReturn(Optional.empty());
 
-        assertThat(controller.fetchCoverage("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         verify(sources, never()).getIfAvailable();
         verifyNoInteractions(cache);
     }

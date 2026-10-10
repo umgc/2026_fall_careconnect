@@ -24,9 +24,14 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -34,7 +39,8 @@ import static org.mockito.Mockito.when;
  * The Medicare reads in live mode, the default: a linked patient gets FHIR from the cache in an
  * envelope, with the status gate applied, and anything else is a 404. Mock mode is
  * {@code EhrControllerMockModeTest}; the real cache and JPA layer underneath are
- * {@code MedicareReadIntegrationTest}.
+ * {@code MedicareReadIntegrationTest}. A {@code patientId} read is a caregiver or family member reading their
+ * patient's data (FR-MCR-16, FR-MCR-17).
  */
 @ExtendWith(MockitoExtension.class)
 class EhrControllerTest {
@@ -100,7 +106,7 @@ class EhrControllerTest {
         final JsonNode patient = resource("{\"resourceType\":\"Patient\",\"id\":\"bene-1\"}");
         when(cache.patient(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(patient), FETCHED));
 
-        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare", null));
 
         assertThat(body.mode()).isEqualTo(MedicareProperties.MODE_LIVE);
         assertThat(body.synthetic()).isTrue();
@@ -115,7 +121,7 @@ class EhrControllerTest {
         linked();
         when(cache.patient(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(), FETCHED));
 
-        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare", null));
 
         assertThat(body.total()).isZero();
         assertThat(body.resources()).isEmpty();
@@ -129,7 +135,7 @@ class EhrControllerTest {
         final JsonNode cancelled = resource("{\"resourceType\":\"Coverage\",\"id\":\"part-d\",\"status\":\"cancelled\"}");
         when(cache.coverage(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(active, cancelled), FETCHED));
 
-        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare", null));
 
         assertThat(body.resources()).containsExactly(active);
         assertThat(body.total()).isEqualTo(1);
@@ -144,7 +150,7 @@ class EhrControllerTest {
         final JsonNode voided = resource("{\"resourceType\":\"ExplanationOfBenefit\",\"id\":\"c2\",\"status\":\"entered-in-error\"}");
         when(cache.visits(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(claim, voided), FETCHED));
 
-        assertThat(envelope(controller.fetchVisits("medicare")).resources()).containsExactly(claim);
+        assertThat(envelope(controller.fetchVisits("medicare", null)).resources()).containsExactly(claim);
     }
 
     @Test
@@ -152,18 +158,18 @@ class EhrControllerTest {
     void notLinkedIs404() {
         notLinked();
 
-        assertThat(controller.fetchIdentity("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchVisits("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchIdentity("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchVisits("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         verifyNoInteractions(cache);
     }
 
     @Test
     @DisplayName("a source other than medicare is a 404, without looking anything up")
     void unknownSourceIs404() {
-        assertThat(controller.fetchIdentity("athena").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("epic").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchVisits("cerner").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchIdentity("athena", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("epic", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchVisits("cerner", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         verifyNoInteractions(medicareService, ehrService, cache);
     }
 
@@ -172,8 +178,8 @@ class EhrControllerTest {
     void sourceIsCaseInsensitive() {
         notLinked();
 
-        assertThat(controller.fetchCoverage("MEDICARE").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("Medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("MEDICARE", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("Medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -183,6 +189,89 @@ class EhrControllerTest {
         linked();
         when(cache.coverage(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(), FETCHED));
 
-        assertThat(envelope(controller.fetchCoverage("medicare")).synthetic()).isFalse();
+        assertThat(envelope(controller.fetchCoverage("medicare", null)).synthetic()).isFalse();
+    }
+
+    private static final long PATIENT = 2L;
+    private static final long CAREGIVER = 12L;
+
+    private void caregiverAllowed() {
+        when(ehrService.canReadMedicareFor(PATIENT)).thenReturn(true);
+        when(medicareService.getId()).thenReturn(MEDICARE);
+        when(ehrService.getCrosswalkForPatient(PATIENT, MEDICARE)).thenReturn(Optional.of(crosswalk));
+        when(ehrService.currentUserId()).thenReturn(Optional.of(CAREGIVER));
+    }
+
+    @Test
+    @DisplayName("a linked caregiver reads the patient's coverage, and the cache records the caregiver as the acting user")
+    void linkedCaregiverReadsCoverage() throws Exception {
+        caregiverAllowed();
+        final JsonNode active = resource("{\"resourceType\":\"Coverage\",\"id\":\"part-a\",\"status\":\"active\"}");
+        when(cache.coverage(crosswalk, CAREGIVER)).thenReturn(new CachedRead(List.of(active), FETCHED));
+
+        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare", PATIENT));
+
+        assertThat(body.resources()).containsExactly(active);
+        verify(ehrService, never()).getCrosswalk(anyLong());
+    }
+
+    @Test
+    @DisplayName("a linked caregiver reads the patient's identity and visits through the same patient lookup")
+    void linkedCaregiverReadsIdentityAndVisits() throws Exception {
+        caregiverAllowed();
+        final JsonNode patient = resource("{\"resourceType\":\"Patient\",\"id\":\"bene-1\"}");
+        final JsonNode claim = resource("{\"resourceType\":\"ExplanationOfBenefit\",\"id\":\"c1\",\"status\":\"active\"}");
+        when(cache.patient(crosswalk, CAREGIVER)).thenReturn(new CachedRead(List.of(patient), FETCHED));
+        when(cache.visits(crosswalk, CAREGIVER)).thenReturn(new CachedRead(List.of(claim), FETCHED));
+
+        assertThat(envelope(controller.fetchIdentity("medicare", PATIENT)).resources()).containsExactly(patient);
+        assertThat(envelope(controller.fetchVisits("medicare", PATIENT)).resources()).containsExactly(claim);
+    }
+
+    @Test
+    @DisplayName("a caller without access to the patient gets a 403 on every read, and nothing is looked up or retrieved")
+    void noAccessIs403() {
+        when(ehrService.canReadMedicareFor(PATIENT)).thenReturn(false);
+
+        for (final ResponseEntity<Object> response : List.of(
+                controller.fetchIdentity("medicare", PATIENT),
+                controller.fetchCoverage("medicare", PATIENT),
+                controller.fetchVisits("medicare", PATIENT))) {
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(response.getBody()).isEqualTo(Map.of("source", MedicareProperties.SOURCE_MEDICARE, "error", "medicare_forbidden"));
+        }
+        verify(ehrService, never()).getCrosswalkForPatient(anyLong(), anyLong());
+        verifyNoInteractions(cache, medicareService);
+    }
+
+    @Test
+    @DisplayName("an allowed caregiver whose patient never connected Medicare gets a 404, as the patient would")
+    void allowedButPatientNotConnectedIs404() {
+        when(ehrService.canReadMedicareFor(PATIENT)).thenReturn(true);
+        when(medicareService.getId()).thenReturn(MEDICARE);
+        when(ehrService.getCrosswalkForPatient(PATIENT, MEDICARE)).thenReturn(Optional.empty());
+
+        assertThat(controller.fetchCoverage("medicare", PATIENT).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        verifyNoInteractions(cache);
+    }
+
+    @Test
+    @DisplayName("without a patientId the read is the caller's own and the access check is not consulted")
+    void ownReadSkipsAccessCheck() {
+        notLinked();
+
+        controller.fetchVisits("medicare", null);
+
+        verify(ehrService, never()).canReadMedicareFor(any());
+    }
+
+    @Test
+    @DisplayName("mock mode still refuses a caller without access to the patient, before serving any fixture")
+    void mockModeStillChecksAccess() {
+        ReflectionTestUtils.setField(properties, "mode", MedicareProperties.MODE_MOCK);
+        when(ehrService.canReadMedicareFor(PATIENT)).thenReturn(false);
+
+        assertThat(controller.fetchCoverage("medicare", PATIENT).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        verifyNoInteractions(sources);
     }
 }
