@@ -247,7 +247,7 @@ class ReconciliationVerificationTest {
         var newer = sync(p, "EPIC", T1.plus(2, ChronoUnit.DAYS), DOB, "1950-05-07");
 
         // A different value still prompts. The value the patient declined (1950-05-06) does not:
-        // that was open question Q3 in the verification report, resolved by TC-EHR-REC-032.
+        // that was open question Q3 in the verification report, resolved by TC-EHR-REC-047.
         assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, newer.get(0).decision());
         assertEquals(Optional.of("1950-05-04"), value(p, DOB));
     }

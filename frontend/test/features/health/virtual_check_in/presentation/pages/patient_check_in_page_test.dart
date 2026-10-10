@@ -4,6 +4,7 @@
 // Camera availability is checked lazily when the FAB is pressed (cameraHandler),
 // not in initState. Questionnaire loading uses UserProvider; a logged-out
 // provider avoids real HTTP.
+// Test IDs TC-HDATA-037..038 (the Unified Health Data card group) are permanent. Never renumber, never reuse.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -237,7 +238,7 @@ void main() {
   });
 
   group('PatientVirtualCheckIn – Unified Health Data card (#263)', () {
-    testWidgets('the card is on the page, with its description', (tester) async {
+    testWidgets('TC-HDATA-037: the card is on the page, with its description', (tester) async {
       await _pumpWithRouter(tester);
       final card = find.text('Unified Health Data');
       await tester.scrollUntilVisible(card, 200, scrollable: find.byType(Scrollable).first);
@@ -246,7 +247,7 @@ void main() {
       expect(find.text('View health records from connected sources'), findsOneWidget);
     });
 
-    testWidgets('tapping the card opens Health Data', (tester) async {
+    testWidgets('TC-HDATA-038: tapping the card opens Health Data', (tester) async {
       await _pumpWithRouter(tester);
       final card = find.text('Unified Health Data');
       await tester.scrollUntilVisible(card, 200, scrollable: find.byType(Scrollable).first);

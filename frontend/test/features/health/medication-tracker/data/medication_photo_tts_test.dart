@@ -1,5 +1,6 @@
 // MedicationPhotoTts: reads prefilled medication details aloud before the
 // user confirms them (FEAT-32). Tested with a recording engine, no real speech.
+// Test IDs TC-MED-PHOTO-109..111 are permanent. Never renumber, never reuse.
 
 import 'package:care_connect_app/features/health/medication-tracker/data/medication_photo_tts.dart';
 import 'package:care_connect_app/services/tts_engine.dart';
@@ -43,7 +44,7 @@ void main() {
     tts = MedicationPhotoTts(engine: engine);
   });
 
-  test('the first speak sets the voice up, stops anything playing, then speaks the trimmed text', () async {
+  test('TC-MED-PHOTO-109: the first speak sets the voice up, stops anything playing, then speaks the trimmed text', () async {
     await tts.speak('  Lisinopril 20 mg  ');
 
     expect(engine.calls, [
@@ -57,7 +58,7 @@ void main() {
     ]);
   });
 
-  test('the voice is set up once, not before every utterance', () async {
+  test('TC-MED-PHOTO-110: the voice is set up once, not before every utterance', () async {
     await tts.speak('first');
     engine.calls.clear();
 
@@ -73,7 +74,7 @@ void main() {
     expect(engine.calls, isEmpty);
   });
 
-  test('a platform without awaitSpeakCompletion still speaks', () async {
+  test('TC-MED-PHOTO-111: a platform without awaitSpeakCompletion still speaks', () async {
     engine.failAwaitCompletion = true;
 
     await tts.speak('Take with food');

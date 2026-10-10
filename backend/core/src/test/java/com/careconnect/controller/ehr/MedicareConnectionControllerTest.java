@@ -23,7 +23,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-/** The Medicare connection status the app's connect tile reads, in live and mock mode. */
+/**
+ * The Medicare connection status the app's connect tile reads, in live and mock mode.
+ * <p>
+ * Test IDs TC-MCR-LINK-034..037 are permanent. Never renumber, never reuse.
+ */
 class MedicareConnectionControllerTest {
 
     private static final String EMAIL = "patient@example.test";
@@ -47,7 +51,7 @@ class MedicareConnectionControllerTest {
     }
 
     @Test
-    @DisplayName("live mode: status is the signed-in patient's real link state")
+    @DisplayName("TC-MCR-LINK-034: live mode: status is the signed-in patient's real link state")
     void liveModeReportsTheRealLink() {
         mode(MedicareProperties.MODE_LIVE);
         final User user = User.builder().id(6L).email(EMAIL).build();
@@ -60,7 +64,7 @@ class MedicareConnectionControllerTest {
     }
 
     @Test
-    @DisplayName("live mode: a user with no patient record is not linked")
+    @DisplayName("TC-MCR-LINK-035: live mode: a user with no patient record is not linked")
     void liveModeWithoutPatientIsUnlinked() {
         mode(MedicareProperties.MODE_LIVE);
         when(users.findByEmail(EMAIL)).thenReturn(Optional.empty());
@@ -70,7 +74,7 @@ class MedicareConnectionControllerTest {
     }
 
     @Test
-    @DisplayName("mock mode: every signed-in user is reported linked, matching the fixture reads, without looking up a link")
+    @DisplayName("TC-MCR-LINK-036: mock mode: every signed-in user is reported linked, matching the fixture reads, without looking up a link")
     void mockModeReportsLinked() {
         mode(MedicareProperties.MODE_MOCK);
 
@@ -80,7 +84,7 @@ class MedicareConnectionControllerTest {
     }
 
     @Test
-    @DisplayName("mock mode: another source is still 404")
+    @DisplayName("TC-MCR-LINK-037: mock mode: another source is still 404")
     void mockModeOtherSourceIsNotFound() {
         mode(MedicareProperties.MODE_MOCK);
 

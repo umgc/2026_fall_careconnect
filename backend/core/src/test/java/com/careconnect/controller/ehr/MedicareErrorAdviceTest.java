@@ -31,6 +31,8 @@ import static org.mockito.Mockito.when;
 /**
  * ERR-MCR-05 for the Medicare reads (FR-MCR-09): 409, never 401 (which would sign the app out), and a
  * token Blue Button rejects marks the link Unlinked.
+ * <p>
+ * Test IDs TC-MCR-LINK-038..042 are permanent. Never renumber, never reuse.
  */
 class MedicareErrorAdviceTest {
 
@@ -76,14 +78,14 @@ class MedicareErrorAdviceTest {
     }
 
     @Test
-    @DisplayName("no working link is ERR-MCR-05 as 409, and nothing is changed")
+    @DisplayName("TC-MCR-LINK-038: no working link is ERR-MCR-05 as 409, and nothing is changed")
     void notConnectedIs409() {
         assertErrMcr05(advice.notConnected(new MedicareNotConnectedException()));
         verifyNoInteractions(connections, users);
     }
 
     @Test
-    @DisplayName("a token Blue Button rejects marks the signed-in patient's link Unlinked, then answers ERR-MCR-05")
+    @DisplayName("TC-MCR-LINK-039: a token Blue Button rejects marks the signed-in patient's link Unlinked, then answers ERR-MCR-05")
     void rejectedTokenMarksLinkUnlinked() {
         signIn();
         final User user = User.builder().id(6L).email(EMAIL).build();
@@ -95,7 +97,7 @@ class MedicareErrorAdviceTest {
     }
 
     @Test
-    @DisplayName("a signed-in user with no patient record still gets ERR-MCR-05, and no link is touched")
+    @DisplayName("TC-MCR-LINK-040: a signed-in user with no patient record still gets ERR-MCR-05, and no link is touched")
     void rejectedTokenWithoutPatientTouchesNothing() {
         signIn();
         final User user = User.builder().id(6L).email(EMAIL).build();
@@ -107,14 +109,14 @@ class MedicareErrorAdviceTest {
     }
 
     @Test
-    @DisplayName("with nobody signed in, a rejected token is still ERR-MCR-05 and no lookup is made")
+    @DisplayName("TC-MCR-LINK-041: with nobody signed in, a rejected token is still ERR-MCR-05 and no lookup is made")
     void rejectedTokenWithoutSignIn() {
         assertErrMcr05(advice.tokenRejected(new AuthenticationException("401")));
         verifyNoInteractions(connections, users);
     }
 
     @Test
-    @DisplayName("in a context without the Medicare beans (a @WebMvcTest slice) the advice still answers instead of failing")
+    @DisplayName("TC-MCR-LINK-042: in a context without the Medicare beans (a @WebMvcTest slice) the advice still answers instead of failing")
     void worksWithoutBeans() {
         signIn();
         final MedicareErrorAdvice bare = new MedicareErrorAdvice(

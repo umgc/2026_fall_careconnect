@@ -30,6 +30,8 @@ import static org.mockito.Mockito.when;
  * The JPA audit writer on its own, with the repository mocked. Its queries and constraints against real
  * PostgreSQL are covered by {@code JpaContractPostgresTest}; this covers its own logic: the transaction
  * guard, how outcomes map to stored status and resolver, and resolving a pending row in place.
+ * <p>
+ * Test IDs TC-EHR-CONF-007..015 are permanent. Never renumber, never reuse.
  */
 class JpaIdentityConflictAuditWriterTest {
 
@@ -59,7 +61,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("a decision is one resolved row: ACCEPTED/SYSTEM maps to ACCEPTED/SYSTEM, detected and resolved at the same instant")
+    @DisplayName("TC-EHR-CONF-007: a decision is one resolved row: ACCEPTED/SYSTEM maps to ACCEPTED/SYSTEM, detected and resolved at the same instant")
     void recordDecisionAccepted() {
         writer.recordDecision(2L, 9L, IdentityFieldNames.PHONE, "555-0100", "555-0199", SOURCE_UPDATED,
                 Outcome.ACCEPTED, ResolvedBy.SYSTEM, NOW);
@@ -75,7 +77,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("REJECTED/PATIENT maps to REJECTED/PATIENT")
+    @DisplayName("TC-EHR-CONF-008: REJECTED/PATIENT maps to REJECTED/PATIENT")
     void recordDecisionRejectedByPatient() {
         writer.recordDecision(2L, 9L, DOB, "1950-03-09", "1950-03-10", SOURCE_UPDATED,
                 Outcome.REJECTED, ResolvedBy.PATIENT, NOW);
@@ -86,7 +88,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("every write refuses to run outside a transaction, so an audit row can't outlive a rolled-back decision")
+    @DisplayName("TC-EHR-CONF-009: every write refuses to run outside a transaction, so an audit row can't outlive a rolled-back decision")
     void writesRequireTransaction() {
         TransactionSynchronizationManager.setActualTransactionActive(false);
 
@@ -100,7 +102,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("a pending conflict is stored PENDING with no resolution yet")
+    @DisplayName("TC-EHR-CONF-010: a pending conflict is stored PENDING with no resolution yet")
     void openPendingConflict() {
         writer.openPendingConflict(2L, 9L, DOB, "1950-03-09", "1950-03-10", SOURCE_UPDATED, NOW);
 
@@ -112,7 +114,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("the current pending conflict is read back as a PendingConflict, or empty when there is none")
+    @DisplayName("TC-EHR-CONF-011: the current pending conflict is read back as a PendingConflict, or empty when there is none")
     void currentPendingConflict() {
         final EhrIdentityConflict row = EhrIdentityConflict.builder()
                 .patientId(2L).sourceId(9L).fieldName(DOB)
@@ -128,7 +130,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("a decline counts only when the patient rejected that value from that source")
+    @DisplayName("TC-EHR-CONF-012: a decline counts only when the patient rejected that value from that source")
     void patientHasDeclinedAsksForPatientRejection() {
         when(repository.existsByPatientIdAndSourceIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
                 2L, 9L, DOB, "1950-03-10", EhrConflictStatus.REJECTED, EhrConflictResolver.PATIENT))
@@ -139,7 +141,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("resolving updates the pending row itself, status and both resolution columns together")
+    @DisplayName("TC-EHR-CONF-013: resolving updates the pending row itself, status and both resolution columns together")
     void resolveUpdatesInPlace() {
         final EhrIdentityConflict pending = EhrIdentityConflict.builder()
                 .patientId(2L).sourceId(9L).fieldName(DOB).status(EhrConflictStatus.PENDING)
@@ -156,7 +158,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("resolving when nothing is pending is an error, not a silent no-op")
+    @DisplayName("TC-EHR-CONF-014: resolving when nothing is pending is an error, not a silent no-op")
     void resolveWithoutPendingFails() {
         when(repository.findByPatientIdAndFieldNameAndStatus(2L, DOB, EhrConflictStatus.PENDING))
                 .thenReturn(Optional.empty());
@@ -167,7 +169,7 @@ class JpaIdentityConflictAuditWriterTest {
     }
 
     @Test
-    @DisplayName("a blank field name is refused; a missing repository is refused at construction")
+    @DisplayName("TC-EHR-CONF-015: a blank field name is refused; a missing repository is refused at construction")
     void inputValidation() {
         assertThatThrownBy(() -> writer.currentPendingConflict(2L, " ")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new JpaIdentityConflictAuditWriter(null)).isInstanceOf(NullPointerException.class);
