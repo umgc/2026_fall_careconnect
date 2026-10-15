@@ -1127,6 +1127,34 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         final registry = VoiceIntentRegistry(); //added variable for method
         final intentDef = registry.resolveIntent(match.intent);
 
+      // --- SOS DIRECT HANDLER ---
+        if (match.intent == 'sos') {
+          final confirmed = await _showSosConfirmationDialog(contactName: '[contact name]');
+          unawaited(_stopListeningBackend());
+
+          if (!mounted) return;
+
+          if (confirmed == true) {
+            if (intentDef?.handler != null) {
+              await intentDef!.handler!({});
+            }
+
+            _setStatus(
+              status: _VoiceStatus.success,
+              detail: 'Alert not currently implemented; please call 911 instead.',
+            );
+            _resetAfterDelay();
+          } else {
+            _setStatus(
+              status: _VoiceStatus.idle,
+              detail: 'Emergency alert cancelled.',
+            );
+            _resetAfterDelay();
+          }
+          return;
+        }
+        // --- END SOS ---
+
         //added support for intents that don't have a destination, like SOS
         // Navigation commands
         if (match.intent == 'navigate') {
@@ -1460,18 +1488,110 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
     }
   }
 
+  
+  Future<bool?> _showSosConfirmationDialog({String contactName = '[contact name]'}) async {
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        Future.delayed(const Duration(milliseconds: 350), () async {
+          void handleSosVoice(String spoken) {
+            final clean = spoken.toLowerCase().trim();
+
+            if (clean == 'yes' ||
+                clean == 'send' ||
+                clean == 'send alert' ||
+                clean.contains('confirm') ||
+                clean == 'proceed') {
+              _stopListeningBackend();
+              if (Navigator.of(dialogContext).canPop()) {
+                Navigator.of(dialogContext).pop(true);
+              }
+            } else if (clean.contains('cancel') ||
+                clean == 'no' ||
+                clean == 'stop') {
+              _stopListeningBackend();
+              if (Navigator.of(dialogContext).canPop()) {
+                Navigator.of(dialogContext).pop(false);
+              }
+            }
+          }
+
+          if (kIsWeb) {
+            await _webSpeech.listen(
+              localeId: localeTag,
+              onStatus: (s) {
+                if (kDebugMode) {
+                  debugPrint('SOS Web Status: $s');
+                }
+              },
+              onError: (err) {
+                if (kDebugMode) {
+                  debugPrint('SOS Web Error: $err');
+                }
+              },
+              onResult: (words, _) {
+                if (words.trim().isNotEmpty) handleSosVoice(words);
+              },
+            );
+          } else {
+            if (!_speech.isListening) {
+              await _speech.listen(
+                listenFor: const Duration(seconds: 12),
+                pauseFor: const Duration(seconds: 2),
+                onResult: (r) {
+                  if (r.recognizedWords.isNotEmpty) {
+                    handleSosVoice(r.recognizedWords);
+                  }
+                },
+              );
+            }
+          }
+        });
+
+        return AlertDialog(
+          title: const Text('Emergency Alert'),
+          content: Text('Send emergency alert to $contactName?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _stopListeningBackend();
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                _stopListeningBackend();
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Send Alert'),
+            ),
+          ],
+        );
+      },
+    );
+  } // end _showSosConfirmationDialog
+
+
   Future<void> _onConfirm() async {
     if (!mounted) return;
 
     final intent = _pendingIntent ?? 'navigate';
     final intentDef = VoiceIntentRegistry().resolveIntent(intent);
 
-// Check if the intent is high-risk and requires explicit confirmation via voice
+// Check if the intent is high-risk (and is not SOS) and it requires explicit confirmation via voice
 // or touch input before proceeding
 // If the user cancels or dismisses the dialog, abort the action
 // and reset the state
 
-    if (intentDef?.riskLevel == IntentRiskLevel.high) {
+    if (intentDef?.riskLevel == IntentRiskLevel.high && intent != 'sos') {
       final titleLabel = intentDef?.displayLabel ?? 'High-Risk Action';
       final localeTag = Localizations.localeOf(context).toLanguageTag();
 
