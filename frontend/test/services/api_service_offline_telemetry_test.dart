@@ -118,7 +118,13 @@ void main() {
         expect(ok, isFalse);
       });
 
-      expect(_eventNames(events), ['sync_started', 'sync_failed']);
+      expect(
+        _eventNames(events),
+        ['sync_started', 'sync_completed', 'sync_failed'],
+      );
+      expect(events[1]['details']['attempted'], 1);
+      expect(events[1]['details']['succeeded'], 0);
+      expect(events[1]['details']['failed'], 1);
       expect(events.last['details']['scope'], 'single');
 
       final verifyDb = AppDatabase();

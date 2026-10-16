@@ -106,7 +106,10 @@ List<Map<String, dynamic>> _sampleMedications() {
 }
 
 /// Sets _httpHandler to respond like the patient dashboard's API.
-void _setupMockClient({int evvStatusCode = 200}) {
+void _setupMockClient({
+  int evvStatusCode = 200,
+  int medicationUpdateStatusCode = 200,
+}) {
   _httpHandler = (request) async {
     final path = request.url.path;
     final method = request.method.toUpperCase();
@@ -125,7 +128,7 @@ void _setupMockClient({int evvStatusCode = 200}) {
 
     // Mark taken / clear taken
     if (path.contains('/last-taken')) {
-      return http.Response('{}', 200);
+      return http.Response('{}', medicationUpdateStatusCode);
     }
 
     // Caregiver list / linked caregivers for patient
@@ -735,6 +738,26 @@ void main() {
       await tester.tap(find.text('Mark Missed'));
       await tester.pump();
       expect(find.text('Medication marked as missed'), findsOneWidget);
+    });
+
+    testWidgets('failed Mark Taken request restores the previous reminder',
+        (tester) async {
+      // Arrange
+      _setLargeViewport(tester);
+      addTearDown(tester.view.reset);
+      _setupMockClient(medicationUpdateStatusCode: 500);
+      await tester.pumpWidget(_wrap());
+      await _pumpUntilSettled(tester);
+      await tester.ensureVisible(find.text('Mark Taken'));
+
+      // Act
+      await tester.tap(find.text('Mark Taken'));
+      await _pumpUntilSettled(tester);
+
+      // Assert
+      expect(find.text('Unable to update medication status'), findsOneWidget);
+      expect(find.text('Mark Taken'), findsOneWidget);
+      expect(find.text('Mark Missed'), findsOneWidget);
     });
   });
 

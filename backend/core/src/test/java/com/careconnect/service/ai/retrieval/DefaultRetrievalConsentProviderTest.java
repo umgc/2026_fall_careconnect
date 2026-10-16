@@ -1,6 +1,6 @@
 package com.careconnect.service.ai.retrieval;
 
-import com.careconnect.service.ConsentService;
+import com.careconnect.service.consent.ConsentService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,7 +22,7 @@ class DefaultRetrievalConsentProviderTest {
     private DefaultRetrievalConsentProvider provider;
 
     @Test
-    @DisplayName("delegates to ConsentService.isEffectiveAiRetrievalConsent")
+    @DisplayName("TC-CONSENT-040 the Ask AI retrieval consent provider delegates to ConsentService.isEffectiveAiRetrievalConsent")
     void delegatesToEffectiveConsent() {
         when(consentService.isEffectiveAiRetrievalConsent(10L, 20L)).thenReturn(true);
 
@@ -31,7 +31,7 @@ class DefaultRetrievalConsentProviderTest {
     }
 
     @Test
-    @DisplayName("propagates denial from effective consent check")
+    @DisplayName("TC-CONSENT-041 the Ask AI retrieval consent provider propagates a denial")
     void propagatesDenial() {
         when(consentService.isEffectiveAiRetrievalConsent(10L, 20L)).thenReturn(false);
 

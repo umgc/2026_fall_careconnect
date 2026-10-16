@@ -455,7 +455,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
-    @DisplayName("TC-EHR-REC-032 A date_of_birth the patient declined is not asked again on the next sync")
+    @DisplayName("TC-EHR-REC-047 A date_of_birth the patient declined is not asked again on the next sync")
     void declinedDateOfBirthIsNotRePromptedOnTheNextSync() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -480,7 +480,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
-    @DisplayName("TC-EHR-REC-033 A value declined from one source still prompts when another source sends it")
+    @DisplayName("TC-EHR-REC-048 A value declined from one source still prompts when another source sends it")
     void valueDeclinedFromOneSourceStillPromptsFromAnother() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");

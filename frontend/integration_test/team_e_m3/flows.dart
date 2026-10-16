@@ -1,6 +1,6 @@
 // WBS 3.6.1 (Team E, Milestone 3): the end-to-end workflows the suite covers.
 //
-// Each flow is one case in Software Test Plan §3.13 (TC-E2E-001..004). A flow
+// Each flow is one case in Software Test Plan §3.13 (TC-E2E-001..004, 010). A flow
 // stays blocked until the features it depends on are merged to team-e-develop
 // (the entry criterion). When a feature lands, wire its steps in
 // team_e_m3_workflows_e2e_test.dart and set `landed: true` here.
@@ -60,8 +60,9 @@ String? skipReasonFor(
   return null;
 }
 
-/// Status as of 2026-10-01: none of the Medicare, reconciliation review, record
-/// sharing or photo capture features are on team-e-develop yet.
+/// Status as of 2026-10-03: none of the Medicare, reconciliation review, record
+/// sharing or photo capture features are on team-e-develop yet, and neither is
+/// the Medicare connect screen or OAuth callback.
 const teamEFlows = <TeamEFlow>[
   TeamEFlow(
     caseId: 'TC-E2E-001',
@@ -125,5 +126,24 @@ const teamEFlows = <TeamEFlow>[
       'The caregiver can no longer open the records',
     ],
     passCriteria: 'Flow completes end to end',
+  ),
+  TeamEFlow(
+    caseId: 'TC-E2E-010',
+    title: 'Patient connects Medicare: consent, callback, Linked',
+    workPackage: '6.2.40 Medicare UI Screen Suite',
+    trace: 'FEAT-01 FR-MCR-01..05 (TC-20.1..20.7)',
+    // 6.2.26 Backend Blue Button Client & Callback; 6.2.40 connect and consent screen.
+    dependsOn: ['6.2.26', '6.2.40'],
+    landed: false,
+    steps: [
+      'Sign in as a demo patient whose Medicare link state is Unlinked',
+      'Activate Connect Medicare Account; the sandbox consent page opens',
+      'Authorize; the callback returns to CareConnect',
+      'The screen shows "Medicare account connected" and the link state reads Linked',
+      'Sign out and back in; the link state still reads Linked',
+      'Second pass with a fresh patient: deny at Medicare; the account stays Unlinked with no stored token',
+    ],
+    passCriteria: 'Linked with the confirmation shown and kept across sign-in; '
+        'a denial leaves the account Unlinked with no stored token',
   ),
 ];

@@ -36,9 +36,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Every test runs in the {@code @DataJpaTest} transaction and is rolled back. PostgreSQL aborts the
  * transaction on a constraint violation, so an expected violation is always the last statement.
  * <p>
- * Test IDs TC-EHR-SCH-001..010 are permanent. Never renumber, never reuse. 001..008 were added by
- * the Testing Lead on the PR #209 review (2026-09-29); 009 and 010 with the TIMESTAMPTZ conversion
- * the same review asked for (2026-09-30).
+ * Test IDs TC-EHR-SCH-001..008, 018 and 019 are permanent. Never renumber, never reuse. 001..008 were
+ * added by the Testing Lead on the PR #209 review (2026-09-29); 018 and 019 with the TIMESTAMPTZ
+ * conversion the same review asked for (2026-09-30). Those two were labelled 009 and 010 until the
+ * Test Plan, which had issued 009 and 010 to the manual boot cases, gave them 018 and 019.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -207,10 +208,10 @@ class EhrCanonicalSchemaPostgresTest {
         assertThat(stamps[1]).as("updated_at, the A1 baseline").isNotNull();
     }
 
-    // ---- TC-EHR-SCH-009 ----
+    // ---- TC-EHR-SCH-018 ----
 
     @Test
-    @DisplayName("TC-EHR-SCH-009: created_at and updated_at are timestamptz on all six ehr_* tables")
+    @DisplayName("TC-EHR-SCH-018: created_at and updated_at are timestamptz on all six ehr_* tables")
     void auditTimestampsAreZoneAwareOnEveryEhrTable() {
         @SuppressWarnings("unchecked")
         List<Object[]> columns = entityManager
@@ -226,7 +227,7 @@ class EhrCanonicalSchemaPostgresTest {
                 .allSatisfy(c -> assertThat(c[2]).as(c[0] + "." + c[1]).isEqualTo("timestamp with time zone"));
     }
 
-    // ---- TC-EHR-SCH-010 ----
+    // ---- TC-EHR-SCH-019 ----
 
     /**
      * The behaviour the column type buys. {@code Auditable} stamps a {@code LocalDateTime}, and
@@ -236,7 +237,7 @@ class EhrCanonicalSchemaPostgresTest {
      * then reads back as local time: off by the JVM's UTC offset on any machine not running in UTC.
      */
     @Test
-    @DisplayName("TC-EHR-SCH-010: a row stamped by Auditable holds the instant it was written, whatever the session zone")
+    @DisplayName("TC-EHR-SCH-019: a row stamped by Auditable holds the instant it was written, whatever the session zone")
     void auditableStampIsTheInstantItWasWritten() {
         EhrSourceIdentity saved = sourceIdentityRepository.saveAndFlush(EhrSourceIdentity.builder()
                 .patientId(newPatient())

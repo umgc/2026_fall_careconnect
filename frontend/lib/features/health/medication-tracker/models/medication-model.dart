@@ -17,6 +17,16 @@ extension MedicationTypeLabel on MedicationType {
       };
 }
 
+/// Parses a backend medication type, accepting both OVER_THE_COUNTER and the
+/// legacy OTC spelling. Returns null for unknown values.
+MedicationType? medicationTypeFromWire(String? value) {
+  if (value == 'OTC') return MedicationType.OVER_THE_COUNTER;
+  for (final type in MedicationType.values) {
+    if (type.name == value) return type;
+  }
+  return null;
+}
+
 /// Medication status enum (for UI display purposes)
 enum MedicationStatus { upcoming, taken, missed }
 

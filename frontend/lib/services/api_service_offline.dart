@@ -135,6 +135,14 @@ class ApiServiceOffline {
           'failed': 0,
         }));
       } else {
+        // Admin metrics sum outcome counters from sync_completed payloads;
+        // sync_failed is a separate event-count signal.
+        unawaited(Telemetry.event('sync_completed', {
+          'scope': 'single',
+          'attempted': 1,
+          'succeeded': 0,
+          'failed': 1,
+        }));
         unawaited(Telemetry.event('sync_failed', {
           'scope': 'single',
           'attempted': 1,
@@ -144,6 +152,13 @@ class ApiServiceOffline {
 
       return ok;
     } catch (_) {
+      // Preserve the outcome summary used by the admin metrics aggregator.
+      unawaited(Telemetry.event('sync_completed', {
+        'scope': 'single',
+        'attempted': 1,
+        'succeeded': 0,
+        'failed': 1,
+      }));
       unawaited(Telemetry.event('sync_failed', {
         'scope': 'single',
         'attempted': 1,

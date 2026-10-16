@@ -71,7 +71,7 @@ unset_count=0
 for var in "${optional_vars[@]}"; do
     if [ -z "${!var}" ]; then
         echo "  - $var"
-        ((unset_count++))
+        unset_count=$((unset_count + 1))  # not ((unset_count++)): that returns 1 when the count is 0, which set -e treats as a failure
     fi
 done
 

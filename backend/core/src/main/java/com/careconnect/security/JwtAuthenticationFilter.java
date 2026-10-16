@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
@@ -21,9 +22,8 @@ import java.util.Arrays;
 import java.util.List;
 
 @RequiredArgsConstructor
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-
-    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private static final String COOKIE_NAME = "AUTH";
 
     // Paths that should be excluded from JWT authentication
@@ -38,7 +38,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/v1/api/email-test",
             "/v1/api/emergency"
     );
-    private static final Logger logger = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private final JwtTokenProvider jwt;
     private final UserDetailsService uds;
 

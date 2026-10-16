@@ -1,0 +1,26 @@
+# test-exemptions.txt
+# Source files that do NOT need a same-name unit test and are skipped by the
+# changed-file coverage gate. Read by scripts/test_mapping.py and
+# scripts/coverage_gate.py, so both stages always agree.
+#
+# One glob per line, relative to the repo root. `*` also matches `/`,
+# so `a/*/b/*` matches `b/` at any depth below `a/`.
+#
+# Files with no executable code (Java interfaces/annotations, empty or
+# import/export-only Dart files) are exempt automatically — don't list them.
+
+# Generated Dart
+frontend/lib/*.g.dart
+frontend/lib/*.freezed.dart
+frontend/lib/*.gr.dart
+frontend/lib/*.mocks.dart
+
+# App bootstrap
+frontend/lib/main.dart
+
+# Data holders — no logic worth a dedicated unit test
+frontend/lib/models/*
+frontend/lib/*/models/*
+backend/core/src/main/java/*/dto/*
+backend/core/src/main/java/*/model/*
+backend/core/src/main/java/*/repository/*

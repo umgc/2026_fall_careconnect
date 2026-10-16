@@ -356,7 +356,7 @@ The templates assume the backend uses these environment variables:
 - `ENVIRONMENT` — CloudFormation environment name; drives SSM prefix `/careconnect/<Environment>/`
 - `AI_PROVIDER` — typically `bedrock`
 - `EMAIL_PROVIDER` / `FROM_EMAIL` — SendGrid when `SpringProfile=prod` (API key from SSM)
-- `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_ENABLED` — optional; leave empty until a real WebSocket API endpoint is set (prod profile uses empty default like dev)
+- `WEBSOCKET_ENABLED` / `WEBSOCKET_MODE` / `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT` / `WEBSOCKET_INTERNAL_PORT` — set by `04-service.yaml` from the stack's own WebSocket API (`mode=aws`, the `https://…/<env>` `@connections` callback URL, internal port `8082`). The API Gateway WebSocket API reaches the task through VPC Link V1 → internal NLB → port 8082; the public HTTP API never reaches 8082. Sessions are in task memory, so `DesiredCount` is capped at 1
 - `AWS_DEFAULT_REGION` — required for Bedrock and SSM clients
 - `CARECONNECT_RECORDING_ENABLED` — `true` on ECS so system capture + post-call Transcribe (including speaker ID) run
 - `CARECONNECT_KVS_ENABLED` / `CARECONNECT_KVS_STREAM_POOL_ARN` / `CARECONNECT_KVS_EVENT_WEBHOOK_ENABLED` / `CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET` — speaker-ID ingest (see [KVS speaker stream pool](#kvs-speaker-stream-pool-speaker-identification))

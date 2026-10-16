@@ -42,6 +42,18 @@ public class ConsentGrant {
     public static final String SCOPE_AI_RETRIEVAL = "AI_RETRIEVAL";
 
     /**
+     * Scope for a patient consenting to a linked caregiver viewing their Medicare data (SRS BR-02,
+     * FR-MCR-16). Must equal {@code MedicareAccessPolicy.SCOPE_MEDICARE_VIEW}.
+     */
+    public static final String SCOPE_MEDICARE_VIEW = "MEDICARE_VIEW";
+
+    /**
+     * Scope for a patient consenting to import their own external EHR (Epic/MyChart) records
+     * (Epic Phase 0). Self-grant: patient and grantee are the same connecting user.
+     */
+    public static final String SCOPE_EHR_IMPORT = "EHR_IMPORT";
+
+    /**
      * Status set while a grant is in force.
      */
     public static final String STATUS_ACTIVE = "ACTIVE";

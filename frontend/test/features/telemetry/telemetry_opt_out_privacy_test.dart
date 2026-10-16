@@ -11,7 +11,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   // TC-TEL-ING-008 — privacy: a local opt-out performs no telemetry HTTP request.
-  test('local opt-out performs no telemetry HTTP requests', () async {
+  test('TC-TEL-ING-008: local opt-out performs no telemetry HTTP requests', () async {
     SharedPreferences.setMockInitialValues({'telemetry_opted_out': true});
     final requests = <http.Request>[];
 

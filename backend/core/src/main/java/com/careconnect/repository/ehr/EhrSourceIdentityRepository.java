@@ -37,4 +37,13 @@ public interface EhrSourceIdentityRepository extends JpaRepository<EhrSourceIden
     @Query("delete from EhrSourceIdentity i where i.updatedAt < :cutoff and i.patientId in :patientIds")
     int deleteUpdatedBeforeForPatients(
             @Param("cutoff") LocalDateTime cutoff, @Param("patientIds") List<Long> patientIds);
+
+    /**
+     * Unlink (FR-MCR-11, Addendum A1-Q1): removes every row this source holds for this patient.
+     * Called by {@code MedicareConnectionService.disconnect} inside its transaction.
+     */
+    @Modifying
+    @Transactional
+    @Query("delete from EhrSourceIdentity e where e.patientId = :patientId and e.sourceId = :sourceId")
+    int deleteAllForPatientAndSource(@Param("patientId") Long patientId, @Param("sourceId") Long sourceId);
 }
