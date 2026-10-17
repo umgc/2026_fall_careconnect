@@ -5,6 +5,7 @@ import com.careconnect.repository.ehr.EhrAuditEventRepository;
 import com.careconnect.repository.ehr.EhrCoverageRecordRepository;
 import com.careconnect.repository.ehr.EhrIdentityConflictRepository;
 import com.careconnect.repository.ehr.EhrRawPayloadRepository;
+import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.repository.ehr.EhrSourceIdentityRepository;
 import com.careconnect.repository.ehr.EhrVisitRecordRepository;
 import com.careconnect.repository.ehr.PatientDateOfBirth;
@@ -49,6 +50,10 @@ import java.util.function.Function;
  * <h2>Which tables, and which date each is measured from</h2>
  * <ul>
  *   <li>{@code ehr_raw_payload}: {@code retrieved_at}, when the source answered.</li>
+ *   <li>{@code ehr_resource}: {@code last_synced_at}, when this application last stored the
+ *       current-state mirror. A mirror for a patient who is still syncing is simply written again
+ *       by the next sync; rows with no {@code patient_id} yet (nullable, additive column) are
+ *       skipped, as the age rule needs a patient.</li>
  *   <li>{@code ehr_identity_conflict}: {@code resolved_at}. Only resolved rows; a {@code PENDING}
  *       row is a question still waiting for the patient and is never purged. The whole row goes,
  *       values and decision together: the trail has by then been kept for the full period.</li>
@@ -105,6 +110,7 @@ public class EhrRetentionWorker {
             final EhrIdentityConflictRepository conflicts,
             final EhrSourceIdentityRepository sourceIdentities,
             final EhrAuditEventRepository auditEvents,
+            final EhrResourceRepository resources,
             final EhrCoverageRecordRepository coverages,
             final EhrVisitRecordRepository visits,
             @Value("${careconnect.ehr.retention.years:7}") final int retentionYears,
@@ -119,6 +125,9 @@ public class EhrRetentionWorker {
                 new Target("ehr_raw_payload",
                         rawPayloads::findPatientsWithPayloadRetrievedBefore,
                         rawPayloads::deleteRetrievedBeforeForPatients),
+                new Target("ehr_resource",
+                        cutoff -> resources.findPatientsWithResourceSyncedBefore(cutoff.toInstant()),
+                        (cutoff, ids) -> resources.deleteSyncedBeforeForPatients(cutoff.toInstant(), ids)),
                 new Target("ehr_identity_conflict",
                         cutoff -> conflicts.findPatientsWithConflictResolvedBefore(cutoff.toInstant()),
                         (cutoff, ids) -> conflicts.deleteResolvedBeforeForPatients(cutoff.toInstant(), ids)),

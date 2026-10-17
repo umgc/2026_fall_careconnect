@@ -1,6 +1,7 @@
 package com.careconnect.service.ehr;
 
 import com.careconnect.config.EpicProperties;
+import com.careconnect.exception.AppException;
 import com.careconnect.indexing.EpicFhirIndexedPayload;
 import com.careconnect.indexing.IndexingEventEmitter;
 import com.careconnect.model.Patient;
@@ -21,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -125,6 +127,10 @@ public class EpicSyncService {
     private final EhrSourceResolver sourceResolver;
     private final EhrPatientCrosswalkRepository crosswalkRepo;
     private final EhrRawPayloadRepository rawPayloadRepo;
+    // Typed projection (Team E brief S5 / Cononical_5_1 Step 6): med/condition/observation tables.
+    private final EpicCanonicalProjector canonicalProjector;
+    // Identity reconciliation (Team E brief S6 / Cononical_5_1 Step 7): ehr_source_identity + reconciler.
+    private final EpicIdentitySync identitySync;
 
     public EpicSyncService(EpicFhirClient fhirClient,
                            EhrResourceRepository resourceRepo,
@@ -140,7 +146,9 @@ public class EpicSyncService {
                            PatientRepository patientRepository,
                            EhrSourceResolver sourceResolver,
                            EhrPatientCrosswalkRepository crosswalkRepo,
-                           EhrRawPayloadRepository rawPayloadRepo) {
+                           EhrRawPayloadRepository rawPayloadRepo,
+                           EpicCanonicalProjector canonicalProjector,
+                           EpicIdentitySync identitySync) {
         this.fhirClient = fhirClient;
         this.resourceRepo = resourceRepo;
         this.statusGate = statusGate;
@@ -156,6 +164,8 @@ public class EpicSyncService {
         this.sourceResolver = sourceResolver;
         this.crosswalkRepo = crosswalkRepo;
         this.rawPayloadRepo = rawPayloadRepo;
+        this.canonicalProjector = canonicalProjector;
+        this.identitySync = identitySync;
     }
 
     /** How much of the patient record a sync pass pulls. */
@@ -219,15 +229,24 @@ public class EpicSyncService {
         log.info("Epic sync mode={} (requested={}) for user {}{}", effectiveMode, mode, userId,
                 lastUpdatedFilter != null ? " since " + lastUpdatedFilter : "");
 
-        // Canonical dual-write targets (Team E brief S2/S3), resolved once per sync. Null when the
-        // user has no patient row (e.g. a caregiver) or the EPIC source is unseeded — the canonical
-        // writes (crosswalk + raw payload) are then skipped and only the interim ehr_resource mirror
-        // is written, so Ask AI still works and nothing in the existing flow breaks.
-        final Long patientId = patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        // Fail fast if the connecting user has no patient row: every ehr_resource (and raw-payload)
+        // row must carry a patient_id, or it is un-reconcilable AND invisible to the retention purge
+        // (which keys on patient_id + the patient's DOB). Epic connect is role-gated to PATIENT and
+        // every patient has a patient row, so this should never fire; if it does, it is a data-integrity
+        // problem and we refuse rather than write a null-patient mirror. (Was previously a warn-and-write.)
+        final Long patientId = patientRepository.findByUserId(userId)
+                .map(Patient::getId)
+                .orElseThrow(() -> new AppException(
+                        HttpStatus.CONFLICT,
+                        "Cannot sync Epic data: no patient record for this account. "
+                                + "Only a provisioned patient may connect Epic."));
+        // sourceId can still be null when the EPIC source row is unseeded (an environment issue, not
+        // a per-user one): the canonical crosswalk/raw-payload writes are then skipped, but the mirror
+        // is still written with its (non-null) patient_id, so Ask AI and retention keep working.
         final Long sourceId = sourceResolver.idForCode(EpicProperties.SOURCE_EPIC);
-        if (patientId == null || sourceId == null) {
-            log.warn("Epic canonical dual-write disabled for user {} (patientId={}, sourceId={}); "
-                    + "writing interim ehr_resource only", userId, patientId, sourceId);
+        if (sourceId == null) {
+            log.warn("Epic canonical dual-write disabled for user {} (EPIC sourceId unseeded); "
+                    + "writing interim ehr_resource only", userId);
         } else {
             // Self-heal the crosswalk each sync (idempotent); the primary write is on connect.
             upsertCrosswalk(patientId, sourceId, oauth.patientFhirId(userId));
@@ -356,6 +375,16 @@ public class EpicSyncService {
             log.warn("Epic sync skipped one {} resource for user {}: {}",
                     actualType, userId, ex.getClass().getSimpleName());
         }
+        // Feed demographics into identity reconciliation (Step 7), in its own transaction. Isolated
+        // from the mirror above so a reconcile failure never fails the sync.
+        if (PATIENT_TYPE.equals(actualType) && patientId != null && sourceId != null) {
+            try {
+                identitySync.syncFromPatient(patientId, sourceId, resource);
+            } catch (final RuntimeException ex) {
+                log.warn("Epic identity reconcile skipped for user {}: {}",
+                        userId, ex.getClass().getSimpleName());
+            }
+        }
     }
 
     private static String resourceTypeOf(final JsonNode resource) {
@@ -404,6 +433,9 @@ public class EpicSyncService {
                         userId, EpicProperties.SOURCE_EPIC, resourceType, fhirId)
                 .orElseGet(EhrResource::new);
         entity.setUserId(userId);
+        // Additive canonical key (Q1): derive patient_id from the same user_id resolution so the two
+        // cannot disagree. Null for a user with no patient row; user_id stays the dedup/scope key.
+        entity.setPatientId(patientId);
         entity.setSource(EpicProperties.SOURCE_EPIC);
         entity.setResourceType(resourceType);
         entity.setResourceFhirId(fhirId);
@@ -419,6 +451,9 @@ public class EpicSyncService {
         // canonical ids could not be resolved (see syncNow).
         if (patientId != null && sourceId != null) {
             writeRawPayload(patientId, sourceId, resourceType, fhirId, resource);
+            // Typed projection (Team E brief S5 / Cononical_5_1 Step 6): med/condition/observation.
+            // No-op for other resource types; same per-resource transaction, so it shares fail-isolation.
+            canonicalProjector.project(patientId, sourceId, resourceType, resource);
         }
 
         // Only emit for resource types the chunker can index (skip Patient/Practitioner, etc.).
@@ -525,6 +560,26 @@ public class EpicSyncService {
             }
         }
         resourceRepo.deleteByUserIdAndSource(userId, EpicProperties.SOURCE_EPIC);
+
+        // Canonical cleanup on disconnect (EPIC Status.md §2 / Q2; Cononical_0 v1.2 §7): also delete
+        // the raw-payload history and the patient crosswalk for this (patient_id, source_id) so no
+        // canonical rows are orphaned on unlink. Scoped to the EPIC source id, so other connectors'
+        // rows are untouched. Fail-soft on an unresolved patient/source — the interim mirror is
+        // already gone, and a missing canonical id just means there was nothing canonical to clean.
+        final Long patientId = patientRepository.findByUserId(userId).map(Patient::getId).orElse(null);
+        final Long sourceId = sourceResolver.idForCode(EpicProperties.SOURCE_EPIC);
+        if (patientId != null && sourceId != null) {
+            final int rawDeleted = rawPayloadRepo.deleteByPatientIdAndSourceId(patientId, sourceId);
+            final int crosswalkDeleted = crosswalkRepo.deleteByPatientIdAndSourceId(patientId, sourceId);
+            final int typedDeleted = canonicalProjector.deleteAllForPatientAndSource(patientId, sourceId);
+            log.info("Epic disconnect canonical cleanup for user {} (patient {}): {} raw-payload row(s), "
+                    + "{} crosswalk row(s), {} typed projection row(s) removed",
+                    userId, patientId, rawDeleted, crosswalkDeleted, typedDeleted);
+        } else {
+            log.warn("Epic disconnect canonical cleanup skipped for user {}: patientId or sourceId "
+                    + "unresolved (patientId={}, sourceId={})", userId, patientId, sourceId);
+        }
+
         audit.record(userId, EpicProperties.SOURCE_EPIC, "EPIC_PURGE", null,
                 String.valueOf(removed), EhrResourceOutcome.OK);
         return removed;

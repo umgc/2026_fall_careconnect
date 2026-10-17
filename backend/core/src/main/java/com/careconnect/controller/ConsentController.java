@@ -2,6 +2,8 @@ package com.careconnect.controller;
 
 import com.careconnect.dto.AiRetrievalConsentRequest;
 import com.careconnect.dto.AiRetrievalConsentResponse;
+import com.careconnect.dto.EhrViewConsentRequest;
+import com.careconnect.dto.EhrViewConsentResponse;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.ConsentGrant;
 import com.careconnect.model.User;
@@ -106,6 +108,65 @@ public class ConsentController {
                 "granted", effectiveConsent,
                 "explicitGrant", explicitGrant,
                 "effectiveConsent", effectiveConsent));
+    }
+
+    @PostMapping(
+            value = "/ehr-view",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Grant EHR_VIEW consent to a caregiver (lets them read the patient's EHR records)")
+    public ResponseEntity<EhrViewConsentResponse> grantEhrView(
+            @RequestBody final EhrViewConsentRequest request) {
+        final User patient = requirePatientCaller();
+        if (request == null || request.granteeUserId() == null) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
+        }
+        final ConsentGrant grant = consentService.grantEhrViewConsent(
+                patient.getId(),
+                request.granteeUserId(),
+                request.granteeRole(),
+                request.expiresAt());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(EhrViewConsentResponse.from(grant));
+    }
+
+    @DeleteMapping(
+            value = "/ehr-view",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Revoke EHR_VIEW consent previously granted to a caregiver")
+    public ResponseEntity<Map<String, Object>> revokeEhrView(
+            @RequestBody final EhrViewConsentRequest request) {
+        final User patient = requirePatientCaller();
+        if (request == null || request.granteeUserId() == null) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
+        }
+        final Long granteeUserId = request.granteeUserId();
+        final int revoked = consentService.revokeEhrViewConsent(patient.getId(), granteeUserId);
+        return ResponseEntity.ok(Map.of(
+                "patientUserId", patient.getId(),
+                "granteeUserId", granteeUserId,
+                "revokedCount", revoked));
+    }
+
+    @GetMapping(value = "/ehr-view", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Check whether EHR_VIEW consent is currently active")
+    public ResponseEntity<Map<String, Object>> checkEhrView(
+            @RequestParam final Long patientUserId,
+            @RequestParam final Long granteeUserId) {
+        final User caller = requireAuthenticatedCaller();
+        // Patient may check their own grants; grantee may check grants issued to them.
+        final boolean selfPatient = caller.getId().equals(patientUserId);
+        final boolean selfGrantee = caller.getId().equals(granteeUserId);
+        if (!selfPatient && !selfGrantee && caller.getRole() != Role.ADMIN) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Not allowed to inspect this consent");
+        }
+        final boolean granted =
+                consentService.isEhrViewConsentGranted(granteeUserId, patientUserId);
+        return ResponseEntity.ok(Map.of(
+                "patientUserId", patientUserId,
+                "granteeUserId", granteeUserId,
+                "granted", granted));
     }
 
     private User requirePatientCaller() {

@@ -3,12 +3,14 @@ package com.careconnect.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.careconnect.model.ConsentGrant;
 import com.careconnect.repository.ConsentGrantRepository;
+import com.careconnect.security.EpicAccessPolicy;
 
 import java.time.Instant;
 import java.util.List;
@@ -244,5 +246,160 @@ class ConsentServiceTest {
     void revokeAiRetrievalConsent_returnsZeroWhenIdsMissing() {
         assertThat(service.revokeAiRetrievalConsent(null, CAREGIVER_USER_ID)).isZero();
         assertThat(service.revokeAiRetrievalConsent(PATIENT_USER_ID, null)).isZero();
+    }
+
+    // ---- EHR_VIEW consent (caregiver read access to a patient's EHR records) -------------
+
+    private static final String EHR_VIEW = EpicAccessPolicy.SCOPE_EHR_VIEW;
+
+    @Test
+    @DisplayName("isEhrViewConsentGranted returns false when either id is null")
+    void isEhrViewConsentGranted_falseWhenIdsMissing() {
+        assertThat(service.isEhrViewConsentGranted(null, PATIENT_USER_ID)).isFalse();
+        assertThat(service.isEhrViewConsentGranted(CAREGIVER_USER_ID, null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("isEhrViewConsentGranted delegates to the active-grant lookup")
+    void isEhrViewConsentGranted_delegatesToRepository() {
+        when(consentGrantRepository.existsActiveGrant(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq(EHR_VIEW), any(Instant.class)))
+                .thenReturn(true);
+
+        assertThat(service.isEhrViewConsentGranted(CAREGIVER_USER_ID, PATIENT_USER_ID)).isTrue();
+
+        verify(consentGrantRepository).existsActiveGrant(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq(EHR_VIEW), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("grantEhrViewConsent persists an ACTIVE row when none exists")
+    void grantEhrViewConsent_persistsActiveGrant() {
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(true);
+        when(consentGrantRepository.findStatusActiveGrants(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, EHR_VIEW))
+                .thenReturn(List.of());
+        when(consentGrantRepository.findActiveGrants(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq(EHR_VIEW), any(Instant.class)))
+                .thenReturn(List.of());
+        when(consentGrantRepository.save(any(ConsentGrant.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        final ConsentGrant grant = service.grantEhrViewConsent(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, null, null);
+
+        assertThat(grant.getPatientUserId()).isEqualTo(PATIENT_USER_ID);
+        assertThat(grant.getGranteeUserId()).isEqualTo(CAREGIVER_USER_ID);
+        assertThat(grant.getGranteeRole()).isEqualTo("CAREGIVER"); // null role defaults
+        assertThat(grant.getScope()).isEqualTo(EHR_VIEW);
+        assertThat(grant.getStatus()).isEqualTo(ConsentGrant.STATUS_ACTIVE);
+        assertThat(grant.getGrantedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("grantEhrViewConsent refreshes the primary active grant, revoking extras and soft-expired rows")
+    void grantEhrViewConsent_refreshesExistingAndRevokesExtrasAndSoftExpired() {
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(true);
+
+        final ConsentGrant softExpired = ConsentGrant.builder()
+                .id(90L)
+                .patientUserId(PATIENT_USER_ID)
+                .granteeUserId(CAREGIVER_USER_ID)
+                .scope(EHR_VIEW)
+                .status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                .expiresAt(Instant.now().minusSeconds(120)) // past -> revoked first
+                .build();
+        when(consentGrantRepository.findStatusActiveGrants(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, EHR_VIEW))
+                .thenReturn(List.of(softExpired));
+
+        final ConsentGrant primary = ConsentGrant.builder()
+                .id(55L).patientUserId(PATIENT_USER_ID).granteeUserId(CAREGIVER_USER_ID)
+                .scope(EHR_VIEW).status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(Instant.parse("2026-01-01T00:00:00Z")).build();
+        final ConsentGrant extra = ConsentGrant.builder()
+                .id(56L).patientUserId(PATIENT_USER_ID).granteeUserId(CAREGIVER_USER_ID)
+                .scope(EHR_VIEW).status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(Instant.parse("2026-01-02T00:00:00Z")).build();
+        when(consentGrantRepository.findActiveGrants(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq(EHR_VIEW), any(Instant.class)))
+                .thenReturn(List.of(primary, extra));
+        when(consentGrantRepository.save(any(ConsentGrant.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        final Instant expiresAt = Instant.parse("2026-12-31T00:00:00Z");
+        final ConsentGrant grant = service.grantEhrViewConsent(
+                PATIENT_USER_ID, CAREGIVER_USER_ID, "FAMILY", expiresAt);
+
+        assertThat(grant.getId()).isEqualTo(55L);
+        assertThat(grant.getGranteeRole()).isEqualTo("FAMILY");
+        assertThat(grant.getExpiresAt()).isEqualTo(expiresAt);
+        assertThat(grant.getStatus()).isEqualTo(ConsentGrant.STATUS_ACTIVE);
+        assertThat(softExpired.getStatus()).isEqualTo(ConsentGrant.STATUS_REVOKED);
+        assertThat(extra.getStatus()).isEqualTo(ConsentGrant.STATUS_REVOKED);
+        // saveAll called for the soft-expired rows and again for the extras.
+        verify(consentGrantRepository, times(2)).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    @DisplayName("grantEhrViewConsent rejects when caregiver has no active care-circle link")
+    void grantEhrViewConsent_requiresCareCircleLink() {
+        when(caregiverPatientLinkService.hasAccessToPatient(CAREGIVER_USER_ID, PATIENT_USER_ID))
+                .thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.grantEhrViewConsent(
+                                PATIENT_USER_ID, CAREGIVER_USER_ID, "CAREGIVER", null))
+                .isInstanceOf(com.careconnect.exception.AppException.class);
+
+        verify(consentGrantRepository, times(0)).save(any());
+    }
+
+    @Test
+    @DisplayName("grantEhrViewConsent throws when required ids are missing")
+    void grantEhrViewConsent_throwsWhenIdsMissing() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.grantEhrViewConsent(null, CAREGIVER_USER_ID, "CAREGIVER", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("revokeEhrViewConsent revokes all active grants for the tuple")
+    void revokeEhrViewConsent_revokesActiveGrants() {
+        final ConsentGrant active = ConsentGrant.builder()
+                .id(1L).patientUserId(PATIENT_USER_ID).granteeUserId(CAREGIVER_USER_ID)
+                .scope(EHR_VIEW).status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(Instant.now()).build();
+        when(consentGrantRepository.findActiveGrants(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq(EHR_VIEW), any(Instant.class)))
+                .thenReturn(List.of(active));
+
+        final int revoked = service.revokeEhrViewConsent(PATIENT_USER_ID, CAREGIVER_USER_ID);
+
+        assertThat(revoked).isEqualTo(1);
+        assertThat(active.getStatus()).isEqualTo(ConsentGrant.STATUS_REVOKED);
+        assertThat(active.getRevokedAt()).isNotNull();
+        verify(consentGrantRepository, times(1)).saveAll(org.mockito.ArgumentMatchers.anyList());
+    }
+
+    @Test
+    @DisplayName("revokeEhrViewConsent returns zero when nothing is active (no sentinel written)")
+    void revokeEhrViewConsent_returnsZeroWhenNoActive() {
+        when(consentGrantRepository.findActiveGrants(
+                eq(PATIENT_USER_ID), eq(CAREGIVER_USER_ID), eq(EHR_VIEW), any(Instant.class)))
+                .thenReturn(List.of());
+
+        assertThat(service.revokeEhrViewConsent(PATIENT_USER_ID, CAREGIVER_USER_ID)).isZero();
+        verify(consentGrantRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("revokeEhrViewConsent returns zero when ids are missing")
+    void revokeEhrViewConsent_returnsZeroWhenIdsMissing() {
+        assertThat(service.revokeEhrViewConsent(null, CAREGIVER_USER_ID)).isZero();
+        assertThat(service.revokeEhrViewConsent(PATIENT_USER_ID, null)).isZero();
     }
 }

@@ -3,6 +3,7 @@ package com.careconnect.service;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.ConsentGrant;
 import com.careconnect.repository.ConsentGrantRepository;
+import com.careconnect.security.EpicAccessPolicy;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -287,5 +288,143 @@ public class ConsentService {
             return 1;
         }
         return 0;
+    }
+
+    /**
+     * Returns whether the caregiver currently holds an active {@link EpicAccessPolicy#SCOPE_EHR_VIEW}
+     * consent grant for the given patient (the check {@link EpicAccessPolicy} enforces on reads).
+     *
+     * @param caregiverUserId user identifier of the prospective grantee
+     * @param patientUserId   user identifier of the patient granting consent
+     * @return true when an active, non-expired EHR_VIEW grant exists
+     */
+    @Transactional(readOnly = true)
+    public boolean isEhrViewConsentGranted(final Long caregiverUserId, final Long patientUserId) {
+        if (caregiverUserId == null || patientUserId == null) {
+            return false;
+        }
+        return consentGrantRepository.existsActiveGrant(
+                patientUserId, caregiverUserId, EpicAccessPolicy.SCOPE_EHR_VIEW, Instant.now());
+    }
+
+    /**
+     * Grants a patient's {@link EpicAccessPolicy#SCOPE_EHR_VIEW} consent to a caregiver, letting
+     * them read the patient's EHR records through the generic {@code /api/ehr} read surface. Mirrors
+     * {@link #grantAiRetrievalConsent}: requires an active caregiver link to the patient, is
+     * idempotent (refreshes an existing ACTIVE row rather than stacking rows), and never writes a
+     * grant to a user outside the patient's care circle.
+     *
+     * @param patientUserId the patient granting consent
+     * @param granteeUserId the caregiver being granted EHR_VIEW
+     * @param granteeRole   the grantee's role label (defaults to CAREGIVER)
+     * @param expiresAt     optional expiry; null for no expiry
+     * @return the persisted grant
+     */
+    @Transactional
+    public ConsentGrant grantEhrViewConsent(
+            final Long patientUserId,
+            final Long granteeUserId,
+            final String granteeRole,
+            final Instant expiresAt) {
+        if (patientUserId == null || granteeUserId == null) {
+            throw new IllegalArgumentException("patientUserId and granteeUserId are required");
+        }
+        if (!caregiverPatientLinkService.hasAccessToPatient(granteeUserId, patientUserId)) {
+            throw new AppException(
+                    HttpStatus.BAD_REQUEST,
+                    "No active caregiver relationship with this patient");
+        }
+        final Instant now = Instant.now();
+        // Soft-expired ACTIVE rows still occupy the unique ACTIVE index — revoke them first.
+        final List<ConsentGrant> statusActive = consentGrantRepository.findStatusActiveGrants(
+                patientUserId, granteeUserId, EpicAccessPolicy.SCOPE_EHR_VIEW);
+        if (!statusActive.isEmpty()) {
+            final List<ConsentGrant> expired = new ArrayList<>();
+            for (final ConsentGrant row : statusActive) {
+                if (row.getExpiresAt() != null && !row.getExpiresAt().isAfter(now)) {
+                    row.setStatus(ConsentGrant.STATUS_REVOKED);
+                    row.setRevokedAt(now);
+                    expired.add(row);
+                }
+            }
+            if (!expired.isEmpty()) {
+                consentGrantRepository.saveAll(expired);
+            }
+        }
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, granteeUserId, EpicAccessPolicy.SCOPE_EHR_VIEW, now);
+        if (!active.isEmpty()) {
+            final ConsentGrant primary = active.get(0);
+            primary.setGranteeRole(granteeRole == null ? "CAREGIVER" : granteeRole);
+            primary.setGrantedAt(now);
+            primary.setExpiresAt(expiresAt);
+            primary.setRevokedAt(null);
+            primary.setStatus(ConsentGrant.STATUS_ACTIVE);
+            if (active.size() > 1) {
+                final List<ConsentGrant> extras = new ArrayList<>(active.subList(1, active.size()));
+                for (final ConsentGrant extra : extras) {
+                    extra.setStatus(ConsentGrant.STATUS_REVOKED);
+                    extra.setRevokedAt(now);
+                }
+                consentGrantRepository.saveAll(extras);
+            }
+            final ConsentGrant saved = consentGrantRepository.save(primary);
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Refreshed EHR view consent: patient={} grantee={} grantId={}",
+                        patientUserId, granteeUserId, saved.getId());
+            }
+            return saved;
+        }
+
+        final ConsentGrant grant = ConsentGrant.builder()
+                .patientUserId(patientUserId)
+                .granteeUserId(granteeUserId)
+                .granteeRole(granteeRole == null ? "CAREGIVER" : granteeRole)
+                .scope(EpicAccessPolicy.SCOPE_EHR_VIEW)
+                .status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(now)
+                .expiresAt(expiresAt)
+                .build();
+        final ConsentGrant saved = consentGrantRepository.save(grant);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Granted EHR view consent: patient={} grantee={} expiresAt={}",
+                    patientUserId, granteeUserId, expiresAt);
+        }
+        return saved;
+    }
+
+    /**
+     * Revokes any active {@link EpicAccessPolicy#SCOPE_EHR_VIEW} consent grants from a patient to a
+     * grantee. Unlike {@link #revokeAiRetrievalConsent} there is no grandfather access to end, so
+     * no REVOKED sentinel is written when nothing is active.
+     *
+     * @param patientUserId the patient
+     * @param granteeUserId the grantee
+     * @return number of grants revoked
+     */
+    @Transactional
+    public int revokeEhrViewConsent(final Long patientUserId, final Long granteeUserId) {
+        if (patientUserId == null || granteeUserId == null) {
+            return 0;
+        }
+        final Instant now = Instant.now();
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, granteeUserId, EpicAccessPolicy.SCOPE_EHR_VIEW, now);
+        if (active.isEmpty()) {
+            return 0;
+        }
+        for (final ConsentGrant grant : active) {
+            grant.setStatus(ConsentGrant.STATUS_REVOKED);
+            grant.setRevokedAt(now);
+        }
+        consentGrantRepository.saveAll(active);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Revoked {} EHR view consent grant(s): patient={} grantee={}",
+                    active.size(), patientUserId, granteeUserId);
+        }
+        return active.size();
     }
 }

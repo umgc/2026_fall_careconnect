@@ -1,10 +1,16 @@
 package com.careconnect.controller;
 
 import com.careconnect.config.EpicProperties;
+import com.careconnect.dto.EpicDobConfirmationRequest;
+import com.careconnect.ehr.reconciliation.IdentityReconciler;
+import com.careconnect.ehr.reconciliation.ReconciliationOutcome;
+import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrCredential;
 import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.security.EpicAccessPolicy;
 import com.careconnect.security.PkceUtil;
 import com.careconnect.service.ConsentService;
 import com.careconnect.service.ehr.EpicAuthStateStore;
@@ -21,6 +27,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -58,6 +65,51 @@ public class EpicOAuthController {
     private final EhrResourceRepository resourceRepo;
     private final ObjectMapper objectMapper;
     private final EpicProperties cfg;
+    private final EpicAccessPolicy epicAccessPolicy;
+    // Identity reconciliation (Cononical_5_1 Step 7): patient-confirmed date_of_birth resolution.
+    private final IdentityReconciler identityReconciler;
+    private final PatientRepository patientRepository;
+
+    /**
+     * Resolve the open {@code date_of_birth} identity conflict for the authenticated patient
+     * (Cononical_5_1 Step 7). Patient self-service only — no caregiver/admin path — so a caregiver
+     * is refused with 403. The reconciler records {@code resolved_by = PATIENT}.
+     *
+     * @return the reconciliation outcome, or 409 when no DOB conflict is currently PENDING.
+     */
+    @PostMapping("/identity/date-of-birth")
+    public ResponseEntity<Map<String, Object>> confirmDateOfBirth(
+            @RequestBody final EpicDobConfirmationRequest request) {
+        final User me = securityUtil.resolveCurrentUser();
+        if (me == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (request == null || request.acceptIncoming() == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "acceptIncoming (boolean) is required"));
+        }
+        final Long patientId = patientRepository.findByUserId(me.getId())
+                .map(Patient::getId).orElse(null);
+        if (patientId == null) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "No patient record for this account"));
+        }
+        try {
+            final ReconciliationOutcome outcome =
+                    identityReconciler.finalizePendingDateOfBirth(patientId, request.acceptIncoming());
+            final Map<String, Object> body = new HashMap<>();
+            body.put("fieldName", outcome.fieldName());
+            body.put("decision", outcome.decision().name());
+            body.put("appliedValue", outcome.appliedValue());
+            return ResponseEntity.ok(body);
+        } catch (final IllegalStateException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "No pending date_of_birth conflict to resolve"));
+        }
+    }
 
     @GetMapping("/authorize")
     public ResponseEntity<Map<String, String>> authorize(
@@ -65,6 +117,11 @@ public class EpicOAuthController {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // Only the patient links their own Epic account: credentials and mirror rows are only ever
+        // written under a patient's user id. A caregiver (or anyone else) is refused with 403.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         String verifier = PkceUtil.newCodeVerifier();
         String challenge = PkceUtil.s256Challenge(verifier);
@@ -113,6 +170,10 @@ public class EpicOAuthController {
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        // Epic connection lifecycle is the patient's own; a caregiver is refused with 403.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         Optional<EhrCredential> cred = epic.findCredential(me.getId());
         Map<String, Object> body = new HashMap<>();
         body.put("connected", cred.map(c -> c.getStatus() == EhrCredential.Status.ACTIVE).orElse(false));
@@ -140,6 +201,10 @@ public class EpicOAuthController {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // Resync writes mirror rows under the caller's id, so it is patient-only like connect.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         // auto = incremental when we already hold Epic data for this user, else a full import;
         // full/delta force the mode (delta itself degrades to full when no watermark exists).
@@ -187,21 +252,27 @@ public class EpicOAuthController {
     }
 
     /**
-     * Read one mirrored Epic resource for the current user (Epic Phase 2). Scoped to the caller's
-     * own {@code ehr_resource} rows (userId from the JWT, never a client-supplied id) so it cannot
-     * be used to read another patient's data. Backs the Epic citation detail page.
+     * Read one mirrored Epic resource (Epic Phase 2). Targets a patient: the caller's own id by
+     * default, or {@code patientUserId} when given. {@link EpicAccessPolicy#requireEhrReadAccess}
+     * decides who may read — the patient themselves, or a caregiver with an active link and the
+     * patient's {@code EHR_VIEW} consent — and refuses everyone else with a uniform 404. The rows
+     * are always the target patient's (never the caregiver's own). Backs the Epic citation page.
      */
     @GetMapping("/resource/{type}/{id}")
     public ResponseEntity<Map<String, Object>> resource(
             @PathVariable("type") String type,
-            @PathVariable("id") String id) {
+            @PathVariable("id") String id,
+            @RequestParam(value = "patientUserId", required = false) Long patientUserId) {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
+        final Long target = patientUserId != null ? patientUserId : me.getId();
+        // Throws a uniform 404 for any caller not allowed to read this patient's EHR data.
+        epicAccessPolicy.requireEhrReadAccess(me, target);
         Optional<EhrResource> found = resourceRepo
                 .findByUserIdAndSourceAndResourceTypeAndResourceFhirId(
-                        me.getId(), EpicProperties.SOURCE_EPIC, type, id);
+                        target, EpicProperties.SOURCE_EPIC, type, id);
         if (found.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
@@ -233,6 +304,10 @@ public class EpicOAuthController {
         User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        // Only the patient links, so only the patient disconnects; a caregiver is refused with 403.
+        if (!me.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
         epic.disconnect(me.getId());
         consentService.revokeEhrImportConsent(me.getId());

@@ -1,9 +1,16 @@
 package com.careconnect.controller;
 
 import com.careconnect.config.EpicProperties;
+import com.careconnect.dto.EpicDobConfirmationRequest;
+import com.careconnect.ehr.reconciliation.IdentityReconciler;
+import com.careconnect.ehr.reconciliation.ReconciliationOutcome;
+import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrCredential;
+import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.security.EpicAccessPolicy;
 import com.careconnect.service.ConsentService;
 import com.careconnect.service.ehr.EpicAuthStateStore;
 import com.careconnect.service.ehr.EpicOAuthService;
@@ -42,15 +49,27 @@ class EpicOAuthControllerTest {
     private final EpicSyncService syncService = mock(EpicSyncService.class);
     private final EhrResourceRepository resourceRepo = mock(EhrResourceRepository.class);
     private final EpicProperties cfg = mock(EpicProperties.class);
+    private final EpicAccessPolicy accessPolicy = mock(EpicAccessPolicy.class);
+    private final IdentityReconciler identityReconciler = mock(IdentityReconciler.class);
+    private final PatientRepository patientRepository = mock(PatientRepository.class);
 
     private EpicOAuthController newController() {
         return new EpicOAuthController(epic, stateStore, securityUtil, consentService,
-                syncService, resourceRepo, new ObjectMapper(), cfg);
+                syncService, resourceRepo, new ObjectMapper(), cfg, accessPolicy,
+                identityReconciler, patientRepository);
+    }
+
+    private User nonPatient(long id) {
+        User u = mock(User.class);
+        when(u.getId()).thenReturn(id);
+        return u; // isPatient() defaults to false
     }
 
     private User userWithId(long id) {
         User me = mock(User.class);
         when(me.getId()).thenReturn(id);
+        // resync is patient-only (EpicOAuthController gates on isPatient); these callers are the patient.
+        when(me.isPatient()).thenReturn(true);
         return me;
     }
 
@@ -188,5 +207,142 @@ class EpicOAuthControllerTest {
         assertThat(resp.getBody()).containsEntry("ok", false);
         assertThat(resp.getBody()).containsEntry("error", "sync_failed");
         assertThat(resp.getBody().get("correlationId")).isNotNull();
+    }
+
+    // ---- patient-only gating on the connection lifecycle endpoints -------
+
+    @Test
+    void authorize_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L); // build before the outer when(), not nested in it
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, String>> resp = newController().authorize(null);
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void status_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, Object>> resp = newController().status();
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void disconnect_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, Object>> resp = newController().disconnect();
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    // ---- resource read: target resolution + access policy ----------------
+
+    @Test
+    void resource_readsTargetPatientRow_whenAccessAllowed() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        // patientUserId supplied -> target is that patient, not the caller; access policy allows.
+        EhrResource row = mock(EhrResource.class);
+        when(row.getResourceType()).thenReturn("Condition");
+        when(row.getResourceFhirId()).thenReturn("c1");
+        when(resourceRepo.findByUserIdAndSourceAndResourceTypeAndResourceFhirId(
+                42L, EpicProperties.SOURCE_EPIC, "Condition", "c1"))
+                .thenReturn(java.util.Optional.of(row));
+
+        ResponseEntity<Map<String, Object>> resp =
+                newController().resource("Condition", "c1", 42L);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.OK.value());
+        assertThat(resp.getBody()).containsEntry("resourceType", "Condition");
+        assertThat(resp.getBody()).containsEntry("resourceId", "c1");
+        verify(accessPolicy).requireEhrReadAccess(me, 42L);
+    }
+
+    @Test
+    void resource_returnsNotFound_whenNoRowForTarget() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        when(resourceRepo.findByUserIdAndSourceAndResourceTypeAndResourceFhirId(
+                7L, EpicProperties.SOURCE_EPIC, "Observation", "o9"))
+                .thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<Map<String, Object>> resp =
+                newController().resource("Observation", "o9", null);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.NOT_FOUND.value());
+    }
+
+    // ---- date-of-birth identity confirmation (Step 7) --------------------
+
+    @Test
+    void confirmDob_returnsUnauthorized_whenNoCurrentUser() {
+        when(securityUtil.resolveCurrentUser()).thenReturn(null);
+        ResponseEntity<Map<String, Object>> resp =
+                newController().confirmDateOfBirth(new EpicDobConfirmationRequest(true));
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.UNAUTHORIZED.value());
+    }
+
+    @Test
+    void confirmDob_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, Object>> resp =
+                newController().confirmDateOfBirth(new EpicDobConfirmationRequest(true));
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void confirmDob_returnsBadRequest_whenAcceptIncomingMissing() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, Object>> resp =
+                newController().confirmDateOfBirth(new EpicDobConfirmationRequest(null));
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    }
+
+    @Test
+    void confirmDob_returnsConflict_whenNoPatientRecord() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        when(patientRepository.findByUserId(7L)).thenReturn(java.util.Optional.empty());
+        ResponseEntity<Map<String, Object>> resp =
+                newController().confirmDateOfBirth(new EpicDobConfirmationRequest(true));
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.CONFLICT.value());
+    }
+
+    @Test
+    void confirmDob_returnsOutcome_onSuccess() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(100L);
+        when(patientRepository.findByUserId(7L)).thenReturn(java.util.Optional.of(patient));
+        when(identityReconciler.finalizePendingDateOfBirth(100L, true)).thenReturn(
+                new ReconciliationOutcome("date_of_birth",
+                        ReconciliationOutcome.Decision.ACCEPTED_BY_PATIENT, "1980-01-01"));
+
+        ResponseEntity<Map<String, Object>> resp =
+                newController().confirmDateOfBirth(new EpicDobConfirmationRequest(true));
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.OK.value());
+        assertThat(resp.getBody()).containsEntry("fieldName", "date_of_birth");
+        assertThat(resp.getBody()).containsEntry("decision", "ACCEPTED_BY_PATIENT");
+        assertThat(resp.getBody()).containsEntry("appliedValue", "1980-01-01");
+    }
+
+    @Test
+    void confirmDob_returnsConflict_whenNoPendingConflict() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(100L);
+        when(patientRepository.findByUserId(7L)).thenReturn(java.util.Optional.of(patient));
+        when(identityReconciler.finalizePendingDateOfBirth(100L, false))
+                .thenThrow(new IllegalStateException("no pending DOB conflict"));
+
+        ResponseEntity<Map<String, Object>> resp =
+                newController().confirmDateOfBirth(new EpicDobConfirmationRequest(false));
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.CONFLICT.value());
     }
 }

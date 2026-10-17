@@ -14,6 +14,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SchemaPatchRunnerTest {
@@ -235,5 +236,96 @@ class SchemaPatchRunnerTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Required schema patch")
                 .hasRootCauseMessage("required production DDL unavailable");
+    }
+
+    @Test
+    void applyEhrResourceJsonb_convertsInPlacePreservingPayloads() throws Exception {
+        // The oid -> jsonb patch must read each large object back and keep the payload, not drop and
+        // recreate the column (which would null every existing row until a full Epic re-sync). Guard
+        // the SQL so a regression back to the destructive form is caught here.
+        final java.nio.file.Path sourcePath = java.nio.file.Path.of(
+                "src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final java.nio.file.Path resolved = java.nio.file.Files.exists(sourcePath)
+                ? sourcePath
+                : java.nio.file.Path.of(
+                "backend/core/src/main/java/com/careconnect/config/SchemaPatchRunner.java");
+        final String source = java.nio.file.Files.readString(resolved);
+        final String method = source.substring(
+                source.indexOf("private void applyEhrResourceJsonbPatch()"),
+                source.indexOf("private void applyEhrResourcePatientIdPatch()"));
+
+        // Still gated on the column still being oid, and still lands on jsonb.
+        assertThat(method).contains("data_type = 'oid'");
+        // Preserving conversion: read the LOB back and cast per row.
+        assertThat(method).contains("convert_from(lo_get(r.lo), 'UTF8')::jsonb");
+        // Per-row isolation so one unreadable object does not abort the whole table.
+        assertThat(method).contains("EXCEPTION WHEN others THEN");
+        // Swap the staged column in rather than recreating payload_json empty.
+        assertThat(method).contains("ADD COLUMN IF NOT EXISTS payload_json_jsonb jsonb");
+        assertThat(method).contains("RENAME COLUMN payload_json_jsonb TO payload_json");
+        // Count notice in the boot log.
+        assertThat(method).contains("row(s) preserved");
+        // The old destructive recreate of the real column must be gone.
+        assertThat(method).doesNotContain("ADD COLUMN payload_json jsonb");
+    }
+
+    @Test
+    void ehrCanonicalPatches_executeTheirDdlOnPostgres() throws Exception {
+        // Drive the three Step-6/Q1/Q3 patch methods on a PostgreSQL-reporting datasource so their
+        // DDL actually runs (the non-PostgreSQL path just logs and returns). Each helper opens a
+        // connection, creates a statement, and executes; all succeed here.
+        final DataSource dataSource = mock(DataSource.class);
+        final Connection connection = mock(Connection.class);
+        final DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+        final Statement statement = mock(Statement.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metadata);
+        when(connection.createStatement()).thenReturn(statement);
+        when(statement.getConnection()).thenReturn(connection);
+        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        when(statement.execute(anyString())).thenReturn(false);
+
+        final SchemaPatchLedger patchLedger = mock(SchemaPatchLedger.class);
+        final SchemaPatchRunner runner = new SchemaPatchRunner(dataSource, patchLedger);
+
+        for (final String method : new String[]{
+                "applyEhrResourceJsonbPatch",
+                "applyEhrResourcePatientIdPatch",
+                "applyEhrTypedProjectionDedupPatches"}) {
+            final java.lang.reflect.Method m =
+                    SchemaPatchRunner.class.getDeclaredMethod(method);
+            m.setAccessible(true);
+            m.invoke(runner); // throws (wrapped) if a required patch could not be applied
+        }
+
+        // Every patch statement reached the database (jsonb convert, patient_id add/backfill/index/FK,
+        // and the three typed-projection unique indexes).
+        verify(statement, org.mockito.Mockito.atLeast(8)).execute(anyString());
+    }
+
+    @Test
+    void ehrCanonicalPatches_skipOnNonPostgres() throws Exception {
+        // The guard path: a non-PostgreSQL datasource logs and returns without touching a statement.
+        final DataSource dataSource = mock(DataSource.class);
+        final Connection connection = mock(Connection.class);
+        final DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metadata);
+        when(metadata.getDatabaseProductName()).thenReturn("H2");
+
+        final SchemaPatchLedger patchLedger = mock(SchemaPatchLedger.class);
+        final SchemaPatchRunner runner = new SchemaPatchRunner(dataSource, patchLedger);
+
+        for (final String method : new String[]{
+                "applyEhrResourceJsonbPatch",
+                "applyEhrResourcePatientIdPatch",
+                "applyEhrTypedProjectionDedupPatches"}) {
+            final java.lang.reflect.Method m =
+                    SchemaPatchRunner.class.getDeclaredMethod(method);
+            m.setAccessible(true);
+            m.invoke(runner);
+        }
+
+        org.mockito.Mockito.verify(connection, org.mockito.Mockito.never()).createStatement();
     }
 }
