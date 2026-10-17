@@ -1,8 +1,6 @@
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
-import 'package:care_connect_app/features/emergency_qr/qr_screen.dart';
-import 'package:provider/provider.dart';
-import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 
 /// Dashboard App header
@@ -115,64 +113,14 @@ class DashboardAppHeader extends StatelessWidget
                             height: 40,
                             child: IconButton(
                               padding: EdgeInsets.zero,
+                              // Opens the patient's passport (CC-12), where they choose what a
+                              // first responder sees and open their QR code.
                               onPressed: () {
-                                final userProvider = Provider.of<UserProvider>(context, listen: false);
-                                final patient = userProvider.patientModel;
-                                final user = userProvider.user;
-
-                                if (patient != null && user != null) {
-                                  // Parse date of birth
-                                  DateTime dobDate;
-                                  try {
-                                    dobDate = DateTime.parse(patient.dob);
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(t.appheaderwidget_invalidDOB),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  // Calculate accurate age
-                                  final now = DateTime.now();
-                                  int age = now.year - dobDate.year;
-                                  if (now.month < dobDate.month || (now.month == dobDate.month && now.day < dobDate.day)) {
-                                    age--;
-                                  }
-
-                                  // Create emergency ID from patient ID
-                                  final emergencyId = 'VIAL${user.patientId ?? user.id}';
-
-                                  final emergencyInfo = EmergencyInfo(
-                                    firstName: patient.firstName,
-                                    lastName: patient.lastName,
-                                    bloodType: '', // Will be filled from backend
-                                    dob: dobDate,
-                                    age: age,
-                                    gender: patient.gender,
-                                    id: emergencyId,
-                                    allergiesCritical: [], // Will be loaded from backend
-                                    contacts: [],
-                                    secureToken: user.token,
-                                  );
-
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => QrScreen(
-                                        payload: emergencyInfo.qrPayload(),
-                                        emergencyId: emergencyId,
-                                        patientId: user.patientId ?? user.id,
-                                      ),
-                                    ),
-                                  );
+                                if (role == "PATIENT") {
+                                  context.push('/medical-passport');
                                 } else {
-                                  // Show error if no patient data available
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(t.appheaderwidget_missingPtData),
-                                    ),
+                                    SnackBar(content: Text(t.appheaderwidget_missingPtData)),
                                   );
                                 }
                               },

@@ -25,6 +25,7 @@ import 'package:care_connect_app/features/health/health_data/pages/dob_confirmat
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
 import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
+import 'package:care_connect_app/features/medical_passport/pages/medical_passport_page.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
 import 'package:care_connect_app/features/tasks/presentation/assign_task_screen.dart';
@@ -231,6 +232,13 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/dob-confirm',
       redirect: _requireSignIn,
       builder: (_, __) => const DobConfirmationScreen(),
+    ),
+    // CC-12: the patient's own passport. Not /passport/:token, which is the
+    // public page a QR scan opens.
+    GoRoute(
+      path: '/medical-passport',
+      redirect: _requireSignIn,
+      builder: (_, __) => const MedicalPassportPage(),
     ),
     GoRoute(
       path: '/medicare-connect',
