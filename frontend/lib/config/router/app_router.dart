@@ -21,6 +21,7 @@ import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_p
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/features/summary/summary_confirmation_list.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
+import 'package:care_connect_app/features/emergency_passport/pages/emergency_qr_page.dart';
 import 'package:care_connect_app/features/emergency_passport/pages/passport_scan_page.dart';
 import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
@@ -268,6 +269,12 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/passport/:token',
       builder: (_, state) =>
           PassportScanPage(token: state.pathParameters['token'] ?? ''),
+    ),
+    // CC-12: the patient's own emergency QR code (design screen 2).
+    GoRoute(
+      path: '/emergency-qr',
+      redirect: _requireSignIn,
+      builder: (_, __) => const EmergencyQrPage(),
     ),
     GoRoute(
       path: '/ui-preview',

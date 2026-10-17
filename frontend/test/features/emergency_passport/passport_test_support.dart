@@ -87,3 +87,29 @@ List<String> lowContrastText(WidgetTester t) {
   }
   return failures;
 }
+
+/// The signed-in patient's own passport, as GET /v1/api/passport returns it.
+const passportJson = {
+  'name': 'Mary Johnson',
+  'age': 68,
+  'bloodType': 'O_POSITIVE',
+  'allergies': [
+    {'allergen': 'Penicillin', 'severity': 'MODERATE', 'reaction': 'Rash'},
+  ],
+  'medications': [],
+  'sharing': {
+    'ALLERGIES': true,
+    'MEDICATIONS': false,
+    'CHRONIC_CONDITIONS': false,
+    'BLOOD_TYPE': true,
+    'EMERGENCY_CONTACT': false,
+  },
+  'token': {
+    'active': true,
+    'createdAt': '2026-10-15T17:11:34.932728Z',
+    'lastScannedAt': null,
+  },
+  'ready': true,
+  'lastUpdated': '2026-10-15T17:11:12Z',
+  'lastUpdatedBySection': {},
+};
