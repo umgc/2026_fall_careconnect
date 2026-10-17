@@ -13,7 +13,6 @@ import com.careconnect.service.VialOfLifePdfService;
 import com.careconnect.util.SecurityUtil;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -73,10 +72,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *   <li>{@link InterimFix}: DEF-EMG-01 and DEF-EMG-03 are fixed for now (PR #336): another account is
  *       refused the PDF with the same 404 as an unknown ID, the patient still gets it, and the debug
  *       endpoint is closed to a patient account. Regression guards until Increment 2 replaces the endpoints.</li>
- *   <li>{@link CurrentGaps}: characterization of DEF-EMG-02, still open. Each asserts today's
- *       behaviour, so it fails the day the gap is closed and must then be rewritten (or removed in
- *       favour of the matching {@link Target} case).</li>
- *   <li>{@link Target}: the required behaviour once DEF-EMG-02 is fixed, disabled until then.</li>
+ *   <li>{@link TokenIsRead}: DEF-EMG-02 is fixed. The sign-in token, in the Authorization header or the
+ *       AUTH cookie, is read on these paths, so the patient gets their own PDF with it, and another
+ *       patient's token is refused like any other account. TC-EMG-009 and 013 characterized the gap
+ *       (the token was ignored, 401) and now assert the fixed behaviour; TC-EMG-014 was the disabled
+ *       target and now runs.</li>
  * </ul>
  *
  * <p>The emergency ID is {@code "VIAL" + patient.id} (VialOfLifePdfService
@@ -157,7 +157,7 @@ class EmergencyAccessControlTest {
             return null;
         }).when(authorizationService).requirePatientAccess(any(), eq(PATIENT_ONE_USER));
 
-        // A token the JWT filter would accept, if it ran on these paths.
+        // A token the JWT filter accepts; since PR #343 (DEF-EMG-02) it runs on these paths.
         lenient().when(jwtTokenProvider.validateToken(VALID_TOKEN)).thenReturn(true);
         lenient().when(jwtTokenProvider.getClaims(VALID_TOKEN)).thenReturn(claims);
         lenient().when(claims.getSubject()).thenReturn(OTHER_USER);
@@ -186,10 +186,13 @@ class EmergencyAccessControlTest {
         }
 
         @Test
-        @DisplayName("TC-EMG-005: a bearer token that does not validate is 401 and generates nothing")
+        @DisplayName("TC-EMG-005: a bearer token that does not validate is 401 and generates nothing; since DEF-EMG-02 "
+                + "is fixed the filter checks it")
         void invalidTokenIsRefused() throws Exception {
             mvc.perform(get(PATIENT_ONE_PDF).header(HttpHeaders.AUTHORIZATION, "Bearer not-a-real-token"))
                     .andExpect(status().isUnauthorized());
+            verify(jwtTokenProvider).validateToken("not-a-real-token");
+            verify(jwtTokenProvider, never()).getClaims(anyString());
             verify(vialOfLifePdfService, never()).generateVialOfLifePdf(anyString());
         }
 
@@ -272,35 +275,38 @@ class EmergencyAccessControlTest {
     }
 
     @Nested
-    @DisplayName("Current gaps (characterization of DEF-EMG-02; each fails once its gap is fixed)")
-    class CurrentGaps {
+    @DisplayName("DEF-EMG-02 fixed: the sign-in token is read on emergency paths")
+    class TokenIsRead {
+
+        /** The token's caller is patient 1's own user, so the access check lets them through. */
+        private void signedInAsPatientOne() {
+            when(securityUtil.resolveCurrentUser())
+                    .thenReturn(com.careconnect.model.User.builder().id(PATIENT_ONE_USER).role(Role.PATIENT).build());
+        }
 
         @Test
-        @DisplayName("TC-EMG-009: GAP 2 (DEF-EMG-02): a valid sign-in token is ignored on emergency paths, so even the patient gets 401")
-        void validTokenIsIgnored() throws Exception {
+        @DisplayName("TC-EMG-009: DEF-EMG-02 fixed: patient 1's valid sign-in token (Authorization header) gets their own PDF")
+        void validTokenIsRead() throws Exception {
+            signedInAsPatientOne();
             mvc.perform(get(PATIENT_ONE_PDF).header(HttpHeaders.AUTHORIZATION, "Bearer " + VALID_TOKEN))
-                    .andExpect(status().isUnauthorized());
-            verify(jwtTokenProvider, never()).validateToken(anyString());
-            verify(vialOfLifePdfService, never()).generateVialOfLifePdf(anyString());
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType("application/pdf"));
+            verify(jwtTokenProvider).validateToken(VALID_TOKEN);
+            verify(vialOfLifePdfService).generateVialOfLifePdf("VIAL1");
         }
 
         @Test
-        @DisplayName("TC-EMG-013: GAP 2 (DEF-EMG-02): a valid sign-in cookie (AUTH) is ignored on emergency paths too")
-        void validCookieIsIgnored() throws Exception {
+        @DisplayName("TC-EMG-013: DEF-EMG-02 fixed: patient 1's valid sign-in cookie (AUTH) gets their own PDF too")
+        void validCookieIsRead() throws Exception {
+            signedInAsPatientOne();
             mvc.perform(get(PATIENT_ONE_PDF).cookie(new Cookie("AUTH", VALID_TOKEN)))
-                    .andExpect(status().isUnauthorized());
-            verify(jwtTokenProvider, never()).validateToken(anyString());
-            verify(vialOfLifePdfService, never()).generateVialOfLifePdf(anyString());
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentType("application/pdf"));
+            verify(jwtTokenProvider).validateToken(VALID_TOKEN);
+            verify(vialOfLifePdfService).generateVialOfLifePdf("VIAL1");
         }
-    }
-
-    @Nested
-    @DisplayName("Target behaviour (enable when DEF-EMG-02 is fixed)")
-    class Target {
 
         @Test
-        @Disabled("CR-1 Increment 2: once the sign-in token is read on these paths (GAP 2), "
-                + "another patient's token must still be refused (GAP 1)")
         @DisplayName("TC-EMG-014: another patient's valid sign-in token is refused patient 1's PDF and nothing is generated")
         void otherPatientsTokenIsRefused() throws Exception {
             mvc.perform(get(PATIENT_ONE_PDF).header(HttpHeaders.AUTHORIZATION, "Bearer " + VALID_TOKEN))
