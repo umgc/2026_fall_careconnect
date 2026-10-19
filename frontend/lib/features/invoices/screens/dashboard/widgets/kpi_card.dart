@@ -31,7 +31,10 @@ class KpiCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: theme.textTheme.titleSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(title,
+                      style: theme.textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 6),
                   if (loading)
                     const LinearProgressIndicator(minHeight: 4)
@@ -41,11 +44,15 @@ class KpiCard extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         value,
-                        style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                        style: theme.textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ),
                   const SizedBox(height: 2),
-                  Text(subtitle, style: theme.textTheme.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(subtitle,
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),

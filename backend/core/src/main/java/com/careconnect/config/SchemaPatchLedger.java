@@ -16,7 +16,9 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 
-/** Executes immutable SQL resources once and records their checksums. */
+/**
+ * Executes immutable SQL resources once and records their checksums.
+ */
 @Slf4j
 final class SchemaPatchLedger {
 
@@ -38,63 +40,6 @@ final class SchemaPatchLedger {
         this.applicationVersion = applicationVersion;
     }
 
-    void initialize() {
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            connection.setAutoCommit(true);
-            statement.execute(CREATE_HISTORY);
-        } catch (Exception exception) {
-            throw new IllegalStateException("Could not initialize schema patch history", exception);
-        }
-    }
-
-    void apply(final Patch patch) {
-        final ClassPathResource resource = new ClassPathResource(patch.resourcePath());
-        final String checksum = checksum(resource);
-        try (Connection connection = dataSource.getConnection()) {
-            connection.setAutoCommit(false);
-            try {
-                final String recordedChecksum = recordedChecksum(connection, patch.id());
-                if (recordedChecksum != null) {
-                    if (recordedChecksum.equals(checksum)) {
-                        connection.rollback();
-                        log.debug("Schema patch already recorded: {}", patch.id());
-                        return;
-                    }
-                    // Scripts are not always safely re-runnable (ADD CONSTRAINT without IF NOT
-                    // EXISTS). Accept the newer checksum when the patch was already applied;
-                    // real schema deltas need a new patch id.
-                    log.warn(
-                            "Schema patch checksum drift for {}; updating ledger to current "
-                                    + "script checksum without re-run",
-                            patch.id());
-                    updateChecksum(connection, patch.id(), checksum);
-                    connection.commit();
-                    return;
-                }
-
-                final long started = System.nanoTime();
-                try (Statement statement = connection.createStatement()) {
-                    SchemaPatchRunner.configureDdlTimeouts(statement);
-                    executeSqlScript(statement, resource);
-                }
-                final long executionMs = (System.nanoTime() - started) / 1_000_000L;
-                record(connection, patch.id(), checksum, executionMs);
-                connection.commit();
-                log.info("Schema patch applied and recorded: {}", patch.id());
-            } catch (Exception exception) {
-                rollback(connection, exception);
-                throw exception;
-            }
-        } catch (Exception exception) {
-            if (exception instanceof IllegalStateException illegalStateException) {
-                throw illegalStateException;
-            }
-            throw new IllegalStateException(
-                    "Required schema patch could not be applied: " + patch.id(), exception);
-        }
-    }
-
     /**
      * Runs a classpath SQL script. Unlike Spring {@code ScriptUtils}, this respects
      * PostgreSQL dollar-quoted blocks ({@code DO $$ ... $$}) so internal semicolons
@@ -110,7 +55,9 @@ final class SchemaPatchLedger {
         }
     }
 
-    /** Package-visible for unit tests. */
+    /**
+     * Package-visible for unit tests.
+     */
     static List<String> splitPostgresStatements(final String script) {
         final List<String> statements = new ArrayList<>();
         final StringBuilder current = new StringBuilder();
@@ -266,23 +213,6 @@ final class SchemaPatchLedger {
         }
     }
 
-    private void record(
-            final Connection connection,
-            final String patchId,
-            final String checksum,
-            final long executionMs) throws Exception {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT INTO careconnect_schema_patch_history "
-                        + "(patch_id, sha256_checksum, execution_ms, application_version) "
-                        + "VALUES (?, ?, ?, ?)")) {
-            statement.setString(1, patchId);
-            statement.setString(2, checksum);
-            statement.setLong(3, executionMs);
-            statement.setString(4, applicationVersion);
-            statement.executeUpdate();
-        }
-    }
-
     private static String checksum(final ClassPathResource resource) {
         try {
             final byte[] bytes = resource.getInputStream().readAllBytes();
@@ -301,6 +231,80 @@ final class SchemaPatchLedger {
             connection.rollback();
         } catch (Exception rollbackFailure) {
             original.addSuppressed(rollbackFailure);
+        }
+    }
+
+    void initialize() {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            connection.setAutoCommit(true);
+            statement.execute(CREATE_HISTORY);
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not initialize schema patch history", exception);
+        }
+    }
+
+    void apply(final Patch patch) {
+        final ClassPathResource resource = new ClassPathResource(patch.resourcePath());
+        final String checksum = checksum(resource);
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                final String recordedChecksum = recordedChecksum(connection, patch.id());
+                if (recordedChecksum != null) {
+                    if (recordedChecksum.equals(checksum)) {
+                        connection.rollback();
+                        log.debug("Schema patch already recorded: {}", patch.id());
+                        return;
+                    }
+                    // Scripts are not always safely re-runnable (ADD CONSTRAINT without IF NOT
+                    // EXISTS). Accept the newer checksum when the patch was already applied;
+                    // real schema deltas need a new patch id.
+                    log.warn(
+                            "Schema patch checksum drift for {}; updating ledger to current "
+                                    + "script checksum without re-run",
+                            patch.id());
+                    updateChecksum(connection, patch.id(), checksum);
+                    connection.commit();
+                    return;
+                }
+
+                final long started = System.nanoTime();
+                try (Statement statement = connection.createStatement()) {
+                    SchemaPatchRunner.configureDdlTimeouts(statement);
+                    executeSqlScript(statement, resource);
+                }
+                final long executionMs = (System.nanoTime() - started) / 1_000_000L;
+                record(connection, patch.id(), checksum, executionMs);
+                connection.commit();
+                log.info("Schema patch applied and recorded: {}", patch.id());
+            } catch (Exception exception) {
+                rollback(connection, exception);
+                throw exception;
+            }
+        } catch (Exception exception) {
+            if (exception instanceof IllegalStateException illegalStateException) {
+                throw illegalStateException;
+            }
+            throw new IllegalStateException(
+                    "Required schema patch could not be applied: " + patch.id(), exception);
+        }
+    }
+
+    private void record(
+            final Connection connection,
+            final String patchId,
+            final String checksum,
+            final long executionMs) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO careconnect_schema_patch_history "
+                        + "(patch_id, sha256_checksum, execution_ms, application_version) "
+                        + "VALUES (?, ?, ?, ?)")) {
+            statement.setString(1, patchId);
+            statement.setString(2, checksum);
+            statement.setLong(3, executionMs);
+            statement.setString(4, applicationVersion);
+            statement.executeUpdate();
         }
     }
 

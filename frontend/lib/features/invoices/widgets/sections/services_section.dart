@@ -38,7 +38,8 @@ class ServicesSection extends StatelessWidget {
                 icon: const Icon(Icons.add),
                 tooltip: 'Add Service',
                 onPressed: () async {
-                  final newLine = await _showEditDialog(context, const ServiceLine());
+                  final newLine =
+                      await _showEditDialog(context, const ServiceLine());
                   if (newLine != null) {
                     final updated = [...s, newLine];
                     _applyServices(updated);
@@ -78,7 +79,8 @@ class ServicesSection extends StatelessWidget {
                           onPressed: () async {
                             final edited = await _showEditDialog(context, line);
                             if (edited != null) {
-                              final updated = List<ServiceLine>.from(value.services);
+                              final updated =
+                                  List<ServiceLine>.from(value.services);
                               final at = updated.indexOf(line);
                               if (at >= 0) {
                                 updated[at] = edited;
@@ -123,7 +125,8 @@ class ServicesSection extends StatelessWidget {
                           allowWrap: true,
                         ),
                       ),
-                      if (line.insuranceAdjustments != null) const SizedBox(width: 12),
+                      if (line.insuranceAdjustments != null)
+                        const SizedBox(width: 12),
                       if (line.insuranceAdjustments != null)
                         Expanded(
                           child: KeyValueRow(
@@ -170,7 +173,8 @@ class ServicesSection extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Expanded(child: Text('Total Charges', softWrap: true)),
+                    const Expanded(
+                        child: Text('Total Charges', softWrap: true)),
                     Expanded(
                       child: Text(
                         money(a.totalCharges),
@@ -185,7 +189,8 @@ class ServicesSection extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Expanded(child: Text('Insurance Adjustments', softWrap: true)),
+                      const Expanded(
+                          child: Text('Insurance Adjustments', softWrap: true)),
                       Expanded(
                         child: Text(
                           '-${money(a.totalAdjustments)}',
@@ -266,10 +271,15 @@ class ServicesSection extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Remove service'),
-        content: const Text('Are you sure you want to delete this service line?'),
+        content:
+            const Text('Are you sure you want to delete this service line?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -282,16 +292,19 @@ class ServicesSection extends StatelessWidget {
     return '${d.year}-$m-$day';
   }
 
-  Future<ServiceLine?> _showEditDialog(BuildContext context, ServiceLine line) async {
-    final descCtrl   = TextEditingController(text: line.description);
-    final codeCtrl   = TextEditingController(text: line.serviceCode);
-    final chargeCtrl = TextEditingController(text: line.charge?.toStringAsFixed(2));
-    final insCtrl    = TextEditingController(text: line.insuranceAdjustments?.toStringAsFixed(2));
+  Future<ServiceLine?> _showEditDialog(
+      BuildContext context, ServiceLine line) async {
+    final descCtrl = TextEditingController(text: line.description);
+    final codeCtrl = TextEditingController(text: line.serviceCode);
+    final chargeCtrl =
+        TextEditingController(text: line.charge?.toStringAsFixed(2));
+    final insCtrl = TextEditingController(
+        text: line.insuranceAdjustments?.toStringAsFixed(2));
 
-    final fnDesc   = FocusNode();
-    final fnCode   = FocusNode();
+    final fnDesc = FocusNode();
+    final fnCode = FocusNode();
     final fnCharge = FocusNode();
-    final fnIns    = FocusNode();
+    final fnIns = FocusNode();
 
     return showDialog<ServiceLine>(
       context: context,
@@ -326,7 +339,8 @@ class ServicesSection extends StatelessWidget {
                 TextField(
                   controller: chargeCtrl,
                   focusNode: fnCharge,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.next,
                   onSubmitted: (_) => FocusScope.of(ctx).requestFocus(fnIns),
                   decoration: _fieldDecoration(ctx, 'Charge'),
@@ -335,7 +349,8 @@ class ServicesSection extends StatelessWidget {
                 TextField(
                   controller: insCtrl,
                   focusNode: fnIns,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.done,
                   decoration: _fieldDecoration(ctx, 'Insurance Paid'),
                 ),
@@ -345,7 +360,9 @@ class ServicesSection extends StatelessWidget {
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
               Navigator.pop(

@@ -34,6 +34,30 @@ public class OAuthRedirectValidator {
         }
     }
 
+    private static URL parseUrl(String value) {
+        try {
+            return new URL(value);
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException("returnUrl is malformed", e);
+        }
+    }
+
+    private static void addHostFromUrl(String baseUrl, Set<String> hosts) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return;
+        }
+        try {
+            hosts.add(new URL(normalizeBase(baseUrl)).getHost().toLowerCase(Locale.ROOT));
+        } catch (MalformedURLException ignored) {
+            // Ignore invalid configuration; localhost fallback still works in dev.
+        }
+    }
+
+    private static String normalizeBase(String baseUrl) {
+        String trimmed = baseUrl.trim();
+        return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
+    }
+
     /**
      * @return sanitized URL when allowed, or {@code null} when blank
      * @throws IllegalArgumentException when the URL is present but not allowed
@@ -71,29 +95,5 @@ public class OAuthRedirectValidator {
             return true;
         }
         return allowedHosts.contains(host);
-    }
-
-    private static URL parseUrl(String value) {
-        try {
-            return new URL(value);
-        } catch (MalformedURLException e) {
-            throw new IllegalArgumentException("returnUrl is malformed", e);
-        }
-    }
-
-    private static void addHostFromUrl(String baseUrl, Set<String> hosts) {
-        if (baseUrl == null || baseUrl.isBlank()) {
-            return;
-        }
-        try {
-            hosts.add(new URL(normalizeBase(baseUrl)).getHost().toLowerCase(Locale.ROOT));
-        } catch (MalformedURLException ignored) {
-            // Ignore invalid configuration; localhost fallback still works in dev.
-        }
-    }
-
-    private static String normalizeBase(String baseUrl) {
-        String trimmed = baseUrl.trim();
-        return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 }

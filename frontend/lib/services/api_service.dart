@@ -2638,7 +2638,8 @@ class ApiService {
 
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      throw const FormatException('Confirm summary item response is not an object');
+      throw const FormatException(
+          'Confirm summary item response is not an object');
     }
     return Map<String, dynamic>.from(decoded);
   }

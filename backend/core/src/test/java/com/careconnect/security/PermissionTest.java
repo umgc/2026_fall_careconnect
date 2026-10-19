@@ -2,6 +2,7 @@ package com.careconnect.security;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -14,10 +15,10 @@ public class PermissionTest {
     @DisplayName("All permissions should have non-null descriptions")
     public void testAllPermissionsHaveDescriptions() throws Exception {
         for (Permission permission : Permission.values()) {
-            assertNotNull(permission.getDescription(), 
-                "Permission " + permission.name() + " should have a description");
+            assertNotNull(permission.getDescription(),
+                    "Permission " + permission.name() + " should have a description");
             assertFalse(permission.getDescription().isEmpty(),
-                "Permission " + permission.name() + " description should not be empty");
+                    "Permission " + permission.name() + " description should not be empty");
         }
     }
 
@@ -25,8 +26,8 @@ public class PermissionTest {
     @DisplayName("Should have exactly 29 permissions defined")
     public void testPermissionCount() throws Exception {
         Permission[] permissions = Permission.values();
-        assertEquals(29, permissions.length, 
-            "Should have exactly 29 permissions defined");
+        assertEquals(29, permissions.length,
+                "Should have exactly 29 permissions defined");
     }
 
     @Test
@@ -35,9 +36,9 @@ public class PermissionTest {
         for (Permission permission : Permission.values()) {
             String name = permission.name();
             assertTrue(name.equals(name.toUpperCase()),
-                "Permission " + name + " should be uppercase");
+                    "Permission " + name + " should be uppercase");
             assertTrue(name.matches("[A-Z_]+"),
-                "Permission " + name + " should only contain uppercase letters and underscores");
+                    "Permission " + name + " should only contain uppercase letters and underscores");
         }
     }
 
@@ -111,34 +112,34 @@ public class PermissionTest {
     public void testIsAdminOnly() throws Exception {
         // These should be admin-only
         assertTrue(Permission.VIEW_ALL_USERS.isAdminOnly(),
-            "VIEW_ALL_USERS should be admin-only");
+                "VIEW_ALL_USERS should be admin-only");
         assertTrue(Permission.MANAGE_USERS.isAdminOnly(),
-            "MANAGE_USERS should be admin-only");
+                "MANAGE_USERS should be admin-only");
         assertTrue(Permission.ASSIGN_ROLES.isAdminOnly(),
-            "ASSIGN_ROLES should be admin-only");
+                "ASSIGN_ROLES should be admin-only");
         assertTrue(Permission.VIEW_ALL_PATIENTS.isAdminOnly(),
-            "VIEW_ALL_PATIENTS should be admin-only");
+                "VIEW_ALL_PATIENTS should be admin-only");
         assertTrue(Permission.DELETE_PATIENTS.isAdminOnly(),
-            "DELETE_PATIENTS should be admin-only");
+                "DELETE_PATIENTS should be admin-only");
 
         // These should NOT be admin-only
         assertFalse(Permission.CREATE_TASKS.isAdminOnly(),
-            "CREATE_TASKS should not be admin-only");
+                "CREATE_TASKS should not be admin-only");
         assertFalse(Permission.VIEW_HEALTH_DATA.isAdminOnly(),
-            "VIEW_HEALTH_DATA should not be admin-only");
+                "VIEW_HEALTH_DATA should not be admin-only");
         assertFalse(Permission.SEND_MESSAGES.isAdminOnly(),
-            "SEND_MESSAGES should not be admin-only");
+                "SEND_MESSAGES should not be admin-only");
     }
 
     @Test
     @DisplayName("getDisplayName should return properly formatted names")
     public void testGetDisplayName() throws Exception {
         assertEquals("Create Tasks", Permission.CREATE_TASKS.getDisplayName(),
-            "Display name should be formatted with spaces and proper case");
+                "Display name should be formatted with spaces and proper case");
         assertEquals("View Health Data", Permission.VIEW_HEALTH_DATA.getDisplayName(),
-            "Display name should be formatted with spaces and proper case");
+                "Display name should be formatted with spaces and proper case");
         assertEquals("Manage Users", Permission.MANAGE_USERS.getDisplayName(),
-            "Display name should be formatted with spaces and proper case");
+                "Display name should be formatted with spaces and proper case");
     }
 
     @Test
@@ -146,9 +147,9 @@ public class PermissionTest {
     public void testToString() throws Exception {
         String result = Permission.CREATE_TASKS.toString();
         assertTrue(result.contains("CREATE_TASKS"),
-            "toString should contain permission name");
+                "toString should contain permission name");
         assertTrue(result.contains("Create tasks for patients"),
-            "toString should contain description");
+                "toString should contain description");
     }
 
     @Test
@@ -165,7 +166,7 @@ public class PermissionTest {
     public void testValueOfMethod() throws Exception {
         Permission permission = Permission.valueOf("CREATE_TASKS");
         assertEquals(Permission.CREATE_TASKS, permission,
-            "valueOf should return correct permission");
+                "valueOf should return correct permission");
     }
 
     @Test
@@ -183,7 +184,7 @@ public class PermissionTest {
         for (int i = 0; i < permissions.length; i++) {
             for (int j = i + 1; j < permissions.length; j++) {
                 assertNotEquals(permissions[i].name(), permissions[j].name(),
-                    "Permissions should have unique names");
+                        "Permissions should have unique names");
             }
         }
     }
@@ -206,10 +207,10 @@ public class PermissionTest {
             String description = permission.getDescription();
             // Description should be at least 10 characters
             assertTrue(description.length() >= 10,
-                "Permission " + permission.name() + " description should be meaningful (at least 10 chars)");
+                    "Permission " + permission.name() + " description should be meaningful (at least 10 chars)");
             // Description should start with a capital letter
             assertTrue(Character.isUpperCase(description.charAt(0)),
-                "Permission " + permission.name() + " description should start with capital letter");
+                    "Permission " + permission.name() + " description should start with capital letter");
         }
     }
 
@@ -217,12 +218,12 @@ public class PermissionTest {
     @DisplayName("Permission enum should be ordered logically by category")
     public void testPermissionOrdering() throws Exception {
         Permission[] permissions = Permission.values();
-        
+
         // User management permissions should come first (indices 0-2)
         assertEquals("VIEW_ALL_USERS", permissions[0].name());
         assertEquals("MANAGE_USERS", permissions[1].name());
         assertEquals("ASSIGN_ROLES", permissions[2].name());
-        
+
         // Patient management permissions should follow (indices 3-7)
         assertEquals("VIEW_ALL_PATIENTS", permissions[3].name());
         assertEquals("VIEW_ASSIGNED_PATIENTS", permissions[4].name());

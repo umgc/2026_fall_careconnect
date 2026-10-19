@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 /// A responsive "Add Task" button.
 /// - Shows a full [ElevatedButton.icon] on wide screens.
@@ -11,12 +12,13 @@ class AddTaskButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = AppLocalizations.of(context)!.calendarAddTask;
     final isCompact = MediaQuery.sizeOf(context).width < 500;
 
     if (isCompact) {
       // Compact icon-only button for phones
       return IconButton(
-        tooltip: 'Add Task',
+        tooltip: label,
         icon: const Icon(Icons.add),
         onPressed: onPressed,
       );
@@ -26,7 +28,7 @@ class AddTaskButton extends StatelessWidget {
     return ElevatedButton.icon(
       onPressed: onPressed,
       icon: const Icon(Icons.add, size: 18),
-      label: const Text('Add Task'),
+      label: Text(label),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(fontSize: 14),

@@ -2,18 +2,35 @@ package com.careconnect.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+
 import java.util.List;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+
 import lombok.*;
 
+/**
+ * A person receiving care, and the record every other patient-scoped entity hangs off.
+ * <p>
+ * <b>Extends {@link Auditable} since 2026-09-29.</b> It previously carried no timestamps at all.
+ * The EHR identity reconciliation algorithm needs {@code updated_at} as its baseline of last resort:
+ * when a field has no {@code ehr_identity_field_provenance} row yet -- because the value was typed
+ * at signup rather than established by a sync -- {@code updated_at} is what an incoming EHR value
+ * must beat to be applied (Assumption A1). Without the column that comparison has nothing to stand
+ * on. Existing rows are backfilled by SchemaPatchRunner; see that patch for what the chosen backfill
+ * value means for pre-existing patients.
+ * <p>
+ * Adding the superclass is source-compatible: Lombok's {@code @Builder} and
+ * {@code @AllArgsConstructor} do not include superclass fields, so existing construction sites are
+ * unaffected. JSON responses do gain {@code createdAt} and {@code updatedAt}.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @Entity
-public class Patient {
+public class Patient extends Auditable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -70,6 +87,12 @@ public class Patient {
     @ManyToOne
     @JoinColumn(name = "primary_care_provider_id")
     private Provider primaryCareProvider;
+    @Column(name = "alexa_refresh_token", length = 500, nullable = true)
+    private String alexaRefreshToken;
+    @Column(name = "alexa_refresh_token_expires_at", nullable = true)
+    private LocalDateTime alexaRefreshTokenExpiresAt;
+    @Column(name = "alexa_refresh_token_created_at", nullable = true)
+    private LocalDateTime alexaRefreshTokenCreatedAt;
 
     public Provider getPrimaryCareProvider() {
         return primaryCareProvider;
@@ -79,9 +102,10 @@ public class Patient {
         this.primaryCareProvider = primaryCareProvider;
     }
 
-
     // Explicit getter for compatibility if Lombok is not processed
-    public User getUser() { return user; }
+    public User getUser() {
+        return user;
+    }
 
     public boolean isAlexaLinked() {
         return Boolean.TRUE.equals(alexaLinked);
@@ -90,15 +114,6 @@ public class Patient {
     public void setAlexaLinked(Boolean alexaLinked) {
         this.alexaLinked = alexaLinked;
     }
-
-    @Column(name = "alexa_refresh_token", length = 500, nullable = true)
-    private String alexaRefreshToken;
-
-    @Column(name = "alexa_refresh_token_expires_at", nullable = true)
-    private LocalDateTime alexaRefreshTokenExpiresAt;
-
-    @Column(name = "alexa_refresh_token_created_at", nullable = true)
-    private LocalDateTime alexaRefreshTokenCreatedAt;
 
     public String getAlexaRefreshToken() {
         return alexaRefreshToken;

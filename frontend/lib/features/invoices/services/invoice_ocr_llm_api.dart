@@ -80,7 +80,8 @@ class InvoiceOcrLlmApi {
 
     // New shape: { invoice: {...}, duplicate: bool, message, duplicateId, duplicateInvoiceNumber }
     if (body is Map && body['invoice'] is Map) {
-      final inv = _mapInvoiceDtoToClient(body['invoice'] as Map<String, dynamic>);
+      final inv =
+          _mapInvoiceDtoToClient(body['invoice'] as Map<String, dynamic>);
       return InvoiceResponseDto(
         invoice: inv,
         duplicate: body['duplicate'] == true,
@@ -136,12 +137,12 @@ MediaType _mediaTypeFromString(String mime) {
   return MediaType('application', 'octet-stream');
 }
 
-
 String _normalizedNameForMime(String original, MediaType media) {
   final base = p.basenameWithoutExtension(original);
   final ext = () {
     if (media.type == 'image' && media.subtype == 'png') return '.png';
-    if (media.type == 'image' && (media.subtype == 'jpeg' || media.subtype == 'jpg')) return '.jpg';
+    if (media.type == 'image' &&
+        (media.subtype == 'jpeg' || media.subtype == 'jpg')) return '.jpg';
     if (media.type == 'application' && media.subtype == 'pdf') return '.pdf';
     return p.extension(original).isEmpty ? '.bin' : p.extension(original);
   }();
@@ -242,10 +243,10 @@ Invoice _mapInvoiceDtoToClient(Map<String, dynamic> j) {
 
   final check = (checkPayable != null)
       ? CheckPayableTo(
-    name: _str(checkPayable['name']),
-    address: _str(checkPayable['address']),
-    reference: _str(checkPayable['reference']),
-  )
+          name: _str(checkPayable['name']),
+          address: _str(checkPayable['address']),
+          reference: _str(checkPayable['reference']),
+        )
       : null;
 
   final history = historyList.map<HistoryEntry>((e) {
@@ -327,21 +328,21 @@ List<String> _stringList(Object? v) {
 
 PaymentStatus _paymentStatusFromWire(String? s) {
   switch ((s ?? '').toLowerCase()) {
-  case 'pending':
-  return PaymentStatus.pending;
-  case 'overdue':
-  return PaymentStatus.overdue;
-  case 'pendinginsurance':
-  return PaymentStatus.pendingInsurance;
-  case 'sent':
-  return PaymentStatus.sent;
-  case 'paid':
-  return PaymentStatus.paid;
-  case 'partialpayment':
-  return PaymentStatus.partialPayment;
-  case 'rejectedinsurance':
-  return PaymentStatus.rejectedInsurance;
-  default:
-  return PaymentStatus.pending;
+    case 'pending':
+      return PaymentStatus.pending;
+    case 'overdue':
+      return PaymentStatus.overdue;
+    case 'pendinginsurance':
+      return PaymentStatus.pendingInsurance;
+    case 'sent':
+      return PaymentStatus.sent;
+    case 'paid':
+      return PaymentStatus.paid;
+    case 'partialpayment':
+      return PaymentStatus.partialPayment;
+    case 'rejectedinsurance':
+      return PaymentStatus.rejectedInsurance;
+    default:
+      return PaymentStatus.pending;
   }
 }

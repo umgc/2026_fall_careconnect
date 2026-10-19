@@ -35,11 +35,16 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BillingQuoteControllerTest {
 
-    @Mock private PlanRepository planRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private TaxCalculationService taxCalculationService;
-    @Mock private PaymentService paymentService;
-    @Mock private SubscriptionRepository subscriptionRepository;
+    @Mock
+    private PlanRepository planRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private TaxCalculationService taxCalculationService;
+    @Mock
+    private PaymentService paymentService;
+    @Mock
+    private SubscriptionRepository subscriptionRepository;
 
     @InjectMocks
     private BillingQuoteController controller;

@@ -57,15 +57,17 @@ public class FileController {
     private final MessageRepository messageRepository;
     private final CaregiverService caregiverService;
     private final PatientService patientService;
+    @Value("${app.file.storage.use-s3:true}")
+    private boolean useS3ForLegacyEndpoints;
 
     @Autowired
     public FileController(@Autowired(required = false) S3StorageService s3StorageService,
-                         FileManagementService fileManagementService,
-                         UserRepository userRepository,
-                         PatientRepository patientRepository,
-                         MessageRepository messageRepository,
-                         CaregiverService caregiverService,
-                         PatientService patientService) {
+                          FileManagementService fileManagementService,
+                          UserRepository userRepository,
+                          PatientRepository patientRepository,
+                          MessageRepository messageRepository,
+                          CaregiverService caregiverService,
+                          PatientService patientService) {
         this.s3StorageService = s3StorageService;
         this.fileManagementService = fileManagementService;
         this.userRepository = userRepository;
@@ -74,12 +76,21 @@ public class FileController {
         this.caregiverService = caregiverService;
         this.patientService = patientService;
     }
-    
-    @Value("${app.file.storage.use-s3:true}")
-    private boolean useS3ForLegacyEndpoints;
 
     // ==================== NEW DATABASE-FIRST ENDPOINTS ====================
-    
+
+    /**
+     * Comma-separated, sorted list of valid intake document types (for error messages).
+     */
+    private static String employmentIntakeTypeNames() {
+        return UserFile.FileCategory.EMPLOYMENT_INTAKE.stream()
+                .map(Enum::name)
+                .sorted()
+                .collect(Collectors.joining(", "));
+    }
+
+    // ==================== EMPLOYMENT / HOME-CARE INTAKE WORKFLOW ====================
+
     /**
      * Upload a file using the new database-first approach
      */
@@ -88,17 +99,17 @@ public class FileController {
     @PostMapping("/upload")
     @Operation(summary = "Upload a file", description = "Upload a file for the current user (database-first storage)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "File uploaded successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid file or parameters"),
-        @ApiResponse(responseCode = "401", description = "Authentication required"),
-        @ApiResponse(responseCode = "413", description = "File too large")
+            @ApiResponse(responseCode = "200", description = "File uploaded successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid file or parameters"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "413", description = "File too large")
     })
     public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "category", defaultValue = "OTHER_DOCUMENT") String category,
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "patientId", required = false) Long patientId) {
-        
+
         try {
             User currentUser = getCurrentUser();
             log.info("File upload request - User: {}, Category: {}, PatientId: {}",
@@ -124,12 +135,12 @@ public class FileController {
             // Pass the canonical token downstream so storage naming/logs never see a raw alias.
             FileUploadResponse response = fileManagementService.uploadFile(
                     file, currentUser.getId(), userType, resolvedCategory.name(), description, patientId);
-            
+
             return ResponseEntity.ok(Map.of(
                     "data", response,
                     "message", "File uploaded successfully"
             ));
-            
+
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", e.getMessage()));
@@ -139,8 +150,6 @@ public class FileController {
                     .body(Map.of("error", "Failed to upload file"));
         }
     }
-
-    // ==================== EMPLOYMENT / HOME-CARE INTAKE WORKFLOW ====================
 
     /**
      * Dedicated intake workflow for employment and home-care documents (hiring and
@@ -156,10 +165,10 @@ public class FileController {
                     + "selection. The document is linked to the uploading owner and, when provided, to the "
                     + "patient / care circle it pertains to.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Intake document uploaded successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid or missing document type"),
-        @ApiResponse(responseCode = "401", description = "Authentication required"),
-        @ApiResponse(responseCode = "403", description = "Not authorized for the target patient / care circle")
+            @ApiResponse(responseCode = "200", description = "Intake document uploaded successfully"),
+            @ApiResponse(responseCode = "400", description = "Invalid or missing document type"),
+            @ApiResponse(responseCode = "401", description = "Authentication required"),
+            @ApiResponse(responseCode = "403", description = "Not authorized for the target patient / care circle")
     })
     public ResponseEntity<?> uploadIntakeDocument(
             @RequestParam("file") MultipartFile file,
@@ -242,8 +251,8 @@ public class FileController {
     @Operation(summary = "List my intake documents",
             description = "List employment / onboarding documents owned by the current user")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Intake documents retrieved successfully"),
-        @ApiResponse(responseCode = "401", description = "Authentication required")
+            @ApiResponse(responseCode = "200", description = "Intake documents retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required")
     })
     public ResponseEntity<?> listMyIntakeDocuments() {
         try {
@@ -260,6 +269,8 @@ public class FileController {
         }
     }
 
+    // ==================== STRUCTURED FORM ENTRIES ====================
+
     /**
      * List intake documents linked to a specific patient / care circle.
      */
@@ -269,8 +280,8 @@ public class FileController {
     @Operation(summary = "List intake documents for a patient / care circle",
             description = "List employment / onboarding documents linked to a patient (care-circle context)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Intake documents retrieved successfully"),
-        @ApiResponse(responseCode = "403", description = "Access denied")
+            @ApiResponse(responseCode = "200", description = "Intake documents retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
     })
     public ResponseEntity<?> listPatientIntakeDocuments(@PathVariable Long patientId) {
         try {
@@ -290,8 +301,6 @@ public class FileController {
         }
     }
 
-    // ==================== STRUCTURED FORM ENTRIES ====================
-
     /**
      * Create a structured form entry for an uploaded document. The original file
      * remains linked to the record as supporting evidence.
@@ -305,10 +314,10 @@ public class FileController {
                     + "A patient or employee context and all required fields for the document type "
                     + "must be supplied.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Structured entry created successfully"),
-        @ApiResponse(responseCode = "400", description = "Missing context, unsupported document type, or incomplete required fields"),
-        @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "File not found")
+            @ApiResponse(responseCode = "200", description = "Structured entry created successfully"),
+            @ApiResponse(responseCode = "400", description = "Missing context, unsupported document type, or incomplete required fields"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "File not found")
     })
     public ResponseEntity<?> createStructuredEntry(
             @PathVariable Long fileId,
@@ -350,9 +359,9 @@ public class FileController {
     @Operation(summary = "Get the structured entry for a file",
             description = "Fetch the structured record captured from an uploaded document")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Structured entry retrieved successfully"),
-        @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "File or structured entry not found")
+            @ApiResponse(responseCode = "200", description = "Structured entry retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "File or structured entry not found")
     })
     public ResponseEntity<?> getStructuredEntry(@PathVariable Long fileId) {
         try {
@@ -395,10 +404,10 @@ public class FileController {
             description = "Edit the captured fields, document type or context of a structured record. "
                     + "The same completeness rules as creation apply.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Structured entry updated successfully"),
-        @ApiResponse(responseCode = "400", description = "Missing context, unsupported document type, or incomplete required fields"),
-        @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "Structured entry not found")
+            @ApiResponse(responseCode = "200", description = "Structured entry updated successfully"),
+            @ApiResponse(responseCode = "400", description = "Missing context, unsupported document type, or incomplete required fields"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Structured entry not found")
     })
     public ResponseEntity<?> updateStructuredEntry(
             @PathVariable Long entryId,
@@ -447,8 +456,8 @@ public class FileController {
     @Operation(summary = "List structured entries for a patient",
             description = "List structured document records linked to a patient / care circle")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Structured entries retrieved successfully"),
-        @ApiResponse(responseCode = "403", description = "Access denied")
+            @ApiResponse(responseCode = "200", description = "Structured entries retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied")
     })
     public ResponseEntity<?> listPatientStructuredEntries(@PathVariable Long patientId) {
         try {
@@ -477,44 +486,44 @@ public class FileController {
     @GetMapping("/{fileId}/download")
     @Operation(summary = "Download a file", description = "Download file content by file ID")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "File downloaded successfully"),
-        @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "File not found")
+            @ApiResponse(responseCode = "200", description = "File downloaded successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "File not found")
     })
     public ResponseEntity<?> downloadFile(@PathVariable Long fileId) {
         try {
             User currentUser = getCurrentUser();
-            
+
             // Get file metadata
             Optional<UserFileDTO> fileOpt = fileManagementService.getFile(fileId);
             if (fileOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             UserFileDTO fileDto = fileOpt.get();
-            
+
             // Check access permissions
             if (!hasAccessToFile(currentUser, fileDto)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Not authorized to access this file"));
             }
-            
+
             // Download file content
             byte[] content = fileManagementService.downloadFile(fileId);
-            
+
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(fileDto.getContentType()))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, 
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
                             "attachment; filename=\"" + fileDto.getOriginalFilename() + "\"")
                     .body(content);
-                    
+
         } catch (Exception e) {
             log.error("Error downloading file: {}", fileId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to download file"));
         }
     }
-    
+
     /**
      * List files for current user
      */
@@ -523,31 +532,31 @@ public class FileController {
     @GetMapping("/my-files")
     @Operation(summary = "List my files", description = "List files owned by the current user")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Files retrieved successfully"),
-        @ApiResponse(responseCode = "401", description = "Authentication required")
+            @ApiResponse(responseCode = "200", description = "Files retrieved successfully"),
+            @ApiResponse(responseCode = "401", description = "Authentication required")
     })
     public ResponseEntity<?> listMyFiles(
-            @Parameter(description = "Filter by file category") 
+            @Parameter(description = "Filter by file category")
             @RequestParam(value = "category", required = false) String category) {
         try {
             User currentUser = getCurrentUser();
             String userType = currentUser.getRole().name();
-            
+
             List<UserFileDTO> files = fileManagementService.listUserFiles(
                     currentUser.getId(), userType, category);
-            
+
             return ResponseEntity.ok(Map.of(
                     "data", files,
                     "message", "Files retrieved successfully"
             ));
-            
+
         } catch (Exception e) {
             log.error("Error listing user files", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to list files"));
         }
     }
-    
+
     /**
      * List files for a specific patient
      */
@@ -556,9 +565,9 @@ public class FileController {
     @GetMapping("/patient/{patientId}")
     @Operation(summary = "List patient files", description = "List files associated with a specific patient")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Patient files retrieved successfully"),
-        @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "Patient not found")
+            @ApiResponse(responseCode = "200", description = "Patient files retrieved successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "Patient not found")
     })
     public ResponseEntity<?> listPatientFiles(
             @PathVariable Long patientId,
@@ -566,32 +575,32 @@ public class FileController {
             @RequestParam(value = "category", required = false) String category) {
         try {
             User currentUser = getCurrentUser();
-            
+
             // Check access to patient
             if (!hasAccessToPatient(currentUser, patientId)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Not authorized to access this patient's files"));
             }
-            
+
             List<UserFileDTO> files;
             if (currentUser.getRole() == Role.PATIENT) {
                 files = fileManagementService.listFilesForPatient(patientId, category);
             } else {
                 files = fileManagementService.listFilesForCaregiverPatient(patientId, category);
             }
-            
+
             return ResponseEntity.ok(Map.of(
                     "data", files,
                     "message", "Patient files retrieved successfully"
             ));
-            
+
         } catch (Exception e) {
             log.error("Error listing patient files for patientId: {}", patientId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to list patient files"));
         }
     }
-    
+
     /**
      * Delete a file
      */
@@ -600,40 +609,42 @@ public class FileController {
     @DeleteMapping("/{fileId}")
     @Operation(summary = "Delete a file", description = "Delete a file by ID")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "File deleted successfully"),
-        @ApiResponse(responseCode = "403", description = "Access denied"),
-        @ApiResponse(responseCode = "404", description = "File not found")
+            @ApiResponse(responseCode = "200", description = "File deleted successfully"),
+            @ApiResponse(responseCode = "403", description = "Access denied"),
+            @ApiResponse(responseCode = "404", description = "File not found")
     })
     public ResponseEntity<?> deleteFile(@PathVariable Long fileId) {
         try {
             User currentUser = getCurrentUser();
-            
+
             // Get file to check ownership
             Optional<UserFileDTO> fileOpt = fileManagementService.getFile(fileId);
             if (fileOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "File not found"));
             }
-            
+
             UserFileDTO fileDto = fileOpt.get();
             if (!fileDto.getOwnerId().equals(currentUser.getId())) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of("error", "Not authorized to delete this file"));
             }
-            
+
             fileManagementService.deleteFile(fileId, currentUser.getId());
-            
+
             return ResponseEntity.ok(Map.of(
                     "message", "File deleted successfully"
             ));
-            
+
         } catch (Exception e) {
             log.error("Error deleting file: {}", fileId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to delete file"));
         }
     }
-    
+
+    // ==================== S3 ENDPOINTS ====================
+
     /**
      * Get user's profile image
      */
@@ -642,35 +653,33 @@ public class FileController {
     @GetMapping("/profile-image")
     @Operation(summary = "Get profile image", description = "Get current user's profile image")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Profile image retrieved"),
-        @ApiResponse(responseCode = "404", description = "No profile image found")
+            @ApiResponse(responseCode = "200", description = "Profile image retrieved"),
+            @ApiResponse(responseCode = "404", description = "No profile image found")
     })
     public ResponseEntity<?> getProfileImage() {
         try {
             User currentUser = getCurrentUser();
             String userType = currentUser.getRole().name();
-            
+
             Optional<UserFileDTO> profileImage = fileManagementService.getUserProfileImage(
                     currentUser.getId(), userType);
-            
+
             if (profileImage.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("error", "No profile image found"));
             }
-            
+
             return ResponseEntity.ok(Map.of(
                     "data", profileImage.get(),
                     "message", "Profile image retrieved successfully"
             ));
-            
+
         } catch (Exception e) {
             log.error("Error getting profile image", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("error", "Failed to get profile image"));
         }
     }
-    
-    // ==================== S3 ENDPOINTS ====================
 
     @RequirePermission(Permission.RECORD_HEALTH_DATA)
 
@@ -681,27 +690,27 @@ public class FileController {
             @PathVariable Long userId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "category", defaultValue = "documents") String category) {
-        
+
         try {
             log.info("Upload request for user ID: {}, category: {}", userId, category);
-            
+
             // Get user details from database
             User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
-            
+                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
             // Get userType from user's role
             String userType = user.getRole().name();
-            
+
             if (file.isEmpty()) {
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", "File is empty"));
+                        .body(Map.of("error", "File is empty"));
             }
-            
+
             if (file.getSize() > 10 * 1024 * 1024) {
                 return ResponseEntity.badRequest()
-                    .body(Map.of("error", "File size exceeds 10MB limit"));
+                        .body(Map.of("error", "File size exceeds 10MB limit"));
             }
-            
+
             // Use S3 or database based on configuration
             String filePath;
             String fileUrl;
@@ -709,23 +718,23 @@ public class FileController {
             filePath = s3StorageService.uploadFile(file, userId, userType, category);
             fileUrl = s3StorageService.getFileUrl(filePath);
 
-            
+
             log.info("File uploaded successfully: {} for user: {} ({})", filePath, userId, userType);
-            
+
             return ResponseEntity.ok(Map.of(
-                "message", "File uploaded successfully",
-                "filePath", filePath,
-                "fileUrl", fileUrl,
-                "fileName", file.getOriginalFilename(),
-                "userId", userId,
-                "userType", userType,
-                "category", category
+                    "message", "File uploaded successfully",
+                    "filePath", filePath,
+                    "fileUrl", fileUrl,
+                    "fileName", file.getOriginalFilename(),
+                    "userId", userId,
+                    "userType", userType,
+                    "category", category
             ));
-            
+
         } catch (Exception e) {
             log.error("File upload failed for user {}: {}", userId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "File upload failed: " + e.getMessage()));
+                    .body(Map.of("error", "File upload failed: " + e.getMessage()));
         }
     }
 
@@ -844,6 +853,8 @@ public class FileController {
         }
     }
 
+    // ==================== UTILITY METHODS ====================
+
     @RequirePermission(Permission.VIEW_HEALTH_DATA)
 
 
@@ -852,24 +863,22 @@ public class FileController {
     public ResponseEntity<?> getValidCategories(@PathVariable Long userId) {
         try {
             User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + userId));
-            
+                    .orElseThrow(() -> new RuntimeException("User not found: " + userId));
+
             var categories = getValidCategoriesForRole(user.getRole());
-            
+
             return ResponseEntity.ok(Map.of(
-                "categories", categories,
-                "userType", user.getRole().name(),
-                "userId", userId
+                    "categories", categories,
+                    "userType", user.getRole().name(),
+                    "userId", userId
             ));
-            
+
         } catch (Exception e) {
             log.error("Failed to get categories for user {}: {}", userId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Failed to get categories"));
+                    .body(Map.of("error", "Failed to get categories"));
         }
     }
-
-    // ==================== UTILITY METHODS ====================
 
     /**
      * Get the current authenticated user
@@ -888,11 +897,11 @@ public class FileController {
         if (currentUser.getRole() == Role.ADMIN) {
             return true;
         }
-        
+
         if (currentUser.getRole() == Role.PATIENT) {
             return currentUser.getId().equals(patientId);
         }
-        
+
         if (currentUser.getRole() == Role.CAREGIVER) {
             // Check if caregiver has access to this patient
             Optional<Patient> patient = patientRepository.findById(patientId);
@@ -901,7 +910,7 @@ public class FileController {
                 return caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
             }
         }
-        
+
         return false;
     }
 
@@ -913,12 +922,12 @@ public class FileController {
         if (currentUser.getRole() == Role.ADMIN) {
             return true;
         }
-        
+
         // Owner has access to their files
         if (fileDto.getOwnerId().equals(currentUser.getId())) {
             return true;
         }
-        
+
         // If file is associated with a patient, check patient access
         if (fileDto.getPatientId() != null) {
             return hasAccessToPatient(currentUser, fileDto.getPatientId());
@@ -928,7 +937,7 @@ public class FileController {
         if (messageRepository.existsAttachmentInUserConversation(fileDto.getId(), currentUser.getId())) {
             return true;
         }
-        
+
         return false;
     }
 
@@ -960,10 +969,10 @@ public class FileController {
 
     private List<String> getValidCategoriesForRole(Role role) {
         return switch (role) {
-            case PATIENT -> List.of("profile", "documents", "medical-records", "prescriptions", 
-                                            "insurance", "reports", "consent-forms", "emergency-contacts");
-            case CAREGIVER -> List.of("profile", "certifications", "documents", "training", 
-                                              "background-check", "references", "contracts");
+            case PATIENT -> List.of("profile", "documents", "medical-records", "prescriptions",
+                    "insurance", "reports", "consent-forms", "emergency-contacts");
+            case CAREGIVER -> List.of("profile", "certifications", "documents", "training",
+                    "background-check", "references", "contracts");
             case FAMILY_MEMBER -> List.of("profile", "documents", "authorization");
             default -> List.of("documents");
         };
@@ -972,13 +981,5 @@ public class FileController {
     private String extractFileName(String filePath) {
         String[] parts = filePath.split("/");
         return parts[parts.length - 1];
-    }
-
-    /** Comma-separated, sorted list of valid intake document types (for error messages). */
-    private static String employmentIntakeTypeNames() {
-        return UserFile.FileCategory.EMPLOYMENT_INTAKE.stream()
-                .map(Enum::name)
-                .sorted()
-                .collect(Collectors.joining(", "));
     }
 }

@@ -1,0 +1,140 @@
+<div id="careconnect-run-graph">
+  <style>
+    #careconnect-run-graph { width: 100%; color: var(--foreground); }
+    #careconnect-run-graph .graph-title { margin-bottom: 12px; }
+    #careconnect-run-graph .route-controls { margin-bottom: 16px; }
+    #careconnect-run-graph .root-row { display: flex; justify-content: center; }
+    #careconnect-run-graph .root-row .btn { max-width: 430px; width: 100%; }
+    #careconnect-run-graph .fork { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; }
+    #careconnect-run-graph .lane { min-width: 0; transition: opacity 180ms ease; }
+    #careconnect-run-graph .lane.is-muted { opacity: 0.3; }
+    #careconnect-run-graph .lane-heading { display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 8px; font-weight: 500; }
+    #careconnect-run-graph .lane-mark { width: 12px; height: 12px; border-radius: 50%; background: var(--viz-series-1); }
+    #careconnect-run-graph .backend .lane-mark { background: var(--viz-series-2); }
+    #careconnect-run-graph .step { display: flex; flex-direction: column; align-items: center; }
+    #careconnect-run-graph .step .btn { width: 100%; }
+    #careconnect-run-graph .arrow { color: var(--muted-foreground); padding: 5px 0; font-weight: 500; }
+    #careconnect-run-graph .bridge { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 14px 0; color: var(--muted-foreground); }
+    #careconnect-run-graph .bridge-line { height: 1px; flex: 1; max-width: 120px; background: var(--border); }
+    #careconnect-run-graph .selected-detail { margin-top: 14px; }
+    #careconnect-run-graph .selected-detail h3 { margin-top: 0; }
+    #careconnect-run-graph .selected-command { display: block; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #careconnect-run-graph .btn[aria-current="true"] { box-shadow: 0 0 0 2px var(--ring); }
+    @media (max-width: 560px) {
+      #careconnect-run-graph .fork { grid-template-columns: 1fr; gap: 18px; }
+      #careconnect-run-graph .bridge { margin: 10px 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #careconnect-run-graph .lane { transition: none; }
+    }
+  </style>
+
+  <h2 class="graph-title">CareConnect repository and launch graph</h2>
+
+  <div class="viz-controls route-controls" aria-label="Highlight a run path">
+    <button type="button" class="btn btn-primary" data-route="full" aria-pressed="true">Full stack</button>
+    <button type="button" class="btn" data-route="ios" aria-pressed="false">iOS app only</button>
+    <button type="button" class="btn" data-route="backend" aria-pressed="false">Backend only</button>
+  </div>
+
+  <div class="root-row">
+    <button type="button" class="btn btn-block graph-node" data-node="root">
+      Repository root<br><code>2026_fall_careconnect/</code>
+    </button>
+  </div>
+  <div class="text-center arrow" aria-hidden="true">↓ splits into two runnable components</div>
+
+  <div class="fork" role="group" aria-label="CareConnect runnable components">
+    <section class="lane frontend" data-lane="ios" aria-label="Flutter iOS launch path">
+      <div class="lane-heading"><span class="lane-mark" aria-hidden="true"></span>Flutter iOS app</div>
+      <div class="step">
+        <button type="button" class="btn btn-block graph-node" data-node="frontend"><code>frontend/</code><br>Flutter project</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="entry"><code>lib/main.dart</code><br>Dart entry point</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="packages"><code>flutter pub get</code><br>Resolve packages</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="simulator">iPhone 16 Pro<br>iOS 18.0 simulator</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="run"><code>flutter run -d …</code><br>Build and launch</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="ui">CareConnect UI<br>running in Simulator</button>
+      </div>
+    </section>
+
+    <section class="lane backend" data-lane="backend" aria-label="Spring Boot backend launch path">
+      <div class="lane-heading"><span class="lane-mark" aria-hidden="true"></span>Spring Boot API</div>
+      <div class="step">
+        <button type="button" class="btn btn-block graph-node" data-node="backend"><code>backend/core/</code><br>Spring Boot project</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="pom"><code>pom.xml</code><br>Maven configuration</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="maven"><code>./mvnw spring-boot:run</code><br>Build and start server</button>
+        <span class="arrow" aria-hidden="true">↓</span>
+        <button type="button" class="btn btn-block graph-node" data-node="api">CareConnect API<br><code>localhost:8080</code></button>
+      </div>
+    </section>
+  </div>
+
+  <div class="bridge" aria-label="The Flutter application exchanges HTTP API requests and responses with the backend">
+    <span class="bridge-line" aria-hidden="true"></span>
+    <span>iOS UI ↔ HTTP API ↔ backend</span>
+    <span class="bridge-line" aria-hidden="true"></span>
+  </div>
+
+  <section class="card selected-detail" aria-live="polite" aria-label="Selected graph node details">
+    <h3 id="cc-detail-title">Repository root</h3>
+    <div id="cc-detail-text">Contains the independently runnable Flutter frontend and Spring Boot backend.</div>
+    <code id="cc-detail-command" class="selected-command">cd /Volumes/TerenceB/SWEN670/2026_fall_careconnect</code>
+  </section>
+
+  <script>
+    (() => {
+      const root = document.getElementById('careconnect-run-graph');
+      const routeButtons = [...root.querySelectorAll('[data-route]')];
+      const lanes = [...root.querySelectorAll('[data-lane]')];
+      const nodes = [...root.querySelectorAll('[data-node]')];
+      const title = root.querySelector('#cc-detail-title');
+      const detail = root.querySelector('#cc-detail-text');
+      const command = root.querySelector('#cc-detail-command');
+
+      const details = {
+        root: ['Repository root', 'Contains the independently runnable Flutter frontend and Spring Boot backend.', 'cd /Volumes/TerenceB/SWEN670/2026_fall_careconnect'],
+        frontend: ['Flutter project', 'Run all Flutter and iOS commands from this directory.', 'cd /Volumes/TerenceB/SWEN670/2026_fall_careconnect/frontend'],
+        entry: ['Dart entry point', 'Flutter begins CareConnect execution in main.dart.', 'frontend/lib/main.dart'],
+        packages: ['Resolve Flutter packages', 'Installs or refreshes the Dart and Flutter dependencies declared by pubspec.yaml.', 'flutter pub get'],
+        simulator: ['Boot the iOS simulator', 'Starts the installed iPhone 16 Pro simulator running iOS 18.0.', 'xcrun simctl boot D991077F-4C41-4DBA-97B4-4C00BF1032B1\nopen -a Simulator'],
+        run: ['Build and launch CareConnect', 'Compiles the Flutter iOS target and installs it on the selected simulator.', 'flutter run -d D991077F-4C41-4DBA-97B4-4C00BF1032B1'],
+        ui: ['Running CareConnect interface', 'The app can display without the backend, but authentication and data-backed features may require the API.', 'Press r for hot reload · R for hot restart · q to stop'],
+        backend: ['Spring Boot project', 'Run the CareConnect API from the backend core directory in a second Terminal.', 'cd /Volumes/TerenceB/SWEN670/2026_fall_careconnect/backend/core'],
+        pom: ['Maven configuration', 'Defines the backend build, dependencies, and Spring Boot configuration.', 'backend/core/pom.xml'],
+        maven: ['Start the backend', 'Uses the repository Maven wrapper to build and run Spring Boot.', './mvnw spring-boot:run'],
+        api: ['Backend API', 'The iOS app sends requests to the locally running CareConnect server.', 'http://localhost:8080']
+      };
+
+      function selectNode(node) {
+        nodes.forEach(item => item.setAttribute('aria-current', item === node ? 'true' : 'false'));
+        const [nextTitle, nextDetail, nextCommand] = details[node.dataset.node];
+        title.textContent = nextTitle;
+        detail.textContent = nextDetail;
+        command.textContent = nextCommand;
+      }
+
+      function selectRoute(route) {
+        routeButtons.forEach(button => {
+          const active = button.dataset.route === route;
+          button.setAttribute('aria-pressed', active ? 'true' : 'false');
+          button.classList.toggle('btn-primary', active);
+        });
+        lanes.forEach(lane => {
+          const visible = route === 'full' || lane.dataset.lane === route;
+          lane.classList.toggle('is-muted', !visible);
+        });
+      }
+
+      routeButtons.forEach(button => button.addEventListener('click', () => selectRoute(button.dataset.route)));
+      nodes.forEach(node => node.addEventListener('click', () => selectNode(node)));
+      selectNode(root.querySelector('[data-node="root"]'));
+    })();
+  </script>
+</div>

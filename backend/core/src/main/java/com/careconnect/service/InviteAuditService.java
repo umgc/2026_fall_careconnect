@@ -10,15 +10,16 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Dedicated bean for writing invite audit rows.
- *
+ * <p>
  * Extracted from InviteTokenService so that {@link #recordInNewTransaction} is
  * invoked ACROSS a bean boundary. Spring's transactional AOP is proxy-based:
  * a self-invocation (this.method()) bypasses the proxy and silently ignores
+ *
  * @Transactional. By living in its own @Service, these methods are always
  * called through the proxy, so REQUIRES_NEW is honoured — audit writes from
  * read-only flows (e.g. previewInvite) run in their own transaction instead of
  * failing inside the caller's read-only transaction.
- *
+ * <p>
  * Audit writes are best-effort: any failure is logged and swallowed so audit
  * problems never break the business flow.
  */

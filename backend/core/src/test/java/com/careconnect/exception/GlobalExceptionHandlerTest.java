@@ -8,6 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 
 import java.util.List;
 import java.util.Map;
@@ -42,15 +44,13 @@ class GlobalExceptionHandlerTest {
         final ResponseEntity<?> response = handler.handleForbiddenScopeException(ex);
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertNotNull(body);
         assertEquals(false, body.get("success"));
         assertEquals("WITHHELD", body.get("deliveryStatus"));
         assertEquals(auditId.toString(), body.get("auditId"));
 
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> error = (Map<String, Object>) body.get("error");
+        @SuppressWarnings("unchecked") final Map<String, Object> error = (Map<String, Object>) body.get("error");
         assertNotNull(error);
         assertEquals("FORBIDDEN_SCOPE", error.get("code"));
         assertEquals(ex.getMessage(), error.get("message"));
@@ -68,8 +68,7 @@ class GlobalExceptionHandlerTest {
         final ResponseEntity<?> response = handler.handleRegistrationException(ex);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertNotNull(body);
         assertEquals("email taken", body.get("error"));
     }
@@ -84,8 +83,7 @@ class GlobalExceptionHandlerTest {
         final ResponseEntity<?> response = handler.handleAppException(ex);
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertNotNull(body);
         assertEquals("access denied", body.get("error"));
     }
@@ -100,10 +98,27 @@ class GlobalExceptionHandlerTest {
         final ResponseEntity<?> response = handler.handleOtherExceptions(ex);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertNotNull(body);
         assertEquals("An unexpected error occurred", body.get("error"));
+    }
+
+    // ── handleAccessDeniedException ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("handleAccessDeniedException returns 403 for a @PreAuthorize denial instead of the catch-all 500")
+    void handleAccessDeniedException_preAuthorizeDenial_returns403() throws Exception {
+        // AuthorizationDeniedException is what @PreAuthorize throws. It extends AccessDeniedException,
+        // so this is the case that previously fell through to handleOtherExceptions as a 500.
+        final AuthorizationDeniedException ex = new AuthorizationDeniedException(
+                "Access Denied", new AuthorizationDecision(false));
+
+        final ResponseEntity<?> response = handler.handleAccessDeniedException(ex);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
+        assertNotNull(body);
+        assertEquals("Access Denied", body.get("error"));
     }
 
 // ── handleUnauthorizedException ────────────────────────────────────────────
@@ -120,8 +135,7 @@ class GlobalExceptionHandlerTest {
         // not 401. Locking this in a test to prevent future well-meaning
         // "fix" that would break every UnauthorizedException call site.
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, String> body = (Map<String, String>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, String> body = (Map<String, String>) response.getBody();
         assertNotNull(body);
         assertEquals("token expired", body.get("error"));
     }
@@ -147,12 +161,10 @@ class GlobalExceptionHandlerTest {
         final ResponseEntity<?> response = handler.handleValidationException(ex);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertNotNull(body);
         assertEquals("Validation failed", body.get("error"));
-        @SuppressWarnings("unchecked")
-        final List<String> fields = (List<String>) body.get("fields");
+        @SuppressWarnings("unchecked") final List<String> fields = (List<String>) body.get("fields");
         assertNotNull(fields);
         assertEquals(2, fields.size());
         assertTrue(fields.contains("email: must not be blank"));
@@ -178,16 +190,14 @@ class GlobalExceptionHandlerTest {
         final ResponseEntity<?> response = handler.handleForbiddenScopeException(ex);
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> body = (Map<String, Object>) response.getBody();
+        @SuppressWarnings("unchecked") final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertNotNull(body);
         assertEquals(false, body.get("success"));
         assertEquals("WITHHELD", body.get("deliveryStatus"));
         assertFalse(body.containsKey("auditId"),
                 "auditId key should be omitted when null, not present with null value");
 
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> error = (Map<String, Object>) body.get("error");
+        @SuppressWarnings("unchecked") final Map<String, Object> error = (Map<String, Object>) body.get("error");
         assertNotNull(error);
         assertFalse(error.containsKey("denialReason"),
                 "denialReason key should be omitted when null, not present with null value");

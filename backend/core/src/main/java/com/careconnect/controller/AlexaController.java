@@ -30,26 +30,20 @@ import java.util.stream.Collectors;
 @RequestMapping("/v1/api/alexa")
 public class AlexaController {
 
+    private final ObjectMapper mapper = new ObjectMapper();
     @Autowired
     private SecurityUtil securityUtil;
-
     @Autowired
     private AuthorizationService authorizationService;
-
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
     private PatientRepository patientRepository;
-
     // 🆕 Inject TaskServiceV2 instead of using RestTemplate
     @Autowired
     private TaskServiceV2 taskService;
-
-    private final ObjectMapper mapper = new ObjectMapper();
 
     // ==============================================================
     // 🔧 Helper: Unlink Alexa account for a patient

@@ -1,4 +1,4 @@
-﻿import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -65,46 +65,46 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
     return 'Sad';
   }
 
-  String _translateMood(String mood, AppLocalizations t){
-    switch(mood){
-      case('Sad'):
+  String _translateMood(String mood, AppLocalizations t) {
+    switch (mood) {
+      case ('Sad'):
         return t.recentcheckinwidget_moodSad;
-      case('Down'):
+      case ('Down'):
         return t.recentcheckinwidget_moodDown;
-      case('Okay'):
+      case ('Okay'):
         return t.recentcheckinwidget_moodOkay;
-      case('Happy'):
+      case ('Happy'):
         return t.recentcheckinwidget_moodHappy;
-      case('Great'):
+      case ('Great'):
         return t.recentcheckinwidget_moodGreat;
-      case('Excellent'):
+      case ('Excellent'):
         return t.recentcheckinwidget_moodExcellent;
       default:
         return mood;
     }
   }
 
-  String _translateMoodTags(String tag, AppLocalizations t){
-    switch(tag){
-      case('happy'):
+  String _translateMoodTags(String tag, AppLocalizations t) {
+    switch (tag) {
+      case ('happy'):
         return t.currentmoodwidget_moodTagHappy;
-      case('calm'):
+      case ('calm'):
         return t.currentmoodwidget_moodTagCalm;
-      case('positive'):
+      case ('positive'):
         return t.currentmoodwidget_moodTagPositive;
-      case('comfortable'):
+      case ('comfortable'):
         return t.currentmoodwidget_moodTagComfortable;
-      case('stable'):
+      case ('stable'):
         return t.currentmoodwidget_moodTagStable;
-      case('neutral'):
+      case ('neutral'):
         return t.currentmoodwidget_moodTagNeutral;
-      case('watchful'):
+      case ('watchful'):
         return t.currentmoodwidget_moodTagWatchful;
-      case('low'):
+      case ('low'):
         return t.currentmoodwidget_moodTagLow;
-      case('monitoring'):
+      case ('monitoring'):
         return t.currentmoodwidget_moodTagMonitoring;
-      case('no recent mood data'):
+      case ('no recent mood data'):
         return t.currentmoodwidget_noMoodTags;
       default:
         return tag;
@@ -254,7 +254,9 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final dateLabel = widget.date == null ? t.medicationreminderwidget_today : _formatDate(widget.date!);
+    final dateLabel = widget.date == null
+        ? t.medicationreminderwidget_today
+        : _formatDate(widget.date!);
     final latestMoods = _latestMoodEntries();
     final averageMood = _averageMoodScore();
     final trendPoints = _dailyMoodTrendForLast7Days(averageMood);
@@ -349,7 +351,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                     thumbColor: Colors.white,
                     overlayColor: theme.colorScheme.primary.withOpacity(0.2),
                     trackShape: const GradientRectSliderTrackShape(
-                      gradient: LinearGradient(colors: [Colors.blue, Colors.yellow]),
+                      gradient:
+                          LinearGradient(colors: [Colors.blue, Colors.yellow]),
                     ),
                   ),
                   child: Slider(
@@ -420,7 +423,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                       } catch (e) {
                         messenger.showSnackBar(
                           SnackBar(
-                            content: Text('${t.currentmoodwidget_errorSavingMood}: $e'),
+                            content: Text(
+                                '${t.currentmoodwidget_errorSavingMood}: $e'),
                             backgroundColor: errorColor,
                           ),
                         );
@@ -438,7 +442,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
               trendPoints: trendPoints,
             ),
             const SizedBox(height: 14),
-            Text(t.currentmoodwidget_lastFourMoods, style: theme.textTheme.titleMedium),
+            Text(t.currentmoodwidget_lastFourMoods,
+                style: theme.textTheme.titleMedium),
             const SizedBox(height: 10),
             GridView.builder(
               shrinkWrap: true,
@@ -459,7 +464,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                 final date = entry['date'] as DateTime;
 
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.surfaceContainerHighest.withValues(
                       alpha: 0.35,
@@ -485,7 +491,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                               '$score/10 - $label',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(height: 2),
                             Text(
@@ -512,9 +519,11 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
             children: widget.moodTags
                 .map(
                   (tag) => Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: theme.colorScheme.primary.withValues(alpha: 0.3),
@@ -578,7 +587,8 @@ class _MoodSummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: theme.colorScheme.outline.withValues(alpha: 0.2),
@@ -815,7 +825,8 @@ class _MoodSparklinePainter extends CustomPainter {
   }
 }
 
-class GradientRectSliderTrackShape extends SliderTrackShape with BaseSliderTrackShape {
+class GradientRectSliderTrackShape extends SliderTrackShape
+    with BaseSliderTrackShape {
   const GradientRectSliderTrackShape({required this.gradient});
   final LinearGradient gradient;
 
@@ -834,10 +845,12 @@ class GradientRectSliderTrackShape extends SliderTrackShape with BaseSliderTrack
   }) {
     final double trackHeight = sliderTheme.trackHeight ?? 4.0;
     final double trackLeft = offset.dx;
-    final double trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
+    final double trackTop =
+        offset.dy + (parentBox.size.height - trackHeight) / 2;
     final double trackRight = trackLeft + parentBox.size.width;
     final double trackBottom = trackTop + trackHeight;
-    final Rect trackRect = Rect.fromLTRB(trackLeft, trackTop, trackRight, trackBottom);
+    final Rect trackRect =
+        Rect.fromLTRB(trackLeft, trackTop, trackRight, trackBottom);
 
     final Paint paint = Paint()
       ..shader = gradient.createShader(trackRect)

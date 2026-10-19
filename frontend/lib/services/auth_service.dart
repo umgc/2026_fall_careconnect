@@ -88,7 +88,8 @@ class AuthService {
               final error = uri.queryParameters['error'];
 
               if (error != null) {
-                completer.completeError(Exception('${t.authservice_oauthError}: $error'));
+                completer.completeError(
+                    Exception('${t.authservice_oauthError}: $error'));
                 return;
               }
 
@@ -169,7 +170,8 @@ class AuthService {
   }
 
   /// LOGIN - Updated to return UserSession and handle JWT
-  static Future<UserSession> login(String email, String password, AppLocalizations t) async {
+  static Future<UserSession> login(
+      String email, String password, AppLocalizations t) async {
     final response = await ApiService.login(email, password);
     final data = jsonDecode(response.body);
 
@@ -204,14 +206,13 @@ class AuthService {
     }
   }
 
-  static Future<String> register({
-    required String name,
-    required String email,
-    required String password,
-    String role = 'PATIENT',
-    required String verificationBaseUrl,
-    required AppLocalizations t
-  }) async {
+  static Future<String> register(
+      {required String name,
+      required String email,
+      required String password,
+      String role = 'PATIENT',
+      required String verificationBaseUrl,
+      required AppLocalizations t}) async {
     final headers = {'Content-Type': 'application/json'};
 
     final response = await http.post(
@@ -233,8 +234,7 @@ class AuthService {
       // If backend returns a string: just return it
       if (data is String) return data;
       // If backend returns JSON: extract a message
-      return data['message'] ??
-          t.authservice_emailRegistrationSuccess;
+      return data['message'] ?? t.authservice_emailRegistrationSuccess;
     } else {
       print("Registration Error: $data");
       throw Exception(data['error'] ?? t.authservice_emailRegistrationFailed);
@@ -361,7 +361,8 @@ class AuthService {
         print(
           "Caregiver Registration failed: ${response.statusCode} - ${response.body}",
         );
-        throw Exception(data['error'] ?? t.authservice_caregiverRegistrationFailedMessage);
+        throw Exception(
+            data['error'] ?? t.authservice_caregiverRegistrationFailedMessage);
       }
     } catch (e) {
       print('Exception during caregiver registration: $e');
@@ -389,7 +390,8 @@ class AuthService {
     }
   }
 
-  static Future<String> requestPasswordReset({required String email, required AppLocalizations t}) async {
+  static Future<String> requestPasswordReset(
+      {required String email, required AppLocalizations t}) async {
     try {
       // Fix: Use ApiConstants.auth which includes the full path
       final fullUrl = '${ApiConstants.auth}/password/forgot';
@@ -403,11 +405,11 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
-        return responseData['message'] ??
-            t.authservice_passwordResetLinkSent;
+        return responseData['message'] ?? t.authservice_passwordResetLinkSent;
       } else {
         final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? t.authservice_passwordResetLinkFailed);
+        throw Exception(
+            errorData['message'] ?? t.authservice_passwordResetLinkFailed);
       }
     } catch (e) {
       throw Exception('${t.authservice_networkError}: ${e.toString()}');
@@ -443,8 +445,9 @@ class AuthService {
         print(
           "Password reset error: ${response.statusCode} - ${response.body}",
         );
-        final errorMessage =
-            data['error'] ?? data['message'] ?? t.authservice_passwordResetFailed;
+        final errorMessage = data['error'] ??
+            data['message'] ??
+            t.authservice_passwordResetFailed;
 
         // Handle specific error cases
         if (errorMessage.toLowerCase().contains('expired')) {
@@ -661,18 +664,16 @@ class AuthService {
     try {
       final endpoint = '${ApiConstants.auth}/sso/alexa/code';
 
-      final response = await http
-          .post(
-            Uri.parse(endpoint),
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer $token',
-            },
-          )
-          .timeout(
-            const Duration(seconds: 30),
-            onTimeout: () => throw SocketException(t.authservice_socketTimeout),
-          );
+      final response = await http.post(
+        Uri.parse(endpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw SocketException(t.authservice_socketTimeout),
+      );
 
       final data = jsonDecode(response.body);
 
@@ -713,7 +714,8 @@ class AuthService {
     }
   }
 
-  static Future<Map<String, dynamic>> unlinkAlexaAccount(AppLocalizations t) async {
+  static Future<Map<String, dynamic>> unlinkAlexaAccount(
+      AppLocalizations t) async {
     final headers = await AuthTokenManager.getAuthHeaders();
     headers['Content-Type'] = 'application/json';
 

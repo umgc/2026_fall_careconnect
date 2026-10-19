@@ -19,7 +19,6 @@ class SubscriptionManagementPage extends StatefulWidget {
   @override
   State<SubscriptionManagementPage> createState() =>
       _SubscriptionManagementPageState();
-
 }
 
 class _SubscriptionManagementPageState
@@ -36,7 +35,7 @@ class _SubscriptionManagementPageState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if(_initialized) return;
+    if (_initialized) return;
     _initialized = true;
     _loadSubscriptionData();
   }
@@ -68,9 +67,8 @@ class _SubscriptionManagementPageState
             features.add(t.submangement_emailSupportFeature);
 
             // Additional features based on plan name/nickname
-            final nickname = (planData['nickname'] ?? '')
-                .toString()
-                .toLowerCase();
+            final nickname =
+                (planData['nickname'] ?? '').toString().toLowerCase();
             if (nickname.contains('premium')) {
               features.add(t.submangement_unlimitedPtFeature);
               features.add(t.submangement_premMonitorFeature);
@@ -88,8 +86,7 @@ class _SubscriptionManagementPageState
             }
 
             return SubscriptionPlan(
-              id:
-                  planData['priceId'] ??
+              id: planData['priceId'] ??
                   planData['id'], // Use priceId if available
               name: _translatePlanName(planData['nickname']),
               description: planData['active'] == true
@@ -171,8 +168,8 @@ class _SubscriptionManagementPageState
                     try {
                       _selectedPlan = _plans.firstWhere(
                         (plan) => plan.name.toLowerCase().contains(
-                          _currentSubscription!.planName.toLowerCase(),
-                        ),
+                              _currentSubscription!.planName.toLowerCase(),
+                            ),
                         orElse: () => _plans.length > 1 ? _plans[1] : _plans[0],
                       );
                     } catch (e) {
@@ -211,8 +208,8 @@ class _SubscriptionManagementPageState
                     try {
                       _selectedPlan = _plans.firstWhere(
                         (plan) => plan.name.toLowerCase().contains(
-                          _currentSubscription!.planName.toLowerCase(),
-                        ),
+                              _currentSubscription!.planName.toLowerCase(),
+                            ),
                         orElse: () => _plans.length > 1 ? _plans[1] : _plans[0],
                       );
                     } catch (e) {
@@ -244,9 +241,8 @@ class _SubscriptionManagementPageState
         // No subscription found, which is a valid state
         setState(() {
           _currentSubscription = null;
-          _selectedPlan = _plans.isNotEmpty
-              ? _plans[0]
-              : null; // Default to basic plan
+          _selectedPlan =
+              _plans.isNotEmpty ? _plans[0] : null; // Default to basic plan
         });
       } else {
         setState(() {
@@ -262,8 +258,7 @@ class _SubscriptionManagementPageState
       }
     } catch (e) {
       setState(() {
-        _error =
-            t.submangement_errorLoadingSub;
+        _error = t.submangement_errorLoadingSub;
       });
       print('Exception in _loadSubscriptionData: $e');
     } finally {
@@ -274,7 +269,6 @@ class _SubscriptionManagementPageState
   }
 
   Future<void> _changePlan(SubscriptionPlan newPlan) async {
-
     // Ensure we have a customerId for new subscriptions
     if (_processingAction) return;
 
@@ -311,12 +305,15 @@ class _SubscriptionManagementPageState
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error.withValues(alpha:0.1),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .error
+                        .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Theme.of(
                         context,
-                      ).colorScheme.error.withValues(alpha:0.3),
+                      ).colorScheme.error.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Column(
@@ -356,12 +353,12 @@ class _SubscriptionManagementPageState
                   decoration: BoxDecoration(
                     color: Theme.of(
                       context,
-                    ).colorScheme.primary.withValues(alpha:0.1),
+                    ).colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Theme.of(
                         context,
-                      ).colorScheme.primary.withValues(alpha:0.3),
+                      ).colorScheme.primary.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Column(
@@ -400,7 +397,7 @@ class _SubscriptionManagementPageState
                   decoration: BoxDecoration(
                     color: Theme.of(
                       context,
-                    ).colorScheme.secondary.withValues(alpha:0.1),
+                    ).colorScheme.secondary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -472,9 +469,8 @@ class _SubscriptionManagementPageState
 
         // Get the user's ID for checkout
         final userSession = await AuthTokenManager.getUserSession();
-        final userId = userSession != null
-            ? userSession['id']?.toString()
-            : null;
+        final userId =
+            userSession != null ? userSession['id']?.toString() : null;
 
         // Extract customer ID from existing subscription
         final customerId = _currentSubscription!.customerId;
@@ -485,39 +481,38 @@ class _SubscriptionManagementPageState
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
+        ).showSnackBar(
+            SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
         setState(() {
           _processingAction = false;
         });
       }
-
     } else {
       // For new subscriptions or inactive subscriptions,
       // get the user ID and customer ID if available, then redirect to checkout
       try {
         final userSession = await AuthTokenManager.getUserSession();
-        final userId = userSession != null
-            ? userSession['id']?.toString()
-            : null;
+        final userId =
+            userSession != null ? userSession['id']?.toString() : null;
 
-      // Redirect to checkout flow for a new subscription
-      _redirectToCheckout(newPlan, userId, _customerId);
+        // Redirect to checkout flow for a new subscription
+        _redirectToCheckout(newPlan, userId, _customerId);
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
+        ).showSnackBar(
+            SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
       }
-
     }
   }
 
-  String _translatePlanName(String name){
+  String _translatePlanName(String name) {
     final t = AppLocalizations.of(context)!;
-    switch(name){
-      case('Standard Plan'):
+    switch (name) {
+      case ('Standard Plan'):
         return t.submangement_standardPlan;
-      case('Premium Plan'):
+      case ('Premium Plan'):
         return t.submangement_premiumPlan;
       default:
         return name;
@@ -541,18 +536,25 @@ class _SubscriptionManagementPageState
           title: Text(t.submangement_confirmFreePlan),
           content: Text(t.submangement_selectedFreePlan),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(t.cancel)),
-            ElevatedButton(onPressed: () async {
-              Navigator.of(ctx).pop();
-              final session = await AuthTokenManager.getUserSession();
-              final userId = session?['id']?.toString() ?? '';
-              if (userId.isNotEmpty) { await ApiService.createSubscriptionByUser(userId, 'plan_free'); }
-              await Future.delayed(const Duration(milliseconds: 500));
-              if (mounted) {
-                await _loadSubscriptionData();
-                setState(() => _processingAction = false);
-              }
-            }, child: Text(t.voicecommand_confirmButton)),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text(t.cancel)),
+            ElevatedButton(
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  final session = await AuthTokenManager.getUserSession();
+                  final userId = session?['id']?.toString() ?? '';
+                  if (userId.isNotEmpty) {
+                    await ApiService.createSubscriptionByUser(
+                        userId, 'plan_free');
+                  }
+                  await Future.delayed(const Duration(milliseconds: 500));
+                  if (mounted) {
+                    await _loadSubscriptionData();
+                    setState(() => _processingAction = false);
+                  }
+                },
+                child: Text(t.voicecommand_confirmButton)),
           ],
         ),
       );
@@ -624,30 +626,30 @@ class _SubscriptionManagementPageState
     // Second confirmation as an extra safety measure
     if (!mounted) return;
 
-        // Second confirmation as an extra safety measure
-        final bool? finalConfirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(t.submangement_finalConfirmation),
-            content: Text(
-              t.submangement_finalWarning,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: Text(t.submangement_noGoBack),
-              ),
-              TextButton(
-                style: TextButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => Navigator.of(context).pop(true),
-                child: Text(t.submangement_yesFinal),
-              ),
-            ],
+    // Second confirmation as an extra safety measure
+    final bool? finalConfirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t.submangement_finalConfirmation),
+        content: Text(
+          t.submangement_finalWarning,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(t.submangement_noGoBack),
           ),
-        );
+          TextButton(
+            style: TextButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(t.submangement_yesFinal),
+          ),
+        ],
+      ),
+    );
 
     if (finalConfirm != true) return;
 
@@ -683,7 +685,6 @@ class _SubscriptionManagementPageState
 
         // Clear navigation history and go to login
         navigator.go('/login');
-
       } else {
         final errorData = jsonDecode(response.body);
         throw Exception(errorData['error'] ?? t.submangement_subCanceledFailed);
@@ -692,7 +693,8 @@ class _SubscriptionManagementPageState
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
+      ).showSnackBar(
+          SnackBar(content: Text('${t.voicecommand_phaseLabelError}: $e')));
 
       setState(() {
         _processingAction = false;
@@ -717,8 +719,8 @@ class _SubscriptionManagementPageState
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? _buildErrorState()
-          : _buildContent(),
+              ? _buildErrorState()
+              : _buildContent(),
     );
   }
 
@@ -803,7 +805,6 @@ class _SubscriptionManagementPageState
               ],
             ),
             const Divider(height: 32),
-
             if (_currentSubscription == null) ...[
               Container(
                 width: double.infinity,
@@ -814,7 +815,7 @@ class _SubscriptionManagementPageState
                   border: Border.all(
                     color: Theme.of(
                       context,
-                    ).colorScheme.outline.withValues(alpha:0.3),
+                    ).colorScheme.outline.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Column(
@@ -828,8 +829,8 @@ class _SubscriptionManagementPageState
                     Text(
                       t.submangement_noActiveSub,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                            fontWeight: FontWeight.bold,
+                          ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
@@ -850,15 +851,21 @@ class _SubscriptionManagementPageState
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Theme.of(context).colorScheme.primary.withValues(alpha:0.1),
-                      Theme.of(context).colorScheme.secondary.withValues(alpha:0.05),
+                      Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.1),
+                      Theme.of(context)
+                          .colorScheme
+                          .secondary
+                          .withValues(alpha: 0.05),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: Theme.of(
                       context,
-                    ).colorScheme.primary.withValues(alpha:0.2),
+                    ).colorScheme.primary.withValues(alpha: 0.2),
                   ),
                 ),
                 child: Column(
@@ -875,7 +882,9 @@ class _SubscriptionManagementPageState
                         const SizedBox(width: 8),
                         Text(
                           _currentSubscription!.planName,
-                          style: Theme.of(context).textTheme.titleLarge
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
                               ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Theme.of(context).colorScheme.primary,
@@ -895,7 +904,9 @@ class _SubscriptionManagementPageState
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
-                            _currentSubscription!.statusDisplay(t).toUpperCase(),
+                            _currentSubscription!
+                                .statusDisplay(t)
+                                .toUpperCase(),
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
@@ -916,17 +927,24 @@ class _SubscriptionManagementPageState
                             children: [
                               Text(
                                 t.submangement_amountPaid,
-                                style: Theme.of(context).textTheme.bodySmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withValues(alpha:0.7),
+                                      )
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.7),
                                     ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 _currentSubscription!.formattedAmount,
-                                style: Theme.of(context).textTheme.headlineSmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: Theme.of(
@@ -936,11 +954,16 @@ class _SubscriptionManagementPageState
                               ),
                               Text(
                                 '/ ${_currentSubscription!.formattedInterval(t)}',
-                                style: Theme.of(context).textTheme.bodyMedium
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withValues(alpha:0.7),
+                                      )
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.7),
                                     ),
                               ),
                             ],
@@ -951,7 +974,7 @@ class _SubscriptionManagementPageState
                           width: 1,
                           color: Theme.of(
                             context,
-                          ).colorScheme.outline.withValues(alpha:0.3),
+                          ).colorScheme.outline.withValues(alpha: 0.3),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -960,11 +983,16 @@ class _SubscriptionManagementPageState
                             children: [
                               Text(
                                 t.submangement_nextBilling,
-                                style: Theme.of(context).textTheme.bodySmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withValues(alpha:0.7),
+                                      )
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.7),
                                     ),
                               ),
                               const SizedBox(height: 4),
@@ -972,7 +1000,9 @@ class _SubscriptionManagementPageState
                                 _formatDate(
                                   _currentSubscription!.currentPeriodEnd,
                                 ),
-                                style: Theme.of(context).textTheme.bodyLarge
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge
                                     ?.copyWith(fontWeight: FontWeight.w600),
                               ),
                             ],
@@ -999,12 +1029,15 @@ class _SubscriptionManagementPageState
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error.withValues(alpha:0.1),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .error
+                        .withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: Theme.of(
                         context,
-                      ).colorScheme.error.withValues(alpha:0.3),
+                      ).colorScheme.error.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -1038,9 +1071,8 @@ class _SubscriptionManagementPageState
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _processingAction
-                            ? null
-                            : _cancelSubscription,
+                        onPressed:
+                            _processingAction ? null : _cancelSubscription,
                         icon: const Icon(Icons.cancel_outlined),
                         label: Text(t.submangement_cancelSub),
                         style: OutlinedButton.styleFrom(
@@ -1112,9 +1144,8 @@ class _SubscriptionManagementPageState
             value,
             style: TextStyle(
               color: valueColor,
-              fontWeight: valueColor != null
-                  ? FontWeight.bold
-                  : FontWeight.normal,
+              fontWeight:
+                  valueColor != null ? FontWeight.bold : FontWeight.normal,
             ),
             textAlign: TextAlign.end,
           ),
@@ -1135,7 +1166,6 @@ class _SubscriptionManagementPageState
           ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-
         if (_plans.isEmpty)
           Center(
             child: Padding(
@@ -1165,15 +1195,14 @@ class _SubscriptionManagementPageState
           )
         else
           ..._plans.map((plan) {
-            final isCurrentPlan =
-                _currentSubscription != null &&
+            final isCurrentPlan = _currentSubscription != null &&
                 (_currentSubscription!.planId == plan.id ||
                     _currentSubscription!.planName.toLowerCase().contains(
-                      plan.name.toLowerCase(),
-                    ) ||
+                          plan.name.toLowerCase(),
+                        ) ||
                     plan.name.toLowerCase().contains(
-                      _currentSubscription!.planName.toLowerCase(),
-                    ) ||
+                          _currentSubscription!.planName.toLowerCase(),
+                        ) ||
                     (_currentSubscription!.planAmount > 0 &&
                         plan.amount > 0 &&
                         _currentSubscription!.planAmount == plan.amount));
@@ -1264,7 +1293,9 @@ class _SubscriptionManagementPageState
                             children: [
                               Text(
                                 plan.formattedAmount,
-                                style: Theme.of(context).textTheme.titleMedium
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
                                     ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                       color: Theme.of(
@@ -1280,11 +1311,9 @@ class _SubscriptionManagementPageState
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
                       const Divider(height: 1),
                       const SizedBox(height: 12),
-
                       ...plan.features.map(
                         (feature) => Padding(
                           padding: const EdgeInsets.only(bottom: 6),
@@ -1301,9 +1330,7 @@ class _SubscriptionManagementPageState
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
                       if (isCurrentPlan)
                         SizedBox(
                           width: double.infinity,

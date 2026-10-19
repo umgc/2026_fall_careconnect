@@ -20,11 +20,10 @@ import java.util.Optional;
 @Service
 public class EmailCredentialLifecycleService {
 
-    private static final Logger log = LoggerFactory.getLogger(EmailCredentialLifecycleService.class);
-    private static final Duration REAUTH_NOTIFY_COOLDOWN = Duration.ofHours(24);
     public static final String RECONNECT_PATH = "/oauth/google/start";
     public static final String NOTIFICATION_TYPE = "GMAIL_REAUTH";
-
+    private static final Logger log = LoggerFactory.getLogger(EmailCredentialLifecycleService.class);
+    private static final Duration REAUTH_NOTIFY_COOLDOWN = Duration.ofHours(24);
     private final EmailCredentialRepository credentialRepository;
     private final NotificationService notificationService;
 
@@ -33,6 +32,17 @@ public class EmailCredentialLifecycleService {
             final NotificationService notificationService) {
         this.credentialRepository = credentialRepository;
         this.notificationService = notificationService;
+    }
+
+    private static String truncate(final String reason) {
+        if (reason == null) {
+            return "Credential revoked or expired";
+        }
+        final String trimmed = reason.trim();
+        if (trimmed.length() <= 512) {
+            return trimmed;
+        }
+        return trimmed.substring(0, 512);
     }
 
     public boolean allowsSync(final EmailCredential credential) {
@@ -159,16 +169,5 @@ public class EmailCredentialLifecycleService {
             log.warn("Failed to notify user {} about Gmail reauth: {}",
                     credential.getUserId(), ex.getMessage());
         }
-    }
-
-    private static String truncate(final String reason) {
-        if (reason == null) {
-            return "Credential revoked or expired";
-        }
-        final String trimmed = reason.trim();
-        if (trimmed.length() <= 512) {
-            return trimmed;
-        }
-        return trimmed.substring(0, 512);
     }
 }

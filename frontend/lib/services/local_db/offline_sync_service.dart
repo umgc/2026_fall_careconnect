@@ -69,6 +69,15 @@ class OfflineSyncService {
 
   factory OfflineSyncService.instance() => _instance;
 
+  @visibleForTesting
+  factory OfflineSyncService.forTesting({
+    required http.Client replayClient,
+  }) {
+    return OfflineSyncService._internal(
+      replayClient: replayClient,
+    );
+  }
+
   bool isQueueableMethod(String method) {
     return _queueableMethods.contains(method.toUpperCase());
   }
@@ -84,8 +93,7 @@ class OfflineSyncService {
     String? body,
   }) async {
     final normalizedHeaders = _normalizeHeaders(headers ?? <String, String>{});
-    final normalizedBody =
-        (body == null || body.isEmpty) ? null : body;
+    final normalizedBody = (body == null || body.isEmpty) ? null : body;
     final createdAt = DateTime.now().toUtc();
     final fingerprint = _buildFingerprint(
       method: method,
@@ -132,9 +140,7 @@ class OfflineSyncService {
     if (row == null) {
       return true;
     }
-    if (row.status != 'pending' &&
-        row.status != 'failed' &&
-        row.status != 'syncing') {
+    if (!OfflineSyncStatus.actionable.contains(row.status)) {
       return false;
     }
     return _syncRow(row);
@@ -237,8 +243,9 @@ class OfflineSyncService {
         headers['Authorization'] = authorization;
       }
     } catch (_) {}
-    headers[replayHeader] = 'true';
-
+    // Replays use the dedicated raw client, not OfflineQueueHttpClient, so a
+    // network failure cannot enqueue a second copy. A browser-visible replay
+    // header is intentionally avoided because it triggers a CORS preflight.
     final request = http.Request(row.method, uri);
     request.headers.addAll(headers);
     if (row.bodyJson != null && row.bodyJson!.isNotEmpty) {
@@ -429,9 +436,9 @@ class OfflineSyncService {
 
   String _humanizeField(String raw) {
     final withSpaces = raw.replaceAll(RegExp(r'[_-]+'), ' ').replaceAllMapped(
-      RegExp(r'([a-z])([A-Z])'),
-      (m) => '${m.group(1)} ${m.group(2)}',
-    );
+          RegExp(r'([a-z])([A-Z])'),
+          (m) => '${m.group(1)} ${m.group(2)}',
+        );
     final trimmed = withSpaces.trim();
     if (trimmed.isEmpty) {
       return 'Field';

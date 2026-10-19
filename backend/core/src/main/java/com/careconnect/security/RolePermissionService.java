@@ -5,25 +5,25 @@ import java.util.*;
 /**
  * Service that maps roles to their permissions.
  * This is the CORE of the RBAC (Role-Based Access Control) system.
- *
+ * <p>
  * Responsibilities:
  * - Define which permissions each role has
  * - Provide methods to check if a role has specific permissions
  * - Cache permission mappings for performance
- *
+ * <p>
  * This class uses a static initialization block to set up the role-permission
  * mappings when the class is first loaded, ensuring fast lookups.
- *
+ * <p>
  * Usage Examples:
- *   // Get all permissions for a role
- *   Set<Permission> caregiverPerms = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
- *
- *   // Check if role has a permission
- *   boolean canCreate = RolePermissionService.hasPermission(Role.CAREGIVER, Permission.CREATE_TASKS);
- *
- *   // Check multiple permissions
- *   boolean hasAll = RolePermissionService.hasAllPermissions(Role.ADMIN,
- *       Permission.CREATE_TASKS, Permission.DELETE_TASKS);
+ * // Get all permissions for a role
+ * Set<Permission> caregiverPerms = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
+ * <p>
+ * // Check if role has a permission
+ * boolean canCreate = RolePermissionService.hasPermission(Role.CAREGIVER, Permission.CREATE_TASKS);
+ * <p>
+ * // Check multiple permissions
+ * boolean hasAll = RolePermissionService.hasAllPermissions(Role.ADMIN,
+ * Permission.CREATE_TASKS, Permission.DELETE_TASKS);
  *
  * @author CareConnect Team
  * @version 1.0
@@ -66,9 +66,7 @@ public class RolePermissionService {
      *
      * @param role The user's role
      * @return Unmodifiable set of permissions (never null)
-     *
-     * @example
-     * Set<Permission> permissions = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
+     * @example Set<Permission> permissions = RolePermissionService.getPermissionsForRole(Role.CAREGIVER);
      * // Returns set with 18 permissions
      */
     public static Set<Permission> getPermissionsForRole(Role role) {
@@ -86,14 +84,12 @@ public class RolePermissionService {
     /**
      * Checks if a role has a specific permission.
      *
-     * @param role The user's role
+     * @param role       The user's role
      * @param permission The permission to check
      * @return true if role has the permission, false otherwise
-     *
-     * @example
-     * boolean canCreate = RolePermissionService.hasPermission(
-     *     Role.CAREGIVER,
-     *     Permission.CREATE_TASKS
+     * @example boolean canCreate = RolePermissionService.hasPermission(
+     * Role.CAREGIVER,
+     * Permission.CREATE_TASKS
      * );
      * // Returns true
      */
@@ -111,16 +107,14 @@ public class RolePermissionService {
      * Checks if a role has ALL of the specified permissions.
      * Returns true only if the role has every single permission listed.
      *
-     * @param role The user's role
+     * @param role                The user's role
      * @param requiredPermissions One or more permissions to check
      * @return true if role has ALL permissions, false if missing any
-     *
-     * @example
-     * boolean hasAll = RolePermissionService.hasAllPermissions(
-     *     Role.CAREGIVER,
-     *     Permission.CREATE_TASKS,
-     *     Permission.VIEW_HEALTH_DATA,
-     *     Permission.RECORD_HEALTH_DATA
+     * @example boolean hasAll = RolePermissionService.hasAllPermissions(
+     * Role.CAREGIVER,
+     * Permission.CREATE_TASKS,
+     * Permission.VIEW_HEALTH_DATA,
+     * Permission.RECORD_HEALTH_DATA
      * );
      * // Returns true only if caregiver has all 3 permissions
      */
@@ -145,15 +139,13 @@ public class RolePermissionService {
      * Checks if a role has ANY of the specified permissions.
      * Returns true if the role has at least one of the permissions listed.
      *
-     * @param role The user's role
+     * @param role                The user's role
      * @param requiredPermissions One or more permissions to check
      * @return true if role has at least ONE permission, false if has none
-     *
-     * @example
-     * boolean hasAny = RolePermissionService.hasAnyPermission(
-     *     Role.PATIENT,
-     *     Permission.CREATE_TASKS,  // Patient doesn't have this
-     *     Permission.VIEW_TASKS     // But patient HAS this
+     * @example boolean hasAny = RolePermissionService.hasAnyPermission(
+     * Role.PATIENT,
+     * Permission.CREATE_TASKS,  // Patient doesn't have this
+     * Permission.VIEW_TASKS     // But patient HAS this
      * );
      * // Returns true because patient has VIEW_TASKS
      */
@@ -180,9 +172,7 @@ public class RolePermissionService {
      *
      * @param role The user's role
      * @return Number of permissions assigned to the role
-     *
-     * @example
-     * int count = RolePermissionService.getPermissionCount(Role.CAREGIVER);
+     * @example int count = RolePermissionService.getPermissionCount(Role.CAREGIVER);
      * // Returns 18
      */
     public static int getPermissionCount(Role role) {
@@ -206,7 +196,7 @@ public class RolePermissionService {
     /**
      * Defines all permissions for the CAREGIVER role.
      * Caregivers can manage assigned patients but not system settings.
-     *
+     * <p>
      * Can do:
      * - Create, view, and update assigned patients
      * - Create and manage tasks
@@ -215,7 +205,7 @@ public class RolePermissionService {
      * - View and export analytics/reports
      * - Use AI features and review held Ask AI answers
      * - Manage devices
-     *
+     * <p>
      * Cannot do:
      * - Manage users or roles (admin only)
      * - View ALL patients (admin only)
@@ -226,58 +216,58 @@ public class RolePermissionService {
      */
     private static Set<Permission> getCaregiverPermissions() {
         return new HashSet<>(Arrays.asList(
-            // Patient Management
-            Permission.VIEW_ASSIGNED_PATIENTS,
-            Permission.CREATE_PATIENTS,
-            Permission.UPDATE_PATIENTS,
+                // Patient Management
+                Permission.VIEW_ASSIGNED_PATIENTS,
+                Permission.CREATE_PATIENTS,
+                Permission.UPDATE_PATIENTS,
 
-            // Task Management
-            Permission.CREATE_TASKS,
-            Permission.VIEW_TASKS,
-            Permission.UPDATE_TASKS,
-            Permission.DELETE_TASKS,
-            Permission.COMPLETE_TASKS,
+                // Task Management
+                Permission.CREATE_TASKS,
+                Permission.VIEW_TASKS,
+                Permission.UPDATE_TASKS,
+                Permission.DELETE_TASKS,
+                Permission.COMPLETE_TASKS,
 
-            // Health Data
-            Permission.VIEW_HEALTH_DATA,
-            Permission.RECORD_HEALTH_DATA,
-            Permission.EXPORT_HEALTH_DATA,
+                // Health Data
+                Permission.VIEW_HEALTH_DATA,
+                Permission.RECORD_HEALTH_DATA,
+                Permission.EXPORT_HEALTH_DATA,
 
-            // Medications
-            Permission.VIEW_MEDICATIONS,
-            Permission.MANAGE_MEDICATIONS,
+                // Medications
+                Permission.VIEW_MEDICATIONS,
+                Permission.MANAGE_MEDICATIONS,
 
-            // Billing
-            Permission.VIEW_BILLING,
-            Permission.MANAGE_SUBSCRIPTIONS,
+                // Billing
+                Permission.VIEW_BILLING,
+                Permission.MANAGE_SUBSCRIPTIONS,
 
-            // Communication
-            Permission.SEND_MESSAGES,
-            Permission.VIEW_MESSAGES,
+                // Communication
+                Permission.SEND_MESSAGES,
+                Permission.VIEW_MESSAGES,
 
-            // Analytics
-            Permission.VIEW_ANALYTICS,
-            Permission.EXPORT_REPORTS,
+                // Analytics
+                Permission.VIEW_ANALYTICS,
+                Permission.EXPORT_REPORTS,
 
-            // AI and Devices
-            Permission.USE_AI_FEATURES,
-            Permission.REVIEW_AI_HOLDS,
-            Permission.MANAGE_DEVICES
+                // AI and Devices
+                Permission.USE_AI_FEATURES,
+                Permission.REVIEW_AI_HOLDS,
+                Permission.MANAGE_DEVICES
         ));
     }
 
     /**
      * Defines all permissions for the PATIENT role.
      * Patients can view and interact with their OWN data only.
-     *
+     * <p>
      * Total: 7 permissions
-     *
+     * <p>
      * Can do:
      * - View and complete own tasks
      * - View and record own health data
      * - Communicate with caregivers
      * - Use Ask AI features on own records (USE_AI_FEATURES; scope enforced elsewhere)
-     *
+     * <p>
      * Cannot do:
      * - Create or delete tasks
      * - View other patients
@@ -289,34 +279,34 @@ public class RolePermissionService {
      */
     private static Set<Permission> getPatientPermissions() {
         return new HashSet<>(Arrays.asList(
-            // Task Management (own tasks only)
-            Permission.VIEW_TASKS,
-            Permission.COMPLETE_TASKS,
+                // Task Management (own tasks only)
+                Permission.VIEW_TASKS,
+                Permission.COMPLETE_TASKS,
 
-            // Health Data (own data only)
-            Permission.VIEW_HEALTH_DATA,
-            Permission.RECORD_HEALTH_DATA,
+                // Health Data (own data only)
+                Permission.VIEW_HEALTH_DATA,
+                Permission.RECORD_HEALTH_DATA,
 
-            // Communication
-            Permission.SEND_MESSAGES,
-            Permission.VIEW_MESSAGES,
+                // Communication
+                Permission.SEND_MESSAGES,
+                Permission.VIEW_MESSAGES,
 
-            // Ask AI (own patient scope enforced by RetrievalScopeService / gateway)
-            Permission.USE_AI_FEATURES
+                // Ask AI (own patient scope enforced by RetrievalScopeService / gateway)
+                Permission.USE_AI_FEATURES
         ));
     }
 
     /**
      * Defines all permissions for the FAMILY_MEMBER role.
      * Family members have READ-ONLY access to linked patient data.
-     *
+     * <p>
      * Total: 3 permissions
-     *
+     * <p>
      * Can do:
      * - View linked patient's tasks (read-only)
      * - View linked patient's health data (read-only)
      * - View messages
-     *
+     * <p>
      * Cannot do:
      * - Create, update, or delete anything
      * - Record health data
@@ -327,12 +317,12 @@ public class RolePermissionService {
      */
     private static Set<Permission> getFamilyMemberPermissions() {
         return new HashSet<>(Arrays.asList(
-            // Read-only access
-            Permission.VIEW_TASKS,
-            Permission.VIEW_HEALTH_DATA,
-            Permission.VIEW_MESSAGES
+                // Read-only access
+                Permission.VIEW_TASKS,
+                Permission.VIEW_HEALTH_DATA,
+                Permission.VIEW_MESSAGES
 
-            // Note: Family members CANNOT create, update, or delete anything
+                // Note: Family members CANNOT create, update, or delete anything
         ));
     }
 

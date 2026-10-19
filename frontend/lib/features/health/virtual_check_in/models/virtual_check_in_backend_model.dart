@@ -47,17 +47,19 @@ class BackendQuestionDto {
       prompt: (j['prompt'] ?? '').toString(),
       type: BackendQuestionTypeX.parse(j['type']),
       required: j['required'] == true || j['required']?.toString() == 'true',
-      ordinal: j['ordinal'] is int ? j['ordinal'] as int : int.parse(j['ordinal'].toString()),
+      ordinal: j['ordinal'] is int
+          ? j['ordinal'] as int
+          : int.parse(j['ordinal'].toString()),
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'prompt': prompt,
-    'type': type.nameUpper,
-    'required': required,
-    'ordinal': ordinal,
-  };
+        'id': id,
+        'prompt': prompt,
+        'type': type.nameUpper,
+        'required': required,
+        'ordinal': ordinal,
+      };
 }
 
 /// Payload for POST /api/checkins/{checkInId}/answers
@@ -66,8 +68,8 @@ class SubmitAnswersRequest {
   const SubmitAnswersRequest(this.answers);
 
   Map<String, dynamic> toJson() => {
-    'answers': answers.map((a) => a.toJson()).toList(),
-  };
+        'answers': answers.map((a) => a.toJson()).toList(),
+      };
 }
 
 /// Exactly one of valueText / valueBoolean / valueNumber must be set.
@@ -100,7 +102,8 @@ class AnswerItem {
         (valueBoolean != null ? 1 : 0) +
         (valueNumber != null ? 1 : 0);
     if (count != 1) {
-      throw StateError('Exactly one of valueText/valueBoolean/valueNumber must be set.');
+      throw StateError(
+          'Exactly one of valueText/valueBoolean/valueNumber must be set.');
     }
   }
 

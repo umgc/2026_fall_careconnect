@@ -41,7 +41,8 @@ class _AllergiesTabState extends State<AllergiesTab> {
         return;
       }
 
-      final List<dynamic> allergies = await ApiService.fetchAllergies(patientId);
+      final List<dynamic> allergies =
+          await ApiService.fetchAllergies(patientId);
 
       setState(() {
         _allergies.clear();
@@ -176,7 +177,10 @@ class _AllergiesTabState extends State<AllergiesTab> {
                 child: Text(
                   'No allergies recorded yet',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
                   ),
                 ),
               ),

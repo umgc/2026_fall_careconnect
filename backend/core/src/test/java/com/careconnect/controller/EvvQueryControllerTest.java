@@ -19,20 +19,18 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EvvQueryControllerTest {
 
+    private static final String STATUS = "PENDING";
+    private static final Long CAREGIVER_ID = 7L;
     @Mock
     private EvvRecordRepository evvRecordRepository;
     @Mock
     private SecurityUtil securityUtil;
-    @Mock
-    private AuthorizationService authorizationService;
-
-    @InjectMocks
-    private EvvQueryController controller;
 
     // ── shared constants ──────────────────────────────────────────────────────
-
-    private static final String STATUS       = "PENDING";
-    private static final Long   CAREGIVER_ID = 7L;
+    @Mock
+    private AuthorizationService authorizationService;
+    @InjectMocks
+    private EvvQueryController controller;
 
     // ── GET /v1/api/evv/records ───────────────────────────────────────────────
     //

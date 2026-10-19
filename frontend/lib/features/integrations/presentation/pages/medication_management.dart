@@ -25,7 +25,8 @@ class _MedicationManagementScreenState
     extends State<MedicationManagementScreen> {
   List<Map<String, dynamic>> medications = [];
   bool isLoading = true;
-  static const String _fdaApiBaseUrl = 'https://api.fda.gov/drug/ndc.json?search=product_ndc:';
+  static const String _fdaApiBaseUrl =
+      'https://api.fda.gov/drug/ndc.json?search=product_ndc:';
   static const String _fdaApiSuffix = '&limit=1';
 
   @override
@@ -42,7 +43,9 @@ class _MedicationManagementScreenState
       if (medicationsJson != null) {
         final List<dynamic> decodedList = jsonDecode(medicationsJson);
         setState(() {
-          medications = decodedList.map((item) => Map<String, dynamic>.from(item)).toList();
+          medications = decodedList
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
           isLoading = false;
         });
       } else {
@@ -72,13 +75,14 @@ class _MedicationManagementScreenState
     }
   }
 
-  bool _isDuplicateMedication(String brandName, String? genericName, {String? excludeId}) {
+  bool _isDuplicateMedication(String brandName, String? genericName,
+      {String? excludeId}) {
     return medications.any((med) =>
-    med['id'] != excludeId &&
+        med['id'] != excludeId &&
         (med['brandName']?.toLowerCase() == brandName.toLowerCase() ||
             (genericName != null &&
-                med['genericName']?.toLowerCase() == genericName.toLowerCase()))
-    );
+                med['genericName']?.toLowerCase() ==
+                    genericName.toLowerCase())));
   }
 
   Future<void> _generateAndSharePDF() async {
@@ -155,7 +159,8 @@ class _MedicationManagementScreenState
             ),
           ),
           pw.SizedBox(height: 8),
-          if (med['genericName'] != null && med['genericName'] != 'Not specified')
+          if (med['genericName'] != null &&
+              med['genericName'] != 'Not specified')
             pw.Text('Generic: ${med['genericName']}'),
           if (med['strength'] != null && med['strength'] != 'Not specified')
             pw.Text('Strength: ${med['strength']}'),
@@ -170,7 +175,8 @@ class _MedicationManagementScreenState
           if (med['doNotTakeWith']?.isNotEmpty == true)
             pw.Text('Do not take with: ${med['doNotTakeWith']}'),
           if (med['startDate'] != null || med['endDate'] != null)
-            pw.Text('Duration: ${_formatDateRange(med['startDate'], med['endDate'])}'),
+            pw.Text(
+                'Duration: ${_formatDateRange(med['startDate'], med['endDate'])}'),
         ],
       ),
     );
@@ -234,7 +240,8 @@ class _MedicationManagementScreenState
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+              color:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -243,9 +250,7 @@ class _MedicationManagementScreenState
               color: Theme.of(context).colorScheme.primary,
             ),
           ),
-
           const SizedBox(height: 32),
-
           Text(
             'No Medications Added',
             style: TextStyle(
@@ -254,17 +259,13 @@ class _MedicationManagementScreenState
               color: Theme.of(context).colorScheme.primary,
             ),
           ),
-
           const SizedBox(height: 16),
-
           const Text(
             'Scan medication barcodes, enter NDC codes, or manually add medications to manage your patient\'s medication schedule.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.4),
           ),
-
           const SizedBox(height: 40),
-
           Column(
             children: [
               SizedBox(
@@ -292,9 +293,7 @@ class _MedicationManagementScreenState
                   ),
                 ),
               ),
-
               const SizedBox(height: 12),
-
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -317,9 +316,7 @@ class _MedicationManagementScreenState
                   ),
                 ),
               ),
-
               const SizedBox(height: 12),
-
               SizedBox(
                 width: double.infinity,
                 child: TextButton.icon(
@@ -344,7 +341,6 @@ class _MedicationManagementScreenState
               ),
             ],
           ),
-
           const SizedBox(height: 24),
         ],
       ),
@@ -382,19 +378,20 @@ class _MedicationManagementScreenState
                 children: [
                   IconButton(
                     onPressed: _generateAndSharePDF,
-                    icon: const Icon(Icons.share, color: Colors.indigo, size: 28),
+                    icon:
+                        const Icon(Icons.share, color: Colors.indigo, size: 28),
                     tooltip: 'Share medication list',
                   ),
                   IconButton(
                     onPressed: _navigateToAddMedication,
-                    icon: const Icon(Icons.add_circle, color: Colors.indigo, size: 32),
+                    icon: const Icon(Icons.add_circle,
+                        color: Colors.indigo, size: 32),
                   ),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 20),
-
           Expanded(
             child: ListView.builder(
               itemCount: medications.length,
@@ -438,32 +435,39 @@ class _MedicationManagementScreenState
                         const SizedBox(height: 2),
                         Text(
                           'Strength: ${medication['strength'] ?? 'Not specified'}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 12, color: Colors.grey),
                         ),
                         if (medication['dosage']?.isNotEmpty == true)
                           Text(
                             'Dosage: ${medication['dosage']} - ${medication['frequency'] ?? 'As needed'}',
-                            style: const TextStyle(fontSize: 12, color: Colors.blue),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.blue),
                           ),
                         if (medication['timeToTake']?.isNotEmpty == true)
                           Text(
                             'Time to take: ${medication['timeToTake']}',
-                            style: const TextStyle(fontSize: 12, color: Colors.orange),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.orange),
                           ),
                         if (medication['takeWith']?.isNotEmpty == true)
                           Text(
                             'Take with: ${medication['takeWith']}',
-                            style: const TextStyle(fontSize: 12, color: Colors.green),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.green),
                           ),
                         if (medication['doNotTakeWith']?.isNotEmpty == true)
                           Text(
                             'Do not take with: ${medication['doNotTakeWith']}',
-                            style: const TextStyle(fontSize: 12, color: Colors.red),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.red),
                           ),
-                        if (medication['startDate'] != null || medication['endDate'] != null)
+                        if (medication['startDate'] != null ||
+                            medication['endDate'] != null)
                           Text(
                             'Duration: ${_formatDateRange(medication['startDate'], medication['endDate'])}',
-                            style: const TextStyle(fontSize: 12, color: Colors.purple),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.purple),
                           ),
                       ],
                     ),
@@ -594,7 +598,8 @@ class _MedicationManagementScreenState
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Medication not found. You can add it manually.'),
+            content:
+                const Text('Medication not found. You can add it manually.'),
             backgroundColor: Colors.orange,
             action: SnackBarAction(
               label: 'Add Manually',
@@ -637,7 +642,8 @@ class _MedicationManagementScreenState
                 _showMedicationDetails(medicationData);
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Add Anyway', style: TextStyle(color: Colors.white)),
+              child: const Text('Add Anyway',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -702,61 +708,61 @@ class _MedicationManagementScreenState
                   onPressed: isLoading
                       ? null
                       : () async {
-                    if (codeController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter an NDC code'),
-                        ),
-                      );
-                      return;
-                    }
+                          if (codeController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter an NDC code'),
+                              ),
+                            );
+                            return;
+                          }
 
-                    setDialogState(() {
-                      isLoading = true;
-                    });
+                          setDialogState(() {
+                            isLoading = true;
+                          });
 
-                    try {
-                      final medicationData = await _lookupMedication(
-                        codeController.text.trim(),
-                      );
+                          try {
+                            final medicationData = await _lookupMedication(
+                              codeController.text.trim(),
+                            );
 
-                      Navigator.pop(context);
+                            Navigator.pop(context);
 
-                      if (medicationData != null) {
-                        // Check for duplicates
-                        if (_isDuplicateMedication(
-                          medicationData['brandName'],
-                          medicationData['genericName'],
-                        )) {
-                          _showDuplicateWarning(medicationData);
-                        } else {
-                          _showMedicationDetails(medicationData);
-                        }
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'NDC code not found. Please check the code and try again.',
-                            ),
-                            backgroundColor: Colors.orange,
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      setDialogState(() {
-                        isLoading = false;
-                      });
+                            if (medicationData != null) {
+                              // Check for duplicates
+                              if (_isDuplicateMedication(
+                                medicationData['brandName'],
+                                medicationData['genericName'],
+                              )) {
+                                _showDuplicateWarning(medicationData);
+                              } else {
+                                _showMedicationDetails(medicationData);
+                              }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'NDC code not found. Please check the code and try again.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() {
+                              isLoading = false;
+                            });
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Error looking up medication: ${e.toString()}',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  },
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Error looking up medication: ${e.toString()}',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                   ),
@@ -888,13 +894,13 @@ class _MedicationManagementScreenState
                     TextField(
                       controller: controllers['doNotTakeWith']!,
                       decoration: const InputDecoration(
-                        labelText: 'Do Not Take With (e.g., alcohol, other meds)',
+                        labelText:
+                            'Do Not Take With (e.g., alcohol, other meds)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.warning),
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -918,14 +924,17 @@ class _MedicationManagementScreenState
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.grey),
+                            const Icon(Icons.calendar_today,
+                                color: Colors.grey),
                             const SizedBox(width: 12),
                             Text(
                               startDate != null
                                   ? 'Start Date: ${_formatDate(startDate!.toIso8601String())}'
                                   : 'Select Start Date (optional)',
                               style: TextStyle(
-                                color: startDate != null ? Colors.black : Colors.grey,
+                                color: startDate != null
+                                    ? Colors.black
+                                    : Colors.grey,
                                 fontSize: 16,
                               ),
                             ),
@@ -934,7 +943,6 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -958,14 +966,17 @@ class _MedicationManagementScreenState
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.grey),
+                            const Icon(Icons.calendar_today,
+                                color: Colors.grey),
                             const SizedBox(width: 12),
                             Text(
                               endDate != null
                                   ? 'End Date: ${_formatDate(endDate!.toIso8601String())}'
                                   : 'Select End Date (optional)',
                               style: TextStyle(
-                                color: endDate != null ? Colors.black : Colors.grey,
+                                color: endDate != null
+                                    ? Colors.black
+                                    : Colors.grey,
                                 fontSize: 16,
                               ),
                             ),
@@ -993,28 +1004,34 @@ class _MedicationManagementScreenState
                     // Check for duplicates
                     if (_isDuplicateMedication(
                       controllers['brandName']!.text.trim(),
-                      controllers['genericName']!.text.trim().isEmpty ? null : controllers['genericName']!.text.trim(),
+                      controllers['genericName']!.text.trim().isEmpty
+                          ? null
+                          : controllers['genericName']!.text.trim(),
                     )) {
                       Navigator.pop(context);
-                      _showDuplicateWarningManual(controllers, startDate, endDate);
+                      _showDuplicateWarningManual(
+                          controllers, startDate, endDate);
                       return;
                     }
 
                     final medicationData = {
                       'id': DateTime.now().millisecondsSinceEpoch.toString(),
                       'brandName': controllers['brandName']!.text.trim(),
-                      'genericName': controllers['genericName']!.text.trim().isEmpty
-                          ? 'Not specified'
-                          : controllers['genericName']!.text.trim(),
+                      'genericName':
+                          controllers['genericName']!.text.trim().isEmpty
+                              ? 'Not specified'
+                              : controllers['genericName']!.text.trim(),
                       'strength': controllers['strength']!.text.trim().isEmpty
                           ? 'Not specified'
                           : controllers['strength']!.text.trim(),
-                      'dosageForm': controllers['dosageForm']!.text.trim().isEmpty
-                          ? 'Not specified'
-                          : controllers['dosageForm']!.text.trim(),
-                      'manufacturer': controllers['manufacturer']!.text.trim().isEmpty
-                          ? 'Not specified'
-                          : controllers['manufacturer']!.text.trim(),
+                      'dosageForm':
+                          controllers['dosageForm']!.text.trim().isEmpty
+                              ? 'Not specified'
+                              : controllers['dosageForm']!.text.trim(),
+                      'manufacturer':
+                          controllers['manufacturer']!.text.trim().isEmpty
+                              ? 'Not specified'
+                              : controllers['manufacturer']!.text.trim(),
                       'ndc': controllers['ndc']!.text.trim().isEmpty
                           ? 'Manual Entry'
                           : controllers['ndc']!.text.trim(),
@@ -1022,7 +1039,8 @@ class _MedicationManagementScreenState
                       'frequency': controllers['frequency']!.text.trim(),
                       'timeToTake': controllers['timeToTake']!.text.trim(),
                       'takeWith': controllers['takeWith']!.text.trim(),
-                      'doNotTakeWith': controllers['doNotTakeWith']!.text.trim(),
+                      'doNotTakeWith':
+                          controllers['doNotTakeWith']!.text.trim(),
                       'startDate': startDate?.toIso8601String(),
                       'endDate': endDate?.toIso8601String(),
                       'addedAt': DateTime.now().toIso8601String(),
@@ -1032,8 +1050,10 @@ class _MedicationManagementScreenState
                     Navigator.pop(context);
                     _addMedicationToList(medicationData);
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                  child: const Text('Add Medication', style: TextStyle(color: Colors.white)),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  child: const Text('Add Medication',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -1044,10 +1064,10 @@ class _MedicationManagementScreenState
   }
 
   void _showDuplicateWarningManual(
-      Map<String, TextEditingController> controllers,
-      DateTime? startDate,
-      DateTime? endDate,
-      ) {
+    Map<String, TextEditingController> controllers,
+    DateTime? startDate,
+    DateTime? endDate,
+  ) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1075,9 +1095,10 @@ class _MedicationManagementScreenState
                   'dosageForm': controllers['dosageForm']!.text.trim().isEmpty
                       ? 'Not specified'
                       : controllers['dosageForm']!.text.trim(),
-                  'manufacturer': controllers['manufacturer']!.text.trim().isEmpty
-                      ? 'Not specified'
-                      : controllers['manufacturer']!.text.trim(),
+                  'manufacturer':
+                      controllers['manufacturer']!.text.trim().isEmpty
+                          ? 'Not specified'
+                          : controllers['manufacturer']!.text.trim(),
                   'ndc': controllers['ndc']!.text.trim().isEmpty
                       ? 'Manual Entry'
                       : controllers['ndc']!.text.trim(),
@@ -1096,7 +1117,8 @@ class _MedicationManagementScreenState
                 _addMedicationToList(medicationData);
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: const Text('Add Anyway', style: TextStyle(color: Colors.white)),
+              child: const Text('Add Anyway',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -1108,15 +1130,18 @@ class _MedicationManagementScreenState
     final medication = medications[index];
     final Map<String, TextEditingController> controllers = {
       'brandName': TextEditingController(text: medication['brandName'] ?? ''),
-      'genericName': TextEditingController(text: medication['genericName'] ?? ''),
+      'genericName':
+          TextEditingController(text: medication['genericName'] ?? ''),
       'strength': TextEditingController(text: medication['strength'] ?? ''),
       'dosageForm': TextEditingController(text: medication['dosageForm'] ?? ''),
-      'manufacturer': TextEditingController(text: medication['manufacturer'] ?? ''),
+      'manufacturer':
+          TextEditingController(text: medication['manufacturer'] ?? ''),
       'dosage': TextEditingController(text: medication['dosage'] ?? ''),
       'frequency': TextEditingController(text: medication['frequency'] ?? ''),
       'timeToTake': TextEditingController(text: medication['timeToTake'] ?? ''),
       'takeWith': TextEditingController(text: medication['takeWith'] ?? ''),
-      'doNotTakeWith': TextEditingController(text: medication['doNotTakeWith'] ?? ''),
+      'doNotTakeWith':
+          TextEditingController(text: medication['doNotTakeWith'] ?? ''),
     };
 
     DateTime? startDate = medication['startDate'] != null
@@ -1214,13 +1239,13 @@ class _MedicationManagementScreenState
                     TextField(
                       controller: controllers['doNotTakeWith']!,
                       decoration: const InputDecoration(
-                        labelText: 'Do Not Take With (e.g., alcohol, other meds)',
+                        labelText:
+                            'Do Not Take With (e.g., alcohol, other meds)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.warning),
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -1244,7 +1269,8 @@ class _MedicationManagementScreenState
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.grey),
+                            const Icon(Icons.calendar_today,
+                                color: Colors.grey),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -1252,7 +1278,9 @@ class _MedicationManagementScreenState
                                     ? 'Start Date: ${_formatDate(startDate!.toIso8601String())}'
                                     : 'Select Start Date (optional)',
                                 style: TextStyle(
-                                  color: startDate != null ? Colors.black : Colors.grey,
+                                  color: startDate != null
+                                      ? Colors.black
+                                      : Colors.grey,
                                   fontSize: 16,
                                 ),
                               ),
@@ -1271,7 +1299,6 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -1295,7 +1322,8 @@ class _MedicationManagementScreenState
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.grey),
+                            const Icon(Icons.calendar_today,
+                                color: Colors.grey),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -1303,7 +1331,9 @@ class _MedicationManagementScreenState
                                     ? 'End Date: ${_formatDate(endDate!.toIso8601String())}'
                                     : 'Select End Date (optional)',
                                 style: TextStyle(
-                                  color: endDate != null ? Colors.black : Colors.grey,
+                                  color: endDate != null
+                                      ? Colors.black
+                                      : Colors.grey,
                                   fontSize: 16,
                                 ),
                               ),
@@ -1341,12 +1371,15 @@ class _MedicationManagementScreenState
                     // Check for duplicates (excluding current medication)
                     if (_isDuplicateMedication(
                       controllers['brandName']!.text.trim(),
-                      controllers['genericName']!.text.trim().isEmpty ? null : controllers['genericName']!.text.trim(),
+                      controllers['genericName']!.text.trim().isEmpty
+                          ? null
+                          : controllers['genericName']!.text.trim(),
                       excludeId: medication['id'],
                     )) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('A medication with this name already exists'),
+                          content: Text(
+                              'A medication with this name already exists'),
                           backgroundColor: Colors.orange,
                         ),
                       );
@@ -1360,12 +1393,14 @@ class _MedicationManagementScreenState
                         'genericName': controllers['genericName']!.text.trim(),
                         'strength': controllers['strength']!.text.trim(),
                         'dosageForm': controllers['dosageForm']!.text.trim(),
-                        'manufacturer': controllers['manufacturer']!.text.trim(),
+                        'manufacturer':
+                            controllers['manufacturer']!.text.trim(),
                         'dosage': controllers['dosage']!.text.trim(),
                         'frequency': controllers['frequency']!.text.trim(),
                         'timeToTake': controllers['timeToTake']!.text.trim(),
                         'takeWith': controllers['takeWith']!.text.trim(),
-                        'doNotTakeWith': controllers['doNotTakeWith']!.text.trim(),
+                        'doNotTakeWith':
+                            controllers['doNotTakeWith']!.text.trim(),
                         'startDate': startDate?.toIso8601String(),
                         'endDate': endDate?.toIso8601String(),
                         'lastModified': DateTime.now().toIso8601String(),
@@ -1382,8 +1417,10 @@ class _MedicationManagementScreenState
                       ),
                     );
                   },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                  child: const Text('Save Changes', style: TextStyle(color: Colors.white)),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
+                  child: const Text('Save Changes',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -1400,7 +1437,8 @@ class _MedicationManagementScreenState
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Remove Medication'),
-          content: Text('Are you sure you want to remove "${medication['brandName']}" from the medication list?'),
+          content: Text(
+              'Are you sure you want to remove "${medication['brandName']}" from the medication list?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1416,13 +1454,15 @@ class _MedicationManagementScreenState
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('${medication['brandName']} removed successfully'),
+                    content:
+                        Text('${medication['brandName']} removed successfully'),
                     backgroundColor: Colors.red,
                   ),
                 );
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              child: const Text('Remove', style: TextStyle(color: Colors.white)),
+              child:
+                  const Text('Remove', style: TextStyle(color: Colors.white)),
             ),
           ],
         );
@@ -1458,19 +1498,17 @@ class _MedicationManagementScreenState
   }
 
   Map<String, dynamic>? _parseNDCResult(
-      Map<String, dynamic> result,
-      String code,
-      ) {
+    Map<String, dynamic> result,
+    String code,
+  ) {
     try {
       return {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'ndc': code,
-        'brandName':
-        result['brand_name'] ??
+        'brandName': result['brand_name'] ??
             result['proprietary_name'] ??
             'Unknown Brand',
-        'genericName':
-        result['generic_name'] ??
+        'genericName': result['generic_name'] ??
             result['nonproprietary_name'] ??
             'Unknown Generic',
         'dosageForm': result['dosage_form_name'] ?? 'Unknown Form',
@@ -1518,22 +1556,23 @@ class _MedicationManagementScreenState
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildDetailRow('Generic Name:', medicationData['genericName']),
-                    _buildDetailRow('Dosage Form:', medicationData['dosageForm']),
+                    _buildDetailRow(
+                        'Generic Name:', medicationData['genericName']),
+                    _buildDetailRow(
+                        'Dosage Form:', medicationData['dosageForm']),
                     _buildDetailRow('Strength:', medicationData['strength']),
                     _buildDetailRow(
                       'Manufacturer:',
                       medicationData['manufacturer'],
                     ),
                     _buildDetailRow('NDC Code:', medicationData['ndc']),
-
                     const SizedBox(height: 16),
                     const Text(
                       'Treatment Information:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: dosageController,
                       decoration: const InputDecoration(
@@ -1542,7 +1581,6 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: frequencyController,
                       decoration: const InputDecoration(
@@ -1551,7 +1589,6 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: timeToTakeController,
                       decoration: const InputDecoration(
@@ -1561,7 +1598,6 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: takeWithController,
                       decoration: const InputDecoration(
@@ -1571,17 +1607,16 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextField(
                       controller: doNotTakeWithController,
                       decoration: const InputDecoration(
-                        labelText: 'Do Not Take With (e.g., alcohol, other meds)',
+                        labelText:
+                            'Do Not Take With (e.g., alcohol, other meds)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.warning),
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -1605,14 +1640,17 @@ class _MedicationManagementScreenState
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.grey),
+                            const Icon(Icons.calendar_today,
+                                color: Colors.grey),
                             const SizedBox(width: 12),
                             Text(
                               startDate != null
                                   ? 'Start Date: ${_formatDate(startDate!.toIso8601String())}'
                                   : 'Select Start Date (optional)',
                               style: TextStyle(
-                                color: startDate != null ? Colors.black : Colors.grey,
+                                color: startDate != null
+                                    ? Colors.black
+                                    : Colors.grey,
                                 fontSize: 16,
                               ),
                             ),
@@ -1621,7 +1659,6 @@ class _MedicationManagementScreenState
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -1645,14 +1682,17 @@ class _MedicationManagementScreenState
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.calendar_today, color: Colors.grey),
+                            const Icon(Icons.calendar_today,
+                                color: Colors.grey),
                             const SizedBox(width: 12),
                             Text(
                               endDate != null
                                   ? 'End Date: ${_formatDate(endDate!.toIso8601String())}'
                                   : 'Select End Date (optional)',
                               style: TextStyle(
-                                color: endDate != null ? Colors.black : Colors.grey,
+                                color: endDate != null
+                                    ? Colors.black
+                                    : Colors.grey,
                                 fontSize: 16,
                               ),
                             ),
@@ -1725,7 +1765,8 @@ class _MedicationManagementScreenState
     setState(() {
       medications.add({
         ...medicationData,
-        'addedAt': medicationData['addedAt'] ?? DateTime.now().toIso8601String(),
+        'addedAt':
+            medicationData['addedAt'] ?? DateTime.now().toIso8601String(),
         'nextDose': null,
       });
     });
@@ -1757,7 +1798,6 @@ class _MedicationManagementScreenState
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
-
               ListTile(
                 leading: const Icon(
                   Icons.qr_code_scanner,
@@ -1770,7 +1810,6 @@ class _MedicationManagementScreenState
                   _scanMedicationCode();
                 },
               ),
-
               ListTile(
                 leading: const Icon(Icons.keyboard, color: Colors.indigo),
                 title: const Text('Enter NDC Code'),
@@ -1780,7 +1819,6 @@ class _MedicationManagementScreenState
                   _enterMedicationCode();
                 },
               ),
-
               ListTile(
                 leading: const Icon(Icons.edit, color: Colors.indigo),
                 title: const Text('Add Manually'),
@@ -1790,7 +1828,6 @@ class _MedicationManagementScreenState
                   _addMedicationManually();
                 },
               ),
-
               const SizedBox(height: 16),
             ],
           ),
@@ -1938,17 +1975,23 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
                   children: [
                     ElevatedButton.icon(
                       onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                      icon: const Icon(Icons.close, color: Colors.white, size: 18),
-                      label: const Text('Cancel', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey),
+                      icon: const Icon(Icons.close,
+                          color: Colors.white, size: 18),
+                      label: const Text('Cancel',
+                          style: TextStyle(color: Colors.white)),
                     ),
                     ElevatedButton.icon(
                       onPressed: () {
                         cameraController.switchCamera();
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo),
-                      icon: const Icon(Icons.flip_camera_ios, color: Colors.white, size: 18),
-                      label: const Text('Flip', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo),
+                      icon: const Icon(Icons.flip_camera_ios,
+                          color: Colors.white, size: 18),
+                      label: const Text('Flip',
+                          style: TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),

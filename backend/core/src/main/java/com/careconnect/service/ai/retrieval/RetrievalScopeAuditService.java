@@ -19,11 +19,9 @@ import java.util.UUID;
 @Service
 public class RetrievalScopeAuditService {
 
-    private static final Logger log = LoggerFactory.getLogger(RetrievalScopeAuditService.class);
-
     static final String EVENT_TYPE = AiAskAuditService.SCOPE_DENIED;
     static final String DELIVERY_STATUS = "WITHHELD";
-
+    private static final Logger log = LoggerFactory.getLogger(RetrievalScopeAuditService.class);
     private final AiAskAuditService askAuditService;
 
     public RetrievalScopeAuditService(final AiAskAuditService askAuditService) {

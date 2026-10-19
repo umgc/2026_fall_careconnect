@@ -164,7 +164,9 @@ public class GoogleHealthOAuthService {
         return new ParsedState(userId, returnUrl);
     }
 
-    private record ParsedState(String userId, String returnUrl) {}
+    private record ParsedState(String userId, String returnUrl) {
+    }
 
-    public record OAuthCallbackResult(String userId, String returnUrl) {}
+    public record OAuthCallbackResult(String userId, String returnUrl) {
+    }
 }

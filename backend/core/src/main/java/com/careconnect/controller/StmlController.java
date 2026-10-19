@@ -39,106 +39,112 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class StmlController {
 
-  private final StmlService stmlService;
-  private final StmlRecallService stmlRecallService;
-  private final StmlCheckInService stmlCheckInService;
-  private final StmlSearchService stmlSearchService;
-  private final RetrievalScopeService retrievalScopeService;
-  private final UserRepository userRepository;
+    private final StmlService stmlService;
+    private final StmlRecallService stmlRecallService;
+    private final StmlCheckInService stmlCheckInService;
+    private final StmlSearchService stmlSearchService;
+    private final RetrievalScopeService retrievalScopeService;
+    private final UserRepository userRepository;
 
-  /** Gets the currently authenticated user from the security context. */
-  private User getCurrentUser() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    return userRepository.findByEmail(auth.getName())
-        .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
-  }
+    /**
+     * Gets the currently authenticated user from the security context.
+     */
+    private User getCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "User not authenticated"));
+    }
 
-  /** STML-2: Returns the daily memory brief for a patient.
-   *
-   * @param patientId the ID of the patient
-   * @return the daily memory brief
-   */
-  @GetMapping("/patients/{patientId}/brief")
-  public ResponseEntity<StmlBriefDTO> getDailyBrief(
-      @PathVariable final Long patientId) {
-    try {
-      retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (ForbiddenScopeException e) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-    } catch (UnauthorizedException e) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    /**
+     * STML-2: Returns the daily memory brief for a patient.
+     *
+     * @param patientId the ID of the patient
+     * @return the daily memory brief
+     */
+    @GetMapping("/patients/{patientId}/brief")
+    public ResponseEntity<StmlBriefDTO> getDailyBrief(
+            @PathVariable final Long patientId) {
+        try {
+            retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
+        } catch (ForbiddenScopeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (UnauthorizedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(stmlService.getDailyBrief(patientId));
     }
-    return ResponseEntity.ok(stmlService.getDailyBrief(patientId));
-  }
 
-  /** STML-1: Answers a patient recall question from their care records.
-   *
-   * @param patientId the ID of the patient
-   * @param request   the recall request containing the question
-   * @return the recall response with AI answer and citations
-   */
-  @PostMapping("/patients/{patientId}/recall")
-  public ResponseEntity<StmlRecallResponse> recall(
-      @PathVariable final Long patientId,
-      @RequestBody final StmlRecallRequest request) {
-    try {
-      retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (ForbiddenScopeException e) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-    } catch (UnauthorizedException e) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    /**
+     * STML-1: Answers a patient recall question from their care records.
+     *
+     * @param patientId the ID of the patient
+     * @param request   the recall request containing the question
+     * @return the recall response with AI answer and citations
+     */
+    @PostMapping("/patients/{patientId}/recall")
+    public ResponseEntity<StmlRecallResponse> recall(
+            @PathVariable final Long patientId,
+            @RequestBody final StmlRecallRequest request) {
+        try {
+            retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
+        } catch (ForbiddenScopeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (UnauthorizedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        request.setPatientId(patientId);
+        return ResponseEntity.ok(stmlRecallService.recall(request));
     }
-    request.setPatientId(patientId);
-    return ResponseEntity.ok(stmlRecallService.recall(request));
-  }
 
-  /** STML-3: Returns a consent-gated check-in preparation view for caregivers.
-   *
-   * @param patientId   the ID of the patient
-   * @param caregiverId the ID of the caregiver requesting access
-   * @return the check-in preparation view
-   */
-  @GetMapping("/patients/{patientId}/checkin")
-  public ResponseEntity<StmlCheckInDTO> getCheckInView(
-      @PathVariable final Long patientId,
-      @RequestParam final Long caregiverId) {
-    User caller = getCurrentUser();
-    // caregiverId is client-supplied — without this check, any authenticated
-    // caregiver could pass a different caregiver's id and read their
-    // consent-gated check-in view. Consent is only meaningful if caregiverId
-    // is the caller, unless the caller is an admin (support/audit access).
-    if (caller.getRole() != Role.ADMIN && !caller.getId().equals(caregiverId)) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    /**
+     * STML-3: Returns a consent-gated check-in preparation view for caregivers.
+     *
+     * @param patientId   the ID of the patient
+     * @param caregiverId the ID of the caregiver requesting access
+     * @return the check-in preparation view
+     */
+    @GetMapping("/patients/{patientId}/checkin")
+    public ResponseEntity<StmlCheckInDTO> getCheckInView(
+            @PathVariable final Long patientId,
+            @RequestParam final Long caregiverId) {
+        User caller = getCurrentUser();
+        // caregiverId is client-supplied — without this check, any authenticated
+        // caregiver could pass a different caregiver's id and read their
+        // consent-gated check-in view. Consent is only meaningful if caregiverId
+        // is the caller, unless the caller is an admin (support/audit access).
+        if (caller.getRole() != Role.ADMIN && !caller.getId().equals(caregiverId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        try {
+            retrievalScopeService.resolveRetrievalScope(caller, patientId);
+        } catch (ForbiddenScopeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (UnauthorizedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(
+                stmlCheckInService.getCheckInView(patientId, caregiverId));
     }
-    try {
-      retrievalScopeService.resolveRetrievalScope(caller, patientId);
-    } catch (ForbiddenScopeException e) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-    } catch (UnauthorizedException e) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-    }
-    return ResponseEntity.ok(
-        stmlCheckInService.getCheckInView(patientId, caregiverId));
-  }
 
-  /** STML-4: Searches recall history by keyword, sender, or date.
-   *
-   * @param patientId the ID of the patient
-   * @param request   the search request with filters
-   * @return the search response with matching results
-   */
-  @PostMapping("/patients/{patientId}/search")
-  public ResponseEntity<StmlSearchResponse> search(
-      @PathVariable final Long patientId,
-      @RequestBody final StmlSearchRequest request) {
-    try {
-      retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
-    } catch (ForbiddenScopeException e) {
-      return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-    } catch (UnauthorizedException e) {
-      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    /**
+     * STML-4: Searches recall history by keyword, sender, or date.
+     *
+     * @param patientId the ID of the patient
+     * @param request   the search request with filters
+     * @return the search response with matching results
+     */
+    @PostMapping("/patients/{patientId}/search")
+    public ResponseEntity<StmlSearchResponse> search(
+            @PathVariable final Long patientId,
+            @RequestBody final StmlSearchRequest request) {
+        try {
+            retrievalScopeService.resolveRetrievalScope(getCurrentUser(), patientId);
+        } catch (ForbiddenScopeException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        } catch (UnauthorizedException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        request.setPatientId(patientId);
+        return ResponseEntity.ok(stmlSearchService.search(request));
     }
-    request.setPatientId(patientId);
-    return ResponseEntity.ok(stmlSearchService.search(request));
-  }
 }

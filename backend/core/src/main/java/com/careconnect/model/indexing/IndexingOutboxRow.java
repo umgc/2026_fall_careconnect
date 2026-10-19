@@ -61,7 +61,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class IndexingOutboxRow {
 
-    /** Auto-generated primary key. */
+    /**
+     * Auto-generated primary key.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -91,7 +93,9 @@ public class IndexingOutboxRow {
     @Column(name = "payload_json", nullable = false, columnDefinition = "TEXT")
     private String payloadJson;
 
-    /** Timestamp when the row was written by the emitter. */
+    /**
+     * Timestamp when the row was written by the emitter.
+     */
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

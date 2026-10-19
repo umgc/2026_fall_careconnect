@@ -18,7 +18,8 @@ class SummaryConfirmationCard extends StatefulWidget {
   });
 
   @override
-  State<SummaryConfirmationCard> createState() => _SummaryConfirmationCardState();
+  State<SummaryConfirmationCard> createState() =>
+      _SummaryConfirmationCardState();
 }
 
 class _SummaryConfirmationCardState extends State<SummaryConfirmationCard> {
@@ -60,7 +61,8 @@ class _SummaryConfirmationCardState extends State<SummaryConfirmationCard> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<String?> _promptForReason() {
@@ -106,7 +108,8 @@ class _SummaryConfirmationCardState extends State<SummaryConfirmationCard> {
             Row(
               children: [
                 Expanded(
-                  child: Text(payload.headline, style: theme.textTheme.titleMedium),
+                  child: Text(payload.headline,
+                      style: theme.textTheme.titleMedium),
                 ),
                 if (payload.typeLabel != null)
                   Chip(

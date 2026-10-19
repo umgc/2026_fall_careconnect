@@ -1,0 +1,34 @@
+requirements:
+  - M3-REQ-01
+  - M3-REQ-02
+  - M3-REQ-04
+  - M3-REQ-12
+scenarios:
+  - M3-SC-MAP-001
+  - M3-SC-MAP-003
+origin: sanitized-sandbox-capture
+sandbox: oracle-health-open-fhir-r4
+capturedAt: "2026-10-02"
+capturedBy: Tiffany Obi
+captureRequest: AllergyIntolerance?_id=<synthetic-resource-id>
+httpStatus: 200
+bundleEntryCount: 1
+derivedFrom: null
+purpose: >-
+  Provide the happy-path AllergyIntolerance input for an active, confirmed
+  medication allergy with terminology coding, onset, reaction manifestation,
+  and severe reaction severity.
+sanitizationChanges:
+  - Replaced the generated Bundle, allergy, version, patient, practitioner, and reaction identifiers.
+  - Replaced Oracle Health sandbox, code-set, extension, and resource URLs with example.test URLs.
+  - Removed the generated XHTML narrative because it contained a patient name and duplicated structured fields.
+  - Replaced patient and practitioner display values with clearly synthetic labels.
+expectedBehaviorSummary: >-
+  Map every approved allergy field while preserving source identity and the
+  clinical facts represented by the structured FHIR elements. Exact normalized
+  field names, null behavior, and expected JSON remain provisional until the
+  canonical model and OpenAPI 1.0 contract are approved.
+expectedOutputStatus: pending-canonical-model-and-openapi-1.0
+reviewedBy: TBD
+consumers:
+  - TBD AllergyIntolerance mapper complete-record test

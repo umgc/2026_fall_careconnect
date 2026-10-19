@@ -3,7 +3,6 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'symptom_input_form.dart';
 import 'symptom_card.dart';
 
-
 class SymptomTab extends StatefulWidget {
   final String patientId;
 
@@ -42,7 +41,8 @@ class _SymptomTabState extends State<SymptomTab> {
 
     final symptomKey = apiSymptom['symptomKey'] ?? '';
     final symptomValue = apiSymptom['symptomValue'] ?? '';
-    final title = symptomValue.isNotEmpty ? '$symptomKey $symptomValue' : symptomKey;
+    final title =
+        symptomValue.isNotEmpty ? '$symptomKey $symptomValue' : symptomKey;
 
     final takenAt = apiSymptom['takenAt'] as String?;
     String timeDisplay = 'Unknown time';
@@ -169,7 +169,10 @@ class _SymptomTabState extends State<SymptomTab> {
                 child: Text(
                   'No symptoms recorded yet',
                   style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
                   ),
                 ),
               ),

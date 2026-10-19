@@ -1,0 +1,28 @@
+requirements:
+  - M3-REQ-04
+  - M3-REQ-06
+scenarios:
+  - M3-SC-MAP-004
+origin: hand-edited-sanitized-capture
+sandbox: oracle-health-open-fhir-r4
+capturedAt: "2026-10-02"
+capturedBy: Tiffany Obi
+captureRequest: AllergyIntolerance?patient=<synthetic-patient-id>
+httpStatus: 200
+bundleEntryCount: 1
+derivedFrom: patient-allergy-search-2026-10-02
+purpose: >-
+  Verify that an active, confirmed AllergyIntolerance with no reaction element
+  is handled successfully without inventing reaction details.
+sanitizationChanges:
+  - Selected one source record that naturally omitted the reaction element.
+  - Replaced all Bundle, allergy, version, patient, and practitioner identifiers.
+  - Replaced Oracle Health sandbox, code-set, extension, and resource URLs with example.test URLs.
+  - Removed the generated XHTML narrative and replaced display values with synthetic labels.
+expectedBehaviorSummary: >-
+  Map the allergy successfully and represent reactions using the approved empty,
+  absent, or null rule without returning an error or fabricating clinical data.
+expectedOutputStatus: pending-canonical-model-and-openapi-1.0
+reviewedBy: TBD
+consumers:
+  - TBD AllergyIntolerance mapper missing-reaction test

@@ -44,11 +44,57 @@ class _WebPayPageState extends State<WebPayPage> {
   late String _selectedState;
 
   static const List<String> _usStates = [
-    'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
-    'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
-    'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-    'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
-    'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC',
+    'AL',
+    'AK',
+    'AZ',
+    'AR',
+    'CA',
+    'CO',
+    'CT',
+    'DE',
+    'FL',
+    'GA',
+    'HI',
+    'ID',
+    'IL',
+    'IN',
+    'IA',
+    'KS',
+    'KY',
+    'LA',
+    'ME',
+    'MD',
+    'MA',
+    'MI',
+    'MN',
+    'MS',
+    'MO',
+    'MT',
+    'NE',
+    'NV',
+    'NH',
+    'NJ',
+    'NM',
+    'NY',
+    'NC',
+    'ND',
+    'OH',
+    'OK',
+    'OR',
+    'PA',
+    'RI',
+    'SC',
+    'SD',
+    'TN',
+    'TX',
+    'UT',
+    'VT',
+    'VA',
+    'WA',
+    'WV',
+    'WI',
+    'WY',
+    'DC',
   ];
 
   @override
@@ -62,16 +108,27 @@ class _WebPayPageState extends State<WebPayPage> {
 
   bool get _showApplePay {
     if (kIsWeb) return true;
-    try { return Platform.isIOS; } catch (_) { return false; }
+    try {
+      return Platform.isIOS;
+    } catch (_) {
+      return false;
+    }
   }
 
   bool get _showGooglePay {
     if (kIsWeb) return true;
-    try { return Platform.isAndroid; } catch (_) { return false; }
+    try {
+      return Platform.isAndroid;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _fetchBillingQuote() async {
-    setState(() { _loadingQuote = true; _quoteError = null; });
+    setState(() {
+      _loadingQuote = true;
+      _quoteError = null;
+    });
     try {
       final service = BillingQuoteService(backendBase: backendBase);
       final quote = await service.getQuote(
@@ -79,9 +136,17 @@ class _WebPayPageState extends State<WebPayPage> {
         userId: _userId,
         state: _selectedState,
       );
-      if (mounted) setState(() { _billingQuote = quote; _loadingQuote = false; });
+      if (mounted)
+        setState(() {
+          _billingQuote = quote;
+          _loadingQuote = false;
+        });
     } catch (e) {
-      if (mounted) setState(() { _quoteError = e.toString(); _loadingQuote = false; });
+      if (mounted)
+        setState(() {
+          _quoteError = e.toString();
+          _loadingQuote = false;
+        });
     }
   }
 
@@ -101,7 +166,8 @@ class _WebPayPageState extends State<WebPayPage> {
     try {
       final t = AppLocalizations.of(context)!;
       final uri = Uri.parse('$backendBase/v1/api/billing/pay/$platform');
-      final token = '${platform.toUpperCase()}_PAY_TOKEN_${DateTime.now().millisecondsSinceEpoch}';
+      final token =
+          '${platform.toUpperCase()}_PAY_TOKEN_${DateTime.now().millisecondsSinceEpoch}';
 
       final body = {
         'token': token,
@@ -111,10 +177,12 @@ class _WebPayPageState extends State<WebPayPage> {
       };
 
       final headers = await _buildHeaders();
-      final resp = await http.post(uri, headers: headers, body: jsonEncode(body))
+      final resp = await http
+          .post(uri, headers: headers, body: jsonEncode(body))
           .timeout(const Duration(seconds: 15));
 
-      if (resp.statusCode != 200) throw Exception('Payment failed: ${resp.body}');
+      if (resp.statusCode != 200)
+        throw Exception('Payment failed: ${resp.body}');
 
       final responseBody = jsonDecode(resp.body) as Map<String, dynamic>;
       if (responseBody['success'] != true) {
@@ -126,13 +194,18 @@ class _WebPayPageState extends State<WebPayPage> {
           _paymentSuccess = true;
           _transactionId = responseBody['transactionId']?.toString();
         });
-        Future.delayed(const Duration(seconds: 3), () { if (mounted) context.go('/subscription'); });
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted) context.go('/subscription');
+        });
       }
     } catch (e) {
       if (mounted) {
         final t = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${t.webpay_paymentFailed}: $e'), backgroundColor: Colors.red, duration: const Duration(seconds: 4)),
+          SnackBar(
+              content: Text('${t.webpay_paymentFailed}: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4)),
         );
       }
     } finally {
@@ -163,10 +236,15 @@ class _WebPayPageState extends State<WebPayPage> {
           children: [
             const Icon(Icons.check_circle, color: Colors.green, size: 80),
             const SizedBox(height: 24),
-            Text(t.paysuccess_paymentSuccess, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+            Text(t.paysuccess_paymentSuccess,
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00A7C8))),
             const SizedBox(height: 12),
             if (_transactionId != null)
-              Text('${t.webpay_transaction}: $_transactionId', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text('${t.webpay_transaction}: $_transactionId',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
             const SizedBox(height: 32),
           ],
         ),
@@ -187,9 +265,12 @@ class _WebPayPageState extends State<WebPayPage> {
             children: [
               const Icon(Icons.error_outline, size: 48, color: Colors.red),
               const SizedBox(height: 16),
-              Text('${t.webpay_errorLoadingQuote}: $_quoteError', textAlign: TextAlign.center),
+              Text('${t.webpay_errorLoadingQuote}: $_quoteError',
+                  textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _fetchBillingQuote, child: Text(t.nativebilling_retry)),
+              ElevatedButton(
+                  onPressed: _fetchBillingQuote,
+                  child: Text(t.nativebilling_retry)),
             ],
           ),
         ),
@@ -208,7 +289,10 @@ class _WebPayPageState extends State<WebPayPage> {
           _buildOrderSummary(),
           const SizedBox(height: 32),
           Text(t.webpay_selectPaymentMethod,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF00A7C8))),
           const SizedBox(height: 16),
           if (_showApplePay) ...[
             _buildPaymentButton(
@@ -242,7 +326,11 @@ class _WebPayPageState extends State<WebPayPage> {
       child: ElevatedButton.icon(
         onPressed: _isProcessing ? null : onPressed,
         icon: _isProcessing
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
             : Icon(icon, size: 24),
         label: Text(label, style: const TextStyle(fontSize: 16)),
         style: ElevatedButton.styleFrom(
@@ -260,11 +348,14 @@ class _WebPayPageState extends State<WebPayPage> {
     final t = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Text('${t.webpay_taxState}: ', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text('${t.webpay_taxState}: ',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
         const SizedBox(width: 8),
         DropdownButton<String>(
           value: _selectedState,
-          items: _usStates.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+          items: _usStates
+              .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+              .toList(),
           onChanged: (val) {
             if (val != null && val != _selectedState) {
               setState(() => _selectedState = val);
@@ -289,27 +380,53 @@ class _WebPayPageState extends State<WebPayPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(t.nativebilling_orderSummary, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+          Text(t.nativebilling_orderSummary,
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF00A7C8))),
           const SizedBox(height: 16),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(quote.tierName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-            Text(quote.subtotalDisplay, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            Text(quote.tierName,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            Text(quote.subtotalDisplay,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
           ]),
-          Container(height: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(vertical: 12)),
+          Container(
+              height: 1,
+              color: Colors.grey[300],
+              margin: const EdgeInsets.symmetric(vertical: 12)),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${t.nativebilling_taxes} (${quote.taxPercentageDisplay})', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-              Text(quote.taxJurisdiction, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              Text('${t.nativebilling_taxes} (${quote.taxPercentageDisplay})',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+              Text(quote.taxJurisdiction,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
             ]),
-            Text(quote.taxDisplay, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            Text(quote.taxDisplay,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600])),
           ]),
-          Container(height: 1, color: Colors.grey[300], margin: const EdgeInsets.symmetric(vertical: 12)),
+          Container(
+              height: 1,
+              color: Colors.grey[300],
+              margin: const EdgeInsets.symmetric(vertical: 12)),
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text(t.nativebilling_total, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
-            Text(quote.totalDisplay, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF00A7C8))),
+            Text(t.nativebilling_total,
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00A7C8))),
+            Text(quote.totalDisplay,
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00A7C8))),
           ]),
           const SizedBox(height: 8),
-          Text('${t.webpay_currency}: ${quote.currency}', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+          Text('${t.webpay_currency}: ${quote.currency}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[500])),
         ],
       ),
     );

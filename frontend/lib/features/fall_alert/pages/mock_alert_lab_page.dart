@@ -67,7 +67,9 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                _running ? 'Status: running (emits every ~3s)' : 'Status: stopped',
+                _running
+                    ? 'Status: running (emits every ~3s)'
+                    : 'Status: stopped',
                 style: theme.textTheme.bodyMedium,
               ),
             ),
@@ -78,7 +80,8 @@ class _MockAlertLabPageState extends State<MockAlertLabPage> {
                   : ListView.separated(
                       itemCount: _recent.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) => _AlertTile(alert: _recent[i]),
+                      itemBuilder: (context, i) =>
+                          _AlertTile(alert: _recent[i]),
                     ),
             ),
           ],
@@ -131,7 +134,9 @@ class _AlertTile extends StatelessWidget {
     return ListTile(
       title: Text(alert.patientName),
       subtitle: Text(subtitle),
-      trailing: alert.hasLiveVideo ? const Icon(Icons.videocam) : const Icon(Icons.watch),
+      trailing: alert.hasLiveVideo
+          ? const Icon(Icons.videocam)
+          : const Icon(Icons.watch),
       onTap: () {
         // Navigate directly into the alert details screen, same as tapping a notification
         AlertNavigation.navigateFromPayload(context, alert.toPayload());

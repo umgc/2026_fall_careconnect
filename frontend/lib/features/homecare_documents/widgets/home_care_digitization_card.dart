@@ -118,8 +118,7 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
       // back to manual entry rather than leaving the card stuck processing.
       result = HomeCareExtractionResult.manualFallback(
         type,
-        message:
-            t.homecarewidget_extractionFailed,
+        message: t.homecarewidget_extractionFailed,
       );
     } finally {
       if (mounted) setState(() => _processing = false);
@@ -130,8 +129,8 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
     if (result.manualEntryRequired) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.message ??
-              t.homecarewidget_extractionUnavailable),
+          content:
+              Text(result.message ?? t.homecarewidget_extractionUnavailable),
           backgroundColor: AppTheme.warning,
         ),
       );
@@ -162,16 +161,16 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
     }
   }
 
-  String _translateDisplayName(String displayname){
+  String _translateDisplayName(String displayname) {
     final t = AppLocalizations.of(context)!;
-    switch(displayname){
-      case('Employment Application'):
+    switch (displayname) {
+      case ('Employment Application'):
         return t.filemanage_empApplication;
-      case('Certification / License'):
+      case ('Certification / License'):
         return t.filemanage_cert;
-      case('Tax Form (W-4)'):
+      case ('Tax Form (W-4)'):
         return t.filemanage_taxForm;
-      case('Work Authorization (I-9)'):
+      case ('Work Authorization (I-9)'):
         return t.filemanage_workAuth;
       default:
         return displayname;
@@ -231,8 +230,8 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
               decoration: InputDecoration(
                 border:
                     OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             ),
             const SizedBox(height: 12),
@@ -275,8 +274,9 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.auto_awesome),
-                  label:
-                      Text(_processing ? '${local.voicecommand_processingState}...' : local.homecarewidget_digitizeReview),
+                  label: Text(_processing
+                      ? '${local.voicecommand_processingState}...'
+                      : local.homecarewidget_digitizeReview),
                 ),
                 const SizedBox(width: 12),
                 TextButton(

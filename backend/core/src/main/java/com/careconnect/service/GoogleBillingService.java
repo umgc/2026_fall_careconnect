@@ -3,11 +3,15 @@ package com.careconnect.service;
 import org.springframework.stereotype.Service;
 import com.careconnect.dto.BillingVerifyRequest;
 import com.careconnect.dto.BillingVerifyResponse;
+
 import java.time.Instant;
+
 import org.springframework.beans.factory.annotation.Value;
 import com.google.auth.oauth2.GoogleCredentials;
+
 import java.io.FileInputStream;
 import java.util.List;
+
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -35,7 +39,7 @@ public class GoogleBillingService implements BillingService {
         if (googleServiceAccountFile != null && !googleServiceAccountFile.isEmpty()) {
             try (FileInputStream fis = new FileInputStream(googleServiceAccountFile)) {
                 GoogleCredentials creds = GoogleCredentials.fromStream(fis)
-                    .createScoped(List.of("https://www.googleapis.com/auth/androidpublisher"));
+                        .createScoped(List.of("https://www.googleapis.com/auth/androidpublisher"));
                 creds.refreshIfExpired();
                 return creds.getAccessToken().getTokenValue();
             }
@@ -51,8 +55,8 @@ public class GoogleBillingService implements BillingService {
             }
 
             String url = String.format(
-                "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/%s/purchases/subscriptions/%s/tokens/%s:cancel",
-                packageName, productId, purchaseToken
+                    "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/%s/purchases/subscriptions/%s/tokens/%s:cancel",
+                    packageName, productId, purchaseToken
             );
 
             RestTemplate rest = new RestTemplate();
@@ -74,8 +78,8 @@ public class GoogleBillingService implements BillingService {
         }
 
         String url = String.format(
-            "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/%s/purchases/subscriptions/%s/tokens/%s",
-            request.getPackageName(), request.getProductId(), request.getReceipt()
+                "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/%s/purchases/subscriptions/%s/tokens/%s",
+                request.getPackageName(), request.getProductId(), request.getReceipt()
         );
 
         RestTemplate rest = new RestTemplate();
@@ -99,9 +103,9 @@ public class GoogleBillingService implements BillingService {
 
         if (root != null) {
             long purchaseTime = root.has("startTimeMillis") ? root.get("startTimeMillis").asLong() :
-                (root.has("purchaseTimeMillis") ? root.get("purchaseTimeMillis").asLong() : Instant.now().toEpochMilli());
+                    (root.has("purchaseTimeMillis") ? root.get("purchaseTimeMillis").asLong() : Instant.now().toEpochMilli());
             long expiryTime = root.has("expiryTimeMillis") ? root.get("expiryTimeMillis").asLong() :
-                (purchaseTime + 30L * 24L * 3600L * 1000L);
+                    (purchaseTime + 30L * 24L * 3600L * 1000L);
             String orderId = root.has("orderId") ? root.get("orderId").asText() : null;
             String purchaseState = root.has("paymentState") ? String.valueOf(root.get("paymentState").asInt()) : "UNKNOWN";
             out.setSuccess(true);

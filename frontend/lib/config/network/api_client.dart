@@ -11,9 +11,9 @@ class ApiClient {
   String get _baseUrl => getBackendBaseUrl();
 
   Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
 
   Future<Map<String, dynamic>> get(String path) async {
     try {

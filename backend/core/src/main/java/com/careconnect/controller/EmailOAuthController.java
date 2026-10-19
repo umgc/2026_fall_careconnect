@@ -25,16 +25,15 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 @RestController
-
-@RequestMapping("/oauth")
-
 @RequiredArgsConstructor
 
 @Slf4j
 
 public class EmailOAuthController {
 
-    /** Query param read by {@code usps_test_screen._handleOAuthReturnError()} (also accepts legacy {@code error}). */
+    /**
+     * Query param read by {@code usps_test_screen._handleOAuthReturnError()} (also accepts legacy {@code error}).
+     */
 
     static final String OAUTH_ERROR_PARAM = "oauthError";
 
@@ -46,23 +45,25 @@ public class EmailOAuthController {
 
     private final OAuthRedirectValidator oauthRedirectValidator;
 
-    @Value("${google.oauth.client-id:}")    String clientId;
+    @Value("${google.oauth.client-id:}")
+    String clientId;
 
-    @Value("${google.oauth.redirect-uri:}") String redirectUri;
+    @Value("${google.oauth.redirect-uri:}")
+    String redirectUri;
 
-    @Value("${google.oauth.scope:email}")   String scope;
+    @Value("${google.oauth.scope:email}")
+    String scope;
 
-    @Value("${google.oauth.frontend-url:http://localhost}") String frontendBaseUrl;
+    @Value("${google.oauth.frontend-url:http://localhost}")
+    String frontendBaseUrl;
 
     /**
-
      * Public entry for external browsers. Requires a short-lived {@code startToken}
-
+     * <p>
      * from {@code GET /v1/api/email-credentials/gmail/connect-url} (JWT-authenticated).
-
      */
 
-    @GetMapping("/google/start")
+    @GetMapping("/oauth/google/start")
 
     public ResponseEntity<Void> start(@RequestParam String startToken) {
 
@@ -106,7 +107,7 @@ public class EmailOAuthController {
 
     }
 
-    @GetMapping("/google/callback")
+    @GetMapping("/oauth/google/callback")
 
     public ResponseEntity<Void> callback(@RequestParam String code, @RequestParam String state) {
 

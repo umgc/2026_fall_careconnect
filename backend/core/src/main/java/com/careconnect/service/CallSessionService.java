@@ -12,26 +12,26 @@ import com.careconnect.repository.CaregiverRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 
-/** Owns durable call authorization, patient mapping, and lifecycle state. */
+/**
+ * Owns durable call authorization, patient mapping, and lifecycle state.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class CallSessionService {
-
-    private static final long TERMINATION_LEASE_SECONDS = 120L;
-    private static final long TERMINATION_RETRY_SECONDS = 30L;
-    private static final int MAX_TERMINATION_ERROR_LENGTH = 2000;
 
     public static final String SESSION_CREATED = "CREATED";
     public static final String SESSION_ACTIVE = "ACTIVE";
@@ -43,7 +43,9 @@ public class CallSessionService {
     public static final String PARTICIPANT_LEFT = "LEFT";
     public static final String PARTICIPANT_DECLINED = "DECLINED";
     public static final String PARTICIPANT_EXPIRED = "EXPIRED";
-
+    private static final long TERMINATION_LEASE_SECONDS = 120L;
+    private static final long TERMINATION_RETRY_SECONDS = 30L;
+    private static final int MAX_TERMINATION_ERROR_LENGTH = 2000;
     private final CallSessionRepository callSessionRepository;
     private final CallParticipantRepository callParticipantRepository;
     private final PatientRepository patientRepository;
@@ -56,50 +58,24 @@ public class CallSessionService {
     @Value("${careconnect.call.transcript.post-call-upload-grace-seconds:120}")
     private long transcriptUploadGraceSeconds = 120L;
 
-    public record LeaveResult(
-            boolean terminationOwner,
-            boolean ended,
-            long remainingParticipants,
-            UUID terminationClaimId,
-            List<Long> notifyUserIds) {
-        public LeaveResult(
-                final boolean terminationOwner,
-                final boolean ended,
-                final long remainingParticipants) {
-            this(terminationOwner, ended, remainingParticipants, null, List.of());
-        }
+    private static LocalDateTime leaseUntil(final long seconds) {
+        return LocalDateTime.now(ZoneOffset.UTC).plusSeconds(seconds);
     }
 
-    public record DeclineResult(
-            List<Long> notifyUserIds, boolean terminationOwner, UUID terminationClaimId) {
-        public DeclineResult(
-                final List<Long> notifyUserIds, final boolean terminationOwner) {
-            this(notifyUserIds, terminationOwner, null);
+    private static boolean isMissingConflictTarget(final Throwable error) {
+        Throwable cursor = error;
+        while (cursor != null) {
+            final String message = cursor.getMessage();
+            if (message != null) {
+                final String lower = message.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("no unique or exclusion constraint matching the on conflict")
+                        || lower.contains("there is no unique or exclusion constraint matching")) {
+                    return true;
+                }
+            }
+            cursor = cursor.getCause();
         }
-    }
-
-    public record TerminationClaim(
-            String callId, UUID claimId, List<Long> notifyUserIds) {}
-
-    /** Snapshot of independently fenced termination step completion. */
-    public record TerminationProgress(
-            boolean sentimentDone,
-            boolean summaryDone,
-            boolean recordingDone,
-            boolean meetingDone) {
-        public boolean isDone(final TerminationStep step) {
-            return switch (step) {
-                case SENTIMENT -> sentimentDone;
-                case SUMMARY -> summaryDone;
-                case RECORDING -> recordingDone;
-                case MEETING -> meetingDone;
-                case COMPLETE -> sentimentDone && summaryDone && recordingDone && meetingDone;
-            };
-        }
-
-        public boolean allRequiredDone() {
-            return isDone(TerminationStep.COMPLETE);
-        }
+        return false;
     }
 
     public CallSession createSession(
@@ -245,7 +221,9 @@ public class CallSessionService {
         return session;
     }
 
-    /** Requires durable call membership for non-PHI signaling and telemetry attribution. */
+    /**
+     * Requires durable call membership for non-PHI signaling and telemetry attribution.
+     */
     @Transactional(readOnly = true)
     public CallSession requireParticipant(final String callId, final Long userId) {
         final CallSession session = requireSession(callId);
@@ -257,7 +235,9 @@ public class CallSessionService {
         return session;
     }
 
-    /** Requires durable PHI access earned by joining the call. */
+    /**
+     * Requires durable PHI access earned by joining the call.
+     */
     @Transactional(readOnly = true)
     public CallSession requireHistoricalParticipant(final String callId, final Long userId) {
         final CallSession session = requireSession(callId);
@@ -273,7 +253,9 @@ public class CallSessionService {
         return session;
     }
 
-    /** Requires a participant who actually joined and has not left. */
+    /**
+     * Requires a participant who actually joined and has not left.
+     */
     @Transactional(readOnly = true)
     public CallSession requireActiveParticipant(final String callId, final Long userId) {
         final CallSession session = requireJoinAuthorized(callId, userId);
@@ -346,7 +328,7 @@ public class CallSessionService {
     /**
      * Persists the Chime meeting id after a durable join has already succeeded.
      *
-     * @param callId durable call identifier
+     * @param callId    durable call identifier
      * @param meetingId Chime meeting id, ignored when blank
      */
     public void attachChimeMeetingId(final String callId, final String meetingId) {
@@ -433,7 +415,7 @@ public class CallSessionService {
         if (callSessionRepository.activateIfJoinable(
                 locked.getId(), chimeMeetingId, SESSION_CREATED, SESSION_ACTIVE) != 1
                 || callParticipantRepository.markJoinedIfInvited(
-                        locked.getId(), userId, PARTICIPANT_INVITED, PARTICIPANT_JOINED) != 1) {
+                locked.getId(), userId, PARTICIPANT_INVITED, PARTICIPANT_JOINED) != 1) {
             throw new AppException(HttpStatus.GONE, "Call is no longer joinable");
         }
         return callSessionRepository.electRecordingStart(
@@ -601,7 +583,9 @@ public class CallSessionService {
         recordTerminationRetry(callId, claimId, failureMessage(failure));
     }
 
-    /** Parks a still-owned TERMINATING session for retry without clearing step progress. */
+    /**
+     * Parks a still-owned TERMINATING session for retry without clearing step progress.
+     */
     public void recordTerminationRetry(
             final String callId, final UUID claimId, final String message) {
         if (claimId == null) {
@@ -771,10 +755,6 @@ public class CallSessionService {
         return message;
     }
 
-    private static LocalDateTime leaseUntil(final long seconds) {
-        return LocalDateTime.now(ZoneOffset.UTC).plusSeconds(seconds);
-    }
-
     private LeaveResult claimExistingTermination(
             final CallSession session, final Long claimedByUserId) {
         final UUID claimId = UUID.randomUUID();
@@ -845,7 +825,7 @@ public class CallSessionService {
             final String existingStatus = existing.get().getStatus();
             if (PARTICIPANT_INVITED.equals(initialStatus)
                     && (PARTICIPANT_LEFT.equals(existingStatus)
-                            || PARTICIPANT_DECLINED.equals(existingStatus))) {
+                    || PARTICIPANT_DECLINED.equals(existingStatus))) {
                 callParticipantRepository.reinviteIfInactive(
                         session.getId(),
                         userId,
@@ -871,22 +851,6 @@ public class CallSessionService {
                     participant.setStatus(initialStatus);
                     return callParticipantRepository.save(participant);
                 });
-    }
-
-    private static boolean isMissingConflictTarget(final Throwable error) {
-        Throwable cursor = error;
-        while (cursor != null) {
-            final String message = cursor.getMessage();
-            if (message != null) {
-                final String lower = message.toLowerCase(java.util.Locale.ROOT);
-                if (lower.contains("no unique or exclusion constraint matching the on conflict")
-                        || lower.contains("there is no unique or exclusion constraint matching")) {
-                    return true;
-                }
-            }
-            cursor = cursor.getCause();
-        }
-        return false;
     }
 
     private void authorizeForPatient(final User user, final Long patientUserId) {
@@ -932,6 +896,55 @@ public class CallSessionService {
         if (callId == null || callId.isBlank() || callId.length() > 120
                 || !callId.matches("[A-Za-z0-9_-]+")) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Invalid callId");
+        }
+    }
+
+    public record LeaveResult(
+            boolean terminationOwner,
+            boolean ended,
+            long remainingParticipants,
+            UUID terminationClaimId,
+            List<Long> notifyUserIds) {
+        public LeaveResult(
+                final boolean terminationOwner,
+                final boolean ended,
+                final long remainingParticipants) {
+            this(terminationOwner, ended, remainingParticipants, null, List.of());
+        }
+    }
+
+    public record DeclineResult(
+            List<Long> notifyUserIds, boolean terminationOwner, UUID terminationClaimId) {
+        public DeclineResult(
+                final List<Long> notifyUserIds, final boolean terminationOwner) {
+            this(notifyUserIds, terminationOwner, null);
+        }
+    }
+
+    public record TerminationClaim(
+            String callId, UUID claimId, List<Long> notifyUserIds) {
+    }
+
+    /**
+     * Snapshot of independently fenced termination step completion.
+     */
+    public record TerminationProgress(
+            boolean sentimentDone,
+            boolean summaryDone,
+            boolean recordingDone,
+            boolean meetingDone) {
+        public boolean isDone(final TerminationStep step) {
+            return switch (step) {
+                case SENTIMENT -> sentimentDone;
+                case SUMMARY -> summaryDone;
+                case RECORDING -> recordingDone;
+                case MEETING -> meetingDone;
+                case COMPLETE -> sentimentDone && summaryDone && recordingDone && meetingDone;
+            };
+        }
+
+        public boolean allRequiredDone() {
+            return isDone(TerminationStep.COMPLETE);
         }
     }
 }

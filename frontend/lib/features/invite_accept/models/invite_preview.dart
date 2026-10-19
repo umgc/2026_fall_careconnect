@@ -6,8 +6,8 @@
 ///     inviteReason, invitedEmail, expiresAt }
 class InvitePreview {
   final bool valid;
-  final String status;      // VALID | EXPIRED | REVOKED | ACCEPTED | INVALID
-  final String nextAction;  // ACCEPT | SIGN_IN | REQUEST_NEW | NONE
+  final String status; // VALID | EXPIRED | REVOKED | ACCEPTED | INVALID
+  final String nextAction; // ACCEPT | SIGN_IN | REQUEST_NEW | NONE
   final int? linkId;
   final String? linkType;
   final String? inviterName;
@@ -49,8 +49,12 @@ class InvitePreview {
   /// A short, human-readable summary of who invited the user and why.
   String get contextSummary {
     final inviter = inviterName ?? 'Someone';
-    final patient = patientName != null ? ' to join $patientName\'s care circle' : ' to join a care circle';
-    final reason = (inviteReason != null && inviteReason!.isNotEmpty) ? '\n\n"$inviteReason"' : '';
+    final patient = patientName != null
+        ? ' to join $patientName\'s care circle'
+        : ' to join a care circle';
+    final reason = (inviteReason != null && inviteReason!.isNotEmpty)
+        ? '\n\n"$inviteReason"'
+        : '';
     return '$inviter has invited you$patient.$reason';
   }
 }

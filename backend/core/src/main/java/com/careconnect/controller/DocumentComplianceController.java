@@ -44,7 +44,9 @@ public class DocumentComplianceController {
         this.authorizationService = authorizationService;
     }
 
-    /** The document types tracked per subject type (drives frontend rendering). */
+    /**
+     * The document types tracked per subject type (drives frontend rendering).
+     */
     @GetMapping("/required-documents")
     public ResponseEntity<?> requiredDocuments() {
         return ResponseEntity.ok(Map.of(
@@ -56,7 +58,9 @@ public class DocumentComplianceController {
                         .stream().map(Enum::name).sorted().toList()));
     }
 
-    /** Compliance summary for every employee and/or care circle (coordinator dashboard). */
+    /**
+     * Compliance summary for every employee and/or care circle (coordinator dashboard).
+     */
     @GetMapping("/dashboard")
     public ResponseEntity<?> dashboard(@RequestParam(required = false) String subjectType) {
         try {
@@ -71,7 +75,9 @@ public class DocumentComplianceController {
         }
     }
 
-    /** Required-document checklist for one employee or care circle. */
+    /**
+     * Required-document checklist for one employee or care circle.
+     */
     @GetMapping("/checklist/{subjectType}/{subjectId}")
     public ResponseEntity<?> checklist(@PathVariable String subjectType,
                                        @PathVariable Long subjectId) {
@@ -87,7 +93,9 @@ public class DocumentComplianceController {
         }
     }
 
-    /** Outstanding required forms (MISSING / REJECTED), filterable by subject and document type. */
+    /**
+     * Outstanding required forms (MISSING / REJECTED), filterable by subject and document type.
+     */
     @GetMapping("/missing")
     public ResponseEntity<?> missing(@RequestParam(required = false) String subjectType,
                                      @RequestParam(required = false) String documentType) {
@@ -104,7 +112,9 @@ public class DocumentComplianceController {
         }
     }
 
-    /** The missing-forms report as a downloadable CSV. */
+    /**
+     * The missing-forms report as a downloadable CSV.
+     */
     @GetMapping("/missing/export")
     public ResponseEntity<?> exportMissing(@RequestParam(required = false) String subjectType,
                                            @RequestParam(required = false) String documentType) {
@@ -126,7 +136,9 @@ public class DocumentComplianceController {
         }
     }
 
-    /** Manually transition a document's status; the reason is mandatory and audited. */
+    /**
+     * Manually transition a document's status; the reason is mandatory and audited.
+     */
     @PutMapping("/status")
     public ResponseEntity<?> updateStatus(@RequestBody DocumentStatusUpdateRequest request) {
         try {
@@ -140,7 +152,9 @@ public class DocumentComplianceController {
         }
     }
 
-    /** Audit trail of status transitions for a subject (who, when, why). */
+    /**
+     * Audit trail of status transitions for a subject (who, when, why).
+     */
     @GetMapping("/history/{subjectType}/{subjectId}")
     public ResponseEntity<?> history(@PathVariable String subjectType,
                                      @PathVariable Long subjectId,

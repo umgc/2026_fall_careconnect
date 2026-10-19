@@ -2,6 +2,7 @@ package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.ClinicalNoteIndexedPayload;
 import com.careconnect.indexing.DocumentIndexedPayload;
+import com.careconnect.indexing.EpicFhirIndexedPayload;
 import com.careconnect.indexing.IndexingEventType;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
@@ -75,6 +76,44 @@ public class IndexWorker {
         this.maxAttempts = Math.max(1, maxAttempts);
         this.claimLeaseMinutes = Math.max(1, claimLeaseMinutes);
         this.noBurnParkHours = Math.max(1, noBurnParkHours);
+    }
+
+    private static Throwable rootCause(final Throwable ex) {
+        for (Throwable current = ex; current != null; current = current.getCause()) {
+            if (current instanceof IndexingDeferredException) {
+                return current;
+            }
+            if (current.getCause() == current) {
+                break;
+            }
+        }
+        Throwable current = ex;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private static String textOrNull(final JsonNode node, final String field) {
+        if (node == null) {
+            return null;
+        }
+        final JsonNode child = node.get(field);
+        return child == null || child.isNull() ? null : child.asText(null);
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        return b;
+    }
+
+    private static String truncate(final String message) {
+        if (message == null) {
+            return null;
+        }
+        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 
     /**
@@ -261,6 +300,11 @@ public class IndexWorker {
                         objectMapper.treeToValue(payloadNode, DocumentIndexedPayload.class);
                 return retrievalIndexService.ingestDocumentIndexed(payload);
             }
+            if (IndexingEventType.EPIC_FHIR_INDEXED.equals(eventType)) {
+                final EpicFhirIndexedPayload payload =
+                        objectMapper.treeToValue(payloadNode, EpicFhirIndexedPayload.class);
+                return retrievalIndexService.ingestEpicFhir(payload);
+            }
         } catch (final IndexingDeferredException | IllegalArgumentException | IllegalStateException ex) {
             throw ex;
         } catch (final Exception ex) {
@@ -274,43 +318,5 @@ public class IndexWorker {
         log.warn("IndexWorker ignoring unsupported eventType={} outboxId={}",
                 eventType, row.getId());
         return 0;
-    }
-
-    private static Throwable rootCause(final Throwable ex) {
-        for (Throwable current = ex; current != null; current = current.getCause()) {
-            if (current instanceof IndexingDeferredException) {
-                return current;
-            }
-            if (current.getCause() == current) {
-                break;
-            }
-        }
-        Throwable current = ex;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        return current;
-    }
-
-    private static String textOrNull(final JsonNode node, final String field) {
-        if (node == null) {
-            return null;
-        }
-        final JsonNode child = node.get(field);
-        return child == null || child.isNull() ? null : child.asText(null);
-    }
-
-    private static String firstNonBlank(final String a, final String b) {
-        if (a != null && !a.isBlank()) {
-            return a;
-        }
-        return b;
-    }
-
-    private static String truncate(final String message) {
-        if (message == null) {
-            return null;
-        }
-        return message.length() > 500 ? message.substring(0, 500) : message;
     }
 }

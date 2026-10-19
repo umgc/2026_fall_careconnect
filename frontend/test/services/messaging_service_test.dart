@@ -2,8 +2,9 @@
 //
 // Coverage strategy:
 //   MessagingService uses WebSocketChannel for real-time messaging and
-//   AuthTokenManager + http for backend storage.  WebSocket connections
-//   require a live server, so those paths are skipped.
+//   AuthTokenManager + http for backend storage.  The notification socket is
+//   exercised through the connectChannel seam with an in-memory fake (JWT
+//   registration and reconnect); no live server is needed.
 //
 //   Pure-logic methods that run without platform channels are tested directly:
 //     getPlatformFeatures — returns the expected feature flags map.
@@ -15,12 +16,16 @@
 
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'package:care_connect_app/services/messaging_service.dart';
+
+import '../test_support/fake_web_socket_channel.dart';
 
 void main() {
   setUp(() {
@@ -193,7 +198,8 @@ void main() {
         10,
         (i) => {
           'id': 'msg$i',
-          'timestamp': '2025-01-${(i + 1).toString().padLeft(2, '0')}T00:00:00.000Z',
+          'timestamp':
+              '2025-01-${(i + 1).toString().padLeft(2, '0')}T00:00:00.000Z',
           'senderId': 'u1',
           'message': 'message $i',
         },
@@ -281,8 +287,7 @@ void main() {
         60,
         (i) => {
           'id': 'msg$i',
-          'timestamp':
-              '2025-01-01T${i.toString().padLeft(2, '0')}:00:00.000Z',
+          'timestamp': '2025-01-01T${i.toString().padLeft(2, '0')}:00:00.000Z',
           'senderId': 'u1',
           'message': 'message $i',
         },
@@ -695,6 +700,97 @@ void main() {
         () => MockClient((_) async => http.Response('', 200)),
       );
       expect(result, isTrue);
+    });
+  });
+
+  group('MessagingService notification socket', () {
+    late List<FakeWebSocketChannel> sockets;
+
+    setUp(() {
+      final expiry = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 3600;
+      FlutterSecureStorage.setMockInitialValues({
+        'jwt_token': 'test-jwt',
+        'token_expiry': '$expiry',
+      });
+      sockets = [];
+      MessagingService.connectChannel = (_) {
+        final socket = FakeWebSocketChannel();
+        sockets.add(socket);
+        return socket;
+      };
+    });
+
+    tearDown(() {
+      MessagingService.resetForTest();
+      MessagingService.connectChannel = WebSocketChannel.connect;
+    });
+
+    testWidgets('registerUser authenticates with the JWT, not the user id',
+        (tester) async {
+      await MessagingService.registerUser(userId: '42');
+
+      final socket = sockets.single;
+      expect(socket.sentOfType('authenticate').single['token'], 'test-jwt');
+      expect(socket.sent.whereType<String>(), isEmpty,
+          reason: 'the old REGISTER_USER:<id> text must no longer be sent');
+    });
+
+    testWidgets('registerUser without a stored token does not register',
+        (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+
+      await MessagingService.registerUser(userId: '42');
+
+      expect(sockets.single.sentOfType('authenticate'), isEmpty);
+      final sent = await MessagingService.sendMessage(
+        recipientId: '7',
+        senderId: '42',
+        senderName: 'Me',
+        message: 'hi',
+        messageType: 'text',
+      );
+      expect(sent, isFalse);
+    });
+
+    testWidgets('a dropped socket reconnects and re-authenticates',
+        (tester) async {
+      // Arrange
+      await MessagingService.registerUser(userId: '42');
+
+      // Act: the server (API Gateway) closes the socket, then 1s backoff
+      sockets.first.serverClose();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+
+      // Assert
+      expect(sockets, hasLength(2));
+      expect(sockets.last.sentOfType('authenticate'), hasLength(1));
+    });
+
+    testWidgets('a rejected token stops reconnecting', (tester) async {
+      // Arrange
+      await MessagingService.registerUser(userId: '42');
+
+      // Act: the backend rejects the token and closes the socket
+      sockets.first.serverSend({'type': 'authentication-failed'});
+      sockets.first.serverClose();
+      await tester.pump(const Duration(minutes: 5));
+
+      // Assert
+      expect(sockets, hasLength(1));
+    });
+
+    testWidgets('plain-text notifications are not mistaken for auth failures',
+        (tester) async {
+      await MessagingService.registerUser(userId: '42');
+
+      sockets.first.serverSend({'type': 'something-else'});
+      await tester.pump();
+      sockets.first.serverClose();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+
+      expect(sockets, hasLength(2));
     });
   });
 }

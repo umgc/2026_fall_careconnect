@@ -32,29 +32,29 @@ public interface ScheduledVisitRepository extends JpaRepository<ScheduledVisit, 
             +
             "AND v.status = 'Scheduled'")
     long countOverdueVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today,
-            @Param("currentTime") LocalTime currentTime);
+                            @Param("today") LocalDate today,
+                            @Param("currentTime") LocalTime currentTime);
 
     @Query("SELECT COUNT(v) FROM ScheduledVisit v WHERE v.caregiverId = :caregiverId " +
             "AND v.scheduledDate = :today " +
             "AND v.scheduledTime <= :timeThreshold " +
             "AND v.status = 'Scheduled'")
     long countReadyVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today,
-            @Param("timeThreshold") LocalTime timeThreshold);
+                          @Param("today") LocalDate today,
+                          @Param("timeThreshold") LocalTime timeThreshold);
 
     @Query("SELECT COUNT(v) FROM ScheduledVisit v WHERE v.caregiverId = :caregiverId " +
             "AND ((v.scheduledDate = :today AND v.scheduledTime > :timeThreshold) " +
             "OR v.scheduledDate > :today) " +
             "AND v.status = 'Scheduled'")
     long countUpcomingVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today,
-            @Param("timeThreshold") LocalTime timeThreshold);
+                             @Param("today") LocalDate today,
+                             @Param("timeThreshold") LocalTime timeThreshold);
 
     @Query("SELECT COUNT(v) FROM ScheduledVisit v WHERE v.caregiverId = :caregiverId " +
             "AND v.scheduledDate = :today")
     long countTodayVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today);
+                          @Param("today") LocalDate today);
 
     @Query("SELECT v FROM ScheduledVisit v WHERE v.caregiverId = :caregiverId " +
             "AND (v.scheduledDate < :today OR (v.scheduledDate = :today AND v.scheduledTime < :currentTime)) "
@@ -62,8 +62,8 @@ public interface ScheduledVisitRepository extends JpaRepository<ScheduledVisit, 
             "AND v.status = 'Scheduled' " +
             "ORDER BY v.scheduledDate ASC, v.scheduledTime ASC")
     List<ScheduledVisit> findOverdueVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today,
-            @Param("currentTime") LocalTime currentTime);
+                                           @Param("today") LocalDate today,
+                                           @Param("currentTime") LocalTime currentTime);
 
     @Query("SELECT v FROM ScheduledVisit v WHERE v.caregiverId = :caregiverId " +
             "AND v.scheduledDate = :today " +
@@ -71,8 +71,8 @@ public interface ScheduledVisitRepository extends JpaRepository<ScheduledVisit, 
             "AND v.status = 'Scheduled' " +
             "ORDER BY v.scheduledTime ASC")
     List<ScheduledVisit> findReadyVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today,
-            @Param("timeThreshold") LocalTime timeThreshold);
+                                         @Param("today") LocalDate today,
+                                         @Param("timeThreshold") LocalTime timeThreshold);
 
     @Query("SELECT v FROM ScheduledVisit v WHERE v.caregiverId = :caregiverId " +
             "AND ((v.scheduledDate = :today AND v.scheduledTime > :timeThreshold) " +
@@ -80,8 +80,8 @@ public interface ScheduledVisitRepository extends JpaRepository<ScheduledVisit, 
             "AND v.status = 'Scheduled' " +
             "ORDER BY v.scheduledDate ASC, v.scheduledTime ASC")
     List<ScheduledVisit> findUpcomingVisits(@Param("caregiverId") Long caregiverId,
-            @Param("today") LocalDate today,
-            @Param("timeThreshold") LocalTime timeThreshold);
+                                            @Param("today") LocalDate today,
+                                            @Param("timeThreshold") LocalTime timeThreshold);
 
     @Query("""
                 SELECT sv FROM ScheduledVisit sv
@@ -91,9 +91,9 @@ public interface ScheduledVisitRepository extends JpaRepository<ScheduledVisit, 
                 AND sv.scheduledTime < :endTime
             """)
     List<ScheduledVisit> findConflictingVisits(
-            @Param("caregiverId") Long caregiverId, 
-            @Param("date") LocalDate date, 
-            @Param("startTime") LocalTime startTime, 
+            @Param("caregiverId") Long caregiverId,
+            @Param("date") LocalDate date,
+            @Param("startTime") LocalTime startTime,
             @Param("endTime") LocalTime endTime);
 
     @Query("SELECT COUNT(*) FROM ScheduledVisit WHERE caregiverId = :caregiverId AND scheduledDate = :date")

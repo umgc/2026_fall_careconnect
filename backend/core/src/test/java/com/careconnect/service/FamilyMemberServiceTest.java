@@ -22,16 +22,25 @@ import static org.mockito.Mockito.*;
 
 class FamilyMemberServiceTest {
 
-    @Mock private FamilyMemberRepository familyMemberRepository;
-    @Mock private FamilyMemberLinkRepository familyMemberLinkRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private PasswordEncoder passwordEncoder;
-    @Mock private EmailService emailService;
-    @Mock private AnalyticsService analyticsService;
-    @Mock private GamificationService gamificationService;
+    @Mock
+    private FamilyMemberRepository familyMemberRepository;
+    @Mock
+    private FamilyMemberLinkRepository familyMemberLinkRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private PasswordEncoder passwordEncoder;
+    @Mock
+    private EmailService emailService;
+    @Mock
+    private AnalyticsService analyticsService;
+    @Mock
+    private GamificationService gamificationService;
 
-    @InjectMocks private FamilyMemberService familyMemberService;
+    @InjectMocks
+    private FamilyMemberService familyMemberService;
 
     private User patientUser;
     private User familyUser;

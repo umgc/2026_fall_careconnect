@@ -80,7 +80,8 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    final start = _startDate ?? DateTime.now().subtract(const Duration(days: 28));
+    final start =
+        _startDate ?? DateTime.now().subtract(const Duration(days: 28));
     final end = _endDate ?? DateTime.now();
     final picked = await showDialog<({DateTime start, DateTime end})>(
       context: context,
@@ -262,7 +263,8 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
       );
     }
 
-    final maxY = counts.map((c) => c.totalLogs).fold(0, (a, b) => a > b ? a : b);
+    final maxY =
+        counts.map((c) => c.totalLogs).fold(0, (a, b) => a > b ? a : b);
     final maxYVal = (maxY < 4) ? 4.0 : (maxY + 1).toDouble();
 
     return Column(
@@ -270,7 +272,8 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
       children: [
         Text(
           'Activity logs per week',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -282,8 +285,10 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
               barTouchData: BarTouchData(enabled: true),
               titlesData: FlTitlesData(
                 show: true,
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
@@ -311,7 +316,8 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
                       final i = value.toInt();
                       if (i >= 0 && i < counts.length) {
                         final label = counts[i].weekStartDate;
-                        final short = label.length >= 10 ? label.substring(5, 10) : label;
+                        final short =
+                            label.length >= 10 ? label.substring(5, 10) : label;
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -335,7 +341,8 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
               ),
               borderData: FlBorderData(
                 show: true,
-                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.3)),
               ),
               barGroups: List.generate(
                 counts.length,
@@ -346,7 +353,8 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
                       toY: counts[i].totalLogs.toDouble(),
                       color: theme.colorScheme.primary,
                       width: 20,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(4)),
                     ),
                   ],
                   showingTooltipIndicators: [0],
@@ -370,18 +378,21 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
     );
   }
 
-  Widget _buildActivityList(ThemeData theme, List<ActivityParticipation> activities) {
+  Widget _buildActivityList(
+      ThemeData theme, List<ActivityParticipation> activities) {
     return Card(
       child: Column(
         children: [
           for (var i = 0; i < activities.length; i++)
-            _buildActivityRow(theme, activities[i], isLast: i == activities.length - 1),
+            _buildActivityRow(theme, activities[i],
+                isLast: i == activities.length - 1),
         ],
       ),
     );
   }
 
-  Widget _buildActivityRow(ThemeData theme, ActivityParticipation a, {bool isLast = false}) {
+  Widget _buildActivityRow(ThemeData theme, ActivityParticipation a,
+      {bool isLast = false}) {
     final noRecent = a.noRecentActivity;
     final dateStr = a.lastLoggedAt != null
         ? DateFormat.yMMMd().add_jm().format(a.lastLoggedAt!)
@@ -389,7 +400,9 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: noRecent ? theme.colorScheme.surfaceContainerHighest.withOpacity(0.5) : null,
+        color: noRecent
+            ? theme.colorScheme.surfaceContainerHighest.withOpacity(0.5)
+            : null,
         border: isLast
             ? null
             : Border(
@@ -405,7 +418,9 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
               child: Text(
                 a.activityName,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  color: noRecent ? theme.colorScheme.onSurface.withOpacity(0.7) : null,
+                  color: noRecent
+                      ? theme.colorScheme.onSurface.withOpacity(0.7)
+                      : null,
                 ),
               ),
             ),
@@ -432,14 +447,18 @@ class _ParticipationScreenState extends State<ParticipationScreen> {
               Text(
                 '${a.totalLogsInPeriod} log${a.totalLogsInPeriod == 1 ? '' : 's'} in period',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: noRecent ? theme.colorScheme.onSurface.withOpacity(0.6) : theme.colorScheme.onSurfaceVariant,
+                  color: noRecent
+                      ? theme.colorScheme.onSurface.withOpacity(0.6)
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(width: 16),
               Text(
                 'Last: $dateStr',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: noRecent ? theme.colorScheme.onSurface.withOpacity(0.6) : theme.colorScheme.onSurfaceVariant,
+                  color: noRecent
+                      ? theme.colorScheme.onSurface.withOpacity(0.6)
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -492,7 +511,8 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                 firstDate: DateTime(2020),
                 lastDate: DateTime.now(),
               );
-              if (picked != null && picked.isBefore(_end)) setState(() => _start = picked);
+              if (picked != null && picked.isBefore(_end))
+                setState(() => _start = picked);
             },
           ),
           ListTile(
@@ -517,7 +537,8 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop((start: _start, end: _end)),
+          onPressed: () =>
+              Navigator.of(context).pop((start: _start, end: _end)),
           child: const Text('Apply'),
         ),
       ],

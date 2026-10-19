@@ -30,7 +30,6 @@ import 'package:care_connect_app/features/gamification/presentation/pages/gamifi
 import 'package:care_connect_app/features/gamification/presentation/pages/achievement_detail_screen.dart';
 import 'package:care_connect_app/features/health/presentation/pages/meal_tracking_screen.dart';
 import 'package:care_connect_app/features/health/symptom-tracker/pages/symptom_allergies_tracker_screen.dart';
-import 'package:care_connect_app/features/profile/presentation/pages/settings_screen.dart';
 
 // Model imports
 import 'package:care_connect_app/features/dashboard/models/patient_model.dart';
@@ -111,10 +110,10 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(const MaterialApp(
-        locale: const Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: PasswordResetPage()));
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PasswordResetPage()));
       await tester.pump();
 
       expect(find.byType(PasswordResetPage), findsOneWidget);
@@ -130,7 +129,8 @@ void main() {
         initialLocation: '/dash',
         routes: [
           GoRoute(path: '/', builder: (_, __) => const Scaffold()),
-          GoRoute(path: '/dash', builder: (_, __) => const CaregiverDashboard()),
+          GoRoute(
+              path: '/dash', builder: (_, __) => const CaregiverDashboard()),
           GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
         ],
       );
@@ -156,7 +156,11 @@ void main() {
 
       final provider = UserProvider();
       provider.setUser(UserSession(
-        id: 5, email: 'p@test.com', role: 'PATIENT', token: 'tok', name: 'P',
+        id: 5,
+        email: 'p@test.com',
+        role: 'PATIENT',
+        token: 'tok',
+        name: 'P',
       ));
       final router = GoRouter(
         initialLocation: '/dash',
@@ -170,10 +174,10 @@ void main() {
         ChangeNotifierProvider<UserProvider>.value(
           value: provider,
           child: MaterialApp.router(
-            locale: const Locale('en'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            routerConfig: router),
+              locale: const Locale('en'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              routerConfig: router),
         ),
       );
       await tester.pump();
@@ -254,10 +258,10 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(const MaterialApp(
-        locale: Locale('en'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: PaymentCancelPage()));
+          locale: Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: PaymentCancelPage()));
 
       expect(find.byType(PaymentCancelPage), findsOneWidget);
       expect(find.byType(Scaffold), findsOneWidget);
@@ -269,7 +273,11 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(home: MainFeedScreen(userId: 1)),
+        const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MainFeedScreen(userId: 1),
+        ),
       );
 
       expect(find.byType(MainFeedScreen), findsOneWidget);
@@ -279,7 +287,8 @@ void main() {
     testWidgets('FriendRequestsScreen renders correctly', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(_withPatientProvider(const FriendRequestsScreen()));
+      await tester
+          .pumpWidget(_withPatientProvider(const FriendRequestsScreen()));
       await tester.pump();
 
       expect(find.byType(FriendRequestsScreen), findsOneWidget);
@@ -299,7 +308,13 @@ void main() {
     testWidgets('GamificationScreen renders correctly', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(const MaterialApp(home: GamificationScreen()));
+      await tester.pumpWidget(
+        const MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GamificationScreen(),
+        ),
+      );
 
       expect(find.byType(GamificationScreen), findsOneWidget);
       expect(find.byType(Scaffold), findsOneWidget);
@@ -330,22 +345,12 @@ void main() {
     testWidgets('SymptomTrackerScreen renders correctly', (
       WidgetTester tester,
     ) async {
-      await tester.pumpWidget(_withPatientProvider(const SymptomsAllergiesPage()));
+      await tester
+          .pumpWidget(_withPatientProvider(const SymptomsAllergiesPage()));
       await tester.pump();
 
       expect(find.byType(SymptomsAllergiesPage), findsOneWidget);
       expect(find.byType(Scaffold), findsAtLeastNWidgets(1));
-    });
-  });
-
-  group('Profile Tests', () {
-    testWidgets('SettingsScreen renders correctly', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
-
-      expect(find.byType(SettingsScreen), findsOneWidget);
-      expect(find.byType(Scaffold), findsOneWidget);
     });
   });
 

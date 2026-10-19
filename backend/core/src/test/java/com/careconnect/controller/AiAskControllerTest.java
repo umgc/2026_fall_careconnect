@@ -56,6 +56,21 @@ class AiAskControllerTest {
     private MockMvc mockMvc;
     private User caller;
 
+    private static String requestJson(final UUID sessionId) {
+        final String session = sessionId == null
+                ? "null"
+                : "\"" + sessionId + "\"";
+        return """
+                {
+                  "query": "What medication changed?",
+                  "patientId": 42,
+                  "inputModality": "TEXT",
+                  "locale": "en-US",
+                  "sessionId": %s
+                }
+                """.formatted(session);
+    }
+
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
@@ -481,20 +496,5 @@ class AiAskControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("bad decision"));
-    }
-
-    private static String requestJson(final UUID sessionId) {
-        final String session = sessionId == null
-                ? "null"
-                : "\"" + sessionId + "\"";
-        return """
-                {
-                  "query": "What medication changed?",
-                  "patientId": 42,
-                  "inputModality": "TEXT",
-                  "locale": "en-US",
-                  "sessionId": %s
-                }
-                """.formatted(session);
     }
 }

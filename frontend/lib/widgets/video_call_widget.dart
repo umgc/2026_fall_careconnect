@@ -27,12 +27,6 @@ class VideoCallWidget extends StatefulWidget {
 }
 
 class _VideoCallWidgetState extends State<VideoCallWidget> {
-  final bool _isMicOn = true;
-  final bool _isCameraOn = true;
-  final bool _isCallConnected = false;
-  final bool _isCallEnded = false;
-  DateTime? _callStartTime;
-
   // final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   // final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   // MediaStream? _localStream;
@@ -54,12 +48,6 @@ class _VideoCallWidgetState extends State<VideoCallWidget> {
   }
 
   Future<void> _startLocalStream() async {
-    final Map<String, dynamic> mediaConstraints = {
-      'audio': true,
-      'video': widget.isVideoCall
-          ? {'facingMode': 'user', 'width': 640, 'height': 480}
-          : false,
-    };
     // _localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
     // _localRenderer.srcObject = _localStream;
     setState(() {});

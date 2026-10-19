@@ -132,8 +132,7 @@ class ContactInfoCard extends StatelessWidget {
     final iconWidget = _InteractiveIcon(
       icon: icon,
       color: cs.onSurface.withOpacity(0.60),
-      tooltip:
-          iconTooltip ??
+      tooltip: iconTooltip ??
           (onIconTap == null ? null : (label == 'Phone' ? 'Call' : label)),
       onTap: onIconTap,
       hoverBump: hoverBump,
@@ -142,9 +141,8 @@ class ContactInfoCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        crossAxisAlignment: isMultiline
-            ? CrossAxisAlignment.start
-            : CrossAxisAlignment.center,
+        crossAxisAlignment:
+            isMultiline ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           iconWidget,
           const SizedBox(width: 12),
@@ -228,16 +226,15 @@ class ContactInfoCard extends StatelessWidget {
     if (_hasValue(l1)) lines.add(l1!);
     if (_hasValue(l2)) lines.add(l2!);
 
-    final last =
-        [
-              if (_hasValue(cityStr)) cityStr,
-              if (_hasValue(stateStr)) stateStr,
-              if (_hasValue(zipStr)) zipStr,
-            ]
-            .whereType<String>()
-            .join(', ')
-            .replaceAll(', ,', ',')
-            .replaceAll(' ,', ',');
+    final last = [
+      if (_hasValue(cityStr)) cityStr,
+      if (_hasValue(stateStr)) stateStr,
+      if (_hasValue(zipStr)) zipStr,
+    ]
+        .whereType<String>()
+        .join(', ')
+        .replaceAll(', ,', ',')
+        .replaceAll(' ,', ',');
     if (_hasValue(last)) lines.add(last);
 
     return lines.join('\n');

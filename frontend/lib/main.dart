@@ -35,12 +35,18 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       installTelemetryErrorHandlers();
 
-      // Load env from committed .env.example so clean checkouts can build
-      // without a gitignored .env. Prefer .env when present (e.g. CI copy).
+      // Load env config. Prefer a bundled .env when a build provides one, else
+      // fall back to the committed .env.example so clean checkouts and CI (which
+      // have no gitignored .env/.env.local) still build and run. Real config is
+      // supplied via --dart-define; dotenv is best-effort.
       try {
         await dotenv.load(fileName: ".env");
       } catch (_) {
-        await dotenv.load(fileName: ".env.example");
+        try {
+          await dotenv.load(fileName: ".env.example");
+        } catch (_) {
+          // No env asset bundled; rely on --dart-define values.
+        }
       }
 
       // Performance optimization: Set preferred orientations
@@ -216,7 +222,6 @@ class _CareConnectAppState extends State<CareConnectApp>
     with WidgetsBindingObserver {
   StreamSubscription? _linkSubscription;
   late AppLinks _appLinks;
-  Locale? _localeOverride;
 
   @override
   void initState() {
@@ -271,6 +276,16 @@ class _CareConnectAppState extends State<CareConnectApp>
       // The actual OAuth handling is done in AuthService.loginWithGoogle()
       // This is just for logging and potential additional processing
     }
+
+    // Epic SMART-on-FHIR return (careconnect://epic/linked?status=ok|error) — Epic Phase 0.
+    if (uri.scheme == 'careconnect' &&
+        uri.host == 'epic' &&
+        uri.path == '/linked') {
+      final ok = uri.queryParameters['status'] == 'ok';
+      print('Epic link callback detected: status=${ok ? 'ok' : 'error'}');
+      // The connection + initial sync are handled server-side; the UI polls
+      // EpicService.status() to refresh the "Connected" state after return.
+    }
   }
 
   @override
@@ -299,7 +314,7 @@ class _CareConnectAppState extends State<CareConnectApp>
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: AppLocalizations.supportedLocales,
+      supportedLocales: const <Locale>[Locale('en'), Locale('es')],
       //  set this to the chosen locale
       locale: localeProvider.locale,
 

@@ -41,9 +41,12 @@ class DocumentComplianceControllerTest {
 
     private MockMvc mockMvc;
 
-    @Mock private DocumentComplianceService complianceService;
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
+    @Mock
+    private DocumentComplianceService complianceService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
 
     @InjectMocks
     private DocumentComplianceController controller;

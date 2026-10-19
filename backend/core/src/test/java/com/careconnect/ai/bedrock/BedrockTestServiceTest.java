@@ -1,9 +1,11 @@
 package com.careconnect.ai.bedrock;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -52,7 +54,7 @@ class BedrockTestServiceTest {
         BedrockTestService service = new BedrockTestService(
                 mockClient,
                 "anthropic.claude-3-5-sonnet-20240620-v1:0",
-            new ObjectMapper()
+                new ObjectMapper()
         );
 
         String aiResponseBody = "{\"content\":[{\"type\":\"text\",\"text\":\"Claude reply\"}]}";

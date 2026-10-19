@@ -58,106 +58,112 @@ class _FamilyPatientsPageState extends State<FamilyPatientsPage> {
         child: isLoading
             ? const Center(child: CircularProgressIndicator())
             : error != null
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error, size: 64, color: Colors.red.shade400),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Error: $error',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.red.shade700),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _loadPatients,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              )
-            : patients.isEmpty
-            ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.people_outline, size: 64, color: Colors.grey),
-                    SizedBox(height: 16),
-                    Text(
-                      'No patients accessible',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Contact your caregiver to get access',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: patients.length,
-                itemBuilder: (context, index) {
-                  final patient = patients[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    elevation: 2,
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blue.shade100,
-                        child: Text(
-                          patient['name']?.substring(0, 1).toUpperCase() ?? 'P',
-                          style: TextStyle(
-                            color: Colors.blue.shade900,
-                            fontWeight: FontWeight.bold,
-                          ),
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error, size: 64, color: Colors.red.shade400),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Error: $error',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.red.shade700),
                         ),
-                      ),
-                      title: Text(
-                        patient['name'] ?? 'Unknown Patient',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (patient['email'] != null)
-                            Text('Email: ${patient['email']}'),
-                          if (patient['phone'] != null)
-                            Text('Phone: ${patient['phone']}'),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              'Read-Only Access',
-                              style: TextStyle(
-                                color: Colors.green.shade700,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios),
-                      onTap: () {
-                        // Navigate to patient dashboard (read-only)
-                        context.go(
-                          '/family-patient-dashboard/${patient['id']}',
-                        );
-                      },
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadPatients,
+                          child: const Text('Retry'),
+                        ),
+                      ],
                     ),
-                  );
-                },
-              ),
+                  )
+                : patients.isEmpty
+                    ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.people_outline,
+                                size: 64, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'No patients accessible',
+                              style:
+                                  TextStyle(fontSize: 18, color: Colors.grey),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Contact your caregiver to get access',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: patients.length,
+                        itemBuilder: (context, index) {
+                          final patient = patients[index];
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            elevation: 2,
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.blue.shade100,
+                                child: Text(
+                                  patient['name']
+                                          ?.substring(0, 1)
+                                          .toUpperCase() ??
+                                      'P',
+                                  style: TextStyle(
+                                    color: Colors.blue.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              title: Text(
+                                patient['name'] ?? 'Unknown Patient',
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (patient['email'] != null)
+                                    Text('Email: ${patient['email']}'),
+                                  if (patient['phone'] != null)
+                                    Text('Phone: ${patient['phone']}'),
+                                  const SizedBox(height: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      'Read-Only Access',
+                                      style: TextStyle(
+                                        color: Colors.green.shade700,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              trailing: const Icon(Icons.arrow_forward_ios),
+                              onTap: () {
+                                // Navigate to patient dashboard (read-only)
+                                context.go(
+                                  '/family-patient-dashboard/${patient['id']}',
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      ),
       ),
     );
   }

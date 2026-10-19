@@ -131,7 +131,8 @@ class _MyFriendsScreenState extends State<MyFriendsScreen> {
         _contacts = data
             .map((item) {
               // CaregiverPatientLinkResponse — only show if messaging is enabled
-              final messagingEnabled = item['patientMessagingEnabled'] as bool? ?? true;
+              final messagingEnabled =
+                  item['patientMessagingEnabled'] as bool? ?? true;
               if (!messagingEnabled) return null;
 
               final userId = (item['caregiverUserId'] as num?)?.toInt();

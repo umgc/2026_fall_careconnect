@@ -9,7 +9,8 @@ import 'package:go_router/go_router.dart';
 class CustomTaskScreen extends StatefulWidget {
   final int patientId;
   final String patientName;
-  const CustomTaskScreen({super.key, required this.patientId, required this.patientName});
+  const CustomTaskScreen(
+      {super.key, required this.patientId, required this.patientName});
 
   @override
   State<CustomTaskScreen> createState() => _CustomTaskScreenState();
@@ -51,9 +52,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Task Name', textAlign: TextAlign.left,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-                          ),
+                      child: const Text('Task Name',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
                       decoration: const InputDecoration(
@@ -69,9 +71,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Description', textAlign: TextAlign.left,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-                          ),
+                      child: const Text('Description',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
                       decoration: const InputDecoration(
@@ -89,18 +92,24 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                     // Frequency selection dropdown
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Frequency', textAlign: TextAlign.left,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-                          ),
+                      child: const Text('Frequency',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: task.frequency,
                       items: const [
                         DropdownMenuItem(value: 'DAILY', child: Text('Daily')),
-                        DropdownMenuItem(value: 'WEEKLY', child: Text('Weekly')),
-                        DropdownMenuItem(value: 'MONTHLY', child: Text('Monthly')),
-                        DropdownMenuItem(value: 'YEARLY', child: Text('Yearly')),
-                        DropdownMenuItem(value: 'EVERY_WEEK_DAY', child: Text('Every Week Day')),
+                        DropdownMenuItem(
+                            value: 'WEEKLY', child: Text('Weekly')),
+                        DropdownMenuItem(
+                            value: 'MONTHLY', child: Text('Monthly')),
+                        DropdownMenuItem(
+                            value: 'YEARLY', child: Text('Yearly')),
+                        DropdownMenuItem(
+                            value: 'EVERY_WEEK_DAY',
+                            child: Text('Every Week Day')),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -115,8 +124,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                     // Interval selection
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Interval', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Interval',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
                       decoration: const InputDecoration(
@@ -134,8 +145,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                     // Count selection dropdown
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Count', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Count',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
                       decoration: const InputDecoration(
@@ -148,13 +161,14 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                           task.count = int.tryParse(value) ?? 1;
                         });
                       },
-                      
                     ),
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Time', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Time',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     Card(
                       // margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -166,8 +180,8 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                         title: Text(task.timeOfDay != null
                             ? task.timeOfDay!.format(context)
                             : 'No time selected'),
-                        leading: const Icon(Icons.access_time, color: Colors.indigo, size: 40),
-
+                        leading: const Icon(Icons.access_time,
+                            color: Colors.indigo, size: 40),
                         onTap: () async {
                           final TimeOfDay? time = await showTimePicker(
                             context: context,
@@ -185,8 +199,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                     // Date selection
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Date', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Date',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     Card(
                       margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -198,11 +214,12 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                         title: Text(
                           '${task.date.toLocal()}'.split(' ')[0],
                         ),
-                        leading: const Icon(Icons.calendar_today, color: Colors.indigo, size: 40),
+                        leading: const Icon(Icons.calendar_today,
+                            color: Colors.indigo, size: 40),
                         onTap: () async {
                           final DateTime? date = await showDatePicker(
                             context: context,
-                            initialDate: task.date ?? DateTime.now(),
+                            initialDate: task.date,
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
@@ -229,7 +246,6 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                   ],
                 ),
               ),
-              
             ),
           ],
         ),
@@ -254,11 +270,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
                 );
               }
               // Optionally check result for success/failure here
-              context.go('/patient-tasks',
-                  extra: {
-                    'patientId': widget.patientId,
-                    'patientName': widget.patientName,
-                  });
+              context.go('/patient-tasks', extra: {
+                'patientId': widget.patientId,
+                'patientName': widget.patientName,
+              });
             } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Failed to create task: $e')),
@@ -269,7 +284,8 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
             backgroundColor: Colors.indigo,
             padding: const EdgeInsets.symmetric(vertical: 20),
           ),
-          child: const Text('Save', style: TextStyle(fontSize: 18, color: Colors.white)),
+          child: const Text('Save',
+              style: TextStyle(fontSize: 18, color: Colors.white)),
         ),
       ),
     );

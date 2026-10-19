@@ -28,7 +28,8 @@ class InviteAcceptService {
     }
 
     if (response.statusCode == 200) {
-      return InvitePreview.fromJson(json.decode(response.body) as Map<String, dynamic>);
+      return InvitePreview.fromJson(
+          json.decode(response.body) as Map<String, dynamic>);
     }
     // The preview endpoint is designed to always return 200; anything else is
     // an unexpected server problem.

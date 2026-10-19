@@ -138,8 +138,7 @@ class _NotetakerDetailViewState extends State<NotetakerDetailView> {
 
   void _checkForChanges() {
     setState(() {
-      _hasChanges =
-          _noteController.text != (_note?.note ?? '') ||
+      _hasChanges = _noteController.text != (_note?.note ?? '') ||
           _aiSummaryController.text != (_note?.aiSummary ?? '');
     });
   }
@@ -289,7 +288,12 @@ class _NotetakerDetailViewState extends State<NotetakerDetailView> {
           ),
           actions: [
             if (_isEditing)
-              IconButton(icon: const Icon(Icons.save), onPressed: () async { await _saveNote(); context.pop(true); })
+              IconButton(
+                  icon: const Icon(Icons.save),
+                  onPressed: () async {
+                    await _saveNote();
+                    context.pop(true);
+                  })
             else
               IconButton(
                 icon: const Icon(Icons.edit),

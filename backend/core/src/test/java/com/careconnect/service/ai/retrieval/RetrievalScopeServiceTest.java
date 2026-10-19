@@ -36,7 +36,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** Task 2.1 / WBS 3.2.3 — RetrievalScopeService unit tests (FR-AI-1, REQ-SC-7/8). */
+/**
+ * Task 2.1 / WBS 3.2.3 — RetrievalScopeService unit tests (FR-AI-1, REQ-SC-7/8).
+ */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class RetrievalScopeServiceTest {

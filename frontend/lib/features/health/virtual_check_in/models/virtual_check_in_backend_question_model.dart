@@ -1,6 +1,5 @@
 import 'package:care_connect_app/features/health/virtual_check_in/models/question_type.dart';
 
-
 class BackendQuestionDto {
   final int? id;
   final String prompt;

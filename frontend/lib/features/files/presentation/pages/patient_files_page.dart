@@ -105,24 +105,24 @@ class _PatientFilesPageState extends State<PatientFilesPage>
     }
   }
 
-  String _translateCategory(String value){
+  String _translateCategory(String value) {
     final t = AppLocalizations.of(context)!;
-    switch(value){
-      case('All Files'):
+    switch (value) {
+      case ('All Files'):
         return t.ptfiles_allFilesItem;
-      case('Medical Notes'):
+      case ('Medical Notes'):
         return t.ptfiles_medNotesItem;
-      case('Medical Records'):
+      case ('Medical Records'):
         return t.ptfiles_MedRecordItem;
-      case('Prescriptions'):
+      case ('Prescriptions'):
         return t.ptfiles_prescripItem;
-      case('Lab Results'):
+      case ('Lab Results'):
         return t.ptfiles_labResItem;
-      case('Insurance'):
+      case ('Insurance'):
         return t.ptfiles_insuranceItem;
-      case('Reports'):
+      case ('Reports'):
         return t.ptfiles_reprotItem;
-      case('Other Documents'):
+      case ('Other Documents'):
         return t.ptfiles_otherDocItem;
       default:
         return value;
@@ -176,7 +176,9 @@ class _PatientFilesPageState extends State<PatientFilesPage>
               indicatorColor: Theme.of(context).primaryColor,
               tabs: [
                 Tab(icon: Icon(Icons.folder), text: t.ptfiles_allFilesItem),
-                Tab(icon: Icon(Icons.note_add), text: t.ptfiles_quickUploadItem),
+                Tab(
+                    icon: Icon(Icons.note_add),
+                    text: t.ptfiles_quickUploadItem),
               ],
             ),
           ),
@@ -235,8 +237,8 @@ class _PatientFilesPageState extends State<PatientFilesPage>
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
               : _filteredFiles.isEmpty
-              ? _buildEmptyState()
-              : _buildFilesList(),
+                  ? _buildEmptyState()
+                  : _buildFilesList(),
         ),
       ],
     );
@@ -397,7 +399,8 @@ class _PatientFilesPageState extends State<PatientFilesPage>
               value: 'delete',
               child: ListTile(
                 leading: Icon(Icons.delete, color: Colors.red),
-                title: Text(t.ptfiles_deleteButton, style: TextStyle(color: Colors.red)),
+                title: Text(t.ptfiles_deleteButton,
+                    style: TextStyle(color: Colors.red)),
                 contentPadding: EdgeInsets.zero,
               ),
             ),
@@ -638,21 +641,5 @@ class _PatientFilesPageState extends State<PatientFilesPage>
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
-  String _formatDate(DateTime date) {
-    final t = AppLocalizations.of(context)!;
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return t.ptfiles_today;
-    } else if (difference.inDays == 1) {
-      return t.ptfiles_yesterday;
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} ${t.ptfiles_daysAgo}';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
   }
 }

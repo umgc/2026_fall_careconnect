@@ -31,12 +31,17 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ConfirmationControllerTest {
 
-    @Mock ConfirmationService confirmationService;
-    @Mock SecurityUtil securityUtil;
-    @Mock AuthorizationService authorizationService;
-    @Mock CaregiverPatientLinkService caregiverPatientLinkService;
+    @Mock
+    ConfirmationService confirmationService;
+    @Mock
+    SecurityUtil securityUtil;
+    @Mock
+    AuthorizationService authorizationService;
+    @Mock
+    CaregiverPatientLinkService caregiverPatientLinkService;
 
-    @InjectMocks ConfirmationController controller;
+    @InjectMocks
+    ConfirmationController controller;
 
     private User user(boolean admin, boolean caregiver, Long id) {
         User u = mock(User.class);

@@ -9,12 +9,12 @@ public record LoginResponse(
         String email,
         Role role,
         String token,
-        Long patientId,      
+        Long patientId,
         Long caregiverId,
         String name,
         String status,
         boolean emailVerified
-        ) {
+) {
 
     public static LoginResponseBuilder builder() {
         return new LoginResponseBuilder();
@@ -70,7 +70,7 @@ public record LoginResponse(
             this.token = token;
             return this;
         }
-        
+
         public LoginResponseBuilder emailVerified(boolean emailVerified) {
             this.emailVerified = emailVerified;
             return this;

@@ -25,7 +25,9 @@ class CommunicationTestPage extends StatelessWidget {
                   children: [
                     Text(
                       'Communication Features Test',
-                      style: Theme.of(context).textTheme.headlineSmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
@@ -51,7 +53,9 @@ class CommunicationTestPage extends StatelessWidget {
                       padding: const EdgeInsets.all(8),
                       child: Text(
                         'Test Case 1: Caregiver → Patient',
-                        style: Theme.of(context).textTheme.titleMedium
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -79,7 +83,9 @@ class CommunicationTestPage extends StatelessWidget {
                       padding: const EdgeInsets.all(8),
                       child: Text(
                         'Test Case 2: Patient → Caregiver',
-                        style: Theme.of(context).textTheme.titleMedium
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -107,11 +113,11 @@ class CommunicationTestPage extends StatelessWidget {
                       padding: const EdgeInsets.all(8),
                       child: Text(
                         'Test Case 3: Emergency Contact',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.red,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red,
+                                ),
                       ),
                     ),
                     const CommunicationWidget(
@@ -141,11 +147,11 @@ class CommunicationTestPage extends StatelessWidget {
                         const SizedBox(width: 8),
                         Text(
                           'Platform Support',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade700,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade700,
+                                  ),
                         ),
                       ],
                     ),

@@ -25,13 +25,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class CaregiverVisibilityControllerTest {
 
-    @Mock CaregiverVisibilityService visibilityService;
-    @Mock SecurityUtil securityUtil;
-    @Mock AuthorizationService authorizationService;
-
-    @InjectMocks CaregiverVisibilityController controller;
-
     private static final Long CG = 5L, PT = 9L;
+    @Mock
+    CaregiverVisibilityService visibilityService;
+    @Mock
+    SecurityUtil securityUtil;
+    @Mock
+    AuthorizationService authorizationService;
+    @InjectMocks
+    CaregiverVisibilityController controller;
 
     private User user(boolean admin, Long id) {
         User u = mock(User.class);

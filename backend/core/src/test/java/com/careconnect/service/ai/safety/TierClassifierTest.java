@@ -14,6 +14,22 @@ class TierClassifierTest {
 
     private TierClassifier classifier;
 
+    private static SafetyInput input(final String query, final String draft) {
+        return new SafetyInput(
+                query,
+                draft,
+                List.of(),
+                42L,
+                7L,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "ASK_AI",
+                "en-US",
+                false,
+                List.of());
+    }
+
     @BeforeEach
     void setUp() {
         classifier = new TierClassifier();
@@ -96,21 +112,5 @@ class TierClassifierTest {
 
         assertThat(outcome.decision()).isEqualTo(SafetyDecision.DELIVER_TIER1);
         assertThat(outcome.escalationLevel()).isEqualTo("none");
-    }
-
-    private static SafetyInput input(final String query, final String draft) {
-        return new SafetyInput(
-                query,
-                draft,
-                List.of(),
-                42L,
-                7L,
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                "ASK_AI",
-                "en-US",
-                false,
-                List.of());
     }
 }

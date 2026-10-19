@@ -15,24 +15,15 @@ public enum Gender {
         this.displayName = displayName;
     }
 
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    @JsonValue
-    public String getValue() {
-        return this.name().toLowerCase();
-    }
-
     @JsonCreator
     public static Gender fromString(String value) {
         if (value == null) {
             return null;
         }
-        
+
         // Handle case-insensitive input
         String upperValue = value.toUpperCase().trim();
-        
+
         try {
             return Gender.valueOf(upperValue);
         } catch (IllegalArgumentException e) {
@@ -48,10 +39,19 @@ public enum Gender {
                 case "PREFER NOT TO SAY":
                     return PREFER_NOT_TO_SAY;
                 default:
-                    throw new IllegalArgumentException("Invalid gender value: " + value + 
-                        ". Valid values are: male, female, other, prefer_not_to_say");
+                    throw new IllegalArgumentException("Invalid gender value: " + value +
+                            ". Valid values are: male, female, other, prefer_not_to_say");
             }
         }
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    @JsonValue
+    public String getValue() {
+        return this.name().toLowerCase();
     }
 
     @Override

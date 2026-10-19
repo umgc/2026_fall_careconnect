@@ -1,0 +1,61 @@
+Cerner HTTP client and error-path review — 2026-10-17 EDT
+WBS 4.5.1; Latest WBS rows 48 and 56; source WBS row 34.
+Prepared by Terence Boyce with Codex. Review requested from Tiffany; no message sent.
+
+Scope
+A small explicitly constructed Java client, with no Spring component, bean, or app wiring.
+It remains inactive in the app. Source baseline: team-c-develop 36dbdf13.
+Uses shared synthetic allergy fixtures; real HTTP requests go to an ephemeral loopback server.
+No live Cerner, database, patient data, or real tokens used.
+
+Results
+143 tests passed: 21 new HTTP tests and 122 existing Cerner regression tests; zero failures,
+errors or skips. Final counts and commands are recorded in tests.log and test-summary.json alongside this packet.
+The new suite covers happy-path mapping and request headers; empty searchset; upstream 401,
+403, 429, 500, 503, 302 and 404; delayed response; malformed UTF-8, malformed and trailing JSON; invalid Bundle
+shape; wrong patient; oversized body; paginated result; invalid input and header injection;
+remote plain HTTP rejection; disconnected server; and HTTP error through the standalone controller.
+Existing mapper, shared-fixture, controller/configuration, patient/appointment mapper, and storage
+adapter tests are included as regressions. No whole-app test claim is made.
+
+Client choices for review
+- HTTPS required except explicit loopback HTTP. Redirects disabled to prevent token forwarding.
+- One request; no automatic retry or refresh. 429/5xx/network/timeout are marked retryable.
+- Connect and read inactivity timeouts are configurable, 1–30000 ms each. This is not a total
+  request deadline: a slow streaming response can exceed one timeout interval.
+- Body capped at 1 MiB. Rejects invalid JSON and incomplete paginated results.
+- Generic exceptions omit upstream body, URLs, token, patient values, and root cause.
+- Existing mapper policy still skips some malformed individual entries. Partial-result and
+  warning behavior needs team approval; it is not established by these tests.
+- Caller must authorize the local patient, resolve a trusted vendor-ID link, and get a server-held
+  token before calling. A name/DOB match must not supply that trust.
+
+Acceptance assessment
+PARTLY MET: local HTTP retrieval, negative tests, and safe API error translation.
+NOT VERIFIED: actual security filter chain, production authorization and patient links, token
+refresh, consent, retries/backoff/Retry-After, paging, database, frontend localized messages,
+end-to-end workflows, live sandbox, and dependency 4.3.7 readiness.
+All endpoint names and error codes remain provisional pending contract review.
+
+Tiffany's review decisions
+1. Accept or revise provisional status/error codes, body limit, timeout and partial-data policy.
+2. Name owners for the production service/access policy, trusted patient crosswalk and token flow.
+3. Confirm retry, refresh and paging rules before extending the client.
+4. Review English/Spanish UI error and end-to-end test needs with the UI owner.
+5. Reconcile duplicate Latest WBS 4.5.1 rows (48 Tiffany; 56 Tiffany/Rashaad/Donald/Terence).
+6. Confirm progress percentage. Notes can record this completed slice; no approved task weighting
+   exists to derive a defensible completion percentage. Do not close the full task yet.
+
+Reproduce (JDK 17, backend/core)
+mvn -B -ntp test -Dtest=CernerAllergyHttpClientIntegrationTest,CernerAllergyMapperTest,CernerAllergyFixtureCompatibilityTest,CernerAllergyControllerTest,CernerAllergyControllerConfigurationTest,CernerResourceMapperTest,CernerStorageAdapterTest
+
+PR #349 review follow-up — 2026-10-17 EDT
+No submitted GitHub reviews or inline review comments were present at inspection.
+The initial quality-gate scan was still running, not failed.
+Changed client now passes Checkstyle 10.12.4 Google checks and PMD 6.55.0 using the CI
+bestpractices/errorprone/codestyle rules with zero unsuppressed findings. Narrow PMD
+exceptions document exact loopback literals and deliberate removal of upstream causes.
+No repository gate thresholds, authentication controls or active app wiring changed.
+The client parses bytes directly to reject malformed UTF-8 rather than replacing it.
+143 Cerner tests passed, including 21 loopback HTTP cases and 122 regression checks.
+Full-app and live integration remain outside this evidence. Independent approval is pending.

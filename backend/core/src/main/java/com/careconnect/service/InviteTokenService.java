@@ -27,17 +27,17 @@ import java.util.Optional;
 
 /**
  * Service implementing the care-circle invite-token lifecycle (issue #53).
- *
+ * <p>
  * Lifecycle: PENDING -> ACCEPTED | EXPIRED | REVOKED.
- *
+ * <p>
  * Token strategy — opaque, DB-stored, hashed:
- *   * The raw token is a 256-bit URL-safe random string. It is returned exactly
- *     once (create response / share URL) and never persisted in plaintext.
- *   * We store a non-secret lookup prefix + a one-way BCrypt hash (reusing the
- *     existing {@link TokenHashService}). Lookup is O(1) by prefix, then we
- *     verify the hash. This gives revocability and full auditability that a
- *     stateless JWT cannot.
- *
+ * * The raw token is a 256-bit URL-safe random string. It is returned exactly
+ * once (create response / share URL) and never persisted in plaintext.
+ * * We store a non-secret lookup prefix + a one-way BCrypt hash (reusing the
+ * existing {@link TokenHashService}). Lookup is O(1) by prefix, then we
+ * verify the hash. This gives revocability and full auditability that a
+ * stateless JWT cannot.
+ * <p>
  * All mutating operations are audited via {@link #audit}.
  */
 @Service
@@ -195,7 +195,7 @@ public class InviteTokenService {
 
     /**
      * Resolve invite context for a pre-registration user ("Who Invited Me?", #59).
-     *
+     * <p>
      * Non-enumerating (issues #59 + #81): ALWAYS returns a stable
      * {@link InvitePreviewResponse}. Whether the token is unknown, expired,
      * revoked, or already accepted, the caller gets the same shape; only the
@@ -349,7 +349,9 @@ public class InviteTokenService {
     // REVOKE  — DELETE /care-circle/{linkId}/invite/{tokenId}
     // =====================================================================
 
-    /** Idempotent: revoking an already-terminal token is a no-op. */
+    /**
+     * Idempotent: revoking an already-terminal token is a no-op.
+     */
     public void revokeInvite(Long linkId, Long tokenId, RevokeInviteRequest request,
                              User revokingUser, String actorIp) {
 

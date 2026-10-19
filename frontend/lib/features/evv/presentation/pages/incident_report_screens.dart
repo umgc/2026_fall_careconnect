@@ -15,7 +15,8 @@ class IncidentReportWizardScreen extends StatefulWidget {
   });
 
   @override
-  State<IncidentReportWizardScreen> createState() => _IncidentReportWizardScreenState();
+  State<IncidentReportWizardScreen> createState() =>
+      _IncidentReportWizardScreenState();
 }
 
 class _IncidentDraft {
@@ -28,7 +29,8 @@ class _IncidentDraft {
   String? outcome;
 }
 
-class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen> {
+class _IncidentReportWizardScreenState
+    extends State<IncidentReportWizardScreen> {
   int _step = 0;
   final _draft = _IncidentDraft();
   bool _submitting = false;
@@ -159,7 +161,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
         final body = res.body;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to submit report: ${res.statusCode}${body.isNotEmpty ? " — $body" : ""}'),
+            content: Text(
+                'Failed to submit report: ${res.statusCode}${body.isNotEmpty ? " — $body" : ""}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -234,7 +237,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
                             width: 24,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : Text(_step == totalSteps - 1 ? 'Submit Report' : 'Next'),
+                        : Text(
+                            _step == totalSteps - 1 ? 'Submit Report' : 'Next'),
                   ),
                 ),
               ],
@@ -294,7 +298,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: selected ? theme.colorScheme.primary : theme.dividerColor,
+                color:
+                    selected ? theme.colorScheme.primary : theme.dividerColor,
                 width: selected ? 2 : 1,
               ),
               color: selected
@@ -328,7 +333,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
         children: [
           Text(
             'When did the incident occur?',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
@@ -339,7 +345,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
           const SizedBox(height: 16),
           Text(
             'Where did this occur?',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -361,7 +368,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
         children: [
           Text(
             'Possible triggers or context — optional',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -383,7 +391,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
         children: [
           Text(
             'Actions Taken',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           ..._actionChecks.entries.map((entry) {
@@ -425,7 +434,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
         children: [
           Text(
             'Outcome',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextField(
@@ -458,7 +468,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
         children: [
           Text(
             'Review incident report',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 16),
           _reviewRow('Incident type', typeLabel),
@@ -473,7 +484,8 @@ class _IncidentReportWizardScreenState extends State<IncidentReportWizardScreen>
           const SizedBox(height: 8),
           Text(
             'Actions taken',
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            style: theme.textTheme.titleSmall
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           if (actions.isEmpty)
@@ -578,7 +590,8 @@ class IncidentReportDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _detailRow('Incident type', _incidentTypeLabel(report.incidentType)),
+              _detailRow(
+                  'Incident type', _incidentTypeLabel(report.incidentType)),
               _detailRow('When', whenStr),
               _detailRow('Location', report.location),
               _detailRow(
@@ -590,7 +603,8 @@ class IncidentReportDetailScreen extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'Actions taken',
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
               if (report.actions.isEmpty)
@@ -602,7 +616,8 @@ class IncidentReportDetailScreen extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: report.actions
-                      .map((a) => Text('• $a', style: theme.textTheme.bodyMedium))
+                      .map((a) =>
+                          Text('• $a', style: theme.textTheme.bodyMedium))
                       .toList(),
                 ),
               const SizedBox(height: 12),
@@ -663,4 +678,3 @@ class IncidentReportDetailScreen extends StatelessWidget {
     );
   }
 }
-

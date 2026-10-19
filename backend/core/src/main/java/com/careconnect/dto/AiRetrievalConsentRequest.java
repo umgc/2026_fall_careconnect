@@ -7,8 +7,8 @@ import java.time.Instant;
  * caregiver (or other grantee).
  *
  * @param granteeUserId user id of the caregiver receiving consent (required)
- * @param granteeRole optional role label; defaults to {@code CAREGIVER}
- * @param expiresAt optional expiry; null means no expiry
+ * @param granteeRole   optional role label; defaults to {@code CAREGIVER}
+ * @param expiresAt     optional expiry; null means no expiry
  */
 public record AiRetrievalConsentRequest(
         Long granteeUserId,

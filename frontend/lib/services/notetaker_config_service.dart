@@ -11,9 +11,9 @@ class PatientNotetakerKeyword {
   PatientNotetakerKeyword({required this.keyword, required this.event_type});
 
   Map<String, String> toJson() => {
-    'keyword': keyword,
-    'event_type': event_type,
-  };
+        'keyword': keyword,
+        'event_type': event_type,
+      };
 }
 
 /// Notetaker Configuration Data Transfer Object
@@ -48,9 +48,8 @@ class PatientNotetakerConfigDTO {
             ),
           )
           .toList()),
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
-          : null,
+      updatedAt:
+          json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
     );
   }
 
@@ -60,9 +59,8 @@ class PatientNotetakerConfigDTO {
       'patientId': patientId,
       'isEnabled': isEnabled,
       'permitCaregiverAccess': permitCaregiverAccess,
-      'triggerKeywords': triggerKeywords
-          .map((trigger) => trigger.toJson())
-          .toList(),
+      'triggerKeywords':
+          triggerKeywords.map((trigger) => trigger.toJson()).toList(),
     };
   }
 
@@ -108,9 +106,8 @@ class NotetakerConfigService {
         'patientId': config.patientId,
         'isEnabled': config.isEnabled,
         'permitCaregiverAccess': config.permitCaregiverAccess,
-        'triggerKeywords': config.triggerKeywords
-            .map((trigger) => trigger.toJson())
-            .toList(),
+        'triggerKeywords':
+            config.triggerKeywords.map((trigger) => trigger.toJson()).toList(),
       };
 
       final response = await http.put(
@@ -223,7 +220,8 @@ class NotetakerConfigService {
   }
 
   /// Loads a single patient note by id (used by Ask AI citation deep links).
-  static Future<PatientNote?> getPatientNote(int patientId, String noteId) async {
+  static Future<PatientNote?> getPatientNote(
+      int patientId, String noteId) async {
     try {
       final authHeaders = await ApiService.getAuthHeaders();
       final uri = Uri.parse('$baseUrl/$patientId/notes/$noteId');

@@ -8,8 +8,7 @@ import '../config/env_constant.dart';
 /// Calls `/v1/api/confirmations` endpoints. Follows the same static-method
 /// pattern as [AIChatService].
 class ConfirmationApiService {
-  static String get _baseUrl =>
-      '${getBackendBaseUrl()}/v1/api/confirmations';
+  static String get _baseUrl => '${getBackendBaseUrl()}/v1/api/confirmations';
 
   /// Fetch all PENDING items, optionally filtered by [sourceType].
   static Future<Map<String, dynamic>> fetchPendingItems({

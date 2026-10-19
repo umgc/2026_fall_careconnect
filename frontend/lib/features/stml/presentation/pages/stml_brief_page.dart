@@ -95,8 +95,7 @@ class _StmlBriefPageState extends State<StmlBriefPage> {
                   return ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      for (final card in brief.cards)
-                        _BriefCard(card: card),
+                      for (final card in brief.cards) _BriefCard(card: card),
                       if (brief.disclaimer.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Text(
@@ -120,7 +119,8 @@ class _StmlBriefPageState extends State<StmlBriefPage> {
               minimumSize: const Size(double.infinity, 52),
               backgroundColor: AppTheme.primary,
               foregroundColor: AppTheme.textLight,
-              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              textStyle:
+                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
             child: const Text('Continue to Dashboard'),
           ),
@@ -146,13 +146,15 @@ class _EmptyBriefState extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.wb_sunny_outlined, size: 48, color: AppTheme.textSecondary),
+                  Icon(Icons.wb_sunny_outlined,
+                      size: 48, color: AppTheme.textSecondary),
                   const SizedBox(height: 16),
                   Text(
                     "Nothing new right now. Check back after your next call, "
                     "visit, or appointment.",
                     textAlign: TextAlign.center,
-                    style: AppTheme.bodyLarge.copyWith(color: AppTheme.textSecondary),
+                    style: AppTheme.bodyLarge
+                        .copyWith(color: AppTheme.textSecondary),
                   ),
                 ],
               ),
@@ -191,7 +193,8 @@ class _ErrorState extends StatelessWidget {
                     style: const TextStyle(fontSize: 18),
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
+                  ElevatedButton(
+                      onPressed: onRetry, child: const Text('Try again')),
                 ],
               ),
             ),
@@ -243,7 +246,8 @@ class _BriefCard extends StatelessWidget {
               children: [
                 Text(
                   card.headline,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.w600),
                 ),
                 if (card.detail.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -256,7 +260,8 @@ class _BriefCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Text(
                     DateFormat.yMMMd().add_jm().format(card.timestamp!),
-                    style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
+                    style: AppTheme.bodySmall
+                        .copyWith(color: AppTheme.textSecondary),
                   ),
                 ],
               ],

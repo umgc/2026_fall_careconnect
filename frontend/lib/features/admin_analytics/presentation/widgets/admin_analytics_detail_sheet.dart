@@ -21,9 +21,8 @@ class AdminAnalyticsDetailSheet {
       AdminAnalyticsDetailKind.error => 'HTTP Error Bucket',
     };
 
-    final percentOfTotalEvents = totalEvents > 0
-        ? (count / totalEvents) * 100
-        : 0.0;
+    final percentOfTotalEvents =
+        totalEvents > 0 ? (count / totalEvents) * 100 : 0.0;
 
     return showModalBottomSheet<void>(
       context: context,

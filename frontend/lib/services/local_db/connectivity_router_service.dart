@@ -79,8 +79,6 @@ class ConnectivityRouterService {
     }
 
     return result.any((entry) => entry != ConnectivityResult.none);
-  
-    return true;
   }
 
   /// Determines whether an error is likely caused by network failure.

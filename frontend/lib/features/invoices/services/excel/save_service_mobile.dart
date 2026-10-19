@@ -9,9 +9,6 @@ import 'package:path_provider/path_provider.dart';
 Future<void> saveAndOpenFile(
     List<int> bytes, String fileName, BuildContext context) async {
   final Directory dir = await getTemporaryDirectory();
-  if (dir == null) {
-    throw Exception('Could not get temporary directory');
-  }
 
   final String filePath = '${dir.path}/$fileName';
   final file = File(filePath)

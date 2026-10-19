@@ -13,6 +13,28 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SchemaPatchLedgerTest {
 
+    private static DataSource dataSource(final String name) {
+        final JdbcDataSource dataSource = new JdbcDataSource();
+        dataSource.setURL("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1");
+        return dataSource;
+    }
+
+    private static long count(final DataSource dataSource, final String sql) throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet result = statement.executeQuery(sql)) {
+            result.next();
+            return result.getLong(1);
+        }
+    }
+
+    private static void execute(final DataSource dataSource, final String sql) throws Exception {
+        try (Connection connection = dataSource.getConnection();
+             Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
     @Test
     void apply_recordsFirstRunAndSkipsMatchingSecondRun() throws Exception {
         final DataSource dataSource = dataSource("first_second");
@@ -108,27 +130,5 @@ class SchemaPatchLedgerTest {
                         .startsWith("DO $$")
                         .contains("ALTER TABLE t ADD CONSTRAINT")
                         .endsWith("END $$"));
-    }
-
-    private static DataSource dataSource(final String name) {
-        final JdbcDataSource dataSource = new JdbcDataSource();
-        dataSource.setURL("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1");
-        return dataSource;
-    }
-
-    private static long count(final DataSource dataSource, final String sql) throws Exception {
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet result = statement.executeQuery(sql)) {
-            result.next();
-            return result.getLong(1);
-        }
-    }
-
-    private static void execute(final DataSource dataSource, final String sql) throws Exception {
-        try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
-            statement.execute(sql);
-        }
     }
 }

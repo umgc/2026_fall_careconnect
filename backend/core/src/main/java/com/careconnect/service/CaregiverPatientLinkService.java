@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class CaregiverPatientLinkService {
     private static final String PATIENT_VIDEO_CALLS_DISABLED_TOKEN = "[PATIENT_VIDEO_CALLS=OFF]";
-    private static final String PATIENT_MESSAGING_DISABLED_TOKEN   = "[PATIENT_MESSAGING=OFF]";
+    private static final String PATIENT_MESSAGING_DISABLED_TOKEN = "[PATIENT_MESSAGING=OFF]";
 
     private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
     private final UserRepository userRepository;
@@ -96,7 +96,6 @@ public class CaregiverPatientLinkService {
 //
 //        return toCaregiverPatientLinkResponse(link);
 //    }
-
     public CaregiverPatientLinkResponse suspendLink(Long linkId, String suspendedByIdentifier) {
         CaregiverPatientLink link = caregiverPatientLinkRepository.findById(linkId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Link not found"));
@@ -119,6 +118,7 @@ public class CaregiverPatientLinkService {
 
         return toCaregiverPatientLinkResponse(link);
     }
+
     /**
      * Reactivate a suspended link
      */
@@ -238,7 +238,7 @@ public class CaregiverPatientLinkService {
     @Transactional(readOnly = true)
     public boolean isPatientMessagingEnabled(Long caregiverUserId, Long patientUserId) {
         User caregiverUser = userRepository.findById(caregiverUserId).orElse(null);
-        User patientUser   = userRepository.findById(patientUserId).orElse(null);
+        User patientUser = userRepository.findById(patientUserId).orElse(null);
         if (caregiverUser == null || patientUser == null) return false;
 
         Optional<CaregiverPatientLink> link = caregiverPatientLinkRepository

@@ -49,9 +49,8 @@ class _StmlCheckInPatientSelectionPageState
       final patients = <Patient>[];
       for (final json in data) {
         try {
-          final raw = json is Map && json['patient'] != null
-              ? json['patient']
-              : json;
+          final raw =
+              json is Map && json['patient'] != null ? json['patient'] : json;
           patients.add(Patient.fromJson(Map<String, dynamic>.from(raw as Map)));
         } catch (_) {
           // Skip malformed entries rather than failing the whole list.
@@ -103,7 +102,8 @@ class _StmlCheckInPatientSelectionPageState
                 style: const TextStyle(fontSize: 18),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _loadPatients, child: const Text('Try again')),
+              ElevatedButton(
+                  onPressed: _loadPatients, child: const Text('Try again')),
             ],
           ),
         ),

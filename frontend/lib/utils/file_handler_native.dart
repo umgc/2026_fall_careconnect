@@ -8,7 +8,8 @@ import '../abstracts/file_handler.dart';
 class NativeFileHandler implements FileHandler {
   /// Android/iOS/Windows
   @override
-  Future<void> downloadFile(String fileName, Uint8List bytes, String contentType) async {
+  Future<void> downloadFile(
+      String fileName, Uint8List bytes, String contentType) async {
     try {
       Directory? directory;
 
@@ -43,7 +44,8 @@ class NativeFileHandler implements FileHandler {
   }
 
   @override
-  Future<FileUploadResult> processPickedFile(String? path, String? fileName, Uint8List? bytes) async {
+  Future<FileUploadResult> processPickedFile(
+      String? path, String? fileName, Uint8List? bytes) async {
     if (path == null) {
       throw Exception('Native file processing requires file path');
     }

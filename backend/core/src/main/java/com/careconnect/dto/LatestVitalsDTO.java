@@ -1,6 +1,7 @@
 package com.careconnect.dto;
 
 import lombok.Builder;
+
 import java.time.Instant;
 
 @Builder
@@ -15,4 +16,5 @@ public record LatestVitalsDTO(
         Integer moodValue,
         Integer painValue,
         Instant createdAt
-) {}
+) {
+}

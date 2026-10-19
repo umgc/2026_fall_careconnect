@@ -125,7 +125,7 @@ class AnswerSubmissionServiceTest {
         when(checkInQuestionRepository.findByCheckIn_IdOrderByOrdinalAsc(10L)).thenReturn(List.of(
                 snapshot(checkIn, 1L, "TEXT", true)
         ));
-        
+
         // Mock an existing answer for question 1
         Answer existingAnswer = Answer.builder()
                 .checkIn(checkIn)

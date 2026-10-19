@@ -10,7 +10,7 @@ enum DisclaimerVariant { ai, medication }
 ///
 /// Copy is localized in [AppLocalizations] (`aiDisclaimer` /
 /// `medicationDisclaimer`) so it lives in the ARB
-/// files and must be reviewed. 
+/// files and must be reviewed.
 class DisclaimerBanner extends StatelessWidget {
   /// Minimum accessible font size (WCAG 2.1)
   static const double kFontSize = 18.0;

@@ -35,12 +35,16 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class CallSummaryItemDecision {
 
-    /** Database identifier for the decision row. */
+    /**
+     * Database identifier for the decision row.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Foreign key to {@link CallSummary#getId()}. */
+    /**
+     * Foreign key to {@link CallSummary#getId()}.
+     */
     @Column(name = "summary_id", nullable = false)
     private Long summaryId;
 
@@ -87,19 +91,27 @@ public class CallSummaryItemDecision {
     @Column(name = "decided_by_user_id")
     private Long decidedByUserId;
 
-    /** Timestamp when the decision was recorded. */
+    /**
+     * Timestamp when the decision was recorded.
+     */
     @Column(name = "decided_at", nullable = false)
     private LocalDateTime decidedAt;
 
-    /** Optional free-text notes captured with the decision. */
+    /**
+     * Optional free-text notes captured with the decision.
+     */
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
-    /** Timestamp when the audit row was persisted. */
+    /**
+     * Timestamp when the audit row was persisted.
+     */
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    /** Populates audit timestamps when not explicitly set by the caller. */
+    /**
+     * Populates audit timestamps when not explicitly set by the caller.
+     */
     @PrePersist
     public void onCreate() {
         final LocalDateTime now = LocalDateTime.now();

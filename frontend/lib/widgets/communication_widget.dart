@@ -47,7 +47,6 @@ class _CommunicationWidgetState extends State<CommunicationWidget> {
 
   Future<void> _startVideoCall() async {
     try {
-      final callId = 'call_${DateTime.now().millisecondsSinceEpoch}';
       // final callData = await VideoCallService.initiateCall(
       //   callId: callId,
       //   callerId: widget.currentUserId,
@@ -67,7 +66,6 @@ class _CommunicationWidgetState extends State<CommunicationWidget> {
 
   Future<void> _startAudioCall() async {
     try {
-      final callId = 'call_${DateTime.now().millisecondsSinceEpoch}';
       // final callData = await VideoCallService.initiateCall(
       //   callId: callId,
       //   callerId: widget.currentUserId,

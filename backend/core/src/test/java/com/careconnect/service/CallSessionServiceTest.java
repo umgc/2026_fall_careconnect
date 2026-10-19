@@ -22,8 +22,10 @@ import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.schedule.ScheduledVisitRepository;
 import com.careconnect.security.Role;
+
 import java.util.Optional;
 import java.time.LocalDateTime;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,16 +35,48 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CallSessionServiceTest {
 
-    @Mock private CallSessionRepository sessionRepository;
-    @Mock private CallParticipantRepository participantRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private CaregiverPatientLinkService caregiverLinkService;
-    @Mock private FamilyMemberService familyMemberService;
-    @Mock private ScheduledVisitRepository scheduledVisitRepository;
-    @Mock private CaregiverRepository caregiverRepository;
+    @Mock
+    private CallSessionRepository sessionRepository;
+    @Mock
+    private CallParticipantRepository participantRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private CaregiverPatientLinkService caregiverLinkService;
+    @Mock
+    private FamilyMemberService familyMemberService;
+    @Mock
+    private ScheduledVisitRepository scheduledVisitRepository;
+    @Mock
+    private CaregiverRepository caregiverRepository;
 
     private CallSessionService service;
+
+    private static User user(Long id, Role role) {
+        User user = new User();
+        user.setId(id);
+        user.setRole(role);
+        return user;
+    }
+
+    private static CallSession session(Long id, Long patientId) {
+        CallSession session = new CallSession();
+        session.setId(id);
+        session.setCallId("call-1");
+        session.setPatientId(patientId);
+        session.setStatus(CallSessionService.SESSION_CREATED);
+        return session;
+    }
+
+    private static CallParticipant participant(Long userId, String status) {
+        CallParticipant participant = new CallParticipant();
+        participant.setCallSessionId(10L);
+        participant.setUserId(userId);
+        participant.setStatus(status);
+        return participant;
+    }
 
     @BeforeEach
     void setUp() {
@@ -666,7 +700,6 @@ class CallSessionServiceTest {
                 any(), any(), any(), any(LocalDateTime.class));
     }
 
-
     @Test
     void requireHistoricalParticipant_rejectsInvitedAndDeclinedParticipants() {
         final CallSession session = session(10L, 42L);
@@ -694,8 +727,8 @@ class CallSessionServiceTest {
                         invocation.getArgument(1).equals(2L)
                                 ? CallSessionService.PARTICIPANT_JOINED
                                 : invocation.getArgument(1).equals(3L)
-                                        ? CallSessionService.PARTICIPANT_LEFT
-                                        : CallSessionService.PARTICIPANT_EXPIRED)));
+                                ? CallSessionService.PARTICIPANT_LEFT
+                                : CallSessionService.PARTICIPANT_EXPIRED)));
 
         assertThat(service.requireHistoricalParticipant("call-1", 2L)).isSameAs(session);
         assertThat(service.requireHistoricalParticipant("call-1", 3L)).isSameAs(session);
@@ -751,29 +784,5 @@ class CallSessionServiceTest {
                 .hasMessageContaining("historical");
         verify(sessionRepository, never()).reclaimTermination(
                 any(), any(), any(), any(), any(LocalDateTime.class));
-    }
-
-    private static User user(Long id, Role role) {
-        User user = new User();
-        user.setId(id);
-        user.setRole(role);
-        return user;
-    }
-
-    private static CallSession session(Long id, Long patientId) {
-        CallSession session = new CallSession();
-        session.setId(id);
-        session.setCallId("call-1");
-        session.setPatientId(patientId);
-        session.setStatus(CallSessionService.SESSION_CREATED);
-        return session;
-    }
-
-    private static CallParticipant participant(Long userId, String status) {
-        CallParticipant participant = new CallParticipant();
-        participant.setCallSessionId(10L);
-        participant.setUserId(userId);
-        participant.setStatus(status);
-        return participant;
     }
 }

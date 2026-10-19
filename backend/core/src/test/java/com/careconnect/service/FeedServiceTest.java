@@ -24,12 +24,17 @@ import java.util.Optional;
 
 class FeedServiceTest {
 
-    @Mock private PostRepository postRepository;
-    @Mock private CommentRepository commentRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private GamificationService gamificationService;
+    @Mock
+    private PostRepository postRepository;
+    @Mock
+    private CommentRepository commentRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private GamificationService gamificationService;
 
-    @InjectMocks private FeedService feedService;
+    @InjectMocks
+    private FeedService feedService;
 
     private Post post;
     private User user;

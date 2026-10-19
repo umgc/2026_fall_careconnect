@@ -49,18 +49,18 @@ class CitationDeepLinkBuilderTest {
     @DisplayName("clinical note links require patientId")
     void build_clinicalNote_requiresPatientId() {
         assertThat(builder.build(new RankedChunk(
-                        UUID.randomUUID(),
-                        null,
-                        RetrievalRecordType.CLINICAL_NOTE,
-                        null,
-                        "42",
-                        "text",
-                        null,
-                        "auto",
-                        0.1d,
-                        1,
-                        null,
-                        "C1")))
+                UUID.randomUUID(),
+                null,
+                RetrievalRecordType.CLINICAL_NOTE,
+                null,
+                "42",
+                "text",
+                null,
+                "auto",
+                0.1d,
+                1,
+                null,
+                "C1")))
                 .isNull();
     }
 
@@ -97,6 +97,17 @@ class CitationDeepLinkBuilderTest {
                 "seg-1",
                 "{\"callId\":\"call-42\",\"startMs\":1500}"))
                 .isEqualTo("/calls/call-42/summary?t=1500");
+    }
+
+    @Test
+    @DisplayName("Epic encounter emits the /epic/{type}/{id} detail route")
+    void build_epicEncounter_emitsEpicDetailRoute() {
+        assertThat(build(
+                RetrievalRecordType.EPIC_ENCOUNTER,
+                "epic",
+                "epic-enc-1",
+                "{\"fhirResourceType\":\"Encounter\",\"fhirResourceId\":\"enc-1\"}"))
+                .isEqualTo("/epic/Encounter/enc-1?patientId=42");
     }
 
     @Test
@@ -166,17 +177,17 @@ class CitationDeepLinkBuilderTest {
             final String sourceId,
             final String metadataJson) {
         return builder.build(new RankedChunk(
-                        UUID.randomUUID(),
-                        42L,
-                        type,
-                        sourceKind,
-                        sourceId,
-                        "text",
-                        metadataJson,
-                        "auto",
-                        0.1d,
-                        1,
-                        null,
-                        "C1"));
+                UUID.randomUUID(),
+                42L,
+                type,
+                sourceKind,
+                sourceId,
+                "text",
+                metadataJson,
+                "auto",
+                0.1d,
+                1,
+                null,
+                "C1"));
     }
 }

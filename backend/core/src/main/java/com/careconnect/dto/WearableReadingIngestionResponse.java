@@ -20,7 +20,8 @@ public record WearableReadingIngestionResponse(
             Double metricValue,
             Instant recordedAt,
             String source
-    ) {}
+    ) {
+    }
 
     public record RejectedReading(
             int index,
@@ -29,5 +30,6 @@ public record WearableReadingIngestionResponse(
             Instant recordedAt,
             String source,
             String error
-    ) {}
+    ) {
+    }
 }

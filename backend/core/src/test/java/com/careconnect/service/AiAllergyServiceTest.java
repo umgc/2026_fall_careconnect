@@ -22,16 +22,13 @@ import static org.mockito.Mockito.when;
 
 class AiAllergyServiceTest {
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private BedrockStructuredAnalysisService bedrockAnalysisService;
-
     @Mock
     private DeepSeekContextBuilder contextBuilder;
-
     @InjectMocks
     private AiAllergyService aiAllergyService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws Exception {

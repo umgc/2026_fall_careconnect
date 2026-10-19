@@ -89,7 +89,8 @@ class VideoCallService {
     Function()? onCallEnded,
   }) async {
     _currentUserId = userId;
-    debugPrint('Web VideoCallService initialized with mobile-compatible interface');
+    debugPrint(
+        'Web VideoCallService initialized with mobile-compatible interface');
   }
 
   // Start a video call (internal method)

@@ -34,7 +34,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
      *
      * @param user the {@link User} entity representing the patient
      * @return an {@link Optional} containing a list of tasks for the patient,
-     *         or empty if no tasks exist
+     * or empty if no tasks exist
      */
     Optional<List<Task>> findByPatient(User user);
 
@@ -48,7 +48,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
      *
      * @param patientId the ID of the patient
      * @return an {@link Optional} containing a list of tasks for the patient,
-     *         or empty if no tasks exist
+     * or empty if no tasks exist
      */
     Optional<List<Task>> findByPatientId(Long patientId);
 

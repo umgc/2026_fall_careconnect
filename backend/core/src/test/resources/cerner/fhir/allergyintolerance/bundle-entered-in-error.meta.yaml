@@ -1,0 +1,28 @@
+requirements:
+  - M3-REQ-04
+scenarios:
+  - M3-SC-MAP-012
+origin: sanitized-sandbox-capture
+sandbox: oracle-health-open-fhir-r4
+capturedAt: "2026-10-02"
+capturedBy: Tiffany Obi
+captureRequest: AllergyIntolerance?_id=<synthetic-resource-id>
+httpStatus: 200
+bundleEntryCount: 1
+derivedFrom: null
+purpose: >-
+  Verify that an AllergyIntolerance whose verification status is
+  entered-in-error is excluded from active normalized allergy results.
+sanitizationChanges:
+  - Replaced the generated Bundle, resource, version, patient, and practitioner identifiers.
+  - Replaced Oracle Health sandbox and resource URLs with example.test URLs.
+  - Removed the generated XHTML narrative because it contained a patient name.
+  - Replaced patient and practitioner display values with clearly synthetic labels.
+expectedBehaviorSummary: >-
+  Exclude the entered-in-error resource from returned allergy records. The exact
+  normalized empty representation remains provisional until the canonical model
+  and OpenAPI 1.0 contract are approved.
+expectedOutputStatus: pending-canonical-model-and-openapi-1.0
+reviewedBy: TBD
+consumers:
+  - TBD AllergyIntolerance mapper entered-in-error exclusion test

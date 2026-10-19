@@ -19,5 +19,5 @@ public class CaregiverRegistration extends RegisterRequest {
     private AddressDto address;
     private LoginRequest credentials;
     private String caregiverType;
-    private String planId; 
+    private String planId;
 }

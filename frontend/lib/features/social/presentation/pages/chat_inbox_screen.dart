@@ -7,7 +7,6 @@ import '../model/conversation_preview_dto.dart';
 import 'chat_room_screen.dart';
 import 'my_friend_screen.dart';
 
-
 class ChatInboxScreen extends StatefulWidget {
   const ChatInboxScreen({super.key});
 
@@ -62,110 +61,119 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
   Widget build(BuildContext context) {
     if (_userId == null) {
       return Scaffold(
-       // appBar: AppBar(title: const Text('Messages')),
+        // appBar: AppBar(title: const Text('Messages')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       appBar: AppBar(
-          title: const Text('Messages'),
-          actions: [
-      IconButton(
-      icon: const Icon(Icons.group),
-      tooltip: 'Contacts',
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => MyFriendsScreen()),
-        );
-        },
-      ),
-          ],
+        title: const Text('Messages'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.group),
+            tooltip: 'Contacts',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => MyFriendsScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : inbox.isEmpty
-          ? const Center(child: Text('No messages yet'))
-          : ListView.builder(
-              itemCount: inbox.length,
-              itemBuilder: (context, index) {
-                final convo = inbox[index];
-                return ListTile(
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          convo.peerName,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: convo.hasUnread ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                      if (convo.relationshipLabel.isNotEmpty) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.blueGrey.shade100,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            convo.relationshipLabel,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.blueGrey.shade700,
-                              fontWeight: FontWeight.w500,
+              ? const Center(child: Text('No messages yet'))
+              : ListView.builder(
+                  itemCount: inbox.length,
+                  itemBuilder: (context, index) {
+                    final convo = inbox[index];
+                    return ListTile(
+                      title: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              convo.peerName,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: convo.hasUnread
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(
-                    convo.content,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: convo.hasUnread ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        convo.timestamp.toLocal().toString().substring(0, 16),
-                        style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          if (convo.relationshipLabel.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blueGrey.shade100,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                convo.relationshipLabel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.blueGrey.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                      if (convo.hasUnread)
-                        Container(
-                          margin: const EdgeInsets.only(top: 4),
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
-                            shape: BoxShape.circle,
+                      subtitle: Text(
+                        convo.content,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: convo.hasUnread
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      trailing: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            convo.timestamp
+                                .toLocal()
+                                .toString()
+                                .substring(0, 16),
+                            style: const TextStyle(
+                                fontSize: 11, color: Colors.grey),
                           ),
-                        ),
-                    ],
-                  ),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatRoomScreen(
-                          peerUserId: convo.peerId,
-                          peerName: convo.peerName,
-                        ),
+                          if (convo.hasUnread)
+                            Container(
+                              margin: const EdgeInsets.only(top: 4),
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(
+                                color: Colors.blue,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
                       ),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatRoomScreen(
+                              peerUserId: convo.peerId,
+                              peerName: convo.peerName,
+                            ),
+                          ),
+                        );
+                        if (mounted) fetchInbox();
+                      },
                     );
-                    if (mounted) fetchInbox();
                   },
-                );
-              },
-            ),
+                ),
     );
   }
 }

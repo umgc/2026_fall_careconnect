@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../config/env_constant.dart';
 import 'package:provider/provider.dart';
 
-
 class WelcomePage extends StatefulWidget {
   const WelcomePage({super.key});
 
@@ -19,7 +18,12 @@ class WelcomePage extends StatefulWidget {
 }
 
 class _WelcomePageState extends State<WelcomePage> {
-  bool _isLoading = true;
+  // Render the welcome UI immediately instead of gating it behind the backend
+  // health check. Blocking here made the app appear to "hang on the logo" on
+  // every (re)start while the health probe ran (up to ~35s if the backend was
+  // briefly unreachable). The check now runs in the background and only drives
+  // the "backend not healthy" warning banner.
+  bool _isLoading = false;
   bool _isBackendHealthy = true;
 
   @override
@@ -29,47 +33,42 @@ class _WelcomePageState extends State<WelcomePage> {
   }
 
   Future<void> _checkBackendHealth() async {
-  try {
+    // Retry a few times: the backend can take up to ~60-70s to boot, and a
+    // single attempt during that window would wrongly flag it as unhealthy.
+    const int maxAttempts = 5;
     final String baseUrl = getBackendBaseUrl();
-
     print('BASE URL: $baseUrl');
 
-    final response = await http
-        .get(Uri.parse('$baseUrl/v1/api/test/health'))
-        .timeout(const Duration(seconds: 5));
+    bool healthy = false;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse('$baseUrl/v1/api/test/health'))
+            .timeout(const Duration(seconds: 5));
 
-    print('STATUS CODE: ${response.statusCode}');
-    print('BODY: ${response.body}');
-
-    if (mounted) {
-      setState(() {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          print('PARSED STATUS: ${data['status']}');
-
-          _isBackendHealthy = data['status'] == 'healthy';
-        } else {
-          _isBackendHealthy = false;
+          if (data['status'] == 'healthy') {
+            healthy = true;
+            break;
+          }
         }
-      });
+      } catch (e) {
+        print('Health check attempt $attempt/$maxAttempts failed: $e');
+      }
+
+      if (attempt < maxAttempts) {
+        await Future.delayed(const Duration(seconds: 2));
+      }
     }
-  } catch (e) {
-    print('ERROR: $e');
 
     if (mounted) {
       setState(() {
-        _isBackendHealthy = false;
-      });
-    }
-  } finally {
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() {
+        _isBackendHealthy = healthy;
         _isLoading = false;
       });
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -77,8 +76,8 @@ class _WelcomePageState extends State<WelcomePage> {
     final t = AppLocalizations.of(context)!;
     final currentLocale = context.watch<LocaleProvider>().locale;
     final currentLangLabel = currentLocale == null
-    ? t.systemDefault 
-    : LanguagePicker.labelFor(currentLocale, t);
+        ? t.systemDefault
+        : LanguagePicker.labelFor(currentLocale, t);
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -125,7 +124,8 @@ class _WelcomePageState extends State<WelcomePage> {
                           backgroundColor: Colors.white.withValues(alpha: 0.12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+                            side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.25)),
                           ),
                         ),
                       ),
@@ -133,231 +133,230 @@ class _WelcomePageState extends State<WelcomePage> {
                   ),
                   SizedBox(height: isMobile ? 32 : 48),
 
-                // Logo container
-                Container(
-                  width: isMobile ? 100 : 200,
-                  height: isMobile ? 100 : 200,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/images/CareConnectLogo.png',
-                          width: isMobile ? 90 : 190,
-                          fit: BoxFit.contain,
-                          color: Colors.white,
-                          colorBlendMode: BlendMode.srcIn,
-                        ),
-                      ],
+                  // Logo container
+                  Container(
+                    width: isMobile ? 100 : 200,
+                    height: isMobile ? 100 : 200,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/images/CareConnectLogo.png',
+                            width: isMobile ? 90 : 190,
+                            fit: BoxFit.contain,
+                            color: Colors.white,
+                            colorBlendMode: BlendMode.srcIn,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-                SizedBox(height: isMobile ? 40 : 48),
+                  SizedBox(height: isMobile ? 40 : 48),
 
-                // Main title (brand name can stay as-is)
-                Text(
-                  'CareConnect',
-                  style: TextStyle(
-                    fontSize: isMobile ? 36 : 42,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                SizedBox(height: isMobile ? 12 : 16),
- 
-            // Subtitle
-            Text(
-              AppLocalizations.of(context)!.welcome_subtitle,
-              style: TextStyle(
-                fontSize: isMobile ? 18 : 20,
-                color: Colors.white.withValues(alpha: 0.9),
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            SizedBox(height: isMobile ? 32 : 40),
-
-            // Description text
-            Text(
-              AppLocalizations.of(context)!.welcome_description,
-              style: TextStyle(
-                fontSize: isMobile ? 16 : 18,
-                color: Colors.white.withValues(alpha: 0.8),
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-            SizedBox(height: isMobile ? 8 : 12),
-
-            // Tagline
-            Text(
-              AppLocalizations.of(context)!.welcome_tagline,
-              style: TextStyle(
-                fontSize: isMobile ? 18 : 20,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-
-
-                SizedBox(height: isMobile ? 40 : 48),
-
-                // Loading state or ready message
-                if (_isLoading) ...[
+                  // Main title (brand name can stay as-is)
                   Text(
-                    t.welcomeInitializingHealthcare,
+                    'CareConnect',
                     style: TextStyle(
-                      fontSize: isMobile ? 16 : 18,
-                      color: Colors.white.withValues(alpha: 0.9),
+                      fontSize: isMobile ? 36 : 42,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: isMobile ? 24 : 32),
-                  const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  ),
-                ] else ...[
+
+                  SizedBox(height: isMobile ? 12 : 16),
+
+                  // Subtitle
                   Text(
-                    t.welcomeReadyToConnect,
+                    AppLocalizations.of(context)!.welcome_subtitle,
                     style: TextStyle(
                       fontSize: isMobile ? 18 : 20,
-                      color: Colors.white,
+                      color: Colors.white.withValues(alpha: 0.9),
                       fontWeight: FontWeight.w500,
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  SizedBox(height: isMobile ? 24 : 32),
 
-                  // Backend health warning
-                  if (!_isBackendHealthy) ...[
-                    Container(
-                      margin: EdgeInsets.only(bottom: isMobile ? 16 : 20),
-                      padding: EdgeInsets.all(isMobile ? 12 : 16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.orange.withValues(alpha: 0.5),
-                          width: 1.5,
+                  SizedBox(height: isMobile ? 32 : 40),
+
+                  // Description text
+                  Text(
+                    AppLocalizations.of(context)!.welcome_description,
+                    style: TextStyle(
+                      fontSize: isMobile ? 16 : 18,
+                      color: Colors.white.withValues(alpha: 0.8),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+
+                  SizedBox(height: isMobile ? 8 : 12),
+
+                  // Tagline
+                  Text(
+                    AppLocalizations.of(context)!.welcome_tagline,
+                    style: TextStyle(
+                      fontSize: isMobile ? 18 : 20,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+
+                  SizedBox(height: isMobile ? 40 : 48),
+
+                  // Loading state or ready message
+                  if (_isLoading) ...[
+                    Text(
+                      t.welcomeInitializingHealthcare,
+                      style: TextStyle(
+                        fontSize: isMobile ? 16 : 18,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: isMobile ? 24 : 32),
+                    const SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      t.welcomeReadyToConnect,
+                      style: TextStyle(
+                        fontSize: isMobile ? 18 : 20,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: isMobile ? 24 : 32),
+
+                    // Backend health warning
+                    if (!_isBackendHealthy) ...[
+                      Container(
+                        margin: EdgeInsets.only(bottom: isMobile ? 16 : 20),
+                        padding: EdgeInsets.all(isMobile ? 12 : 16),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.5),
+                            width: 1.5,
+                          ),
                         ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.warning_rounded,
+                              color: Colors.orange[100],
+                              size: isMobile ? 20 : 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                t.welcomeBackendNotHealthyWarning,
+                                style: TextStyle(
+                                  fontSize: isMobile ? 14 : 16,
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // New React UI — full sign-in experience (does not replace
+                    // the existing Flutter Continue path yet).
+                    ElevatedButton(
+                      onPressed: _openNewUiPreview,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF4A5FBF),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 32 : 40,
+                          vertical: isMobile ? 16 : 20,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 2,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.warning_rounded,
-                            color: Colors.orange[100],
-                            size: isMobile ? 20 : 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Flexible(
-                            child: Text(
-                              t.welcomeBackendNotHealthyWarning,
-                              style: TextStyle(
-                                fontSize: isMobile ? 14 : 16,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                              ),
-                              textAlign: TextAlign.center,
+                          const Icon(Icons.auto_awesome, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Try new CareConnect UI',
+                            style: TextStyle(
+                              fontSize: isMobile ? 16 : 18,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
+                    SizedBox(height: isMobile ? 10 : 12),
+                    Text(
+                      'Opens the new sign-in & Care Circle experience',
+                      style: TextStyle(
+                        fontSize: isMobile ? 13 : 14,
+                        color: Colors.white.withValues(alpha: 0.85),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    SizedBox(height: isMobile ? 20 : 24),
 
-                  // New React UI — full sign-in experience (does not replace
-                  // the existing Flutter Continue path yet).
-                  ElevatedButton(
-                    onPressed: _openNewUiPreview,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF4A5FBF),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isMobile ? 32 : 40,
-                        vertical: isMobile ? 16 : 20,
+                    // Existing Flutter continue path
+                    OutlinedButton(
+                      onPressed: () {
+                        context.go('/dashboard');
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isMobile ? 32 : 40,
+                          vertical: isMobile ? 16 : 20,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      elevation: 2,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.auto_awesome, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Try new CareConnect UI',
-                          style: TextStyle(
-                            fontSize: isMobile ? 16 : 18,
-                            fontWeight: FontWeight.w600,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            t.welcomeContinue,
+                            style: TextStyle(
+                              fontSize: isMobile ? 16 : 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: isMobile ? 10 : 12),
-                  Text(
-                    'Opens the new sign-in & Care Circle experience',
-                    style: TextStyle(
-                      fontSize: isMobile ? 13 : 14,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  SizedBox(height: isMobile ? 20 : 24),
-
-                  // Existing Flutter continue path
-                  OutlinedButton(
-                    onPressed: () {
-                      context.go('/dashboard');
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: isMobile ? 32 : 40,
-                        vertical: isMobile ? 16 : 20,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          t.welcomeContinue,
-                          style: TextStyle(
-                            fontSize: isMobile ? 16 : 18,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 20,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.arrow_forward_rounded,
-                          size: 20,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
                   ],
 
                   SizedBox(height: isMobile ? 32 : 48),
@@ -369,9 +368,12 @@ class _WelcomePageState extends State<WelcomePage> {
                       mainAxisSize: MainAxisSize.min,
                       spacing: 8,
                       children: [
-                        _buildComplianceBadge(t.welcomeComplianceBadgeHipaa, isMobile),
-                        _buildComplianceBadge(t.welcomeComplianceBadgeWcag, isMobile),
-                        _buildComplianceBadge(t.welcomeComplianceBadgeSecure, isMobile),
+                        _buildComplianceBadge(
+                            t.welcomeComplianceBadgeHipaa, isMobile),
+                        _buildComplianceBadge(
+                            t.welcomeComplianceBadgeWcag, isMobile),
+                        _buildComplianceBadge(
+                            t.welcomeComplianceBadgeSecure, isMobile),
                       ],
                     ),
                   ),

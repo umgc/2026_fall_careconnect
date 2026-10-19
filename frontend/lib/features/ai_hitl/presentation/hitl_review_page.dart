@@ -192,7 +192,8 @@ class _HitlReviewPageState extends State<HitlReviewPage> {
                 Text('Triggers: ${detail.triggerCodes.join(', ')}'),
               ],
               const SizedBox(height: 16),
-              Text('Original question', style: Theme.of(context).textTheme.titleSmall),
+              Text('Original question',
+                  style: Theme.of(context).textTheme.titleSmall),
               const SizedBox(height: 4),
               SelectableText(detail.queryText?.trim().isNotEmpty == true
                   ? detail.queryText!
@@ -254,7 +255,8 @@ class _HitlReviewPageState extends State<HitlReviewPage> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Text('Release'),
                       ),

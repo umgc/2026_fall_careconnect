@@ -41,6 +41,12 @@ class AiAnalyzeEndpointPermissionTest {
 
     private PermissionAspect permissionAspect;
 
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        var field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         permissionAspect = new PermissionAspect();
@@ -130,11 +136,5 @@ class AiAnalyzeEndpointPermissionTest {
                 return RequirePermission.class;
             }
         };
-    }
-
-    private static void setField(Object target, String fieldName, Object value) throws Exception {
-        var field = target.getClass().getDeclaredField(fieldName);
-        field.setAccessible(true);
-        field.set(target, value);
     }
 }

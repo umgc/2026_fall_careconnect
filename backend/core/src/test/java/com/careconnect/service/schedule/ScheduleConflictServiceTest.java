@@ -35,15 +35,13 @@ import com.careconnect.service.schedule.ScheduleConflictService.ConflictSummary;
  */
 class ScheduleConflictServiceTest {
 
-    @Mock
-    private ScheduledVisitRepository scheduledVisitRepository;
-
-    @InjectMocks
-    private ScheduleConflictService conflictService;
-
     private static final Long CAREGIVER_ID = 1L;
     private static final Long PATIENT_ID = 10L;
     private static final LocalDate TEST_DATE = LocalDate.of(2026, 3, 17);
+    @Mock
+    private ScheduledVisitRepository scheduledVisitRepository;
+    @InjectMocks
+    private ScheduleConflictService conflictService;
 
     @BeforeEach
     void setUp() {

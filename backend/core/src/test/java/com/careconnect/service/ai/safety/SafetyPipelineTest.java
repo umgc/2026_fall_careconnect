@@ -13,6 +13,26 @@ class SafetyPipelineTest {
 
     private SafetyPipeline pipeline;
 
+    private static SafetyInput input(
+            final String query,
+            final String draft,
+            final boolean groundingFailed,
+            final List<String> groundingCodes) {
+        return new SafetyInput(
+                query,
+                draft,
+                List.of(),
+                42L,
+                7L,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "ASK_AI",
+                "en-US",
+                groundingFailed,
+                groundingCodes);
+    }
+
     @BeforeEach
     void setUp() {
         pipeline = new SafetyPipeline(new TierClassifier());
@@ -97,25 +117,5 @@ class SafetyPipelineTest {
 
         assertThat(outcome.decision()).isEqualTo(SafetyDecision.BLOCK);
         assertThat(outcome.triggerCodes()).contains("GROUNDING_FAILED");
-    }
-
-    private static SafetyInput input(
-            final String query,
-            final String draft,
-            final boolean groundingFailed,
-            final List<String> groundingCodes) {
-        return new SafetyInput(
-                query,
-                draft,
-                List.of(),
-                42L,
-                7L,
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                "ASK_AI",
-                "en-US",
-                groundingFailed,
-                groundingCodes);
     }
 }

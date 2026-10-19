@@ -1,0 +1,2959 @@
+{
+  "publisher": "athenahealth",
+  "instantiates": [
+    "http://hl7.org/fhir/us/core/CapabilityStatement/us-core-server|3.1.1",
+    "http://hl7.org/fhir/us/core/CapabilityStatement/us-core-server|6.1.0",
+    "http://hl7.org/fhir/uv/bulkdata/CapabilityStatement/bulk-data|1.0.1",
+    "http://hl7.org/fhir/uv/bulkdata/CapabilityStatement/bulk-data|2.0.0"
+  ],
+  "kind": "instance",
+  "rest": [
+    {
+      "security": {
+        "cors": true,
+        "extension": [
+          {
+            "url": "http://DSTU2/fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris",
+            "extension": [
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/authorize",
+                "url": "authorize"
+              },
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/token",
+                "url": "token"
+              },
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/introspect",
+                "url": "introspect"
+              },
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/revoke",
+                "url": "revoke"
+              }
+            ]
+          },
+          {
+            "url": "http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris",
+            "extension": [
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/authorize",
+                "url": "authorize"
+              },
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/token",
+                "url": "token"
+              },
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/introspect",
+                "url": "introspect"
+              },
+              {
+                "valueUri": "https://api.preview.platform.athenahealth.com/oauth2/v1/revoke",
+                "url": "revoke"
+              }
+            ]
+          }
+        ],
+        "service": [
+          {
+            "text": "OAuth (unspecified version see oauth.net).",
+            "coding": [
+              {
+                "code": "OAuth",
+                "system": "http://terminology.hl7.org/CodeSystem/restful-security-service"
+              }
+            ]
+          },
+          {
+            "text": "OAuth2 using SMART-on-FHIR profile (see http://docs.smarthealthit.org)",
+            "coding": [
+              {
+                "code": "SMART-on-FHIR",
+                "system": "http://terminology.hl7.org/CodeSystem/restful-security-service"
+              }
+            ]
+          }
+        ]
+      },
+      "resource": [
+        {
+          "type": "AllergyIntolerance",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-allergyintolerance|6.1.0"
+          ],
+          "searchInclude": [
+            "AllergyIntolerance:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "AllergyIntolerance.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "The number of AllergyIntolerance resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "AllergyIntolerance._revinclude include resources that reference this",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "AllergyIntolerance._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Last updated date associated with the AllergyIntolerance (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Code to which this AllergyIntolerance is associated",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-code|4.0.1",
+              "name": "code"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredSearchParams",
+                  "valueString": "patient"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-allergyintolerance",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Appointment",
+          "searchParam": [
+            {
+              "documentation": "Appointment.id resource reference to FHIR Appointment resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Custom named query",
+              "type": "string",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-query|4.0.1",
+              "name": "_query"
+            },
+            {
+              "documentation": "Search by Athena Appointment ID for resources containing the 'Athena Group Appointment' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-base-appointment-id",
+              "name": "base-appointment-id"
+            },
+            {
+              "documentation": "Search by Athena Group Appointment ID for resources containing the same 'Athena Group Appointment' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-group-appointment-id",
+              "name": "group-appointment-id"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_query, base-appointment-id"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_query, group-appointment-id"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "operation": [
+            {
+              "name": "self-checkin-entry-url",
+              "definition": "https://fhir.athena.io/OperationDefinition/ah-appointment-self-checkin-entry-url",
+              "documentation": "Generate a patient self check in link. Link can be used for up to 1 week or 10 usages. Patient will need enter demographic info after following link. Requires scope system/Appointment.$self-checkin-entry-url."
+            },
+            {
+              "name": "telehealth-zoom-credentials",
+              "definition": "https://fhir.athena.io/OperationDefinition/ah-appointment-telehealth-zoom-credentials"
+            }
+          ]
+        },
+        {
+          "type": "Binary",
+          "interaction": [
+            {
+              "code": "read"
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-binary"
+        },
+        {
+          "type": "CarePlan",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careplan|6.1.0"
+          ],
+          "searchInclude": [
+            "CarePlan:patient",
+            "CarePlan:ah-brand",
+            "CarePlan:ah-chart-sharing-group",
+            "CarePlan:ah-department",
+            "CarePlan:ah-practice",
+            "CarePlan:ah-provider-group"
+          ],
+          "searchParam": [
+            {
+              "documentation": "CarePlan.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "CarePlan.category is assess-plan",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/CarePlan-category|4.0.1",
+              "name": "category"
+            },
+            {
+              "documentation": "Last updated date associated with the CarePlan (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "The number of CarePlan resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "CarePlan._id resource reference to FHIR CarePlan resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "CarePlan._revinclude is the parameter for reverse include searching",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "CarePlan._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Brand' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-brand",
+              "name": "ah-brand"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Department for resources containing the 'Athena Department' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-department",
+              "name": "ah-department"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-careplan",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "CareTeam",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-careteam|6.1.0"
+          ],
+          "searchInclude": [
+            "CareTeam:patient",
+            "CareTeam:ah-brand",
+            "CareTeam:ah-chart-sharing-group",
+            "CareTeam:ah-department",
+            "CareTeam:ah-practice",
+            "CareTeam:ah-provider-group"
+          ],
+          "searchParam": [
+            {
+              "documentation": "CareTeam.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "CareTeam.status of proposed | active | suspended | inactive | entered-in-error",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/CareTeam-status|4.0.1",
+              "name": "status"
+            },
+            {
+              "documentation": "Last updated date associated with the CareTeam (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "The number of CareTeam resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "CareTeam._id resource reference to FHIR CareTeam resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "CareTeam._revinclude is the parameter for reverse include searching",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "CareTeam._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Brand' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-brand",
+              "name": "ah-brand"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by Athena Department for resources containing the 'Athena Department' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-department",
+              "name": "ah-department"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-careteam",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Condition",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-encounter-diagnosis|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-condition-problems-health-concerns|6.1.0"
+          ],
+          "searchInclude": [
+            "Condition:ah-chart-sharing-group",
+            "Condition:ah-practice",
+            "Condition:encounter",
+            "Condition:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Resource id (not a full URL)",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Who has the condition?",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "Encounter to which this Condition is associated",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "Other resources to include in the search results when they refer to search matches",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Other resources to include in the search results that search matches point to",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "The number of Condition resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Last updated date associated with the condition (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Code to which this Condition is associated",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-condition-code|6.1.0",
+              "name": "code"
+            },
+            {
+              "documentation": "Category of the condition in the format [parameter]=[system]|[code](e.g.,category=http://terminology.hl7.org/CodeSystem/condition-category|problem-list-item or if US Core, it would be category=http://hl7.org/fhir/us/core/CodeSystem/condition-category|health-concern)",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Condition-category|4.0.1",
+              "name": "category"
+            },
+            {
+              "documentation": "Security label for redacting inline data separately from top-level resources",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-redact-inline-security",
+              "name": "ah-redact-inline-security"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "encounter"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-condition",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Coverage",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-coverage|6.1.0"
+          ],
+          "searchInclude": [
+            "Coverage:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "The number of Coverage resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Coverage.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-coverage-patient|6.1.0",
+              "name": "patient"
+            },
+            {
+              "documentation": "Coverage._revinclude resource reference to FHIR Provenance resource",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Last updated date of the coverage (_lastUpdated may only be used in conjunction with other supported search parameter combinations)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-coverage",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Device",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-implantable-device|6.1.0"
+          ],
+          "searchInclude": [
+            "Device:ah-chart-sharing-group",
+            "Device:ah-practice",
+            "Device:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Device.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "The number of Device resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "Device._include includes resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Device._revinclude include resources that reference this",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Device._id resource reference to FHIR device resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Last updated parameter consists of a comparator (eq, gt, lt, ge and le) and a date (format: YYYY-MM-DD). It can be used to select device resources based on the last time they changed.",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-device",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "DiagnosticReport",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-lab|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-diagnosticreport-note|6.1.0"
+          ],
+          "searchInclude": [
+            "DiagnosticReport:ah-chart-sharing-group",
+            "DiagnosticReport:encounter",
+            "DiagnosticReport:patient",
+            "DiagnosticReport:result",
+            "DiagnosticReport:performer"
+          ],
+          "searchParam": [
+            {
+              "documentation": "DiagnosticReport.id resource reference to FHIR DiagnosticReport resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Custom named query",
+              "type": "string",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-query|4.0.1",
+              "name": "_query"
+            },
+            {
+              "documentation": "Resource reference to FHIR Encounter resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "DiagnosticReport.subject resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "DiagnosticReport._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "DiagnosticReport._revinclude resource reference to FHIR Provenance resource",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "DiagnosticReport.category is the parameter for searching on category",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/DiagnosticReport-category|4.0.1",
+              "name": "category"
+            },
+            {
+              "documentation": "DiagnosticReport.code is the parameter for searching on code. Either multiple loinc codes or http://terminology.hl7.org/CodeSystem/data-absent-reason|unknown can be used for filtering",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-code|4.0.1",
+              "name": "code"
+            },
+            {
+              "documentation": "DiagnosticReport.effective is the parameter for searching on date",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-date|4.0.1",
+              "name": "date"
+            },
+            {
+              "documentation": "The number of DiagnosticReport resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "DiagnostReport.result resource reference to FHIR Obserrvation resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/DiagnosticReport-result|4.0.1",
+              "name": "result"
+            },
+            {
+              "documentation": "DiagnosticReport.performer resource reference to the FHIR Practitioner or Organization resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/DiagnosticReport-performer|4.0.1",
+              "name": "performer"
+            },
+            {
+              "documentation": "Search by athena Chart Sharing Group for resources containing the 'athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "DiagnosticReport._lastUpdated is the parameter for searching on last modified date",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Returns the cpt codes for imaging results",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-include-cpt-codes-for-imaging-results",
+              "name": "ah-include-cpt-codes-for-imaging-results"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-diagnosticreport",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "DocumentReference",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-documentreference|6.1.0"
+          ],
+          "searchInclude": [
+            "DocumentReference:ah-chart-sharing-group",
+            "DocumentReference:ah-published-date-time-to-portal",
+            "DocumentReference:encounter",
+            "DocumentReference:patient",
+            "DocumentReference:author",
+            "DocumentReference:custodian"
+          ],
+          "searchParam": [
+            {
+              "documentation": "DocumentReference.id resource reference to FHIR DocumentReference resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "DocumentReference.subject resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "DocumentReference._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Custom named query",
+              "type": "string",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-query|4.0.1",
+              "name": "_query"
+            },
+            {
+              "documentation": "DocumentReference._revinclude resource reference to FHIR Provenance resource",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "DocumentReference._sort is the parameter for sorting resources in ascending or descending order",
+              "type": "special",
+              "name": "_sort"
+            },
+            {
+              "documentation": "DocumentReference.category is the parameter for searching on category",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/DocumentReference-category|4.0.1",
+              "name": "category"
+            },
+            {
+              "documentation": "DocumentReference.type is the parameter for searching on code",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-documentreference-type|6.1.0",
+              "name": "type"
+            },
+            {
+              "documentation": "DocumentReference.date is the parameter for searching on date",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-date|4.0.1",
+              "name": "date",
+              "extension": [
+                {
+                  "url": "https://fhir.athena.io/StructureDefinition/ah-sortable-search-parameter",
+                  "valueBoolean": true
+                }
+              ]
+            },
+            {
+              "documentation": "The number of DocumentReference resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "DocumentReference.context.encounter resource reference to FHIR Encounter resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "DocumentReference.author resource reference to the FHIR Practitioner or Organization resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/DocumentReference-author|4.0.1",
+              "name": "author"
+            },
+            {
+              "documentation": "DocumentReference.custodian resource reference to the FHIR Organization resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/DocumentReference-custodian|4.0.1",
+              "name": "custodian"
+            },
+            {
+              "documentation": "Last updated parameter consists of a comparator (eq, gt, lt, ge and le) and a date (format: YYYY-MM-DD). It can be used to select document reference resources based on the last time they changed.",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Search by athena Chart Sharing Group for resources containing the 'athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by athenahealth Published Date Time To Portal (e.g., 'ah-published-date-time-to-portal:missing=false', 'ah-published-date-time-to-portal=lt2025-02-26') for resources containing the 'athenahealth Published Date Time To Portal' extension",
+              "type": "date",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-published-date-time-to-portal",
+              "name": "ah-published-date-time-to-portal"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-documentreference",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Encounter",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-encounter|6.1.0"
+          ],
+          "searchInclude": [
+            "Encounter:ah-chart-sharing-group",
+            "Encounter:ah-practice",
+            "Encounter:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Encounter.id resource reference to FHIR Encounter resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Encounter.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "Encounter.period resource reference to FHIR Period resource",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-date|4.0.1",
+              "name": "date"
+            },
+            {
+              "documentation": "Encounter._revinclude resource reference to FHIR Provenance resource",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Encounter._include resource reference to FHIR Patient resource",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "The number of Encounter resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Last updated date associated with the encounter (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Encounter.location resource reference to FHIR location resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-encounter-location|6.1.0",
+              "name": "location"
+            },
+            {
+              "documentation": "Encounter.serviceProvider resource reference to FHIR organization resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/Encounter-service-provider|4.0.1",
+              "name": "service-provider"
+            },
+            {
+              "documentation": "Encounter.practitioner resource reference to FHIR practitioner resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/Encounter-practitioner|4.0.1",
+              "name": "practitioner"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-encounter",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Goal",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-goal|6.1.0"
+          ],
+          "searchInclude": [
+            "Goal:patient",
+            "Goal:ah-brand",
+            "Goal:ah-chart-sharing-group",
+            "Goal:ah-department",
+            "Goal:ah-practice",
+            "Goal:ah-provider-group"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Goal.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "The number of Goal resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "Goal._id resource reference to FHIR Goal resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Goal._revinclude is the parameter for reverse include searching",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Goal._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Last updated date associated with the Goal (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Brand' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-brand",
+              "name": "ah-brand"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by Athena Department for resources containing the 'Athena Department' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-department",
+              "name": "ah-department"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-goal",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Immunization",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-immunization|6.1.0"
+          ],
+          "searchInclude": [
+            "Immunization:encounter",
+            "Immunization:patient",
+            "Immunization:ah-chart-sharing-group",
+            "Immunization:ah-practice"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Resource reference to FHIR referenced resources - use with patient",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Resource reference to FHIR Encounter resource - use with patient",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "Reference to patient related to the resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-immunization-patient|6.1.0",
+              "name": "patient"
+            },
+            {
+              "documentation": "occurence date - use with patient",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-immunization-date|6.1.0",
+              "name": "date"
+            },
+            {
+              "documentation": "Vaccine status - use with patient",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-immunization-status|6.1.0",
+              "name": "status"
+            },
+            {
+              "documentation": "Resource reference to FHIR Provenance resource - use with patient",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Immunization.id resource reference to FHIR Immunization resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "The number of Immunization resources to return per page for paged search results. - use with patient",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return - use with patient",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension - use with patient",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Practice' Extension - use with patient",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Last updated date associated with the Immunization",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Code associated with vaccine Product Administered",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-code|4.0.1",
+              "name": "vaccine-code"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-immunization",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Location",
+          "searchParam": [
+            {
+              "documentation": "Location.id resource reference to FHIR Location resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-location|6.1.0"
+          ],
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredSearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-location"
+        },
+        {
+          "type": "Medication",
+          "searchParam": [
+            {
+              "documentation": "Medication.id - Logical id of Medication resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Resource reference to FHIR Medication ingredient resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/medications-ingredient-code|4.0.1",
+              "name": "ingredient-code"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medication|6.1.0"
+          ],
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredSearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-medication"
+        },
+        {
+          "type": "MedicationRequest",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationrequest|6.1.0"
+          ],
+          "searchInclude": [
+            "MedicationRequest:encounter",
+            "MedicationRequest:medication",
+            "MedicationRequest:subject",
+            "MedicationRequest:requester",
+            "MedicationRequest:ah-chart-sharing-group",
+            "MedicationRequest:ah-practice"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Reference to a patient related to the prescription - use with intent",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-medicationrequest-patient|6.1.0",
+              "name": "patient"
+            },
+            {
+              "documentation": "Intent type of the prescription - use with patient",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-medicationrequest-intent|6.1.0",
+              "name": "intent"
+            },
+            {
+              "documentation": " Prescription status - use with patient and intent",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-medicationrequest-status|6.1.0",
+              "name": "status"
+            },
+            {
+              "documentation": "MedicationRequest.id - Logical id of MEDICATIONREQUEST resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Prescription creation date - use with patient and intent",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-medicationrequest-authoredon|6.1.0",
+              "name": "authoredon"
+            },
+            {
+              "documentation": "Resource reference to FHIR Medication resource - use with patient and intent",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Resource reference to FHIR Medication resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/medications-medication|4.0.1",
+              "name": "medication"
+            },
+            {
+              "documentation": "Resource reference to FHIR patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "subject"
+            },
+            {
+              "documentation": "Resource reference to FHIR encounter resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/medications-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "Resource reference to FHIR practitioner resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/MedicationRequest-requester|4.0.1",
+              "name": "requester"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Chart Sharing Group' Extension - use with patient and intent",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Practice' Extension - use with patient and intent",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Resource reference to FHIR Provenance resource - use with patient and intent",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "The number of MedicationRequest resources to return per page for paged search results. - use with patient and intent",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "The MedicationRequest resources to return for the RXNORM code . - use with patient and intent",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-code|4.0.1",
+              "name": "code"
+            },
+            {
+              "documentation": "An identifier for the first resource to return - use with patient and intent",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Last updated date associated with the medication",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Resource reference to FHIR Medication resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/medications-ingredient-code|4.0.1",
+              "name": "ingredient-code"
+            },
+            {
+              "documentation": "Returns the most recent instance of the medication and prescribed vaccines",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-most-recent-medication-instance-and-prescribed-vaccines",
+              "name": "ah-most-recent-medication-instance-and-prescribed-vaccines"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient, intent"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-medicationrequest",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Observation",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-lab|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-smokingstatus|6.1.0",
+            "http://hl7.org/fhir/StructureDefinition/vitalspanel|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/resprate|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/heartrate|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/oxygensat|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/bodytemp|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/bodyheight|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/headcircum|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/bodyweight|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/bmi|4.0.1",
+            "http://hl7.org/fhir/StructureDefinition/bp|4.0.1",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-sexual-orientation|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-screening-assessment|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-simple-observation|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-bmi-for-age|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/pediatric-weight-for-height|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/head-occipital-frontal-circumference-percentile|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-pulse-oximetry|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-blood-pressure|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-bmi|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-head-circumference|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-height|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-weight|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-body-temperature|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-heart-rate|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-respiratory-rate|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-clinical-result|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-occupation|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-pregnancyintent|6.1.0",
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-observation-pregnancystatus|6.1.0"
+          ],
+          "searchInclude": [
+            "Observation:ah-chart-sharing-group",
+            "Observation:ah-practice",
+            "Observation:encounter",
+            "Observation:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Observation.id resource reference to FHIR Observation resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Observation.subject resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "Observation._revinclude resource reference to FHIR Provenance resource",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Observation._include includes resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Observation.issued is the parameter for searching on date",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-date|4.0.1",
+              "name": "date"
+            },
+            {
+              "documentation": "Observation.category is the parameter for searching on category",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Observation-category|4.0.1",
+              "name": "category"
+            },
+            {
+              "documentation": "Observation.code is the parameter for searching on code",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-code|4.0.1",
+              "name": "code"
+            },
+            {
+              "documentation": "Observation.encounter is the parameter for searching by encounter",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "The number of Observation resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by athena Chart Sharing Group for resources containing the 'athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by athena Practice for resources containing the 'athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Last updated parameter consists of a comparator (eq, gt, lt, ge and le) and a date (format: YYYY-MM-DD). It can be used to select observation resources based on the last time they changed.",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-observation",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Organization",
+          "searchParam": [
+            {
+              "documentation": "Organization.id resource reference to FHIR Organization resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-organization|6.1.0"
+          ],
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredSearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-organization"
+        },
+        {
+          "type": "Patient",
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-patient|6.1.0"
+          ],
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "operation": [
+            {
+              "definition": "https://fhir.athena.io/OperationDefinition/ah-smart-health-cards",
+              "name": "health-cards-issue"
+            }
+          ],
+          "searchInclude": [
+            "Patient:ah-chart-sharing-group",
+            "Patient:ah-brand",
+            "Patient:ah-provider-group"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Patient.id resource reference to FHIR Patient resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-id|6.1.0",
+              "name": "_id"
+            },
+            {
+              "documentation": "A patient identifier",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-identifier|6.1.0",
+              "name": "identifier"
+            },
+            {
+              "documentation": "A server defined search that may match any of the string fields in the HumanName, including family, given, prefix, suffix, suffix, and/or text",
+              "type": "string",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-name|6.1.0",
+              "name": "name"
+            },
+            {
+              "documentation": "The patient's date of birth",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-birthdate|6.1.0",
+              "name": "birthdate"
+            },
+            {
+              "documentation": "Gender of the patient",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-gender|6.1.0",
+              "name": "gender"
+            },
+            {
+              "documentation": "A portion of the family name of the patient",
+              "type": "string",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-family|6.1.0",
+              "name": "family"
+            },
+            {
+              "documentation": "A portion of the given name of the patient",
+              "type": "string",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-patient-given|6.1.0",
+              "name": "given"
+            },
+            {
+              "documentation": "Last updated date of the patient (_lastUpdated may only be used in conjunction with other supported search parameter combinations)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Search by Athena Brand for resources containing the 'Athena Brand' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-brand",
+              "name": "ah-brand"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Search by Athena Department for resources containing the 'Athena Department' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-department",
+              "name": "ah-department"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "The number of Patient resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Include resources that reference specified value",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Other resources to include in the search results when they refer to search matches",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "identifier"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "name"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "family, birthdate"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "family, gender"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "family, given"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-patient",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Practitioner",
+          "searchParam": [
+            {
+              "documentation": "Practitioner.id resource reference to FHIR Practitioner resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Search by athenaNet username identifier (e.g., 'identifier=https://identity.athena.io/sid/athenanet-user|{username}')",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Practitioner-identifier|4.0.1",
+              "name": "identifier"
+            },
+            {
+              "documentation": "Search by Athenahealth Practice for resources under a specific practice",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-practitioner|6.1.0"
+          ],
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "identifier, ah-practice"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-practitioner"
+        },
+        {
+          "type": "Procedure",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-procedure|6.1.0"
+          ],
+          "searchInclude": [
+            "Procedure:ah-chart-sharing-group",
+            "Procedure:performer",
+            "Procedure:device-name",
+            "Procedure:ah-provider-group",
+            "Procedure:encounter",
+            "Procedure:patient"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Procedure.patient resource reference to FHIR Patient resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "name": "patient"
+            },
+            {
+              "documentation": "Procedure.period resource reference to FHIR Period resource",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-date|4.0.1",
+              "name": "date"
+            },
+            {
+              "documentation": "Procedure._revinclude resource reference to FHIR Provenance resource",
+              "type": "special",
+              "name": "_revinclude"
+            },
+            {
+              "documentation": "The number of Procedure resources to return per page for paged search results.",
+              "type": "number",
+              "name": "_count"
+            },
+            {
+              "documentation": "An identifier for the first resource to return",
+              "type": "token",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "name": "cursor"
+            },
+            {
+              "documentation": "Search by Athena Chart Sharing Group for resources containing the 'Athena Chart Sharing Group' Extension'",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "name": "ah-chart-sharing-group"
+            },
+            {
+              "documentation": "Procedure.encounter resource reference to FHIR Encounter resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "name": "encounter"
+            },
+            {
+              "documentation": "Procedure._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Procedure.performer.actor resource reference to FHIR Pracitioner resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/Procedure-performer|4.0.1",
+              "name": "performer"
+            },
+            {
+              "documentation": "Search by Athena Provider Group for resources containing the 'Athena Provider Group' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-provider-group",
+              "name": "ah-provider-group"
+            },
+            {
+              "documentation": "Procedure.focalDevice.manipulated resource reference to FHIR Device resource",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-procedure-device",
+              "name": "device-name"
+            },
+            {
+              "documentation": "Procedure._id resource reference to FHIR Procedure resource",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "name": "_id"
+            },
+            {
+              "documentation": "Last updated date associated with the procedure (format: YYYY-MM-DD)",
+              "type": "date",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "name": "_lastUpdated"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-procedure",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Provenance",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-provenance|6.1.0"
+          ],
+          "searchInclude": [
+            "Provenance:agent"
+          ],
+          "searchParam": [
+            {
+              "documentation": "Provenance.target search parameter for Provenance resource",
+              "type": "reference",
+              "definition": "http://hl7.org/fhir/SearchParameter/Provenance-target|4.0.1",
+              "name": "target"
+            },
+            {
+              "documentation": "Provenance._include include resources that reference this",
+              "type": "special",
+              "name": "_include"
+            },
+            {
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+              "type": "reference",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "name": "ah-practice"
+            },
+            {
+              "documentation": "Search by a security label",
+              "type": "token",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "name": "_security"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredSearchParams",
+                  "valueString": "target"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-provenance"
+        },
+        {
+          "type": "ServiceRequest",
+          "interaction": [
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            },
+            {
+              "code": "search-type"
+            }
+          ],
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-servicerequest"
+          ],
+          "searchInclude": [
+            "ServiceRequest:ah-chart-sharing-group",
+            "ServiceRequest:ah-practice",
+            "ServiceRequest:encounter",
+            "ServiceRequest:patient",
+            "ServiceRequest:performer",
+            "ServiceRequest:requester",
+            "*"
+          ],
+          "searchParam": [
+            {
+              "name": "_id",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-id|4.0.1",
+              "type": "token",
+              "documentation": "ServiceRequest.id resource reference to FHIR ServiceRequest resource"
+            },
+            {
+              "name": "encounter",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-encounter|4.0.1",
+              "type": "reference",
+              "documentation": "Resource reference to FHIR Encounter resource"
+            },
+            {
+              "name": "patient",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-patient|4.0.1",
+              "type": "reference",
+              "documentation": "ServiceRequest.subject resource reference to FHIR Patient resource"
+            },
+            {
+              "name": "_count",
+              "type": "number",
+              "documentation": "The number of ServiceRequest resources to return per page for paged search results."
+            },
+            {
+              "name": "status",
+              "definition": "http://hl7.org/fhir/SearchParameter/ServiceRequest-status|4.0.1",
+              "type": "token",
+              "documentation": "ServiceRequest.status token value."
+            },
+            {
+              "name": "authored",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-date|4.0.1",
+              "type": "date",
+              "documentation": "ServiceRequest.authoredOn is the parameter for searching by authored"
+            },
+            {
+              "name": "_lastUpdated",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-lastUpdated|4.0.1",
+              "type": "date",
+              "documentation": "Last updated parameter for searching service requests resources by the last time that they changed"
+            },
+            {
+              "name": "cursor",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-cursor",
+              "type": "token",
+              "documentation": "An identifier for the first resource to return"
+            },
+            {
+              "name": "performer",
+              "definition": "http://hl7.org/fhir/SearchParameter/ServiceRequest-performer|4.0.1",
+              "type": "reference",
+              "documentation": "ServiceRequest.performer resource reference to the FHIR Practitioner or Organization resource"
+            },
+            {
+              "name": "requester",
+              "definition": "http://hl7.org/fhir/SearchParameter/ServiceRequest-requester|4.0.1",
+              "type": "reference",
+              "documentation": "ServiceRequest.requester resource reference to the FHIR Practitioner resource"
+            },
+            {
+              "name": "_include",
+              "type": "special",
+              "documentation": "ServiceRequest._include include resources that reference this"
+            },
+            {
+              "name": "_revinclude",
+              "type": "special",
+              "documentation": "ServiceRequest._revinclude resource reference to FHIR Provenance resource"
+            },
+            {
+              "name": "ah-chart-sharing-group",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-chart-sharing-group",
+              "type": "reference",
+              "documentation": "Search by athena Chart Sharing Group for resources containing the 'athena Chart Sharing Group' Extension"
+            },
+            {
+              "name": "ah-practice",
+              "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+              "type": "reference",
+              "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension"
+            },
+            {
+              "name": "code",
+              "definition": "http://hl7.org/fhir/SearchParameter/clinical-code|4.0.1",
+              "type": "token",
+              "documentation": "ServiceRequest.code is the parameter for searching on code"
+            },
+            {
+              "name": "category",
+              "definition": "http://hl7.org/fhir/us/core/SearchParameter/us-core-servicerequest-category|6.1.0",
+              "type": "token",
+              "documentation": "ServiceRequest.category is the parameter for searching on category"
+            },
+            {
+              "name": "_security",
+              "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+              "type": "token",
+              "documentation": "Search by a security label"
+            },
+            {
+              "name": "ah-include-quality-codes",
+              "type": "token"
+            }
+          ],
+          "extension": [
+            {
+              "url": "https://fhir.athena.io/StructureDefinition/ah-search-parameter-metadata",
+              "extension": [
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "_id"
+                },
+                {
+                  "url": "requiredAnySearchParams",
+                  "valueString": "patient"
+                }
+              ]
+            }
+          ],
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-servicerequest",
+          "searchRevInclude": [
+            "Provenance:target"
+          ]
+        },
+        {
+          "type": "Group",
+          "operation": [
+            {
+              "name": "export",
+              "definition": "https://fhir.athena.io/OperationDefinition/ah-group-export"
+            }
+          ]
+        },
+        {
+          "type": "QuestionnaireResponse",
+          "profile": "http://fhir.athena.io/StructureDefinition/ah-questionnaireresponse",
+          "interaction": [
+            {
+              "code": "create"
+            },
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            }
+          ],
+          "searchInclude": [
+            "*"
+          ],
+          "searchRevInclude": [
+            "Provenance:target"
+          ],
+          "searchParam": [
+            {
+              "name": "_id",
+              "type": "token",
+              "documentation": "The ID of the resource"
+            },
+            {
+              "name": "_lastUpdated",
+              "type": "date",
+              "documentation": "Only return resources which were last updated as specified by the given range"
+            },
+            {
+              "name": "ah-chart-sharing-group",
+              "type": "reference"
+            },
+            {
+              "name": "ah-practice",
+              "type": "reference"
+            },
+            {
+              "name": "authored",
+              "type": "date",
+              "documentation": "When the questionnaire response was last changed"
+            },
+            {
+              "name": "encounter",
+              "type": "reference",
+              "documentation": "Encounter associated with the questionnaire response"
+            },
+            {
+              "name": "patient",
+              "type": "reference",
+              "documentation": "The patient that is the subject of the questionnaire response"
+            },
+            {
+              "name": "questionnaire",
+              "type": "token",
+              "documentation": "The questionnaire the answers are provided for"
+            },
+            {
+              "name": "questionnaireCode",
+              "type": "token"
+            },
+            {
+              "name": "status",
+              "type": "string",
+              "documentation": "The status of the questionnaire response"
+            }
+          ],
+          "operation": [
+            {
+              "name": "latest-response-by-questionnaire",
+              "definition": "https://macroservice-clinicals.clienttrain.svc-gateway.api.athena.io/fhir/r4/OperationDefinition/QuestionnaireResponse-query-latest-response-by-questionnaire"
+            }
+          ],
+          "conditionalDelete": "multiple"
+        },
+        {
+          "type": "MeasureReport",
+          "operation": [
+            {
+              "name": "submit-care-gaps",
+              "definition": "https://fhir.athena.io/OperationDefinition/ah-measurereport-submit-care-gaps"
+            }
+          ]
+        },
+        {
+          "type": "FamilyMemberHistory",
+          "profile": "http://fhir.athena.io/StructureDefinition/ah-familymemberhistory",
+          "interaction": [
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            }
+          ],
+          "searchRevInclude": [
+            "Provenance:target"
+          ],
+          "searchParam": [
+            {
+              "name": "_id",
+              "type": "token",
+              "documentation": "The ID of the resource"
+            },
+            {
+              "name": "_lastUpdated",
+              "type": "date",
+              "documentation": "Only return resources which were last updated as specified by the given range"
+            },
+            {
+              "name": "ah-chart-sharing-group",
+              "type": "reference"
+            },
+            {
+              "name": "ah-practice",
+              "type": "reference"
+            },
+            {
+              "name": "code",
+              "type": "token",
+              "documentation": "A search by a condition code"
+            },
+            {
+              "name": "patient",
+              "type": "reference",
+              "documentation": "The identity of a subject to list family member history items for"
+            },
+            {
+              "name": "relationship",
+              "type": "token",
+              "documentation": "A search by a relationship type"
+            },
+            {
+              "name": "status",
+              "type": "token",
+              "documentation": "partial | completed | entered-in-error | health-unknown"
+            }
+          ],
+          "operation": [
+            {
+              "name": "batch-write",
+              "definition": "https://preview.api.fhir.athena.io/fhir/r4/OperationDefinition/ConditionFamilyMemberHistory-t-batch-write"
+            }
+          ]
+        },
+        {
+          "type": "Media",
+          "profile": "http://fhir.athena.io/StructureDefinition/ah-media",
+          "interaction": [
+            {
+              "code": "read"
+            }
+          ]
+        },
+        {
+          "type": "MedicationDispense",
+          "profile": "https://fhir.athena.io/StructureDefinition/ah-medicationdispense",
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-medicationdispense"
+          ],
+          "interaction": [
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            }
+          ],
+          "searchInclude": [
+            "MedicationDispense:medication"
+          ],
+          "searchRevInclude": [
+            "Provenance:target"
+          ],
+          "searchParam": [
+            {
+              "name": "_id",
+              "type": "token",
+              "documentation": "The ID of the resource"
+            },
+            {
+              "name": "_lastUpdated",
+              "type": "date",
+              "documentation": "Only return resources which were last updated as specified by the given range"
+            },
+            {
+              "name": "ah-chart-sharing-group",
+              "type": "reference"
+            },
+            {
+              "name": "ah-practice",
+              "type": "reference"
+            },
+            {
+              "name": "date",
+              "type": "date"
+            },
+            {
+              "name": "patient",
+              "type": "reference",
+              "documentation": "The identity of a patient to list dispenses  for"
+            },
+            {
+              "name": "status",
+              "type": "token",
+              "documentation": "Returns dispenses with a specified dispense status"
+            }
+          ]
+        },
+        {
+          "type": "Questionnaire",
+          "profile": "http://hl7.org/fhir/StructureDefinition/Questionnaire",
+          "interaction": [
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            }
+          ],
+          "searchInclude": [
+            "*"
+          ],
+          "searchRevInclude": [
+            "AllergyIntolerance:ah-chart-sharing-group",
+            "AllergyIntolerance:patient",
+            "CarePlan:patient",
+            "Device:patient",
+            "FamilyMemberHistory:ah-chart-sharing-group",
+            "FamilyMemberHistory:ah-practice",
+            "FamilyMemberHistory:patient",
+            "MedicationDispense:ah-chart-sharing-group",
+            "MedicationDispense:ah-practice",
+            "MedicationDispense:patient",
+            "MedicationRequest:ah-chart-sharing-group",
+            "MedicationRequest:encounter",
+            "MedicationRequest:patient",
+            "Provenance:target",
+            "QuestionnaireResponse:ah-chart-sharing-group",
+            "QuestionnaireResponse:ah-practice",
+            "QuestionnaireResponse:encounter",
+            "QuestionnaireResponse:patient",
+            "ServiceRequest:ah-chart-sharing-group",
+            "ServiceRequest:ah-practice",
+            "ServiceRequest:encounter",
+            "ServiceRequest:patient",
+            "ServiceRequest:requester",
+            "Specimen:ah-chart-sharing-group",
+            "Specimen:patient",
+            "Task:encounter",
+            "Task:part-of",
+            "Task:patient"
+          ],
+          "searchParam": [
+            {
+              "name": "_id",
+              "type": "token",
+              "documentation": "The ID of the resource"
+            },
+            {
+              "name": "code",
+              "type": "token",
+              "documentation": "A code that corresponds to one of its items in the questionnaire"
+            }
+          ]
+        },
+        {
+          "type": "Specimen",
+          "profile": "http://fhir.athena.io/StructureDefinition/ah-specimen",
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-specimen"
+          ],
+          "interaction": [
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            }
+          ],
+          "searchInclude": [
+            "*",
+            "Specimen:ah-chart-sharing-group",
+            "Specimen:patient"
+          ],
+          "searchRevInclude": [
+            "Provenance:target"
+          ],
+          "searchParam": [
+            {
+              "name": "_id",
+              "type": "token",
+              "documentation": "The ID of the resource"
+            },
+            {
+              "name": "_lastUpdated",
+              "type": "date",
+              "documentation": "Only return resources which were last updated as specified by the given range"
+            },
+            {
+              "name": "ah-chart-sharing-group",
+              "type": "reference"
+            },
+            {
+              "name": "patient",
+              "type": "reference",
+              "documentation": "The patient the specimen comes from"
+            }
+          ]
+        },
+        {
+          "type": "RelatedPerson",
+          "profile": "http://hl7.org/fhir/StructureDefinition/RelatedPerson",
+          "supportedProfile": [
+            "http://hl7.org/fhir/us/core/StructureDefinition/us-core-relatedperson"
+          ],
+          "interaction": [
+            {
+              "code": "search-type"
+            },
+            {
+              "code": "read"
+            }
+          ],
+          "searchInclude": [
+            "*",
+            "RelatedPerson:ah-brand",
+            "RelatedPerson:ah-chart-sharing-group",
+            "RelatedPerson:ah-provider-group",
+            "RelatedPerson:patient"
+          ],
+          "searchRevInclude": [
+            "Provenance:target"
+          ],
+          "searchParam": [
+            {
+              "name": "patient",
+              "type": "reference",
+              "documentation": "The patient this related person is related to"
+            },
+            {
+              "name": "_lastUpdated",
+              "type": "date",
+              "documentation": "Only return resources which were last updated as specified by the given range"
+            },
+            {
+              "name": "active",
+              "type": "token",
+              "documentation": "Indicates if the related person record is active"
+            },
+            {
+              "name": "ah-brand",
+              "type": "reference",
+              "documentation": "The brand extension this related person belongs to"
+            },
+            {
+              "name": "ah-chart-sharing-group",
+              "type": "reference",
+              "documentation": "The chart sharing group this related person belongs to"
+            },
+            {
+              "name": "ah-provider-group",
+              "type": "reference",
+              "documentation": "The provider group this related person belongs to"
+            },
+            {
+              "name": "name",
+              "type": "string",
+              "documentation": "A server defined search that may match any of the string fields in the HumanName, including family, give, prefix, suffix, suffix, and/or text"
+            },
+            {
+              "name": "_id",
+              "type": "string",
+              "documentation": "The ID of the resource"
+            }
+          ]
+        }
+      ],
+      "mode": "server",
+      "searchParam": [
+        {
+          "documentation": "Search by Athena Practice for resources containing the 'Athena Practice' Extension",
+          "type": "reference",
+          "definition": "https://fhir.athena.io/SearchParameter/ah-practice",
+          "name": "ah-practice"
+        },
+        {
+          "documentation": "Search by a security label",
+          "type": "token",
+          "definition": "http://hl7.org/fhir/SearchParameter/Resource-security|4.0.1",
+          "name": "_security"
+        }
+      ]
+    }
+  ],
+  "fhirVersion": "4.0.1",
+  "experimental": false,
+  "date": "2022-06-06",
+  "status": "active",
+  "id": "ah-r4-base",
+  "implementationGuide": [
+    "http://hl7.org/fhir/us/core/ImplementationGuide/hl7.fhir.us.core|6.1.0",
+    "http://hl7.org/fhir/uv/bulkdata/ImplementationGuide/hl7.fhir.uv.bulkdata|1.0.1",
+    "http://hl7.org/fhir/uv/bulkdata/ImplementationGuide/hl7.fhir.uv.bulkdata|2.0.0"
+  ],
+  "version": "2.0.0",
+  "url": "https://fhir.athena.io/CapabilityStatement/ah-r4-base",
+  "software": {
+    "name": "athenahealth FHIR Server"
+  },
+  "name": "athenahealth_FHIR_R4_CapabilityStatement",
+  "resourceType": "CapabilityStatement",
+  "implementation": {
+    "url": "https://api.preview.platform.athenahealth.com/fhir/r4",
+    "description": "athenahealth R4 FHIR Server"
+  },
+  "title": "athenahealth FHIR R4 CapabilityStatement",
+  "format": [
+    "json",
+    "application/json",
+    "application/json+fhir",
+    "application/fhir+json"
+  ]
+}

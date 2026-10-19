@@ -36,9 +36,8 @@ class SubscriptionPlan {
       product: json['product'] ?? '',
       nickname: json['nickname'] ?? '',
       customDescription: json['description'],
-      features: json['features'] != null
-          ? List<String>.from(json['features'])
-          : [],
+      features:
+          json['features'] != null ? List<String>.from(json['features']) : [],
     );
   }
 
@@ -74,6 +73,8 @@ class SubscriptionPlan {
 
   // Helper method to get formatted interval
   String formattedInterval(AppLocalizations t) {
-    return interval == 'year' ? t.subscriptionplans_yearly : t.subscriptionplans_monthly;
+    return interval == 'year'
+        ? t.subscriptionplans_yearly
+        : t.subscriptionplans_monthly;
   }
 }

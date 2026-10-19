@@ -5,15 +5,19 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
+
 import java.io.Serializable;
 import java.util.Objects;
 import java.util.UUID;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** Normalized recipient row for Ask AI conversation share ACL queries. */
+/**
+ * Normalized recipient row for Ask AI conversation share ACL queries.
+ */
 @Entity
 @Table(name = "ai_ask_share_recipient")
 @IdClass(AiAskShareRecipient.Pk.class)

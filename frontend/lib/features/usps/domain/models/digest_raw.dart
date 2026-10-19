@@ -1,5 +1,5 @@
 class DigestRaw {
-  final String html;                 // full HTML of the email
+  final String html; // full HTML of the email
   final Map<String, List<int>> cids; // content-id -> bytes for inline images
   final DateTime receivedAt;
 

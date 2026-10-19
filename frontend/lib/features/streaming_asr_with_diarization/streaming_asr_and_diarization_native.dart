@@ -106,7 +106,6 @@ class _StreamingAsrAndDiarizationScreenState
   List<int> recordedData = [];
   String _textToDisplay = '';
   String _last = '';
-  int _index = 0;
   bool _isInitialized = false;
   bool _isLoading = false;
   List<String> _speakerList = [];
@@ -208,14 +207,14 @@ class _StreamingAsrAndDiarizationScreenState
               _recognizer!.reset(_stream!);
               if (text != '') {
                 _last = textToDisplay;
-                _index += 1;
               }
             }
             _controller.value = TextEditingValue(
               text: textToDisplay,
               selection: TextSelection.collapsed(offset: textToDisplay.length),
             );
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+            _scrollController
+                .jumpTo(_scrollController.position.maxScrollExtent);
           },
           onDone: () {
             print('stream stopped.');
@@ -401,10 +400,10 @@ class _StreamingAsrAndDiarizationScreenState
 
     final segmentationConfig =
         sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-          pyannote: sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-            model: segmentationModel,
-          ),
-        );
+      pyannote: sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+        model: segmentationModel,
+      ),
+    );
 
     final embeddingConfig = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
       model: embeddingModel,
@@ -634,7 +633,12 @@ class _StreamingAsrAndDiarizationScreenState
             ? Column(
                 children: [CircularProgressIndicator(), Text("Processing")],
               )
-            : TextField(maxLines: 5, controller: _controller, readOnly: true, scrollController: _scrollController,),
+            : TextField(
+                maxLines: 5,
+                controller: _controller,
+                readOnly: true,
+                scrollController: _scrollController,
+              ),
         const SizedBox(height: 16),
         if (!_noteSaved) ...[
           Row(
@@ -709,11 +713,11 @@ class _StreamingAsrAndDiarizationScreenState
                                   if (_selectedSpeaker != null &&
                                       _newSpeakerName.text.isNotEmpty) {
                                     setState(() {
-                                      _textToDisplay = _textToDisplay
-                                          .replaceAll(
-                                            _selectedSpeaker!,
-                                            _newSpeakerName.text,
-                                          );
+                                      _textToDisplay =
+                                          _textToDisplay.replaceAll(
+                                        _selectedSpeaker!,
+                                        _newSpeakerName.text,
+                                      );
                                       _controller.value = TextEditingValue(
                                         text: _textToDisplay,
                                         selection: TextSelection.collapsed(

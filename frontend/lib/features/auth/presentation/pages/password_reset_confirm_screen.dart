@@ -148,13 +148,15 @@ class _PasswordResetConfirmScreenState
                 TextFormField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: AppTheme.inputDecoration(t.passwordresetconfirm_newPasswordDeco),
+                  decoration: AppTheme.inputDecoration(
+                      t.passwordresetconfirm_newPasswordDeco),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: true,
-                  decoration: AppTheme.inputDecoration(t.passwordresetconfirm_confirmNewPasswordDeco),
+                  decoration: AppTheme.inputDecoration(
+                      t.passwordresetconfirm_confirmNewPasswordDeco),
                 ),
                 const SizedBox(height: 16),
                 if (_error != null) ...[

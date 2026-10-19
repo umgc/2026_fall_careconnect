@@ -17,11 +17,11 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link QuestionInitializer}.
- *
+ * <p>
  * QuestionInitializer is a Spring {@code @Component} that seeds the database with
  * a fixed set of health-check questions on application startup. It is idempotent:
  * if questions already exist ({@code repository.count() > 0}), it does nothing.
- *
+ * <p>
  * Mockito is used here via {@code @Mock} and {@code @InjectMocks} annotations so that
  * the real {@link QuestionRepository} is replaced with a mock, avoiding the need for a
  * database. {@link ArgumentCaptor} is used in several tests to capture the {@link Question}

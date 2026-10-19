@@ -16,22 +16,22 @@ class Address {
   });
 
   factory Address.fromJson(Map<String, dynamic> json) => Address(
-    line1: json['line1'],
-    line2: json['line2'],
-    city: json['city'],
-    state: json['state'],
-    zip: json['zip'],
-    phone: json['phone'],
-  );
+        line1: json['line1'],
+        line2: json['line2'],
+        city: json['city'],
+        state: json['state'],
+        zip: json['zip'],
+        phone: json['phone'],
+      );
 
   Map<String, dynamic> toJson() => {
-    'line1': line1,
-    'line2': line2,
-    'city': city,
-    'state': state,
-    'zip': zip,
-    'phone': phone,
-  };
+        'line1': line1,
+        'line2': line2,
+        'city': city,
+        'state': state,
+        'zip': zip,
+        'phone': phone,
+      };
 }
 
 class Patient {
@@ -124,9 +124,8 @@ class Patient {
     }
     if (json.containsKey('patientVideoCallsEnabled')) {
       final raw = json['patientVideoCallsEnabled'];
-      patientVideoCallsEnabled = raw is bool
-          ? raw
-          : raw?.toString().toLowerCase() != 'false';
+      patientVideoCallsEnabled =
+          raw is bool ? raw : raw?.toString().toLowerCase() != 'false';
     }
 
     // If linkId is still null, try to extract from link object
@@ -146,9 +145,8 @@ class Patient {
       }
       if (linkData.containsKey('patientVideoCallsEnabled')) {
         final raw = linkData['patientVideoCallsEnabled'];
-        patientVideoCallsEnabled = raw is bool
-            ? raw
-            : raw?.toString().toLowerCase() != 'false';
+        patientVideoCallsEnabled =
+            raw is bool ? raw : raw?.toString().toLowerCase() != 'false';
       }
 
       // Extract status if available
@@ -165,14 +163,12 @@ class Patient {
       email: patientData['email']?.toString() ?? '',
       phone: patientData['phone']?.toString() ?? '',
       dob: patientData['dob']?.toString() ?? '',
-      relationship:
-          patientData['relationship']?.toString() ??
+      relationship: patientData['relationship']?.toString() ??
           (json.containsKey('link') && json['link'] is Map<String, dynamic>
               ? json['link']['linkType']?.toString()
               : '') ??
           '',
-      profileImageUrl:
-          patientData['profileImageUrl']?.toString() ??
+      profileImageUrl: patientData['profileImageUrl']?.toString() ??
           (patientData.containsKey('user') &&
                   patientData['user'] is Map<String, dynamic>
               ? patientData['user']['profileImageUrl']?.toString()
@@ -193,9 +189,8 @@ class Patient {
               ?.toString(),
       habits: (patientData['habits'] ?? patientData['personalizationHabits'])
           ?.toString(),
-      phobias:
-          (patientData['phobias'] ?? patientData['personalizationPhobias'])
-              ?.toString(),
+      phobias: (patientData['phobias'] ?? patientData['personalizationPhobias'])
+          ?.toString(),
       preferredCommunicationMethod:
           (patientData['preferredCommunicationMethod'] ??
                   patientData['preferred_communication_method'])
@@ -363,5 +358,3 @@ class Patient {
     return 'Patient{id: $id, firstName: $firstName, lastName: $lastName, email: $email, phone: $phone, dob: $dob, relationship: $relationship, maNumber: $maNumber, linkId: $linkId, linkStatus: $linkStatus, gender: $gender, allergies: $allergies, vitalConditions: $vitalConditions, patientVideoCallsEnabled: $patientVideoCallsEnabled}';
   }
 }
-
-

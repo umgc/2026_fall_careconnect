@@ -32,6 +32,10 @@ class USPSDigestServiceTest {
 
     // ΓöÇΓöÇ Existing tests (unchanged) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
+    private static UspsMailpiecePersistenceService noOpMailpiecePersistence() {
+        return new RecordingMailpiecePersistence();
+    }
+
     @Test
     void returnsGmailDigestAndCachesResult() throws Exception {
         var cacheStub = new CacheRepoStub();
@@ -72,6 +76,8 @@ class USPSDigestServiceTest {
         assertEquals("user-1", cacheStub.saved.getUserId());
         assertNotNull(cacheStub.saved.getPayloadJson());
     }
+
+    // ΓöÇΓöÇ New: latestForUser ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     @Test
     void returnsCachedDigestWhenAvailable() throws Exception {
@@ -115,8 +121,6 @@ class USPSDigestServiceTest {
         assertEquals("user-2", persistence.lastUserId);
     }
 
-    // ΓöÇΓöÇ New: latestForUser ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-
     /**
      * When the cache is empty and no email credentials are stored for the user,
      * latestForUser() should return an empty Optional without throwing.
@@ -138,6 +142,8 @@ class USPSDigestServiceTest {
         assertTrue(service.latestForUser("no-creds-user").isEmpty(),
                 "No cache and no credentials should yield an empty result");
     }
+
+    // ΓöÇΓöÇ New: digestForDate ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * When there is no Gmail credential but a valid Outlook credential exists,
@@ -174,8 +180,6 @@ class USPSDigestServiceTest {
         assertEquals(expectedDigest, result.get());
         assertNotNull(cacheStub.saved, "Outlook digest should be cached after fetch");
     }
-
-    // ΓöÇΓöÇ New: digestForDate ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * digestForDate(userId, null) must delegate to latestForUser().
@@ -252,6 +256,8 @@ class USPSDigestServiceTest {
         assertEquals("user-5", persistence.lastUserId);
     }
 
+    // ΓöÇΓöÇ New: search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
     /**
      * When the date cache misses and a Gmail credential is present,
      * digestForDate() should fetch from Gmail, cache the result, and return it.
@@ -292,8 +298,6 @@ class USPSDigestServiceTest {
         assertEquals("user-6", cacheStub.saved.getUserId());
     }
 
-    // ΓöÇΓöÇ New: search ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-
     /**
      * search() performs an early-exit guard on the userId.
      * A blank or null userId must return an empty list without touching any repository.
@@ -309,8 +313,8 @@ class USPSDigestServiceTest {
                 new OutlookParser()
         );
 
-        assertTrue(service.search("", "bank").isEmpty(),    "blank userId ΓåÆ empty list");
-        assertTrue(service.search(null, "bank").isEmpty(),  "null userId ΓåÆ empty list");
+        assertTrue(service.search("", "bank").isEmpty(), "blank userId ΓåÆ empty list");
+        assertTrue(service.search(null, "bank").isEmpty(), "null userId ΓåÆ empty list");
     }
 
     /**
@@ -328,7 +332,7 @@ class USPSDigestServiceTest {
                 new OutlookParser()
         );
 
-        assertTrue(service.search("user-1", "").isEmpty(),   "blank keyword ΓåÆ empty list");
+        assertTrue(service.search("user-1", "").isEmpty(), "blank keyword ΓåÆ empty list");
         assertTrue(service.search("user-1", null).isEmpty(), "null keyword ΓåÆ empty list");
     }
 
@@ -362,8 +366,8 @@ class USPSDigestServiceTest {
         List<Map<String, Object>> results = service.search("user-7", "acme");
 
         assertFalse(results.isEmpty(), "Should find the matching mail piece");
-        assertEquals("mail", results.get(0).get("type"),    "Result type should be 'mail'");
-        assertEquals("m-1",  results.get(0).get("id"),      "Result id should match mail piece id");
+        assertEquals("mail", results.get(0).get("type"), "Result type should be 'mail'");
+        assertEquals("m-1", results.get(0).get("id"), "Result id should match mail piece id");
         assertEquals("ACME Bank", results.get(0).get("sender"), "Sender field should be preserved");
     }
 
@@ -395,10 +399,12 @@ class USPSDigestServiceTest {
         List<Map<String, Object>> results = service.search("user-8", "amazon");
 
         assertFalse(results.isEmpty(), "Should find the matching package");
-        assertEquals("package", results.get(0).get("type"),   "Result type should be 'package'");
-        assertEquals("Amazon",  results.get(0).get("sender"), "Sender field should be preserved");
+        assertEquals("package", results.get(0).get("type"), "Result type should be 'package'");
+        assertEquals("Amazon", results.get(0).get("sender"), "Sender field should be preserved");
         assertEquals("9400111899223397623988", results.get(0).get("trackingNumber"));
     }
+
+    // ΓöÇΓöÇ New: clearCacheForUser ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * When the same MailPiece appears in two separate cache entries (identical id/sender/subject),
@@ -438,7 +444,7 @@ class USPSDigestServiceTest {
                 "Identical mail pieces across two cache entries should be deduplicated to one result");
     }
 
-    // ΓöÇΓöÇ New: clearCacheForUser ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // ΓöÇΓöÇ New: latestForUser Outlook fallback when Gmail fetch empty ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * clearCacheForUser() must hard-delete all cache rows for the user via deleteByUserId.
@@ -462,7 +468,7 @@ class USPSDigestServiceTest {
                 "clearCacheForUser should call deleteByUserId with the target user");
     }
 
-    // ΓöÇΓöÇ New: latestForUser Outlook fallback when Gmail fetch empty ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    // ΓöÇΓöÇ New: digestForDate additional paths ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * When a Gmail credential is present but fetchLatestDigest() returns empty,
@@ -509,8 +515,6 @@ class USPSDigestServiceTest {
         assertNotNull(cacheStub.saved, "Outlook digest should be cached");
     }
 
-    // ΓöÇΓöÇ New: digestForDate additional paths ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-
     /**
      * When there is no cache hit and no credentials for a specific date,
      * digestForDate() must return an empty Optional.
@@ -533,6 +537,8 @@ class USPSDigestServiceTest {
         assertTrue(service.digestForDate("user-nodata", LocalDate.of(2025, 1, 1)).isEmpty(),
                 "No credentials and no cache should yield empty for a specific date");
     }
+
+    // ΓöÇΓöÇ New: search additional matching paths ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * When the date cache misses, Gmail credential is absent, but an Outlook credential
@@ -569,8 +575,6 @@ class USPSDigestServiceTest {
         assertEquals(expected, result.get());
         assertNotNull(cacheStub.saved, "Fetched Outlook digest should be cached");
     }
-
-    // ΓöÇΓöÇ New: search additional matching paths ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
      * search() must match a MailPiece whose subject (the "summary" JSON field) contains
@@ -673,6 +677,8 @@ class USPSDigestServiceTest {
         assertEquals("Valid Sender", results.get(0).get("sender"));
     }
 
+    // ΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+
     /**
      * When the cache scan and remote fetches yield no matches,
      * search() falls back to latestForUser() for a final check.
@@ -716,8 +722,6 @@ class USPSDigestServiceTest {
         assertEquals("FallbackSender", results.get(0).get("sender"));
     }
 
-    // ΓöÇΓöÇ Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-
     /**
      * Constructs a USPSDigestService with the class-level cryptor key so that any
      * credentials encrypted by this test class can be correctly decrypted at runtime.
@@ -749,31 +753,6 @@ class USPSDigestServiceTest {
                 lifecycle,
                 noOpMailpiecePersistence()
         );
-    }
-
-    private static UspsMailpiecePersistenceService noOpMailpiecePersistence() {
-        return new RecordingMailpiecePersistence();
-    }
-
-    /**
-     * Counts persistAndIndex invocations so cache-hit retry can be asserted.
-     */
-    private static final class RecordingMailpiecePersistence extends UspsMailpiecePersistenceService {
-        int calls;
-        String lastUserId;
-        USPSDigest lastDigest;
-
-        RecordingMailpiecePersistence() {
-            super(null, null, new MailpieceNormalizer(), null, null);
-        }
-
-        @Override
-        public int persistAndIndex(String userId, USPSDigest digest) {
-            calls++;
-            lastUserId = userId;
-            lastDigest = digest;
-            return 0;
-        }
     }
 
     /**
@@ -812,8 +791,8 @@ class USPSDigestServiceTest {
                     return switch (method.getName()) {
                         case "toString" -> "EmailCredentialRepoStub";
                         case "hashCode" -> System.identityHashCode(proxy);
-                        case "equals"   -> proxy == args[0];
-                        default         -> method.invoke(this, args);
+                        case "equals" -> proxy == args[0];
+                        default -> method.invoke(this, args);
                     };
                 }
                 return switch (method.getName()) {
@@ -835,6 +814,27 @@ class USPSDigestServiceTest {
         );
     }
 
+    /**
+     * Counts persistAndIndex invocations so cache-hit retry can be asserted.
+     */
+    private static final class RecordingMailpiecePersistence extends UspsMailpiecePersistenceService {
+        int calls;
+        String lastUserId;
+        USPSDigest lastDigest;
+
+        RecordingMailpiecePersistence() {
+            super(null, null, new MailpieceNormalizer(), null, null);
+        }
+
+        @Override
+        public int persistAndIndex(String userId, USPSDigest digest) {
+            calls++;
+            lastUserId = userId;
+            lastDigest = digest;
+            return 0;
+        }
+    }
+
     // ΓöÇΓöÇ Stub classes ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
     /**
@@ -842,19 +842,29 @@ class USPSDigestServiceTest {
      * Fields are set per-test to control the return values for each query method.
      */
     private static class CacheRepoStub {
-        /** Return value for findFirstByUserIdAndExpiresAtAfterOrderByDigestDateDesc (latestForUser path). */
+        /**
+         * Return value for findFirstByUserIdAndExpiresAtAfterOrderByDigestDateDesc (latestForUser path).
+         */
         Optional<USPSDigestCache> nextLookup = Optional.empty();
 
-        /** Return value for findFirstByUserIdAndDigestDateBetweenAndExpiresAtAfterOrderByDigestDateDesc (digestForDate path). */
+        /**
+         * Return value for findFirstByUserIdAndDigestDateBetweenAndExpiresAtAfterOrderByDigestDateDesc (digestForDate path).
+         */
         Optional<USPSDigestCache> dateRangeLookup = Optional.empty();
 
-        /** Return value for findByUserIdOrderByDigestDateDesc (search cache-scan path). */
+        /**
+         * Return value for findByUserIdOrderByDigestDateDesc (search cache-scan path).
+         */
         List<USPSDigestCache> listByUser = List.of();
 
-        /** Return value for findAll (legacy soft-expire path). */
+        /**
+         * Return value for findAll (legacy soft-expire path).
+         */
         List<USPSDigestCache> allEntries = List.of();
 
-        /** Records the most-recently saved entry (used to assert caching behaviour). */
+        /**
+         * Records the most-recently saved entry (used to assert caching behaviour).
+         */
         USPSDigestCache saved = null;
 
         /**
@@ -863,7 +873,9 @@ class USPSDigestServiceTest {
          */
         List<USPSDigestCache> savedAll = null;
 
-        /** User id passed to deleteByUserId (hard-delete clearCache path). */
+        /**
+         * User id passed to deleteByUserId (hard-delete clearCache path).
+         */
         String deletedUserId = null;
 
         USPSDigestCacheRepo asRepo() throws Exception {
@@ -874,19 +886,16 @@ class USPSDigestServiceTest {
                         return switch (method.getName()) {
                             case "toString" -> "USPSDigestCacheRepoStub";
                             case "hashCode" -> System.identityHashCode(proxy);
-                            case "equals"   -> proxy == args[0];
-                            default         -> method.invoke(this, args);
+                            case "equals" -> proxy == args[0];
+                            default -> method.invoke(this, args);
                         };
                     }
                     return switch (method.getName()) {
-                        case "findFirstByUserIdAndExpiresAtAfterOrderByDigestDateDesc"
-                                -> nextLookup;
-                        case "findFirstByUserIdAndDigestDateBetweenAndExpiresAtAfterOrderByDigestDateDesc"
-                                -> dateRangeLookup;
-                        case "findByUserIdOrderByDigestDateDesc"
-                                -> listByUser;
-                        case "findAll"
-                                -> allEntries;
+                        case "findFirstByUserIdAndExpiresAtAfterOrderByDigestDateDesc" -> nextLookup;
+                        case "findFirstByUserIdAndDigestDateBetweenAndExpiresAtAfterOrderByDigestDateDesc" ->
+                                dateRangeLookup;
+                        case "findByUserIdOrderByDigestDateDesc" -> listByUser;
+                        case "findAll" -> allEntries;
                         case "deleteByUserId" -> {
                             deletedUserId = (String) args[0];
                             yield null;
@@ -914,10 +923,14 @@ class USPSDigestServiceTest {
      * and the date-specific digest fetch methods.
      */
     private static class StubGmailClient extends GmailClient {
-        /** Returned by fetchLatestDigest (latestForUser path). */
+        /**
+         * Returned by fetchLatestDigest (latestForUser path).
+         */
         Optional<GmailDigestPayload> payload = Optional.empty();
 
-        /** Returned by fetchDigestForDate (digestForDate path). */
+        /**
+         * Returned by fetchDigestForDate (digestForDate path).
+         */
         Optional<GmailDigestPayload> payloadForDate = Optional.empty();
 
         @Override
@@ -931,7 +944,9 @@ class USPSDigestServiceTest {
         }
     }
 
-    /** GmailParser stub that returns a preset USPSDigest for any input payload. */
+    /**
+     * GmailParser stub that returns a preset USPSDigest for any input payload.
+     */
     private static class StubGmailParser extends GmailParser {
         USPSDigest digest;
 
@@ -963,7 +978,9 @@ class USPSDigestServiceTest {
         }
     }
 
-    /** OutlookParser stub that returns a preset USPSDigest for any input. */
+    /**
+     * OutlookParser stub that returns a preset USPSDigest for any input.
+     */
     private static class StubOutlookParser extends OutlookParser {
         private final USPSDigest digest;
 

@@ -8,7 +8,7 @@ import java.util.UUID;
  * Thrown when Ask AI retrieval scope cannot be granted for the caller and patient (FR-AI-1).
  * Maps to HTTP 403 with code {@code FORBIDDEN_SCOPE} and {@code deliveryStatus: WITHHELD}.
  */
-public class ForbiddenScopeException extends Exception {
+public final class ForbiddenScopeException extends Exception {
 
     public static final String ERROR_CODE = "FORBIDDEN_SCOPE";
 

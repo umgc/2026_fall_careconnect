@@ -68,10 +68,10 @@ public class ScheduledNotificationService {
         if (recipient.getEmail() != null && !recipient.getEmail().isEmpty()) {
             try {
                 String messageId = sesService.sendEmail(
-                    recipient.getEmail(),
-                    notification.getTitle(),
-                    null, // HTML body - could be enhanced
-                    notification.getBody()
+                        recipient.getEmail(),
+                        notification.getTitle(),
+                        null, // HTML body - could be enhanced
+                        notification.getBody()
                 );
                 notification.setMessageId(messageId);
             } catch (Exception e) {
@@ -99,7 +99,7 @@ public class ScheduledNotificationService {
      */
     @Transactional
     public ScheduledNotification createScheduledNotification(Long taskId, Long receiverId, String title, String body,
-                                                          LocalDateTime scheduledTime, String notificationType) {
+                                                             LocalDateTime scheduledTime, String notificationType) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
 
@@ -120,16 +120,16 @@ public class ScheduledNotificationService {
      */
     @Transactional
     public List<ScheduledNotification> createMedicationReminders(Long patientId, String medicationName,
-                                                               String dosage, List<LocalDateTime> reminderTimes) {
+                                                                 String dosage, List<LocalDateTime> reminderTimes) {
         // This would be called when a medication schedule is created
         return reminderTimes.stream()
                 .map(time -> createScheduledNotification(
-                    null, // No specific task for medication reminders
-                    patientId,
-                    "Medication Reminder: " + medicationName,
-                    String.format("Time to take %s (%s)", medicationName, dosage),
-                    time,
-                    "MEDICATION_REMINDER"
+                        null, // No specific task for medication reminders
+                        patientId,
+                        "Medication Reminder: " + medicationName,
+                        String.format("Time to take %s (%s)", medicationName, dosage),
+                        time,
+                        "MEDICATION_REMINDER"
                 ))
                 .toList();
     }
@@ -139,20 +139,20 @@ public class ScheduledNotificationService {
      */
     @Transactional
     public ScheduledNotification createAppointmentReminder(Long patientId, String appointmentType,
-                                                         LocalDateTime appointmentTime, String location) {
+                                                           LocalDateTime appointmentTime, String location) {
         LocalDateTime reminderTime = appointmentTime.minusHours(24); // 24 hours before
 
         return createScheduledNotification(
-            null, // No specific task
-            patientId,
-            "Appointment Reminder: " + appointmentType,
-            String.format("You have a %s appointment on %s at %s. Location: %s",
-                appointmentType,
-                appointmentTime.toLocalDate(),
-                appointmentTime.toLocalTime(),
-                location),
-            reminderTime,
-            "APPOINTMENT_REMINDER"
+                null, // No specific task
+                patientId,
+                "Appointment Reminder: " + appointmentType,
+                String.format("You have a %s appointment on %s at %s. Location: %s",
+                        appointmentType,
+                        appointmentTime.toLocalDate(),
+                        appointmentTime.toLocalTime(),
+                        location),
+                reminderTime,
+                "APPOINTMENT_REMINDER"
         );
     }
 
@@ -180,9 +180,9 @@ public class ScheduledNotificationService {
      * This would be useful for weekly medication reminders, recurring appointments, etc.
      */
     public List<ScheduledNotification> createRecurringNotifications(Long taskId, Long receiverId,
-                                                                  String title, String body,
-                                                                  LocalDateTime startTime, LocalDateTime endTime,
-                                                                  String frequency, String notificationType) {
+                                                                    String title, String body,
+                                                                    LocalDateTime startTime, LocalDateTime endTime,
+                                                                    String frequency, String notificationType) {
         // TODO: Implement recurring notification creation
         // Frequency could be "DAILY", "WEEKLY", "MONTHLY", etc.
         throw new UnsupportedOperationException("Recurring notifications not yet implemented");

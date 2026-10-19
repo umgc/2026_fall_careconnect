@@ -2,6 +2,7 @@ package com.careconnect.model;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.time.LocalDateTime;
 
 /**
@@ -33,7 +34,9 @@ public class DocumentStatusHistory {
     @Enumerated(EnumType.STRING)
     private UserFile.FileCategory documentType;
 
-    /** Null on the very first transition for a requirement. */
+    /**
+     * Null on the very first transition for a requirement.
+     */
     @Column(name = "previous_status")
     @Enumerated(EnumType.STRING)
     private DocumentRequirementStatus.ComplianceStatus previousStatus;
@@ -42,7 +45,9 @@ public class DocumentStatusHistory {
     @Enumerated(EnumType.STRING)
     private DocumentRequirementStatus.ComplianceStatus newStatus;
 
-    /** users.id of the person (or acting uploader) who made the change. */
+    /**
+     * users.id of the person (or acting uploader) who made the change.
+     */
     @Column(name = "changed_by", nullable = false)
     private Long changedBy;
 
@@ -68,13 +73,39 @@ public class DocumentStatusHistory {
     }
 
     // Manual getters for Lombok compatibility (matches UserFile style)
-    public Long getId() { return id; }
-    public DocumentRequirementStatus.SubjectType getSubjectType() { return subjectType; }
-    public Long getSubjectId() { return subjectId; }
-    public UserFile.FileCategory getDocumentType() { return documentType; }
-    public DocumentRequirementStatus.ComplianceStatus getPreviousStatus() { return previousStatus; }
-    public DocumentRequirementStatus.ComplianceStatus getNewStatus() { return newStatus; }
-    public Long getChangedBy() { return changedBy; }
-    public String getReason() { return reason; }
-    public LocalDateTime getChangedAt() { return changedAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public DocumentRequirementStatus.SubjectType getSubjectType() {
+        return subjectType;
+    }
+
+    public Long getSubjectId() {
+        return subjectId;
+    }
+
+    public UserFile.FileCategory getDocumentType() {
+        return documentType;
+    }
+
+    public DocumentRequirementStatus.ComplianceStatus getPreviousStatus() {
+        return previousStatus;
+    }
+
+    public DocumentRequirementStatus.ComplianceStatus getNewStatus() {
+        return newStatus;
+    }
+
+    public Long getChangedBy() {
+        return changedBy;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public LocalDateTime getChangedAt() {
+        return changedAt;
+    }
 }

@@ -4,7 +4,9 @@ import com.careconnect.repository.CallSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Resolves the single authoritative patient participant for a call. */
+/**
+ * Resolves the single authoritative patient participant for a call.
+ */
 @Service
 @RequiredArgsConstructor
 public class CallPatientResolver {

@@ -13,7 +13,7 @@ void main() {
         headersJson: '{"Content-Type":"application/json"}',
         bodyJson: '{"title":"Daily task"}',
         createdAt: now,
-        status: 'pending',
+        status: OfflineSyncStatus.pending,
         retryCount: 1,
         lastError: null,
       );
@@ -25,9 +25,39 @@ void main() {
       expect(row.headersJson, contains('Content-Type'));
       expect(row.bodyJson, contains('Daily task'));
       expect(row.createdAt, equals(now));
-      expect(row.status, equals('pending'));
+      expect(row.status, equals(OfflineSyncStatus.pending));
       expect(row.retryCount, equals(1));
       expect(row.lastError, isNull);
+    });
+
+    test('copyWith updates mutable queue state and preserves request data', () {
+      // Arrange
+      final row = OfflineSyncDbRow(
+        id: 'row-1',
+        fingerprint: 'abc123',
+        method: 'POST',
+        url: 'https://example.org/v1/api/tasks',
+        headersJson: '{}',
+        bodyJson: '{"title":"Daily task"}',
+        createdAt: DateTime.utc(2026, 3, 12, 10, 30),
+        status: OfflineSyncStatus.pending,
+        retryCount: 0,
+        lastError: null,
+      );
+
+      // Act
+      final failed = row.copyWith(
+        status: OfflineSyncStatus.failed,
+        retryCount: 1,
+        lastError: 'network timeout',
+      );
+
+      // Assert
+      expect(failed.id, row.id);
+      expect(failed.bodyJson, row.bodyJson);
+      expect(failed.status, OfflineSyncStatus.failed);
+      expect(failed.retryCount, 1);
+      expect(failed.lastError, 'network timeout');
     });
   });
 }

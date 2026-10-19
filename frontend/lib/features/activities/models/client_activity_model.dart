@@ -18,7 +18,9 @@ class ClientActivity {
 
   static ClientActivity fromJson(Map<String, dynamic> json) {
     return ClientActivity(
-      id: (json['id'] is int) ? json['id'] as int : int.tryParse(json['id'].toString()) ?? 0,
+      id: (json['id'] is int)
+          ? json['id'] as int
+          : int.tryParse(json['id'].toString()) ?? 0,
       name: json['name']?.toString() ?? '',
       category: (json['category']?.toString() ?? 'ADL').toUpperCase(),
       customIconUrl: json['customIconUrl']?.toString(),
@@ -37,7 +39,9 @@ class CompetencyScaleItem {
 
   static CompetencyScaleItem fromJson(Map<String, dynamic> json) {
     return CompetencyScaleItem(
-      value: (json['value'] is int) ? json['value'] as int : int.tryParse(json['value'].toString()) ?? 0,
+      value: (json['value'] is int)
+          ? json['value'] as int
+          : int.tryParse(json['value'].toString()) ?? 0,
       label: json['label']?.toString() ?? '',
     );
   }
@@ -59,7 +63,9 @@ class Activity {
 
   static Activity fromJson(Map<String, dynamic> json) {
     return Activity(
-      id: (json['id'] is int) ? json['id'] as int : int.tryParse(json['id'].toString()) ?? 0,
+      id: (json['id'] is int)
+          ? json['id'] as int
+          : int.tryParse(json['id'].toString()) ?? 0,
       name: json['name']?.toString() ?? '',
       category: (json['category']?.toString() ?? 'ADL').toUpperCase(),
       defaultIconUrl: json['defaultIconUrl']?.toString(),
@@ -96,22 +102,52 @@ class ActivityLogEntry {
       if (createdAtRaw is String) {
         createdAt = DateTime.tryParse(createdAtRaw) ?? createdAt;
       } else if (createdAtRaw is List && createdAtRaw.length >= 6) {
-        final y = createdAtRaw[0] is int ? createdAtRaw[0] as int : int.tryParse(createdAtRaw[0].toString()) ?? 0;
-        final m = createdAtRaw[1] is int ? createdAtRaw[1] as int : int.tryParse(createdAtRaw[1].toString()) ?? 1;
-        final d = createdAtRaw[2] is int ? createdAtRaw[2] as int : int.tryParse(createdAtRaw[2].toString()) ?? 1;
-        final h = createdAtRaw.length > 3 && createdAtRaw[3] != null ? (createdAtRaw[3] is int ? createdAtRaw[3] as int : int.tryParse(createdAtRaw[3].toString()) ?? 0) : 0;
-        final min = createdAtRaw.length > 4 && createdAtRaw[4] != null ? (createdAtRaw[4] is int ? createdAtRaw[4] as int : int.tryParse(createdAtRaw[4].toString()) ?? 0) : 0;
-        final sec = createdAtRaw.length > 5 && createdAtRaw[5] != null ? (createdAtRaw[5] is int ? createdAtRaw[5] as int : int.tryParse(createdAtRaw[5].toString()) ?? 0) : 0;
+        final y = createdAtRaw[0] is int
+            ? createdAtRaw[0] as int
+            : int.tryParse(createdAtRaw[0].toString()) ?? 0;
+        final m = createdAtRaw[1] is int
+            ? createdAtRaw[1] as int
+            : int.tryParse(createdAtRaw[1].toString()) ?? 1;
+        final d = createdAtRaw[2] is int
+            ? createdAtRaw[2] as int
+            : int.tryParse(createdAtRaw[2].toString()) ?? 1;
+        final h = createdAtRaw.length > 3 && createdAtRaw[3] != null
+            ? (createdAtRaw[3] is int
+                ? createdAtRaw[3] as int
+                : int.tryParse(createdAtRaw[3].toString()) ?? 0)
+            : 0;
+        final min = createdAtRaw.length > 4 && createdAtRaw[4] != null
+            ? (createdAtRaw[4] is int
+                ? createdAtRaw[4] as int
+                : int.tryParse(createdAtRaw[4].toString()) ?? 0)
+            : 0;
+        final sec = createdAtRaw.length > 5 && createdAtRaw[5] != null
+            ? (createdAtRaw[5] is int
+                ? createdAtRaw[5] as int
+                : int.tryParse(createdAtRaw[5].toString()) ?? 0)
+            : 0;
         createdAt = DateTime(y, m.clamp(1, 12), d.clamp(1, 31), h, min, sec);
       }
     }
     return ActivityLogEntry(
-      id: (json['id'] is int) ? json['id'] as int : int.tryParse(json['id'].toString()) ?? 0,
-      clientId: (json['clientId'] is int) ? json['clientId'] as int : int.tryParse(json['clientId'].toString()) ?? 0,
-      activityId: (json['activityId'] is int) ? json['activityId'] as int : int.tryParse(json['activityId'].toString()) ?? 0,
+      id: (json['id'] is int)
+          ? json['id'] as int
+          : int.tryParse(json['id'].toString()) ?? 0,
+      clientId: (json['clientId'] is int)
+          ? json['clientId'] as int
+          : int.tryParse(json['clientId'].toString()) ?? 0,
+      activityId: (json['activityId'] is int)
+          ? json['activityId'] as int
+          : int.tryParse(json['activityId'].toString()) ?? 0,
       activityName: json['activityName']?.toString(),
-      competencyScore: (json['competencyScore'] is int) ? json['competencyScore'] as int : int.tryParse(json['competencyScore'].toString()) ?? 0,
-      satisfactionRating: json['satisfactionRating'] != null ? ((json['satisfactionRating'] is int) ? json['satisfactionRating'] as int : int.tryParse(json['satisfactionRating'].toString())) : null,
+      competencyScore: (json['competencyScore'] is int)
+          ? json['competencyScore'] as int
+          : int.tryParse(json['competencyScore'].toString()) ?? 0,
+      satisfactionRating: json['satisfactionRating'] != null
+          ? ((json['satisfactionRating'] is int)
+              ? json['satisfactionRating'] as int
+              : int.tryParse(json['satisfactionRating'].toString()))
+          : null,
       notes: json['notes']?.toString(),
       createdAt: createdAt,
     );
@@ -143,22 +179,49 @@ class BehavioralIncidentEntry {
       if (occurredRaw is String) {
         occurredAt = DateTime.tryParse(occurredRaw) ?? occurredAt;
       } else if (occurredRaw is List && occurredRaw.length >= 3) {
-        final y = occurredRaw[0] is int ? occurredRaw[0] as int : int.tryParse(occurredRaw[0].toString()) ?? 0;
-        final m = occurredRaw[1] is int ? occurredRaw[1] as int : int.tryParse(occurredRaw[1].toString()) ?? 1;
-        final d = occurredRaw[2] is int ? occurredRaw[2] as int : int.tryParse(occurredRaw[2].toString()) ?? 1;
-        final h = occurredRaw.length > 3 && occurredRaw[3] != null ? (occurredRaw[3] is int ? occurredRaw[3] as int : int.tryParse(occurredRaw[3].toString()) ?? 0) : 0;
-        final min = occurredRaw.length > 4 && occurredRaw[4] != null ? (occurredRaw[4] is int ? occurredRaw[4] as int : int.tryParse(occurredRaw[4].toString()) ?? 0) : 0;
-        final sec = occurredRaw.length > 5 && occurredRaw[5] != null ? (occurredRaw[5] is int ? occurredRaw[5] as int : int.tryParse(occurredRaw[5].toString()) ?? 0) : 0;
+        final y = occurredRaw[0] is int
+            ? occurredRaw[0] as int
+            : int.tryParse(occurredRaw[0].toString()) ?? 0;
+        final m = occurredRaw[1] is int
+            ? occurredRaw[1] as int
+            : int.tryParse(occurredRaw[1].toString()) ?? 1;
+        final d = occurredRaw[2] is int
+            ? occurredRaw[2] as int
+            : int.tryParse(occurredRaw[2].toString()) ?? 1;
+        final h = occurredRaw.length > 3 && occurredRaw[3] != null
+            ? (occurredRaw[3] is int
+                ? occurredRaw[3] as int
+                : int.tryParse(occurredRaw[3].toString()) ?? 0)
+            : 0;
+        final min = occurredRaw.length > 4 && occurredRaw[4] != null
+            ? (occurredRaw[4] is int
+                ? occurredRaw[4] as int
+                : int.tryParse(occurredRaw[4].toString()) ?? 0)
+            : 0;
+        final sec = occurredRaw.length > 5 && occurredRaw[5] != null
+            ? (occurredRaw[5] is int
+                ? occurredRaw[5] as int
+                : int.tryParse(occurredRaw[5].toString()) ?? 0)
+            : 0;
         occurredAt = DateTime(y, m.clamp(1, 12), d.clamp(1, 31), h, min, sec);
       }
     }
     return BehavioralIncidentEntry(
-      id: (json['id'] is int) ? json['id'] as int : int.tryParse(json['id'].toString()) ?? 0,
-      clientId: (json['clientId'] is int) ? json['clientId'] as int : int.tryParse(json['clientId'].toString()) ?? 0,
-      caregiverId: (json['caregiverId'] is int) ? json['caregiverId'] as int : int.tryParse(json['caregiverId'].toString()) ?? 0,
-      observedBehavior: json['observedBehavior']?.toString() ?? json['observed_behavior']?.toString() ?? '',
+      id: (json['id'] is int)
+          ? json['id'] as int
+          : int.tryParse(json['id'].toString()) ?? 0,
+      clientId: (json['clientId'] is int)
+          ? json['clientId'] as int
+          : int.tryParse(json['clientId'].toString()) ?? 0,
+      caregiverId: (json['caregiverId'] is int)
+          ? json['caregiverId'] as int
+          : int.tryParse(json['caregiverId'].toString()) ?? 0,
+      observedBehavior: json['observedBehavior']?.toString() ??
+          json['observed_behavior']?.toString() ??
+          '',
       occurredAt: occurredAt,
-      triggerNotes: json['triggerNotes']?.toString() ?? json['trigger_notes']?.toString(),
+      triggerNotes:
+          json['triggerNotes']?.toString() ?? json['trigger_notes']?.toString(),
     );
   }
 }
@@ -196,12 +259,30 @@ class IncidentReportEntry {
       if (occurredRaw is String) {
         occurredAt = DateTime.tryParse(occurredRaw) ?? occurredAt;
       } else if (occurredRaw is List && occurredRaw.length >= 3) {
-        final y = occurredRaw[0] is int ? occurredRaw[0] as int : int.tryParse(occurredRaw[0].toString()) ?? 0;
-        final m = occurredRaw[1] is int ? occurredRaw[1] as int : int.tryParse(occurredRaw[1].toString()) ?? 1;
-        final d = occurredRaw[2] is int ? occurredRaw[2] as int : int.tryParse(occurredRaw[2].toString()) ?? 1;
-        final h = occurredRaw.length > 3 && occurredRaw[3] != null ? (occurredRaw[3] is int ? occurredRaw[3] as int : int.tryParse(occurredRaw[3].toString()) ?? 0) : 0;
-        final min = occurredRaw.length > 4 && occurredRaw[4] != null ? (occurredRaw[4] is int ? occurredRaw[4] as int : int.tryParse(occurredRaw[4].toString()) ?? 0) : 0;
-        final sec = occurredRaw.length > 5 && occurredRaw[5] != null ? (occurredRaw[5] is int ? occurredRaw[5] as int : int.tryParse(occurredRaw[5].toString()) ?? 0) : 0;
+        final y = occurredRaw[0] is int
+            ? occurredRaw[0] as int
+            : int.tryParse(occurredRaw[0].toString()) ?? 0;
+        final m = occurredRaw[1] is int
+            ? occurredRaw[1] as int
+            : int.tryParse(occurredRaw[1].toString()) ?? 1;
+        final d = occurredRaw[2] is int
+            ? occurredRaw[2] as int
+            : int.tryParse(occurredRaw[2].toString()) ?? 1;
+        final h = occurredRaw.length > 3 && occurredRaw[3] != null
+            ? (occurredRaw[3] is int
+                ? occurredRaw[3] as int
+                : int.tryParse(occurredRaw[3].toString()) ?? 0)
+            : 0;
+        final min = occurredRaw.length > 4 && occurredRaw[4] != null
+            ? (occurredRaw[4] is int
+                ? occurredRaw[4] as int
+                : int.tryParse(occurredRaw[4].toString()) ?? 0)
+            : 0;
+        final sec = occurredRaw.length > 5 && occurredRaw[5] != null
+            ? (occurredRaw[5] is int
+                ? occurredRaw[5] as int
+                : int.tryParse(occurredRaw[5].toString()) ?? 0)
+            : 0;
         occurredAt = DateTime(y, m.clamp(1, 12), d.clamp(1, 31), h, min, sec);
       }
     }
@@ -212,12 +293,30 @@ class IncidentReportEntry {
       if (createdRaw is String) {
         createdAt = DateTime.tryParse(createdRaw) ?? createdAt;
       } else if (createdRaw is List && createdRaw.length >= 3) {
-        final y = createdRaw[0] is int ? createdRaw[0] as int : int.tryParse(createdRaw[0].toString()) ?? 0;
-        final m = createdRaw[1] is int ? createdRaw[1] as int : int.tryParse(createdRaw[1].toString()) ?? 1;
-        final d = createdRaw[2] is int ? createdRaw[2] as int : int.tryParse(createdRaw[2].toString()) ?? 1;
-        final h = createdRaw.length > 3 && createdRaw[3] != null ? (createdRaw[3] is int ? createdRaw[3] as int : int.tryParse(createdRaw[3].toString()) ?? 0) : 0;
-        final min = createdRaw.length > 4 && createdRaw[4] != null ? (createdRaw[4] is int ? createdRaw[4] as int : int.tryParse(createdRaw[4].toString()) ?? 0) : 0;
-        final sec = createdRaw.length > 5 && createdRaw[5] != null ? (createdRaw[5] is int ? createdRaw[5] as int : int.tryParse(createdRaw[5].toString()) ?? 0) : 0;
+        final y = createdRaw[0] is int
+            ? createdRaw[0] as int
+            : int.tryParse(createdRaw[0].toString()) ?? 0;
+        final m = createdRaw[1] is int
+            ? createdRaw[1] as int
+            : int.tryParse(createdRaw[1].toString()) ?? 1;
+        final d = createdRaw[2] is int
+            ? createdRaw[2] as int
+            : int.tryParse(createdRaw[2].toString()) ?? 1;
+        final h = createdRaw.length > 3 && createdRaw[3] != null
+            ? (createdRaw[3] is int
+                ? createdRaw[3] as int
+                : int.tryParse(createdRaw[3].toString()) ?? 0)
+            : 0;
+        final min = createdRaw.length > 4 && createdRaw[4] != null
+            ? (createdRaw[4] is int
+                ? createdRaw[4] as int
+                : int.tryParse(createdRaw[4].toString()) ?? 0)
+            : 0;
+        final sec = createdRaw.length > 5 && createdRaw[5] != null
+            ? (createdRaw[5] is int
+                ? createdRaw[5] as int
+                : int.tryParse(createdRaw[5].toString()) ?? 0)
+            : 0;
         createdAt = DateTime(y, m.clamp(1, 12), d.clamp(1, 31), h, min, sec);
       }
     }
@@ -237,13 +336,22 @@ class IncidentReportEntry {
     }
 
     return IncidentReportEntry(
-      id: (json['id'] is int) ? json['id'] as int : int.tryParse(json['id'].toString()) ?? 0,
-      clientId: (json['clientId'] is int) ? json['clientId'] as int : int.tryParse(json['clientId'].toString()) ?? 0,
-      caregiverId: (json['caregiverId'] is int) ? json['caregiverId'] as int : int.tryParse(json['caregiverId'].toString()) ?? 0,
-      incidentType: json['incidentType']?.toString() ?? json['incident_type']?.toString() ?? '',
+      id: (json['id'] is int)
+          ? json['id'] as int
+          : int.tryParse(json['id'].toString()) ?? 0,
+      clientId: (json['clientId'] is int)
+          ? json['clientId'] as int
+          : int.tryParse(json['clientId'].toString()) ?? 0,
+      caregiverId: (json['caregiverId'] is int)
+          ? json['caregiverId'] as int
+          : int.tryParse(json['caregiverId'].toString()) ?? 0,
+      incidentType: json['incidentType']?.toString() ??
+          json['incident_type']?.toString() ??
+          '',
       occurredAt: occurredAt,
       location: json['location']?.toString() ?? '',
-      triggerNotes: json['triggerNotes']?.toString() ?? json['trigger_notes']?.toString(),
+      triggerNotes:
+          json['triggerNotes']?.toString() ?? json['trigger_notes']?.toString(),
       outcome: json['outcome']?.toString() ?? '',
       createdAt: createdAt,
       actions: actions,
@@ -270,7 +378,9 @@ class CompetencyWeekDataPoint {
       averageCompetencyScore: (json['averageCompetencyScore'] is num)
           ? (json['averageCompetencyScore'] as num).toDouble()
           : 0.0,
-      logCount: (json['logCount'] is int) ? json['logCount'] as int : int.tryParse(json['logCount'].toString()) ?? 0,
+      logCount: (json['logCount'] is int)
+          ? json['logCount'] as int
+          : int.tryParse(json['logCount'].toString()) ?? 0,
     );
   }
 }
@@ -295,7 +405,9 @@ class CompetencyActivityTrend {
             .toList()
         : <CompetencyWeekDataPoint>[];
     return CompetencyActivityTrend(
-      activityId: (json['activityId'] is int) ? json['activityId'] as int : int.tryParse(json['activityId'].toString()) ?? 0,
+      activityId: (json['activityId'] is int)
+          ? json['activityId'] as int
+          : int.tryParse(json['activityId'].toString()) ?? 0,
       activityName: json['activityName']?.toString() ?? '',
       dataPoints: points,
     );
@@ -317,10 +429,15 @@ class CompetencyTrendsResponse {
     final rawWeeks = json['weekLabels'];
     final weekLabels = rawWeeks is List
         ? (rawWeeks).whereType<String>().toList()
-        : (rawWeeks is List ? (rawWeeks).map((e) => e?.toString() ?? '').toList() : <String>[]);
+        : (rawWeeks is List
+            ? (rawWeeks).map((e) => e?.toString() ?? '').toList()
+            : <String>[]);
     final rawTrends = json['activityTrends'];
     final activityTrends = rawTrends is List
-        ? (rawTrends).whereType<Map<String, dynamic>>().map(CompetencyActivityTrend.fromJson).toList()
+        ? (rawTrends)
+            .whereType<Map<String, dynamic>>()
+            .map(CompetencyActivityTrend.fromJson)
+            .toList()
         : <CompetencyActivityTrend>[];
     return CompetencyTrendsResponse(
       status: json['status']?.toString() ?? 'STABLE',
@@ -346,11 +463,17 @@ class BehavioralTrendsResponse {
   static BehavioralTrendsResponse fromJson(Map<String, dynamic> json) {
     final raw = json['weeklyCounts'];
     final weeklyCounts = raw is List
-        ? (raw).whereType<Map<String, dynamic>>().map(BehavioralWeekCount.fromJson).toList()
+        ? (raw)
+            .whereType<Map<String, dynamic>>()
+            .map(BehavioralWeekCount.fromJson)
+            .toList()
         : <BehavioralWeekCount>[];
     final rawKw = json['topKeywords'];
     final topKeywords = rawKw is List
-        ? (rawKw).map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList()
+        ? (rawKw)
+            .map((e) => e?.toString() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toList()
         : <String>[];
     return BehavioralTrendsResponse(
       trend: json['trend']?.toString() ?? 'STABLE',
@@ -364,7 +487,8 @@ class BehavioralWeekCount {
   final String weekStartDate;
   final int incidentCount;
 
-  const BehavioralWeekCount({required this.weekStartDate, required this.incidentCount});
+  const BehavioralWeekCount(
+      {required this.weekStartDate, required this.incidentCount});
 
   static BehavioralWeekCount fromJson(Map<String, dynamic> json) {
     return BehavioralWeekCount(
@@ -392,11 +516,17 @@ class ParticipationResponse {
   static ParticipationResponse fromJson(Map<String, dynamic> json) {
     final rawWeeks = json['weeklyCounts'];
     final weeklyCounts = rawWeeks is List
-        ? (rawWeeks).whereType<Map<String, dynamic>>().map(ParticipationWeekCount.fromJson).toList()
+        ? (rawWeeks)
+            .whereType<Map<String, dynamic>>()
+            .map(ParticipationWeekCount.fromJson)
+            .toList()
         : <ParticipationWeekCount>[];
     final raw = json['activities'];
     final activities = raw is List
-        ? (raw).whereType<Map<String, dynamic>>().map(ActivityParticipation.fromJson).toList()
+        ? (raw)
+            .whereType<Map<String, dynamic>>()
+            .map(ActivityParticipation.fromJson)
+            .toList()
         : <ActivityParticipation>[];
     return ParticipationResponse(
       status: json['status']?.toString() ?? 'STABLE',
@@ -410,12 +540,15 @@ class ParticipationWeekCount {
   final String weekStartDate;
   final int totalLogs;
 
-  const ParticipationWeekCount({required this.weekStartDate, required this.totalLogs});
+  const ParticipationWeekCount(
+      {required this.weekStartDate, required this.totalLogs});
 
   static ParticipationWeekCount fromJson(Map<String, dynamic> json) {
     return ParticipationWeekCount(
       weekStartDate: json['weekStartDate']?.toString() ?? '',
-      totalLogs: (json['totalLogs'] is int) ? json['totalLogs'] as int : int.tryParse(json['totalLogs'].toString()) ?? 0,
+      totalLogs: (json['totalLogs'] is int)
+          ? json['totalLogs'] as int
+          : int.tryParse(json['totalLogs'].toString()) ?? 0,
     );
   }
 }
@@ -444,20 +577,44 @@ class ActivityParticipation {
       if (raw is String) {
         lastLoggedAt = DateTime.tryParse(raw);
       } else if (raw is List && raw.length >= 6) {
-        final y = raw[0] is int ? raw[0] as int : int.tryParse(raw[0].toString()) ?? 0;
-        final m = (raw[1] is int ? raw[1] as int : int.tryParse(raw[1].toString()) ?? 1).clamp(1, 12);
-        final d = (raw[2] is int ? raw[2] as int : int.tryParse(raw[2].toString()) ?? 1).clamp(1, 31);
-        final h = raw.length > 3 && raw[3] != null ? (raw[3] is int ? raw[3] as int : int.tryParse(raw[3].toString()) ?? 0) : 0;
-        final min = raw.length > 4 && raw[4] != null ? (raw[4] is int ? raw[4] as int : int.tryParse(raw[4].toString()) ?? 0) : 0;
-        final sec = raw.length > 5 && raw[5] != null ? (raw[5] is int ? raw[5] as int : int.tryParse(raw[5].toString()) ?? 0) : 0;
+        final y = raw[0] is int
+            ? raw[0] as int
+            : int.tryParse(raw[0].toString()) ?? 0;
+        final m = (raw[1] is int
+                ? raw[1] as int
+                : int.tryParse(raw[1].toString()) ?? 1)
+            .clamp(1, 12);
+        final d = (raw[2] is int
+                ? raw[2] as int
+                : int.tryParse(raw[2].toString()) ?? 1)
+            .clamp(1, 31);
+        final h = raw.length > 3 && raw[3] != null
+            ? (raw[3] is int
+                ? raw[3] as int
+                : int.tryParse(raw[3].toString()) ?? 0)
+            : 0;
+        final min = raw.length > 4 && raw[4] != null
+            ? (raw[4] is int
+                ? raw[4] as int
+                : int.tryParse(raw[4].toString()) ?? 0)
+            : 0;
+        final sec = raw.length > 5 && raw[5] != null
+            ? (raw[5] is int
+                ? raw[5] as int
+                : int.tryParse(raw[5].toString()) ?? 0)
+            : 0;
         lastLoggedAt = DateTime(y, m, d, h, min, sec);
       }
     }
     return ActivityParticipation(
-      activityId: (json['activityId'] is int) ? json['activityId'] as int : int.tryParse(json['activityId'].toString()) ?? 0,
+      activityId: (json['activityId'] is int)
+          ? json['activityId'] as int
+          : int.tryParse(json['activityId'].toString()) ?? 0,
       activityName: json['activityName']?.toString() ?? '',
       category: (json['category']?.toString() ?? 'ADL').toUpperCase(),
-      totalLogsInPeriod: (json['totalLogsInPeriod'] is int) ? json['totalLogsInPeriod'] as int : int.tryParse(json['totalLogsInPeriod'].toString()) ?? 0,
+      totalLogsInPeriod: (json['totalLogsInPeriod'] is int)
+          ? json['totalLogsInPeriod'] as int
+          : int.tryParse(json['totalLogsInPeriod'].toString()) ?? 0,
       lastLoggedAt: lastLoggedAt,
       noRecentActivity: json['noRecentActivity'] == true,
     );

@@ -20,15 +20,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class NotificationSettingControllerTest {
 
-    @Mock private NotificationSettingService notificationSettingService;
-
-    @Mock private SecurityUtil securityUtil;
-    @Mock private AuthorizationService authorizationService;
-
+    private static final Long USER_ID = 1L;
+    @Mock
+    private NotificationSettingService notificationSettingService;
+    @Mock
+    private SecurityUtil securityUtil;
+    @Mock
+    private AuthorizationService authorizationService;
     @InjectMocks
     private NotificationSettingController controller;
-
-    private static final Long USER_ID = 1L;
 
     private NotificationSettingDTO makeDto(Long userId) {
         return NotificationSettingDTO.builder()

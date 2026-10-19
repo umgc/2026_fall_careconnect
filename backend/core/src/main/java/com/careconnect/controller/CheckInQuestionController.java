@@ -198,7 +198,7 @@ public class CheckInQuestionController {
         User currentUser = securityUtil.resolveCurrentUser();
         Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
         authorizationService.requirePatientAccess(currentUser, patientId);
-        
+
         SubmitAnswersResponseDTO result = answerSubmissionService.submitAnswers(checkInId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }

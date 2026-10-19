@@ -45,7 +45,9 @@ class _InvoiceTabbedPageState extends State<InvoiceTabbedPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Invoice Assistant'),
-        leading: showBack ? BackButton(onPressed: () => Navigator.of(context).maybePop()) : null,
+        leading: showBack
+            ? BackButton(onPressed: () => Navigator.of(context).maybePop())
+            : null,
         bottom: TabBar(
           // Let the theme determine the selected color for full compatibility
           // Set unselected color to be a slightly transparent version of the foreground color
@@ -81,7 +83,8 @@ class _DashboardTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (settings) {
-        return MaterialPageRoute(builder: (context) => const InvoiceDashboardPage());
+        return MaterialPageRoute(
+            builder: (context) => const InvoiceDashboardPage());
       },
     );
   }
@@ -94,7 +97,8 @@ class _UploadInvoiceTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (settings) {
-        return MaterialPageRoute(builder: (context) => const UploadInvoicePage());
+        return MaterialPageRoute(
+            builder: (context) => const UploadInvoicePage());
       },
     );
   }

@@ -36,11 +36,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
 
-    /** DateTime pattern expected by HHAExchange for visitStartDateTime / scheduleStartTime fields. */
+    /**
+     * DateTime pattern expected by HHAExchange for visitStartDateTime / scheduleStartTime fields.
+     */
     private static final DateTimeFormatter VISIT_DT_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
-    /** DateTime pattern expected by HHAExchange for EVV clockIn / clockOut callDateTime fields. */
+    /**
+     * DateTime pattern expected by HHAExchange for EVV clockIn / clockOut callDateTime fields.
+     */
     private static final DateTimeFormatter CLOCK_DT_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
@@ -51,18 +55,28 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
     // EvvIntegrationClient contract
     // -------------------------------------------------------------------------
 
-    @Override
-    public String destination() {
-        return "virginia-hhaexchange";
+    /**
+     * Maps a CareConnect service type label to the corresponding HCPCS/CPT procedure code
+     * used by Virginia DMAS.
+     */
+    private static String mapServiceTypeToCode(String serviceType) {
+        if (serviceType == null) return "T1019";
+        return switch (serviceType.toLowerCase().trim()) {
+            case "personal care" -> "T1019";
+            case "companion care" -> "T1020";
+            case "respite care" -> "S5150";
+            case "homemaker services" -> "S5130";
+            case "skilled nursing" -> "G0299";
+            case "physical therapy" -> "97110";
+            case "occupational therapy" -> "97530";
+            case "speech therapy" -> "92507";
+            case "home health aide" -> "G0156";
+            default -> "T1019";
+        };
     }
 
-    /**
-     * Submit a single EVV record to HHAExchange.
-     * Delegates to {@link #submitBatch(List)} with a one-element list.
-     */
-    @Override
-    public void submit(EvvRecord record) throws Exception {
-        submitBatch(List.of(record));
+    private static <T> T coalesce(T first, T second) {
+        return first != null ? first : second;
     }
 
     // -------------------------------------------------------------------------
@@ -79,6 +93,21 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
      * @param records non-empty list of {@link EvvRecord} instances to submit
      * @throws Exception if the HTTP call fails or the aggregator returns a non-2xx response
      */
+
+    @Override
+    public String destination() {
+        return "virginia-hhaexchange";
+    }
+
+    /**
+     * Submit a single EVV record to HHAExchange.
+     * Delegates to {@link #submitBatch(List)} with a one-element list.
+     */
+    @Override
+    public void submit(EvvRecord record) throws Exception {
+        submitBatch(List.of(record));
+    }
+
     /**
      * Builds the HHAExchange request payload without submitting it.
      * Useful for payload preview and download before submission.
@@ -92,9 +121,9 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
                         log.debug("[VA-HHAExchange] Successfully mapped record {}", record.getId());
                         return visit;
                     } catch (Exception e) {
-                        log.error("[VA-HHAExchange] Error mapping record {}: {}", 
+                        log.error("[VA-HHAExchange] Error mapping record {}: {}",
                                 record.getId(), e.getMessage(), e);
-                        throw new RuntimeException("Error mapping record " + record.getId() + 
+                        throw new RuntimeException("Error mapping record " + record.getId() +
                                 ": " + e.getMessage(), e);
                     }
                 })
@@ -102,6 +131,10 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
         log.info("[VA-HHAExchange] Successfully mapped {} record(s) to HhaExchangeVisit", visits.size());
         return HhaExchangeVisitRequest.builder().visits(visits).build();
     }
+
+    // -------------------------------------------------------------------------
+    // Mapping
+    // -------------------------------------------------------------------------
 
     public void submitBatch(List<EvvRecord> records) throws Exception {
         HhaExchangeVisitRequest request = buildRequest(records);
@@ -141,10 +174,6 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Mapping
-    // -------------------------------------------------------------------------
-
     private HhaExchangeVisit mapToHhaVisit(EvvRecord record) {
         Patient patient = record.getPatient();
 
@@ -156,8 +185,8 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
         HhaExchangeVisit.ServiceAddress serviceAddress = buildServiceAddress(patient);
 
         // Prefer dedicated check-in/out coordinate fields; fall back to legacy single-location
-        Double inLat  = coalesce(record.getCheckinLocationLat(),  record.getLocationLat());
-        Double inLng  = coalesce(record.getCheckinLocationLng(),  record.getLocationLng());
+        Double inLat = coalesce(record.getCheckinLocationLat(), record.getLocationLat());
+        Double inLng = coalesce(record.getCheckinLocationLng(), record.getLocationLng());
         Double outLat = coalesce(record.getCheckoutLocationLat(), record.getLocationLat());
         Double outLng = coalesce(record.getCheckoutLocationLng(), record.getLocationLng());
 
@@ -266,7 +295,7 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
             if (record.getTimeIn() != null && record.getTimeOut() != null) {
                 minutes = java.time.Duration.between(record.getTimeIn(), record.getTimeOut()).toMinutes();
             }
-            
+
             // Ensure we have at least 1 minute for billing purposes
             if (minutes <= 0) {
                 minutes = 1;
@@ -285,7 +314,7 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
                     .diagnosisCodes(List.of()) // Empty list - would need patient diagnosis data
                     .build();
         } catch (Exception e) {
-            log.warn("[VA-HHAExchange] Error building billing section for record {}: {}", 
+            log.warn("[VA-HHAExchange] Error building billing section for record {}: {}",
                     record.getId(), e.getMessage());
             // Return empty billing if calculation fails
             return HhaExchangeVisit.Billing.builder()
@@ -296,29 +325,5 @@ public class VirginiaHhaExchangeClient implements EvvIntegrationClient {
                     .diagnosisCodes(List.of())
                     .build();
         }
-    }
-
-    /**
-     * Maps a CareConnect service type label to the corresponding HCPCS/CPT procedure code
-     * used by Virginia DMAS.
-     */
-    private static String mapServiceTypeToCode(String serviceType) {
-        if (serviceType == null) return "T1019";
-        return switch (serviceType.toLowerCase().trim()) {
-            case "personal care"        -> "T1019";
-            case "companion care"       -> "T1020";
-            case "respite care"         -> "S5150";
-            case "homemaker services"   -> "S5130";
-            case "skilled nursing"      -> "G0299";
-            case "physical therapy"     -> "97110";
-            case "occupational therapy" -> "97530";
-            case "speech therapy"       -> "92507";
-            case "home health aide"     -> "G0156";
-            default                     -> "T1019";
-        };
-    }
-
-    private static <T> T coalesce(T first, T second) {
-        return first != null ? first : second;
     }
 }

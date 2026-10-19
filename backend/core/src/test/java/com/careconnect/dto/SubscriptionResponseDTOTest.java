@@ -16,17 +16,14 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class SubscriptionResponseDTOTest {
 
-    @Mock
-    private Subscription mockSubscription;
-
-    @Mock
-    private User mockUser;
-
-    @Mock
-    private Plan mockPlan;
-
     private static final Instant NOW = Instant.parse("2026-01-15T10:00:00Z");
     private static final Instant END = Instant.parse("2026-02-15T10:00:00Z");
+    @Mock
+    private Subscription mockSubscription;
+    @Mock
+    private User mockUser;
+    @Mock
+    private Plan mockPlan;
 
     // ─── No-arg constructor ───────────────────────────────────────────────────
 

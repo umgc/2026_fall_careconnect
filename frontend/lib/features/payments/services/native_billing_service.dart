@@ -8,7 +8,6 @@ import '../../../config/app_config.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:in_app_purchase_android/billing_client_wrappers.dart';
 
-
 class NativeBillingService {
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
@@ -53,7 +52,8 @@ class NativeBillingService {
 
     if (product is GooglePlayProductDetails) {
       final offerToken = product.offerToken;
-      if (offerToken == null) throw Exception('${t.billservice_noOfferToken} $productId');
+      if (offerToken == null)
+        throw Exception('${t.billservice_noOfferToken} $productId');
 
       GooglePlayPurchaseParam googleParam;
 
@@ -94,7 +94,8 @@ class NativeBillingService {
           }
           onPurchaseSuccess?.call();
         } else if (purchase.status == PurchaseStatus.error) {
-          onPurchaseError?.call(purchase.error?.message ?? t.nativebilling_purchaseFailed);
+          onPurchaseError
+              ?.call(purchase.error?.message ?? t.nativebilling_purchaseFailed);
         }
       } catch (e) {
         onPurchaseError?.call('${t.billservice_verifyFailed}: $e');
@@ -122,8 +123,7 @@ class NativeBillingService {
     };
 
     final headers = <String, String>{'Content-Type': 'application/json'};
-    final resp =
-        await http.post(uri, headers: headers, body: jsonEncode(body));
+    final resp = await http.post(uri, headers: headers, body: jsonEncode(body));
 
     if (resp.statusCode != 200) {
       throw Exception('${t.billservice_paymentProcessFailed}: ${resp.body}');

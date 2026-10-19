@@ -39,6 +39,96 @@ final class CitationAssembler {
         this.metadataMapper = metadataMapper;
     }
 
+    private static String joinedEvidence(final List<String> windows) {
+        if (windows == null || windows.isEmpty()) {
+            return null;
+        }
+        return windows.stream()
+                .filter(window -> window != null && !window.isBlank())
+                .map(String::trim)
+                .distinct()
+                .reduce((left, right) -> left + " … " + right)
+                .orElse(null);
+    }
+
+    private static String publicSourceId(
+            final RankedChunk chunk,
+            final String sourceKey) {
+        if (sourceKey == null || chunk == null || chunk.recordType() == null) {
+            return null;
+        }
+        if (RetrievalRecordType.summaryTypeNames().contains(chunk.recordType().name())
+                && SummarySourceKey.sourceKind(sourceKey) != null) {
+            return SummarySourceKey.parsePublicSummaryId(sourceKey)
+                    .map(String::valueOf)
+                    .orElse(null);
+        }
+        return sourceKey;
+    }
+
+    private static String citationSourceKind(
+            final RankedChunk chunk,
+            final String sourceKey) {
+        if (chunk != null && chunk.sourceKind() != null && !chunk.sourceKind().isBlank()) {
+            return chunk.sourceKind();
+        }
+        final String namespacedKind = SummarySourceKey.sourceKind(sourceKey);
+        if (namespacedKind != null) {
+            return namespacedKind;
+        }
+        if (chunk == null || chunk.recordType() == null) {
+            return null;
+        }
+        return switch (chunk.recordType()) {
+            case CALL_SUMMARY -> SummarySourceKey.CALL_KIND;
+            case VISIT_SUMMARY -> SummarySourceKey.VISIT_KIND;
+            default -> null;
+        };
+    }
+
+    private static String validateIdentifier(final String value) {
+        if (value == null
+                || value.isBlank()
+                || !value.equals(value.trim())
+                || AskAiTextPolicy.containsBidiControl(value)) {
+            return null;
+        }
+        if (value.codePointCount(0, value.length()) > SOURCE_ID_CHARS) {
+            return null;
+        }
+        for (int offset = 0; offset < value.length(); ) {
+            final int codePoint = value.codePointAt(offset);
+            if (Character.isISOControl(codePoint) || Character.isWhitespace(codePoint)) {
+                return null;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return value;
+    }
+
+    private static String normalizeAndTruncate(final String text, final int maxCodePoints) {
+        if (text == null) {
+            return "";
+        }
+        final String normalized = AskAiTextPolicy.normalize(text)
+                .replaceAll("\\p{Cntrl}", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+        final int codePoints = normalized.codePointCount(0, normalized.length());
+        if (codePoints <= maxCodePoints) {
+            return normalized;
+        }
+        final int end = normalized.offsetByCodePoints(0, maxCodePoints - 1);
+        return normalized.substring(0, end).stripTrailing() + "…";
+    }
+
+    private static String normalizeVerifiedEvidence(final String text) {
+        return AskAiTextPolicy.normalize(text)
+                .replaceAll("\\p{Cntrl}", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
     CitationResult assemble(
             final List<String> citationRefs, final Map<String, RankedChunk> refMap) {
         return assemble(citationRefs, refMap, Map.of());
@@ -111,18 +201,6 @@ final class CitationAssembler {
                 grounded);
     }
 
-    private static String joinedEvidence(final List<String> windows) {
-        if (windows == null || windows.isEmpty()) {
-            return null;
-        }
-        return windows.stream()
-                .filter(window -> window != null && !window.isBlank())
-                .map(String::trim)
-                .distinct()
-                .reduce((left, right) -> left + " … " + right)
-                .orElse(null);
-    }
-
     private Optional<AiCitation> toCitation(
             final String ref,
             final RankedChunk chunk,
@@ -161,88 +239,10 @@ final class CitationAssembler {
                 metadata.metadata()));
     }
 
-    private static String publicSourceId(
-            final RankedChunk chunk,
-            final String sourceKey) {
-        if (sourceKey == null || chunk == null || chunk.recordType() == null) {
-            return null;
-        }
-        if (RetrievalRecordType.summaryTypeNames().contains(chunk.recordType().name())
-                && SummarySourceKey.sourceKind(sourceKey) != null) {
-            return SummarySourceKey.parsePublicSummaryId(sourceKey)
-                    .map(String::valueOf)
-                    .orElse(null);
-        }
-        return sourceKey;
-    }
-
-    private static String citationSourceKind(
-            final RankedChunk chunk,
-            final String sourceKey) {
-        if (chunk != null && chunk.sourceKind() != null && !chunk.sourceKind().isBlank()) {
-            return chunk.sourceKind();
-        }
-        final String namespacedKind = SummarySourceKey.sourceKind(sourceKey);
-        if (namespacedKind != null) {
-            return namespacedKind;
-        }
-        if (chunk == null || chunk.recordType() == null) {
-            return null;
-        }
-        return switch (chunk.recordType()) {
-            case CALL_SUMMARY -> SummarySourceKey.CALL_KIND;
-            case VISIT_SUMMARY -> SummarySourceKey.VISIT_KIND;
-            default -> null;
-        };
-    }
-
-    private static String validateIdentifier(final String value) {
-        if (value == null
-                || value.isBlank()
-                || !value.equals(value.trim())
-                || AskAiTextPolicy.containsBidiControl(value)) {
-            return null;
-        }
-        if (value.codePointCount(0, value.length()) > SOURCE_ID_CHARS) {
-            return null;
-        }
-        for (int offset = 0; offset < value.length();) {
-            final int codePoint = value.codePointAt(offset);
-            if (Character.isISOControl(codePoint) || Character.isWhitespace(codePoint)) {
-                return null;
-            }
-            offset += Character.charCount(codePoint);
-        }
-        return value;
-    }
-
-    private static String normalizeAndTruncate(final String text, final int maxCodePoints) {
-        if (text == null) {
-            return "";
-        }
-        final String normalized = AskAiTextPolicy.normalize(text)
-                .replaceAll("\\p{Cntrl}", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-        final int codePoints = normalized.codePointCount(0, normalized.length());
-        if (codePoints <= maxCodePoints) {
-            return normalized;
-        }
-        final int end = normalized.offsetByCodePoints(0, maxCodePoints - 1);
-        return normalized.substring(0, end).stripTrailing() + "…";
-    }
-
-    private static String normalizeVerifiedEvidence(final String text) {
-        return AskAiTextPolicy.normalize(text)
-                .replaceAll("\\p{Cntrl}", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-    }
-
     /**
-     * @param citations validated citations in retrieval relevance order
+     * @param citations   validated citations in retrieval relevance order
      * @param invalidRefs unknown or malformed refs, or refs whose chunk cannot form a citation
-     * @param grounded true only when at least one citation is valid and every requested ref validates
+     * @param grounded    true only when at least one citation is valid and every requested ref validates
      */
     record CitationResult(List<AiCitation> citations, Set<String> invalidRefs, boolean grounded) {
         static CitationResult ungrounded() {

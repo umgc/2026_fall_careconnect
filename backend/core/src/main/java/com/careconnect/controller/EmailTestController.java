@@ -30,10 +30,10 @@ public class EmailTestController {
         String testEmail = request.get("email");
         if (testEmail == null || testEmail.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(
-                Collections.singletonMap("error", "Email address is required")
+                    Collections.singletonMap("error", "Email address is required")
             );
         }
-        
+
         Map<String, Object> result = emailTestService.testEmailConfiguration(testEmail);
         return ResponseEntity.ok(result);
     }
@@ -74,10 +74,10 @@ public class EmailTestController {
         String testEmail = request.get("email");
         if (testEmail == null || testEmail.trim().isEmpty()) {
             return ResponseEntity.badRequest().body(
-                Collections.singletonMap("error", "Email address is required")
+                    Collections.singletonMap("error", "Email address is required")
             );
         }
-        
+
         Map<String, Object> results = emailTestService.testAllEmailTypes(testEmail);
         return ResponseEntity.ok(results);
     }
@@ -92,14 +92,14 @@ public class EmailTestController {
     public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> config = emailTestService.getEmailConfiguration();
         boolean healthy = (boolean) config.get("configurationValid");
-        
+
         Map<String, Object> health = Map.of(
-            "healthy", healthy,
-            "provider", config.get("provider"),
-            "mailSenderAvailable", config.get("mailSenderAvailable"),
-            "status", healthy ? "UP" : "DOWN"
+                "healthy", healthy,
+                "provider", config.get("provider"),
+                "mailSenderAvailable", config.get("mailSenderAvailable"),
+                "status", healthy ? "UP" : "DOWN"
         );
-        
+
         return ResponseEntity.ok(health);
     }
 

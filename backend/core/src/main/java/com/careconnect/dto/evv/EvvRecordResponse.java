@@ -1,11 +1,16 @@
 package com.careconnect.dto.evv;
 
 import lombok.*;
+
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EvvRecordResponse {
     private Long id;
 

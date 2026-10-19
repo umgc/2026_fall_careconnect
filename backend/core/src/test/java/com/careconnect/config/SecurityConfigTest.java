@@ -9,12 +9,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link SecurityConfig}.
- *
+ * <p>
  * SecurityConfig is a Spring {@code @Configuration} class whose primary responsibility
  * tested here is producing a {@code PasswordEncoder} bean backed by BCrypt. BCrypt is
  * the industry-standard adaptive hashing algorithm for passwords: it incorporates a
  * random salt per hash, making rainbow-table and precomputed-hash attacks infeasible.
- *
+ * <p>
  * No Spring context is needed — the config class is instantiated directly, and the
  * real BCrypt implementation is exercised (not mocked) to verify both correctness and
  * security properties of the encoder.

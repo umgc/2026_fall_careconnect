@@ -25,12 +25,12 @@ import java.util.regex.Pattern;
 
 /**
  * WBS 3.15.3 secondary validation pass on AI output before delivery.
- *
+ * <p>
  * Two stages
- * fast deterministic guardrails reject or hold obviously bad output without spending an AI call; 
+ * fast deterministic guardrails reject or hold obviously bad output without spending an AI call;
  * output that clears that is sent to a second AI review (LLM-as-judge) that returns PASS / HOLD / REJECT.
  * if it is unavailable or unparseable the output is held.
- *
+ * <p>
  * Every check produces a {@link ValidationResult} and a {@code VALIDATION} audit event. HOLD is
  * queued for human review via the Confirmation Service. Any AI output surface can call
  * {@link #validate} with its own {@link AuditSourceFeature} and deliver only when
@@ -40,47 +40,40 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class AiOutputValidationService {
 
-    private static final Logger log = LoggerFactory.getLogger(AiOutputValidationService.class);
-
-    /** Outputs longer than this are held. */
+    /**
+     * Outputs longer than this are held.
+     */
     static final int MAX_OUTPUT_LENGTH = 8000;
-
-    /** High-risk directive phrases that must not reach a patient without review. */
+    /**
+     * Upper bound on the secondary AI review call so a hung judge cannot stall delivery.
+     */
+    static final long JUDGE_TIMEOUT_SECONDS = 8;
+    private static final Logger log = LoggerFactory.getLogger(AiOutputValidationService.class);
+    /**
+     * High-risk directive phrases that must not reach a patient without review.
+     */
     private static final List<Pattern> HIGH_RISK_DIRECTIVES = List.of(
             Pattern.compile("(?i)\\b(stop|quit|cease|discontinue|skip|halt)\\b.{0,20}\\b(medication|medicine|meds|prescription|pills?|insulin|dose|dosage|therapy|treatment)\\b"),
             Pattern.compile("(?i)\\b(double|triple|increase|decrease|reduce|lower|raise|halve|adjust|change)\\b.{0,15}\\b(dose|dosage|insulin|medication|meds)\\b"),
             Pattern.compile("(?i)\\b(don'?t|do not|no need to|avoid|skip)\\b.{0,25}\\b(see|consult|contact|call|visit|go to)\\b.{0,20}\\b(doctor|physician|provider|nurse|hospital|emergency|er|urgent care)\\b"),
             Pattern.compile("(?i)\\byou (definitely |certainly |probably )?(have|are diagnosed with)\\b.{0,40}\\b(cancer|tumou?r|diabetes|disease|disorder|syndrome|infection)\\b")
     );
-
-    /** Upper bound on the secondary AI review call so a hung judge cannot stall delivery. */
-    static final long JUDGE_TIMEOUT_SECONDS = 8;
-
     private static final int JUDGE_POOL_SIZE = 4;
-
+    private static final Pattern JUDGE_VERDICT = Pattern.compile("(?i)VERDICT\\s*:\\s*(PASS|HOLD|REJECT)");
+    private static final Pattern JUDGE_REASON = Pattern.compile("(?i)REASON\\s*:\\s*(.+)");
     private final ExecutorService judgeExecutor = Executors.newFixedThreadPool(JUDGE_POOL_SIZE, r -> {
         Thread t = new Thread(r, "ai-output-judge");
         t.setDaemon(true);
         return t;
     });
-
-    @PreDestroy
-    void shutdown() {
-        judgeExecutor.shutdownNow();
-    }
-
-    private static final Pattern JUDGE_VERDICT = Pattern.compile("(?i)VERDICT\\s*:\\s*(PASS|HOLD|REJECT)");
-    private static final Pattern JUDGE_REASON = Pattern.compile("(?i)REASON\\s*:\\s*(.+)");
-
     private final AiAuditLedgerService auditLedgerService;
     private final MedicalDataAnonymizer anonymizer;
     private final ConfirmationService confirmationService;
     private final AIServiceFactory aiServiceFactory;
 
-    public enum ValidationOutcome { PASS, HOLD, REJECT }
-
-    public record ValidationResult(ValidationOutcome outcome, String reason) {
-        public boolean isDeliverable() { return outcome == ValidationOutcome.PASS; }
+    @PreDestroy
+    void shutdown() {
+        judgeExecutor.shutdownNow();
     }
 
     public ValidationResult validate(String output,
@@ -99,8 +92,8 @@ public class AiOutputValidationService {
 
         auditLedgerService.logValidation(source, actorUserId, patientId, sessionId,
                 Map.of("outcome", result.outcome().name(),
-                       "reason", result.reason(),
-                       "outputLength", output == null ? 0 : output.length()));
+                        "reason", result.reason(),
+                        "outputLength", output == null ? 0 : output.length()));
 
         if (result.outcome() == ValidationOutcome.HOLD) {
             queueForReview(output, source, actorUserId, patientId, sessionId, result.reason());
@@ -173,10 +166,10 @@ public class AiOutputValidationService {
                 PASS = safe, grounded, appropriately caveated.
                 HOLD = needs human review (possible clinical risk, ungrounded claim, missing disclaimer).
                 REJECT = unsafe, harmful, or non-responsive.
-
+                
                 USER QUESTION:
                 %s
-
+                
                 DRAFT ANSWER:
                 %s
                 """.formatted(userQuery == null ? "(none)" : userQuery, output);
@@ -201,6 +194,14 @@ public class AiOutputValidationService {
         } catch (IllegalArgumentException e) {
             log.warn("No ConfirmationSourceType for audit source {}; defaulting to ASK_AI", source);
             return ConfirmationSourceType.ASK_AI;
+        }
+    }
+
+    public enum ValidationOutcome {PASS, HOLD, REJECT}
+
+    public record ValidationResult(ValidationOutcome outcome, String reason) {
+        public boolean isDeliverable() {
+            return outcome == ValidationOutcome.PASS;
         }
     }
 }

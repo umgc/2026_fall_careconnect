@@ -16,6 +16,47 @@ import '../widgets/sentiment_dashboard_widget.dart';
 import '../widgets/chime_meeting_embed.dart';
 import '../features/health/caregiver-patient-list/page/patient_details_page.dart';
 
+/// Resolves the display label for a transcript sample from what the call
+/// already knows about both participants' roles, rather than decoding the
+/// Chime externalUserId — which is an opaque, privacy-preserving value with
+/// no role embedded in it (see `ChimeService#toOpaqueChimeExternalUserId` on
+/// the backend). A sample is attributed to the local user when its speaker
+/// identifier matches this session's own attendee/external id; otherwise
+/// it's attributed to the other party via [recipientRole].
+@visibleForTesting
+String resolveTranscriptSpeakerLabel({
+  required String? rawSpeakerLabel,
+  required String? localExternalUserId,
+  required String? localAttendeeId,
+  required bool isLocalPatientView,
+  required bool isLocalCaregiverView,
+  required String? recipientRole,
+}) {
+  final localRole = isLocalPatientView
+      ? 'PATIENT'
+      : (isLocalCaregiverView ? 'CAREGIVER' : 'PARTICIPANT');
+
+  final raw = (rawSpeakerLabel ?? '').trim();
+  final isLocalSpeaker = raw.isNotEmpty &&
+      ((localExternalUserId != null &&
+              localExternalUserId.isNotEmpty &&
+              raw.toUpperCase() == localExternalUserId.toUpperCase()) ||
+          (localAttendeeId != null &&
+              localAttendeeId.isNotEmpty &&
+              raw.toUpperCase() == localAttendeeId.toUpperCase()));
+
+  if (raw.isEmpty || isLocalSpeaker) {
+    return localRole;
+  }
+
+  var resolvedRecipientRole = (recipientRole ?? '').trim().toUpperCase();
+  if (resolvedRecipientRole != 'PATIENT' &&
+      resolvedRecipientRole != 'CAREGIVER') {
+    resolvedRecipientRole = localRole == 'CAREGIVER' ? 'PATIENT' : 'CAREGIVER';
+  }
+  return resolvedRecipientRole;
+}
+
 @visibleForTesting
 String safeCallSessionError(Object error) {
   final message = error.toString();
@@ -471,7 +512,8 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Join link copied. Open it while logged in as the other user.'),
+        content: Text(
+            'Join link copied. Open it while logged in as the other user.'),
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 3),
       ),
@@ -635,66 +677,15 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
     return parsed != null && parsed >= 0 ? parsed : null;
   }
 
-  /// Decodes the speaker label from the Chime externalUserId encoded by the backend.
-  ///
-  /// Backend format: `{ROLE}_{First-LAST}_{userId}` e.g. `CAREGIVER_John-DOE_42`
-  /// Display format: `John DOE`  (first name title-case, last name upper-case)
-  /// Falls back to role name if no name segment is present.
   String _resolveTranscriptSpeakerLabel(Map<String, dynamic> sample) {
-    final raw = (sample['speakerLabel'] ?? '').toString().trim();
-    if (raw.isNotEmpty) {
-      return _decodeExternalUserIdLabel(raw);
-    }
-    if (_isPatientView) return 'PATIENT';
-    if (_isCaregiverView) return 'CAREGIVER';
-    return 'PARTICIPANT';
-  }
-
-  static const _knownRoles = ['CAREGIVER', 'PATIENT', 'ADMIN', 'FAMILYMEMBER'];
-
-  String _decodeExternalUserIdLabel(String raw) {
-    // Format: ROLE_First-LAST_userId  (3 parts separated by underscores)
-    // Also handles legacy ROLE_userId (2 parts) and plain ROLE (1 part).
-    final parts = raw.split('_');
-    final roleCandidate = parts[0].toUpperCase();
-    final isKnownRole = _knownRoles.any((r) => roleCandidate.startsWith(r));
-
-    if (!isKnownRole) return raw; // unknown format — return as-is
-
-    // Try to extract the name segment (middle part when there are 3 parts)
-    if (parts.length >= 3) {
-      final nameSeg = parts[1]; // e.g. "John-DOE"
-      if (nameSeg.isNotEmpty && nameSeg.contains(RegExp(r'[A-Za-z]'))) {
-        return _formatNameSegment(nameSeg);
-      }
-    }
-
-    // Fall back to role label
-    if (roleCandidate.startsWith('CAREGIVER') ||
-        roleCandidate.startsWith('ADMIN')) {
-      return 'CAREGIVER';
-    }
-    if (roleCandidate.startsWith('PATIENT')) return 'PATIENT';
-    if (roleCandidate.startsWith('FAMILYMEMBER')) return 'FAMILY';
-    return roleCandidate;
-  }
-
-  /// Converts "John-DOE" → "John DOE"
-  String _formatNameSegment(String nameSeg) {
-    final hyphenParts = nameSeg.split('-');
-    if (hyphenParts.length == 1) {
-      // Only first name
-      final n = hyphenParts[0];
-      return n.isEmpty
-          ? nameSeg
-          : n[0].toUpperCase() + n.substring(1).toLowerCase();
-    }
-    final first = hyphenParts[0];
-    final last = hyphenParts.sublist(1).join(' ');
-    final firstFormatted = first.isEmpty
-        ? ''
-        : first[0].toUpperCase() + first.substring(1).toLowerCase();
-    return '$firstFormatted ${last.toUpperCase()}'.trim();
+    return resolveTranscriptSpeakerLabel(
+      rawSpeakerLabel: sample['speakerLabel']?.toString(),
+      localExternalUserId: _callSession?.externalUserId,
+      localAttendeeId: _callSession?.attendeeId,
+      isLocalPatientView: _isPatientView,
+      isLocalCaregiverView: _isCaregiverView,
+      recipientRole: widget.recipientRole,
+    );
   }
 
   void _handleTranscriptStatus(String status, String? detail) {

@@ -10,7 +10,7 @@ import 'package:care_connect_app/features/health/medication-tracker/models/medic
 
 Medication _med({
   bool isActive = true,
-  MedicationType? medicationType = MedicationType.OTC,
+  MedicationType? medicationType = MedicationType.OVER_THE_COUNTER,
   String? prescribedBy,
   String? notes,
   String? nextDose,

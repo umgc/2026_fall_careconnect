@@ -80,8 +80,7 @@ class _StmlSearchPageState extends State<StmlSearchPage> {
     }
   }
 
-  String _formatDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
+  String _formatDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 
@@ -130,7 +129,9 @@ class _StmlSearchPageState extends State<StmlSearchPage> {
                         onPressed: () => _pickDate(isFrom: true),
                         icon: const Icon(Icons.calendar_today, size: 18),
                         label: Text(
-                          _fromDate == null ? 'From date' : _formatDate(_fromDate!),
+                          _fromDate == null
+                              ? 'From date'
+                              : _formatDate(_fromDate!),
                         ),
                       ),
                     ),
@@ -192,7 +193,8 @@ class _StmlSearchPageState extends State<StmlSearchPage> {
                 'Enter a keyword, sender, or date range to search your call, '
                 'visit, and mail history.',
                 textAlign: TextAlign.center,
-                style: AppTheme.bodyLarge.copyWith(color: AppTheme.textSecondary),
+                style:
+                    AppTheme.bodyLarge.copyWith(color: AppTheme.textSecondary),
               ),
             ],
           ),
@@ -219,7 +221,8 @@ class _StmlSearchPageState extends State<StmlSearchPage> {
                 style: const TextStyle(fontSize: 18),
               ),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _search, child: const Text('Try again')),
+              ElevatedButton(
+                  onPressed: _search, child: const Text('Try again')),
             ],
           ),
         ),
@@ -243,7 +246,8 @@ class _StmlSearchPageState extends State<StmlSearchPage> {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: results.length,
-      itemBuilder: (context, index) => _SearchResultCard(result: results[index]),
+      itemBuilder: (context, index) =>
+          _SearchResultCard(result: results[index]),
     );
   }
 }
@@ -272,12 +276,14 @@ class _SearchResultCard extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 result.sourceType,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
               const Spacer(),
               Text(
                 result.date,
-                style: AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
+                style:
+                    AppTheme.bodySmall.copyWith(color: AppTheme.textSecondary),
               ),
             ],
           ),
@@ -289,7 +295,8 @@ class _SearchResultCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 8),
-          Text(result.content, style: const TextStyle(fontSize: 18, height: 1.3)),
+          Text(result.content,
+              style: const TextStyle(fontSize: 18, height: 1.3)),
         ],
       ),
     );

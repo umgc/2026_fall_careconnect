@@ -16,7 +16,8 @@ class FriendRequestDto {
       id: json['id'],
       fromUserId: json['fromUserId'],
       toUserId: json['toUserId'],
-      fromUsername: json['from_username'], // or json['fromUsername'] based on backend
+      fromUsername:
+          json['from_username'], // or json['fromUsername'] based on backend
     );
   }
 }

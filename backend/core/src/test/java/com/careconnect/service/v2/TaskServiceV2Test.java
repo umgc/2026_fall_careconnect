@@ -815,8 +815,7 @@ class TaskServiceV2Test {
 
             service.createTask(1L, dto);
 
-            @SuppressWarnings("unchecked")
-            final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
+            @SuppressWarnings("unchecked") final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
             verify(taskRepository).saveAll(captor.capture());
             final List<Task> occurrences = captor.getValue();
             assertThat(occurrences).allSatisfy(t ->
@@ -875,8 +874,7 @@ class TaskServiceV2Test {
 
             service.createTask(1L, dto);
 
-            @SuppressWarnings("unchecked")
-            final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
+            @SuppressWarnings("unchecked") final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
             verify(taskRepository).saveAll(captor.capture());
             // Only 1 new occurrence (2025-06-03), since parent=2025-06-01 and 2025-06-02 exists
             assertThat(captor.getValue()).hasSize(1);
@@ -1010,8 +1008,7 @@ class TaskServiceV2Test {
 
             service.createTask(1L, dto);
 
-            @SuppressWarnings("unchecked")
-            final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
+            @SuppressWarnings("unchecked") final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
             verify(taskRepository).saveAll(captor.capture());
             assertThat(captor.getValue()).allSatisfy(t ->
                     assertThat(t.getNotifications()).isEmpty()
@@ -1916,8 +1913,7 @@ class TaskServiceV2Test {
 
             service.deleteTask(1L, true);
 
-            @SuppressWarnings("unchecked")
-            final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
+            @SuppressWarnings("unchecked") final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
             verify(taskRepository).deleteAll(captor.capture());
             assertThat(captor.getValue()).hasSize(3); // 2 children + parent
         }
@@ -1937,8 +1933,7 @@ class TaskServiceV2Test {
 
             service.deleteTask(2L, true);
 
-            @SuppressWarnings("unchecked")
-            final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
+            @SuppressWarnings("unchecked") final ArgumentCaptor<List<Task>> captor = ArgumentCaptor.forClass(List.class);
             verify(taskRepository).deleteAll(captor.capture());
             assertThat(captor.getValue()).hasSize(3);
         }

@@ -11,22 +11,22 @@ import java.util.UUID;
 
 @Repository
 public interface EvvRecordLocationRepository extends JpaRepository<EvvRecordLocation, UUID> {
-    
+
     /**
      * Find a specific location by EVV record ID and role (CHECK_IN or CHECK_OUT)
      */
     Optional<EvvRecordLocation> findByEvvRecordIdAndRole(Long evvRecordId, EvvLocationRole role);
-    
+
     /**
      * Find all locations for a specific EVV record
      */
     List<EvvRecordLocation> findByEvvRecordId(Long evvRecordId);
-    
+
     /**
      * Delete a specific location by EVV record ID and role
      */
     void deleteByEvvRecordIdAndRole(Long evvRecordId, EvvLocationRole role);
-    
+
     /**
      * Check if a location exists for a specific EVV record and role
      */

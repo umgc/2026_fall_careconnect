@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -43,34 +44,34 @@ public class UserController {
      */
     @PostMapping("/reset-password")
     @Operation(
-        summary = "Reset user password",
-        description = "Reset password for any user (caregiver or patient) using username (email), reset token, and new password. This endpoint completes the password reset flow after the user receives a reset token via email.",
-        tags = {"Authentication", "User Management"},
-        security = {}, // No authentication required for password reset
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Password reset request containing username (email), reset token, and new password",
-            required = true,
-            content = @Content(
-                mediaType = "application/json",
-                schema = @Schema(implementation = com.careconnect.dto.ResetPasswordRequest.class),
-                examples = @ExampleObject(
-                    name = "Password Reset Example",
-                    value = "{\n    \"username\": \"user@example.com\",\n    \"resetToken\": \"abc123-reset-token-xyz789\",\n    \"newPassword\": \"NewSecurePassword123!\"\n}"
-                )
+            summary = "Reset user password",
+            description = "Reset password for any user (caregiver or patient) using username (email), reset token, and new password. This endpoint completes the password reset flow after the user receives a reset token via email.",
+            tags = {"Authentication", "User Management"},
+            security = {}, // No authentication required for password reset
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Password reset request containing username (email), reset token, and new password",
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = com.careconnect.dto.ResetPasswordRequest.class),
+                            examples = @ExampleObject(
+                                    name = "Password Reset Example",
+                                    value = "{\n    \"username\": \"user@example.com\",\n    \"resetToken\": \"abc123-reset-token-xyz789\",\n    \"newPassword\": \"NewSecurePassword123!\"\n}"
+                            )
+                    )
             )
-        )
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Password reset successful",
-            content = @Content(mediaType = "application/json",
-                examples = @ExampleObject(value = "{\n    \"message\": \"Password updated successfully\"\n}")
+            @ApiResponse(responseCode = "200", description = "Password reset successful",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n    \"message\": \"Password updated successfully\"\n}")
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid request or expired token",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n    \"error\": \"Invalid or expired reset token\"\n}")
+                    )
             )
-        ),
-        @ApiResponse(responseCode = "400", description = "Invalid request or expired token",
-            content = @Content(mediaType = "application/json",
-                examples = @ExampleObject(value = "{\n    \"error\": \"Invalid or expired reset token\"\n}")
-            )
-        )
     })
     public ResponseEntity<?> resetPassword(@RequestBody com.careconnect.dto.ResetPasswordRequest req) {
         try {
@@ -87,34 +88,34 @@ public class UserController {
      */
     @PostMapping("/setup-password")
     @Operation(
-        summary = "Set up password for new user",
-        description = "Set up password for new users (patients) using verification token from registration email. This is different from password reset - it's for users who haven't set their password yet.",
-        tags = {"Authentication", "User Management"},
-        security = {}, // No authentication required for password setup
-        requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
-            description = "Password setup request containing username (email), verification token, and new password",
-            required = true,
-            content = @Content(
-                mediaType = "application/json",
-                schema = @Schema(implementation = com.careconnect.dto.SetupPasswordRequest.class),
-                examples = @ExampleObject(
-                    name = "Password Setup Example",
-                    value = "{\n    \"username\": \"patient@example.com\",\n    \"verificationToken\": \"c4de0569-80a6-44f5-a6ad-dd0adba19c6e\",\n    \"newPassword\": \"MyNewPassword123!\"\n}"
-                )
+            summary = "Set up password for new user",
+            description = "Set up password for new users (patients) using verification token from registration email. This is different from password reset - it's for users who haven't set their password yet.",
+            tags = {"Authentication", "User Management"},
+            security = {}, // No authentication required for password setup
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    description = "Password setup request containing username (email), verification token, and new password",
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = com.careconnect.dto.SetupPasswordRequest.class),
+                            examples = @ExampleObject(
+                                    name = "Password Setup Example",
+                                    value = "{\n    \"username\": \"patient@example.com\",\n    \"verificationToken\": \"c4de0569-80a6-44f5-a6ad-dd0adba19c6e\",\n    \"newPassword\": \"MyNewPassword123!\"\n}"
+                            )
+                    )
             )
-        )
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Password setup successful",
-            content = @Content(mediaType = "application/json",
-                examples = @ExampleObject(value = "{\n    \"message\": \"Password setup completed successfully\"\n}")
+            @ApiResponse(responseCode = "200", description = "Password setup successful",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n    \"message\": \"Password setup completed successfully\"\n}")
+                    )
+            ),
+            @ApiResponse(responseCode = "400", description = "Invalid request or token",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n    \"error\": \"Invalid or expired verification token\"\n}")
+                    )
             )
-        ),
-        @ApiResponse(responseCode = "400", description = "Invalid request or token",
-            content = @Content(mediaType = "application/json",
-                examples = @ExampleObject(value = "{\n    \"error\": \"Invalid or expired verification token\"\n}")
-            )
-        )
     })
     public ResponseEntity<?> setupPassword(@RequestBody com.careconnect.dto.SetupPasswordRequest req) {
         try {
@@ -162,6 +163,7 @@ public class UserController {
 
         return ResponseEntity.ok(response);
     }
+
     @PutMapping("/{userId}/leaderboard-opt-in")
     public ResponseEntity<?> toggleLeaderboardOptIn(
             @PathVariable Long userId,
@@ -192,31 +194,31 @@ public class UserController {
 
     @GetMapping("/check-email")
     @Operation(
-        summary = "Check if email exists",
-        description = "Check if a user exists with the given email address and return their role if they do",
-        tags = {"User Management"},
-        security = {}
+            summary = "Check if email exists",
+            description = "Check if a user exists with the given email address and return their role if they do",
+            tags = {"User Management"},
+            security = {}
     )
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Email check completed",
-            content = @Content(mediaType = "application/json",
-                examples = @ExampleObject(value = "{\n    \"exists\": true,\n    \"role\": \"PATIENT\"\n}")
+            @ApiResponse(responseCode = "200", description = "Email check completed",
+                    content = @Content(mediaType = "application/json",
+                            examples = @ExampleObject(value = "{\n    \"exists\": true,\n    \"role\": \"PATIENT\"\n}")
+                    )
             )
-        )
     })
     public ResponseEntity<?> checkEmailExists(@RequestParam String email) {
         Optional<User> userOpt = userRepo.findByEmail(email);
-        
+
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             return ResponseEntity.ok(Map.of(
-                "exists", true,
-                "role", user.getRole(),
-                "userId", user.getId()
+                    "exists", true,
+                    "role", user.getRole(),
+                    "userId", user.getId()
             ));
         } else {
             return ResponseEntity.ok(Map.of(
-                "exists", false
+                    "exists", false
             ));
         }
     }

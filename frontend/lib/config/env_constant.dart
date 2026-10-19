@@ -5,17 +5,13 @@ import 'package:flutter/foundation.dart';
 // --- Raw values from --dart-define ---
 // We define all the compile-time variables here
 
-const String _agoraAppId = String.fromEnvironment('AGORA_APP_ID');
-const String _agoraAppCertificate = String.fromEnvironment(
-  'AGORA_APP_CERTIFICATE',
-);
-
 const String _backendBaseUrl = String.fromEnvironment(
   'BACKEND_URL',
   defaultValue: '',
 );
 
 const String _wsOverrideUrl = String.fromEnvironment('WEBSOCKET_SERVER_URL');
+const String _wsGatewayUrl = String.fromEnvironment('WEBSOCKET_GATEWAY_URL');
 const String _backendToken = String.fromEnvironment('CC_BACKEND_TOKEN');
 const String _jwtSecret = String.fromEnvironment('JWT_SECRET');
 const String _deepSeekUri = String.fromEnvironment('DEEPSEEK_URI');
@@ -33,6 +29,18 @@ const String _appPort = String.fromEnvironment(
 const String _fitbitClientId = String.fromEnvironment('FITBIT_CLIENT_ID');
 const String _fitbitClientSecret = String.fromEnvironment(
   'FITBIT_CLIENT_SECRET',
+);
+const String _googlePlacesApiKey = String.fromEnvironment(
+  'GOOGLE_PLACES_API_KEY',
+  defaultValue: '',
+);
+const String _appleMerchantId = String.fromEnvironment(
+  'APPLE_MERCHANT_ID',
+  defaultValue: '',
+);
+const String _googlePayMerchantId = String.fromEnvironment(
+  'GOOGLE_PAY_MERCHANT_ID',
+  defaultValue: '',
 );
 
 String getFitbitClientId() {
@@ -83,24 +91,59 @@ String _getUnifiedWebSocketBaseUrl() {
   return 'ws://localhost:8080';
 }
 
+/// Whether sockets go through the deployed API Gateway WebSocket API, which
+/// closes connections idle for 10 minutes (clients must send heartbeats).
+bool isWebSocketGatewayEnabled() => _wsGatewayUrl.isNotEmpty;
+
+/// Builds a channel URL on the API Gateway WebSocket API.
+@visibleForTesting
+String buildGatewayWebSocketUrl(
+  String gatewayUrl,
+  String channel, {
+  required bool releaseMode,
+}) {
+  if (releaseMode && !gatewayUrl.startsWith('wss://')) {
+    throw Exception('WEBSOCKET_GATEWAY_URL must use wss:// in release builds.');
+  }
+  final base = gatewayUrl.trim().replaceAll(RegExp(r'/+$'), '');
+  return '$base?channel=$channel';
+}
+
+String _webSocketUrl(String channel, String localPath) {
+  if (_wsGatewayUrl.isNotEmpty) {
+    return buildGatewayWebSocketUrl(
+      _wsGatewayUrl,
+      channel,
+      releaseMode: !kDebugMode,
+    );
+  }
+  return '${_getUnifiedWebSocketBaseUrl()}$localPath';
+}
+
 /// Returns the WebRTC signaling server URL (points to /ws/notifications)
 String getWebRTCSignalingServerUrl() {
-  return '${_getUnifiedWebSocketBaseUrl()}/ws/notifications';
+  return _webSocketUrl('notifications', '/ws/notifications');
 }
 
 /// Returns the WebSocket notification URL (points to /ws/notifications)
 String getWebSocketNotificationUrl() {
-  return '${_getUnifiedWebSocketBaseUrl()}/ws/notifications';
+  return _webSocketUrl('notifications', '/ws/notifications');
 }
 
 /// Returns the WebSocket URL for call invitation/accept/decline events
 String getCallNotificationWebSocketUrl() {
-  return '${_getUnifiedWebSocketBaseUrl()}/ws/calls-ws';
+  return _webSocketUrl('calls', '/ws/calls-ws');
 }
 
 /// Returns the WebSocket URL for the real-time P2P chat service
 String getChatWebSocketUrl() {
-  return '${_getUnifiedWebSocketBaseUrl()}/ws/chat';
+  return _webSocketUrl('chat', '/ws/chat');
+}
+
+/// Returns the WebSocket URL for general real-time updates and email
+/// verification (points to /ws/careconnect)
+String getCareConnectWebSocketUrl() {
+  return _webSocketUrl('careconnect', '/ws/careconnect');
 }
 
 /// Returns the Backend Base URL
@@ -116,6 +159,7 @@ String getBackendBaseUrl() {
     } else {
       switch (defaultTargetPlatform) {
         case TargetPlatform.android:
+          // 10.0.2.2 is the Android emulator's alias for the host loopback.
           resolved = 'http://10.0.2.2:8080';
           break;
         default:
@@ -127,7 +171,7 @@ String getBackendBaseUrl() {
   // https enforcement disabled for local testing
   // TODO: re-enable before production release
   //if (!kDebugMode && !resolved.startsWith('https://')) {
-    //throw Exception('BACKEND_URL must use https:// in release builds.');
+  //throw Exception('BACKEND_URL must use https:// in release builds.');
   //}
 
   return resolved;
@@ -246,6 +290,12 @@ String getGoogleClientId() {
   }
   return clientId;
 }
+
+String getGooglePlacesApiKey() => _googlePlacesApiKey;
+
+String getAppleMerchantId() => _appleMerchantId;
+
+String getGooglePayMerchantId() => _googlePayMerchantId;
 
 String getAppDomain() {
   // Now uses the const _appDomain (which has its own defaultValue)

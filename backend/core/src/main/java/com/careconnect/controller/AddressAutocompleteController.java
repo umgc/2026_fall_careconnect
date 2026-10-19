@@ -7,6 +7,7 @@ import org.springframework.web.client.RestTemplate;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -22,23 +23,22 @@ import java.util.Map;
 @Tag(name = "Address", description = "Address autocomplete and Place Details endpoints")
 public class AddressAutocompleteController {
 
+    private static final String PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
+    private static final String PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
+    private final RestTemplate restTemplate = new RestTemplate();
     @Value("${google.places.api-key:}")
     private String googlePlacesApiKey;
 
-    private static final String PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json";
-    private static final String PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
-
-    private final RestTemplate restTemplate = new RestTemplate();
-
     /**
      * Get address suggestions from Google Places API
+     *
      * @param input User's partial address input
      * @return Google Places autocomplete predictions
      */
     @GetMapping("/suggestions")
     @Operation(
-        summary = "Get address suggestions",
-        description = "Returns address suggestions from Google Places Autocomplete API based on user input"
+            summary = "Get address suggestions",
+            description = "Returns address suggestions from Google Places Autocomplete API based on user input"
     )
     public ResponseEntity<Map<String, Object>> getAddressSuggestions(
             @Parameter(description = "Partial address input") @RequestParam String input) {
@@ -72,13 +72,14 @@ public class AddressAutocompleteController {
 
     /**
      * Get detailed place information including address components
+     *
      * @param placeId Google Place ID
      * @return Detailed place information
      */
     @GetMapping("/details")
     @Operation(
-        summary = "Get place details",
-        description = "Returns detailed information about a place including address components and geometry"
+            summary = "Get place details",
+            description = "Returns detailed information about a place including address components and geometry"
     )
     public ResponseEntity<Map<String, Object>> getPlaceDetails(
             @Parameter(description = "Google Place ID") @RequestParam String placeId) {

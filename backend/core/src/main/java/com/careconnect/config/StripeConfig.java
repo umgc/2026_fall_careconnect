@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "careconnect.stripe.enabled", havingValue = "true", matchIfMissing = true)
 public class StripeConfig {
 
-    @Value("${stripe.secret-key:}")   
+    @Value("${stripe.secret-key:}")
     private String secretKey;
 
     @PostConstruct

@@ -1,64 +1,101 @@
 package com.careconnect.config;
 
-import java.util.concurrent.TimeUnit;
-
+import com.careconnect.security.JwtAuthenticationFilter;
+import com.careconnect.security.JwtTokenProvider;
+import com.careconnect.service.OAuthHelperService;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
-import com.careconnect.security.JwtAuthenticationFilter;
-import com.careconnect.security.JwtTokenProvider;
-
-import jakarta.servlet.http.HttpServletResponse;
+import java.util.concurrent.TimeUnit;
 
 @Configuration
 @EnableMethodSecurity
+@Slf4j
 public class SecurityConfig {
 
     private static final String ROLE_ADMIN = "ADMIN";
 
-    @Bean
-    @Order(0)
-    @Profile("dev")
-    SecurityFilterChain devChain(
-            HttpSecurity http,
-            CorsConfigurationSource corsConfigurationSource
-    ) throws Exception {
+    @Autowired
+    private ObjectProvider<OAuthHelperService> oauthHelperService;
 
-        return http
-                .securityMatcher("/v1/api/dev/**")
+    /**
+     * The OAuth sign-in flows that link an external account, such as Medicare (Blue Button).
+     * <p>
+     * Separate from {@link #apiChain} because the two need opposite things. An OAuth sign-in has
+     * to keep state in a session across the browser's trip to the provider and back (the
+     * authorization request and our link token); the JWT API must not, or a session left behind by
+     * that sign-in would authenticate later API calls. So only these paths may create or read a
+     * session, and {@code apiChain} stays stateless. See CLAUDE.md: STATELESS and oauth2Login()
+     * cannot share a chain.
+     * <p>
+     * Every path here is reachable without a JWT, because the browser doing the sign-in cannot send
+     * one. Entry is guarded instead: {@code /oauth2/connect} requires a one-time link token issued
+     * to a signed-in patient, the redirect is protected by OAuth {@code state} and PKCE, and the
+     * success handler discards the session once the tokens are stored.
+     * <p>
+     * Where Spring's OAuth client auto-configuration is switched off, or a security test slice loads
+     * this config without the services behind it, there is nothing to sign in with, so the chain is built without
+     * {@code oauth2Login()}: the paths still exist and still cannot reach the API chain.
+     */
+    @Bean
+    @Order(-1)
+    SecurityFilterChain oauthLinkChain(
+            HttpSecurity http,
+            CorsConfigurationSource corsConfigurationSource,
+            ObjectProvider<ClientRegistrationRepository> clientRegistrations) throws Exception {
+
+        http
+                .securityMatcher("/oauth2/**", "/login/oauth2/**")
+                // A browser redirect flow: state and PKCE protect it, and nothing here accepts a form post.
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
-                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint((req, res, e) ->
-                                res.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"))
-                        .accessDeniedHandler((req, res, e) ->
-                                res.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden"))
-                )
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
-                        .requestMatchers(HttpMethod.PUT, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/recent").hasRole(ROLE_ADMIN)
-                        .anyRequest().denyAll()
-                )
-                .build();
+                .headers(headers -> headers
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(TimeUnit.DAYS.toSeconds(365))))
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+
+        final ClientRegistrationRepository clientRegistrationRepository = clientRegistrations.getIfAvailable();
+        final OAuthHelperService handler = oauthHelperService.getIfAvailable();
+        if (clientRegistrationRepository != null && handler != null) {
+            DefaultOAuth2AuthorizationRequestResolver resolver =
+                    new DefaultOAuth2AuthorizationRequestResolver(
+                            clientRegistrationRepository,
+                            "/oauth2/authorization"
+                    );
+            resolver.setAuthorizationRequestCustomizer(
+                    OAuth2AuthorizationRequestCustomizers.withPkce()
+            );
+            http.oauth2Login(oauth -> oauth
+                    .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(resolver))
+                    .successHandler(handler)
+                    .failureHandler(handler));
+        }
+        return http.build();
     }
 
     @Bean
-    @Order(1)
+    @Order(0)
     SecurityFilterChain apiChain(
             HttpSecurity http,
             JwtTokenProvider jwt,
@@ -73,7 +110,7 @@ public class SecurityConfig {
                 .headers(headers -> headers
                         .contentTypeOptions(contentType -> {
                         })
-                        .frameOptions(frame -> frame.deny())
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::deny)
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(TimeUnit.DAYS.toSeconds(365)))
@@ -99,8 +136,8 @@ public class SecurityConfig {
                              • AWS ALB / ECS / Fargate health checks
                              • Monitoring tools
                         */
-                       .requestMatchers("/actuator/health").permitAll()
-                        
+                        .requestMatchers("/actuator/health").permitAll()
+
                         /* ---------- Swagger / API docs ------------------------ */
                         .requestMatchers(
                                 "/swagger-ui/**",
@@ -131,7 +168,11 @@ public class SecurityConfig {
                                 "/oauth/**",
                                 "/ws/**",
                                 "/api/notifications/demo/**",
-                                "/api/internal/chime/**"
+                                "/api/internal/chime/**",
+                                // Epic SMART redirect target — unauthenticated; user is recovered
+                                // from the signed, single-use state (Epic Phase 0).
+                                "/api/epic/callback",
+                                "/api/internal/ws/**"
                         ).permitAll()
 
                         /* ---------- Actuator / health checks ------------------- */
@@ -142,61 +183,60 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
                         /* ---------- Admin-only endpoints ---------------------- */
-                        .requestMatchers("/v1/api/debug/**").hasRole(ROLE_ADMIN)
-                        .requestMatchers("/v1/api/email-test/**").hasRole(ROLE_ADMIN)
-                        .requestMatchers("/v1/api/admin/analytics/**").hasRole(ROLE_ADMIN)
-                        .requestMatchers("/v1/api/admin/users/**").hasRole(ROLE_ADMIN)
+                        .requestMatchers("/v1/api/debug/**",
+                                "/v1/api/email-test/**",
+                                "/v1/api/admin/analytics/**",
+                                "/v1/api/admin/users/**"
+                                ).hasRole(ROLE_ADMIN)
+                        /* ---------- Telemetry Admin Endpoints ------------------ */
+                        .requestMatchers(HttpMethod.PUT, "/v1/api/dev/telemetry/enabled").hasRole(ROLE_ADMIN)
+                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/recent").hasRole(ROLE_ADMIN)
+
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
-                        .requestMatchers("/v1/api/care-circle/**").authenticated()
 
-                        /* ---------- Authenticated endpoints ------------------- */
-                        .requestMatchers("/v1/api/subscriptions/**").authenticated()
-                        .requestMatchers("/v3/api/subscriptions/**").authenticated()
+                        // Kept from before the matcher list was collapsed: public on team-e-develop.
                         .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
-                        .requestMatchers("/v1/api/invoices/**").authenticated()
-                        .requestMatchers("/v1/api/homecare-documents/**").authenticated()
-                        .requestMatchers("/v1/api/notification-settings/**").authenticated()
-                        .requestMatchers("/v1/api/patients/**").authenticated()
-                        .requestMatchers("/v1/api/caregivers/**").authenticated()
-                        .requestMatchers("/v1/api/allergies/**").authenticated()
-                        .requestMatchers("/v1/api/symptoms/**").authenticated()
-                        .requestMatchers("/v1/api/ai/**", "/api/ai/**").authenticated()
-                        .requestMatchers("/v1/api/ai/deepseek/**").authenticated()
-                        .requestMatchers("/v1/api/family-members/**").authenticated()
-                        .requestMatchers("/v1/api/ai-chat/**").authenticated()
-                        .requestMatchers("/v1/api/users/**").authenticated()
-                        .requestMatchers("/v1/api/tasks/**").authenticated()
-                        .requestMatchers("/v2/api/tasks/**").authenticated()
-                        .requestMatchers("/v1/api/messages/**").authenticated()
-                        .requestMatchers("/v1/api/evv/**").authenticated()
-                        .requestMatchers("/v1/api/notifications/**").authenticated()
-                        .requestMatchers("/v1/api/friends/**").authenticated()
-                        .requestMatchers("/v1/api/connection-requests/**").authenticated()
-                        .requestMatchers("/v1/api/feed/**").authenticated()
-                        .requestMatchers("/v1/api/comments/**").authenticated()
-                        .requestMatchers("/v1/api/files/**").authenticated()
-                        .requestMatchers("/v1/api/templates/**").authenticated()
-                        .requestMatchers("/v1/api/analytics/**").authenticated()
-                        .requestMatchers("/v1/api/scheduled-visits/**").authenticated()
-                        .requestMatchers("/v1/api/patient-notetaker/**").authenticated()
-                        .requestMatchers("/v1/api/link-management/**").authenticated()
-                        .requestMatchers("/v1/api/caregiver-patient-links/**").authenticated()
-                        .requestMatchers("/v1/api/symptoms-entry/**").authenticated()
-                        .requestMatchers("/v1/api/alexa/**").authenticated()
-                        .requestMatchers("/v1/api/usps/**", "/api/usps/**").authenticated()
-                        .requestMatchers("/v1/api/questions/**", "/api/questions/**").authenticated()
-                        .requestMatchers("/v1/checkins/**", "/api/checkins/**").authenticated()
-                        .requestMatchers("/v1/api/patient/**").authenticated()
-                        .requestMatchers("/api/patient/**").authenticated()
-                        .requestMatchers("/api/gamification/**").authenticated()
-                        .requestMatchers("/api/websocket/**").authenticated()
+
+                        /* ---------- Telemetry: intentionally unauthenticated ----
+                         * These two matchers are public in EVERY profile, prod
+                         * included. That is deliberate, not an oversight:
+                         *
+                         *  - The Flutter client posts telemetry with no bearer
+                         *    token (ApiService.sendTelemetryEventV3), and events
+                         *    fire before login (screen_view on the login and
+                         *    signup routes, session_start). Requiring auth here
+                         *    does not harden the endpoint, it silently drops
+                         *    every pre-login event and 401s the rest.
+                         *  - Telemetry.getBackendEnabled() reads /enabled with no
+                         *    token, so that GET must stay public or the client
+                         *    fails open and keeps emitting after an opt-out.
+                         *
+                         * The endpoint is therefore defended by WHAT it accepts,
+                         * not by WHO calls it:
+                         *  - TelemetryService rejects any event outside its
+                         *    allowlist and strips non-allowlisted detail keys.
+                         *  - TelemetryController bounds payload size before the
+                         *    body reaches the service or the database.
+                         *
+                         * Mutating and reading stored telemetry stays ADMIN-only
+                         * (PUT /enabled and GET /recent, declared above).
+                         *
+                         * Rate limiting is NOT yet implemented. Until it is, this
+                         * endpoint accepts unauthenticated writes at any rate from
+                         * any source. Tracked as follow-up work.
+                         */
+                        .requestMatchers(HttpMethod.POST, "/v1/api/dev/telemetry").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/api/dev/telemetry/enabled").permitAll()
+
                         // Explicit matcher before /v1/api/** and /api/** catch-alls; both paths require auth.
                         // Legacy /api/email-credentials/** kept for clients not yet on the /v1 prefix.
-                        .requestMatchers("/v1/api/email-credentials/**", "/api/email-credentials/**").authenticated()
-                        .requestMatchers("/api/v3/calls/**").authenticated()
-                        .requestMatchers("/v1/api/**", "/v2/api/**", "/v3/api/**").authenticated()
-                        .requestMatchers("/api/**").authenticated()
+                        // /v1/checkins is not under /v1/api, so it needs its own matcher or it falls to denyAll.
+                        .requestMatchers("/v1/checkins/**").authenticated()
+                        .requestMatchers(
+                                "/v1/api/**", "/v2/api/**", "/v3/api/**",
+                                "/api/**"
+                                ).authenticated()
 
                         /* ---------- Everything else: deny --------------------- */
                         .anyRequest().denyAll()

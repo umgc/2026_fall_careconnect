@@ -16,7 +16,7 @@ public interface CallTranscriptArchiveRepository
      * @return most recent archive, when present
      */
     Optional<CallTranscriptArchive>
-            findTopByCallIdOrderByArchivedAtDesc(String callId);
+    findTopByCallIdOrderByArchivedAtDesc(String callId);
 
     /**
      * Returns whether an archive exists for a call.
@@ -31,7 +31,7 @@ public interface CallTranscriptArchiveRepository
      *
      * @param callId call identifier
      * @return matching archives in
-     *     descending archive order
+     * descending archive order
      */
     List<CallTranscriptArchive> findByCallIdOrderByArchivedAtDesc(
             String callId

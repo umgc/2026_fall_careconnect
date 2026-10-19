@@ -22,6 +22,38 @@ final class CitationDeepLinkBuilder {
         this.objectMapper = objectMapper;
     }
 
+    private static String textOrNull(final JsonNode node, final String field) {
+        if (node == null) {
+            return null;
+        }
+        final JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        final String text = value.isTextual() || value.isNumber() ? value.asText() : null;
+        return text == null || text.isBlank() ? null : text.trim();
+    }
+
+    /**
+     * Rejects empty, traversal, and path-separator values so deep links stay single-segment.
+     */
+    static String pathSegment(final String raw) {
+        if (raw == null) {
+            return null;
+        }
+        final String trimmed = raw.trim();
+        if (trimmed.isEmpty()
+                || trimmed.contains("/")
+                || trimmed.contains("\\")
+                || trimmed.contains("..")
+                || trimmed.contains("#")
+                || trimmed.contains("?")
+                || trimmed.contains(":")) {
+            return null;
+        }
+        return trimmed;
+    }
+
     String build(final RankedChunk chunk) {
         if (chunk == null || chunk.recordType() == null) {
             return null;
@@ -30,15 +62,33 @@ final class CitationDeepLinkBuilder {
         return switch (chunk.recordType()) {
             case CALL_SUMMARY -> callSummaryLink(metadata, null);
             case SUMMARY_ACTION_ITEM, SUMMARY_APPOINTMENT, SUMMARY_CARE_INSTRUCTION,
-                    SUMMARY_CONDITION, SUMMARY_SOAP, SUMMARY_CLINICAL_OBSERVATION,
-                    MEDICATION_TIMELINE_EVENT -> summaryChildLink(chunk, metadata);
+                 SUMMARY_CONDITION, SUMMARY_SOAP, SUMMARY_CLINICAL_OBSERVATION,
+                 MEDICATION_TIMELINE_EVENT -> summaryChildLink(chunk, metadata);
             case TRANSCRIPT_SEGMENT -> transcriptLink(metadata);
             case VISIT_SUMMARY -> visitSummaryLink(metadata, chunk.sourceRecordId());
             case CLINICAL_NOTE -> clinicalNoteLink(chunk.patientId(), chunk.sourceRecordId());
             case UPLOADED_DOCUMENT -> documentLink(chunk.sourceRecordId());
             case USPS_MAIL -> mailLink(chunk.sourceRecordId());
+            case EPIC_CONDITION, EPIC_MEDICATION, EPIC_ALLERGY, EPIC_OBSERVATION,
+                    EPIC_DIAGNOSTIC_REPORT, EPIC_IMMUNIZATION, EPIC_PROCEDURE,
+                    EPIC_DOCUMENT, EPIC_ENCOUNTER, EPIC_CARE_PLAN, EPIC_GOAL,
+                    EPIC_CARE_TEAM, EPIC_FAMILY_HISTORY, EPIC_COVERAGE,
+                    EPIC_DEVICE -> epicLink(chunk, metadata);
             default -> null;
         };
+    }
+
+    /**
+     * Epic detail route {@code /epic/{resourceType}/{id}?patientId=...}. Returns null (citation
+     * still renders, untappable) when the FHIR type/id are absent or non-path-safe.
+     */
+    private String epicLink(final RankedChunk chunk, final JsonNode metadata) {
+        final String type = pathSegment(textOrNull(metadata, "fhirResourceType"));
+        final String id = pathSegment(textOrNull(metadata, "fhirResourceId"));
+        if (type == null || id == null || chunk.patientId() == null || chunk.patientId() <= 0) {
+            return null;
+        }
+        return "/epic/" + type + "/" + id + "?patientId=" + chunk.patientId();
     }
 
     private String summaryChildLink(final RankedChunk chunk, final JsonNode metadata) {
@@ -128,37 +178,5 @@ final class CitationDeepLinkBuilder {
         } catch (final Exception ignored) {
             return objectMapper.createObjectNode();
         }
-    }
-
-    private static String textOrNull(final JsonNode node, final String field) {
-        if (node == null) {
-            return null;
-        }
-        final JsonNode value = node.get(field);
-        if (value == null || value.isNull()) {
-            return null;
-        }
-        final String text = value.isTextual() || value.isNumber() ? value.asText() : null;
-        return text == null || text.isBlank() ? null : text.trim();
-    }
-
-    /**
-     * Rejects empty, traversal, and path-separator values so deep links stay single-segment.
-     */
-    static String pathSegment(final String raw) {
-        if (raw == null) {
-            return null;
-        }
-        final String trimmed = raw.trim();
-        if (trimmed.isEmpty()
-                || trimmed.contains("/")
-                || trimmed.contains("\\")
-                || trimmed.contains("..")
-                || trimmed.contains("#")
-                || trimmed.contains("?")
-                || trimmed.contains(":")) {
-            return null;
-        }
-        return trimmed;
     }
 }

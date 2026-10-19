@@ -19,6 +19,36 @@
   "stmlSearch": "Buscar en mi historial",
   "stmlCheckIn": "Preparación de Check-in",
   "calendarAssistant": "Asistente de Calendario",
+  "calendarFilters": "Filtros",
+  "calendarTaskTypes": "Tipos de tarea",
+  "calendarPatients": "Pacientes",
+  "calendarClear": "Borrar",
+  "calendarToday": "Hoy",
+  "calendarMonthly": "Mensual",
+  "calendarWeekly": "Semanal",
+  "calendarDaily": "Diario",
+  "calendarUnknownPatient": "Paciente desconocido",
+  "calendarUnassigned": "Sin asignar",
+  "calendarAllDay": "Todo el día",
+  "calendarNoTasksDay": "No hay tareas para este día",
+  "calendarNoTasksWeek": "No hay tareas esta semana",
+  "calendarCompleted": "Completada",
+  "calendarMarkComplete": "Marcar como completada",
+  "calendarUpdateTaskFailed": "No se pudo actualizar la tarea",
+  "calendarAddTask": "Agregar tarea",
+  "calendarImportIcs": "Importar ICS",
+  "calendarSelectPatientBeforeImport": "Selecciona un paciente antes de importar.",
+  "calendarAssignToPatient": "Asignar al paciente",
+  "calendarChooseFile": "Elegir archivo",
+  "calendarTask": "Tarea",
+  "calendarManageTaskTypes": "Administrar tipos de tarea",
+  "calendarTypeMedication": "Medicamento",
+  "calendarTypeAppointment": "Cita",
+  "calendarTypeExercise": "Ejercicio",
+  "calendarTypeGeneral": "General",
+  "calendarTypeLab": "Laboratorio",
+  "calendarTypePharmacy": "Farmacia",
+  "calendarTypeImported": "Importado",
   "medicationManagement": "Gestión de Medicación",
   "socialFeed": "Red Social",
   "gamification": "Gamificación",
@@ -1013,6 +1043,278 @@
   "homecarereview_digitized": "Digitalizado",
   "homecarereview_reviewed": "(revisado)",
   "homecarereview_savedForm": "Formulario digitalizado guardado",
-  "homecarereview_failedToSave": "No se ha podido guardar el formulario digitalizado"
+  "homecarereview_failedToSave": "No se ha podido guardar el formulario digitalizado",
 
+  "socialFeedInvalidUser": "ID de usuario no válido. Inicia sesión de nuevo.",
+  "socialFeedLoadError": "Error: {message}",
+  "@socialFeedLoadError": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "socialFeedComments": "{count, plural, =1{1 comentario} other{{count} comentarios}}",
+  "@socialFeedComments": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "socialFeedTitle": "Mi feed",
+  "socialFeedEmpty": "Aún no hay publicaciones. Desliza para actualizar.",
+  "socialFeedAddFriend": "Agregar amigo",
+  "socialFeedFriendRequests": "Solicitudes de amistad",
+  "socialFeedMessages": "Mensajes",
+  "socialFeedCreatePost": "Crear publicación",
+
+  "gamificationTitle": "Logros",
+  "gamificationHeading": "Gamificación",
+  "gamificationLevel": "Nivel {level}",
+  "@gamificationLevel": {
+    "placeholders": {
+      "level": {"type": "int"}
+    }
+  },
+  "gamificationAchievements": "Logros",
+  "gamificationLeaderboard": "Ver clasificación",
+  "gamificationUnnamedAchievement": "Logro sin nombre",
+  "gamificationDailyMessage1": "¡Lo estás haciendo muy bien! ¡Sigue así! 💪",
+  "gamificationDailyMessage2": "Los pequeños pasos de cada día conducen a grandes resultados.",
+  "gamificationDailyMessage3": "Cree en ti y en todo lo que eres.",
+  "gamificationDailyMessage4": "Progreso, no perfección.",
+  "gamificationDailyMessage5": "Un día a la vez: ¡tú puedes!",
+
+  "uspsTitle": "Resumen de correo de USPS",
+  "uspsGmailIntegration": "Integración con Gmail",
+  "uspsIntegrationDescription": "CareConnect lee los correos de USPS Informed Delivery en Gmail con acceso de solo lectura. Nunca enviamos, eliminamos ni modificamos tus correos.",
+  "uspsGoogleConnected": "Cuenta de Google conectada. Puedes obtener resúmenes de USPS automáticamente.",
+  "uspsGmailExpired": "El acceso a Gmail ha caducado. Vuelve a conectarlo para seguir sincronizando el correo.",
+  "uspsConnectPrompt": "Conecta tu cuenta de Google para obtener automáticamente los resúmenes de USPS desde Gmail.",
+  "uspsReconnectGoogle": "Volver a conectar la cuenta de Google",
+  "uspsConnectGoogle": "Conectar cuenta de Google",
+  "uspsDisconnectGmail": "Desconectar Gmail",
+  "uspsSelectDigestDate": "Seleccionar fecha del resumen",
+  "uspsDateDescription": "Elige una fecha para ver datos históricos del resumen de USPS.",
+  "uspsGoToday": "Ir a hoy",
+  "uspsSearchHistory": "Buscar en el historial de correo",
+  "uspsSearchDescription": "Busca correo por remitente, asunto o cualquier palabra clave.",
+  "uspsKeywordHint": "Introduce una palabra clave...",
+  "uspsSearch": "Buscar",
+  "uspsFetchDigest": "Obtener resumen",
+  "uspsClearCache": "Borrar caché",
+  "uspsClearSearch": "Borrar búsqueda",
+  "uspsSearchResults": "Resultados de búsqueda",
+  "uspsFoundItems": "Se encontraron {count} elementos de correo que coinciden con \"{keyword}\"",
+  "@uspsFoundItems": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "keyword": {"type": "String"}
+    }
+  },
+  "uspsSearchFailed": "Error en la búsqueda: {message}",
+  "@uspsSearchFailed": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "uspsNoMatches": "Ningún elemento de correo coincide con \"{keyword}\".",
+  "@uspsNoMatches": {
+    "placeholders": {
+      "keyword": {"type": "String"}
+    }
+  },
+  "uspsShowTodayMail": "Mostrar el correo de hoy",
+  "uspsShowingDate": "Mostrando el resumen del {date}",
+  "@uspsShowingDate": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "uspsItemCount": "{count, plural, =1{1 elemento} other{{count} elementos}}",
+  "@uspsItemCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "uspsNoItems": "No hay elementos",
+  "uspsPackages": "Paquetes",
+  "uspsMailPieces": "Piezas de correo",
+  "uspsPackage": "Paquete",
+  "uspsMail": "Correo",
+  "uspsUnknownSender": "Remitente desconocido",
+  "uspsUnknownSenderTitle": "Remitente desconocido",
+  "uspsFrom": "De: {sender}",
+  "@uspsFrom": {
+    "placeholders": {
+      "sender": {"type": "String"}
+    }
+  },
+  "uspsTracking": "Seguimiento: {trackingNumber}",
+  "@uspsTracking": {
+    "placeholders": {
+      "trackingNumber": {"type": "String"}
+    }
+  },
+  "uspsExpected": "Previsto: {date}",
+  "@uspsExpected": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "uspsDelivered": "Entregado: {date}",
+  "@uspsDelivered": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "uspsDetails": "Detalles",
+  "uspsSubject": "Asunto",
+  "uspsTrackingNumber": "Número de seguimiento",
+  "uspsExpectedDelivery": "Entrega prevista",
+  "uspsDeliveredLabel": "Entregado",
+  "uspsTrack": "Seguir",
+  "uspsTrackPackage": "Seguir paquete",
+  "uspsViewDashboard": "Ver en el panel de USPS",
+  "uspsNoSubject": "No hay asunto disponible",
+  "uspsNoSummary": "No hay resumen",
+  "uspsNoDigestItems": "No hay elementos en el resumen",
+  "uspsSelectDateHelp": "Selecciona la fecha del resumen",
+  "uspsCancel": "Cancelar",
+  "uspsSelect": "Seleccionar",
+  "uspsOpenLinkError": "No se pudo abrir el enlace",
+  "uspsGmailDisconnected": "Gmail desconectado.",
+  "uspsDisconnectError": "No se pudo desconectar Gmail",
+  "uspsLoginRequired": "Inicia sesión primero",
+  "uspsLoginToView": "Inicia sesión para ver el correo de USPS.",
+  "uspsLoginToSearch": "Inicia sesión para buscar correo de USPS.",
+  "uspsLoginToConnect": "Inicia sesión para conectar Gmail.",
+  "uspsCacheCleared": "Caché borrada. Vuelve a obtener el resumen.",
+  "uspsClearCacheError": "No se pudo borrar la caché",
+  "uspsGmailStatusError": "No se pudo comprobar el estado de conexión de Gmail.",
+  "uspsGoogleAuthError": "No se pudo abrir la autenticación de Google",
+  "uspsGmailConnectError": "No se pudo iniciar la conexión con Gmail",
+  "uspsDigestNotFound": "No se encontró un resumen de USPS para {date}.",
+  "@uspsDigestNotFound": {
+    "placeholders": {
+      "date": {"type": "String"}
+    }
+  },
+  "uspsUSPSPackage": "Paquete de USPS",
+
+  "hhaTitle": "Enviar a HHAExchange",
+  "hhaRefresh": "Actualizar",
+  "hhaInfo": "Selecciona las visitas APROBADAS para enviarlas al agregador HHAExchange de Virginia (https://implementation.hhaexchange.com/api/v2/visits). Solo se envían registros del estado de Virginia.",
+  "hhaDeselectAll": "Deseleccionar todo",
+  "hhaSelectAll": "Seleccionar todo ({count})",
+  "@hhaSelectAll": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "hhaSelectedCount": "{count} seleccionados",
+  "@hhaSelectedCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "hhaSubmitting": "Enviando…",
+  "hhaSubmitVisits": "Enviar {count} visita(s)",
+  "@hhaSubmitVisits": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "hhaErrorLoading": "Error al cargar los registros: {message}",
+  "@hhaErrorLoading": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "hhaDownloading": "Descargando los datos de HHAExchange...",
+  "hhaDownloadedAs": "Datos descargados como {filename}",
+  "@hhaDownloadedAs": {
+    "placeholders": {
+      "filename": {"type": "String"}
+    }
+  },
+  "hhaDownloadFailed": "No se pudieron descargar los datos: {message}",
+  "@hhaDownloadFailed": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "hhaFetchingPayload": "Obteniendo los datos para descargar...",
+  "hhaPayloadDownloadedSubmitting": "Datos descargados. Enviando a HHAExchange...",
+  "hhaPayloadDownloadWarning": "Aviso: no se pudieron descargar los datos ({message}). Se continuará con el envío...",
+  "@hhaPayloadDownloadWarning": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "hhaSubmittedCount": "{count} visita(s) enviadas correctamente a HHAExchange.",
+  "@hhaSubmittedCount": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "hhaSubmissionFailed": "Error al enviar: {message}",
+  "@hhaSubmissionFailed": {
+    "placeholders": {
+      "message": {"type": "String"}
+    }
+  },
+  "hhaNoEligibleVisits": "No hay visitas aptas",
+  "hhaNoEligibleDescription": "Todas las visitas aprobadas ya se han enviado,\no todavía no hay visitas aprobadas.",
+  "hhaAllApproved": "Todas las visitas aprobadas ya se han enviado",
+  "hhaCheckIn": "Entrada: {time}",
+  "@hhaCheckIn": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "hhaCheckOut": "Salida: {time}",
+  "@hhaCheckOut": {
+    "placeholders": {
+      "time": {"type": "String"}
+    }
+  },
+  "hhaState": "Estado: {state}",
+  "@hhaState": {
+    "placeholders": {
+      "state": {"type": "String"}
+    }
+  },
+  "hhaStatusApproved": "APROBADA",
+
+  "shiftTitle": "Programación de turnos del cuidador",
+  "shiftRecurring": "Turno recurrente",
+  "shiftStartTime": "Hora de inicio",
+  "shiftEndTime": "Hora de finalización",
+  "shiftNoTimeSelected": "No se ha seleccionado una hora",
+  "shiftDays": "Días",
+  "shiftSunday": "D",
+  "shiftMonday": "L",
+  "shiftTuesday": "M",
+  "shiftWednesday": "X",
+  "shiftThursday": "J",
+  "shiftFriday": "V",
+  "shiftSaturday": "S",
+  "shiftSave": "Guardar",
+  "shiftVisitSaved": "Visita guardada: {patient}",
+  "@shiftVisitSaved": {
+    "placeholders": {
+      "patient": {"type": "String"}
+    }
+  },
+  "analyticsPatientAnalytics": "Análisis del paciente",
+  "analyticsRetry": "Reintentar",
+  "analyticsAskAiTooltip": "Preguntar a la IA sobre los análisis",
+  "analyticsDownloadCsv": "Descargar CSV",
+  "analyticsDownloadPdf": "Descargar PDF",
+  "analyticsOverview": "Resumen de análisis",
+  "analyticsMetricsAndTrends": "Métricas y tendencias de salud del paciente",
+  "analyticsTimeRange": "Intervalo de tiempo:",
+  "analyticsHealthSummary": "Resumen de salud",
+  "analyticsLastDaysShort": "Últimos {days} d",
+  "analyticsLastDaysOverview": "Resumen de los últimos {days} días",
+  "analyticsDetailedCharts": "Gráficos detallados",
+  "analyticsLoadingData": "Cargando datos de análisis..."
 }

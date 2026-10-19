@@ -1,6 +1,7 @@
 package com.careconnect.dto;
 
 import lombok.Builder;
+
 import java.time.Instant;
 
 @Builder
@@ -13,4 +14,5 @@ public record SymptomDTO(
         Boolean completed,
         Instant takenAt,
         String notes            // Clinical notes
-) {}
+) {
+}

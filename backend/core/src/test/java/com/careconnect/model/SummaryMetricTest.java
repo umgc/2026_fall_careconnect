@@ -6,7 +6,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SummaryMetricTest {
 
@@ -240,13 +239,20 @@ class SummaryMetricTest {
         assertThat(m.getUpdatedAt()).isNotNull();
     }
 
-    // ─── getGeneratedAt() – recursive method ──────────────────────────────────
+    // ─── getGeneratedAt (derived from Auditable.createdAt) ───────────────────
 
     @Test
-    void getGeneratedAt_throwsStackOverflowError() throws Exception {
+    void getGeneratedAt_returnsCreatedAtAsInstant() throws Exception {
         final SummaryMetric m = new SummaryMetric();
+        final LocalDateTime createdAt = LocalDateTime.of(2026, 10, 10, 9, 30);
+        m.setCreatedAt(createdAt);
 
-        assertThatThrownBy(m::getGeneratedAt)
-                .isInstanceOf(StackOverflowError.class);
+        assertThat(m.getGeneratedAt())
+                .isEqualTo(createdAt.atZone(java.time.ZoneId.systemDefault()).toInstant());
+    }
+
+    @Test
+    void getGeneratedAt_nullCreatedAt_returnsNull() throws Exception {
+        assertThat(new SummaryMetric().getGeneratedAt()).isNull();
     }
 }

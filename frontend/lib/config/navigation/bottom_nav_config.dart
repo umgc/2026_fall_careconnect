@@ -28,7 +28,7 @@ import '../../screens/tabs/caregiver_tabs.dart';
 /// Either [screen] or [onPress] must be provided, but not both.
 class BottomNavItem {
   final String label;
-  final String? labelKey;   // i18n key
+  final String? labelKey; // i18n key
   final IconData icon;
   final IconData? activeIcon;
   final String routeName;
@@ -59,21 +59,30 @@ class BottomNavItem {
     this.showCallFab = false,
     this.onPress,
   }) : assert(
-         screen != null || onPress != null,
-         'Either screen or onPress must be provided',
-       );
+          screen != null || onPress != null,
+          'Either screen or onPress must be provided',
+        );
 
-   String localizedLabel(AppLocalizations t) {
+  String localizedLabel(AppLocalizations t) {
     switch (labelKey) {
-      case 'nav_home': return t.navHome;
-      case 'nav_symptoms': return t.navSymptoms;
-      case 'nav_health': return t.navHealth;
-      case 'nav_messages': return t.navMessages;
-      case 'nav_menu': return t.navMenu;
-      case 'nav_patientList': return t.navPatientList;
-      case 'nav_analytics': return t.navAnalytics;
-      case 'nav_more': return t.navMore;
-      default: return label;
+      case 'nav_home':
+        return t.navHome;
+      case 'nav_symptoms':
+        return t.navSymptoms;
+      case 'nav_health':
+        return t.navHealth;
+      case 'nav_messages':
+        return t.navMessages;
+      case 'nav_menu':
+        return t.navMenu;
+      case 'nav_patientList':
+        return t.navPatientList;
+      case 'nav_analytics':
+        return t.navAnalytics;
+      case 'nav_more':
+        return t.navMore;
+      default:
+        return label;
     }
   }
 }
@@ -144,6 +153,7 @@ class BottomNavConfig {
       ),
     ];
   }
+
   /// Returns the bottom navigation items for caregiver users.
   ///
   /// Creates a list of navigation items specifically designed for caregivers,
@@ -152,7 +162,7 @@ class BottomNavConfig {
   ///
   /// Returns:
   /// * List<BottomNavItem> - A list of navigation items for caregiver interface
-static List<BottomNavItem> getCaregiverNavItems() {
+  static List<BottomNavItem> getCaregiverNavItems() {
     return [
       BottomNavItem(
         label: 'Home',
@@ -209,6 +219,7 @@ static List<BottomNavItem> getCaregiverNavItems() {
       ),
     ];
   }
+
   /// Returns navigation items based on the specified user role.
   ///
   /// This method acts as a factory that returns the appropriate navigation

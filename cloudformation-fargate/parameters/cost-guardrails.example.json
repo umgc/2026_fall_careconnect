@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "careconnect"
+  },
+  {
+    "ParameterKey": "NotificationEmail",
+    "ParameterValue": "REPLACE_WITH_TEAM_COST_ALERT_EMAIL"
+  },
+  {
+    "ParameterKey": "SecondaryNotificationEmail",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "MonthlyBudgetUsd",
+    "ParameterValue": "REPLACE_WITH_APPROVED_MONTHLY_BUDGET"
+  },
+  {
+    "ParameterKey": "AnomalyAlertUsd",
+    "ParameterValue": "REPLACE_WITH_APPROVED_ANOMALY_THRESHOLD"
+  }
+]

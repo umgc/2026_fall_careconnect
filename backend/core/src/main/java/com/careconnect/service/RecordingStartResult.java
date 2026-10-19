@@ -4,7 +4,9 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Typed result for recording acquisition and AWS capture creation. */
+/**
+ * Typed result for recording acquisition and AWS capture creation.
+ */
 public record RecordingStartResult(
         Status status,
         String callId,
@@ -16,8 +18,11 @@ public record RecordingStartResult(
         LocalDateTime startedAt,
         String message) {
 
-    public enum Status {
-        STARTED, ALREADY_RECORDING, POLICY_BLOCKED, DISABLED, UNAVAILABLE, ERROR
+    private static void put(
+            final Map<String, Object> target, final String key, final Object value) {
+        if (value != null) {
+            target.put(key, value);
+        }
     }
 
     public Map<String, Object> toMap() {
@@ -36,10 +41,7 @@ public record RecordingStartResult(
         return result;
     }
 
-    private static void put(
-            final Map<String, Object> target, final String key, final Object value) {
-        if (value != null) {
-            target.put(key, value);
-        }
+    public enum Status {
+        STARTED, ALREADY_RECORDING, POLICY_BLOCKED, DISABLED, UNAVAILABLE, ERROR
     }
 }

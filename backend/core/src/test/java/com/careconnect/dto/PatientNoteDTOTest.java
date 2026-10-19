@@ -14,10 +14,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PatientNoteDTOTest {
 
+    private static final LocalDateTime NOW = LocalDateTime.of(2026, 1, 15, 10, 30);
     @Mock
     private PatientNote mockNote;
-
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 1, 15, 10, 30);
 
     // ─── No-arg constructor ───────────────────────────────────────────────────
 

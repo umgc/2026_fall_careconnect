@@ -10,7 +10,11 @@ class PreDefinedTaskScreen extends StatefulWidget {
   final int patientId;
   final int templateId;
   final String patientName;
-  const PreDefinedTaskScreen({super.key, required this.patientId, required this.templateId, required this.patientName});
+  const PreDefinedTaskScreen(
+      {super.key,
+      required this.patientId,
+      required this.templateId,
+      required this.patientName});
 
   @override
   State<PreDefinedTaskScreen> createState() => _PreDefinedTaskScreenState();
@@ -84,9 +88,10 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Task Name', textAlign: TextAlign.left,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-                          ),
+                      child: const Text('Task Name',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
                       controller: TextEditingController(text: task.name),
@@ -103,9 +108,10 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Description', textAlign: TextAlign.left,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-                          ),
+                      child: const Text('Description',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
                       controller: TextEditingController(text: task.description),
@@ -124,18 +130,24 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                     // Frequency selection dropdown
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Frequency', textAlign: TextAlign.left,
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)
-                          ),
+                      child: const Text('Frequency',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     DropdownButtonFormField<String>(
                       initialValue: task.frequency,
                       items: const [
                         DropdownMenuItem(value: 'DAILY', child: Text('Daily')),
-                        DropdownMenuItem(value: 'WEEKLY', child: Text('Weekly')),
-                        DropdownMenuItem(value: 'MONTHLY', child: Text('Monthly')),
-                        DropdownMenuItem(value: 'YEARLY', child: Text('Yearly')),
-                        DropdownMenuItem(value: 'EVERY_WEEK_DAY', child: Text('Every Week Day')),
+                        DropdownMenuItem(
+                            value: 'WEEKLY', child: Text('Weekly')),
+                        DropdownMenuItem(
+                            value: 'MONTHLY', child: Text('Monthly')),
+                        DropdownMenuItem(
+                            value: 'YEARLY', child: Text('Yearly')),
+                        DropdownMenuItem(
+                            value: 'EVERY_WEEK_DAY',
+                            child: Text('Every Week Day')),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -150,11 +162,14 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                     // Interval selection
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Interval', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Interval',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
-                      controller: TextEditingController(text: task.interval.toString()),
+                      controller:
+                          TextEditingController(text: task.interval.toString()),
                       decoration: const InputDecoration(
                         hintText: 'Interval (e.g., 1 day between tasks)',
                         border: OutlineInputBorder(),
@@ -170,11 +185,14 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                     // Count selection dropdown
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Count', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Count',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     TextField(
-                      controller: TextEditingController(text: task.count?.toString() ?? ''),
+                      controller: TextEditingController(
+                          text: task.count?.toString() ?? ''),
                       decoration: const InputDecoration(
                         hintText: 'Number of times to repeat the task',
                         border: OutlineInputBorder(),
@@ -185,13 +203,14 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                           task.count = int.tryParse(value) ?? 1;
                         });
                       },
-                      
                     ),
                     const SizedBox(height: 10),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Time', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Time',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     Card(
                       // margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -203,8 +222,8 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                         title: Text(task.timeOfDay != null
                             ? task.timeOfDay!.format(context)
                             : 'No time selected'),
-                        leading: const Icon(Icons.access_time, color: Colors.indigo, size: 40),
-
+                        leading: const Icon(Icons.access_time,
+                            color: Colors.indigo, size: 40),
                         onTap: () async {
                           final TimeOfDay? time = await showTimePicker(
                             context: context,
@@ -222,8 +241,10 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                     // Date selection
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text('Date', textAlign: TextAlign.left,
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      child: const Text('Date',
+                          textAlign: TextAlign.left,
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                     ),
                     Card(
                       margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -235,11 +256,12 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                         title: Text(
                           '${task.date.toLocal()}'.split(' ')[0],
                         ),
-                        leading: const Icon(Icons.calendar_today, color: Colors.indigo, size: 40),
+                        leading: const Icon(Icons.calendar_today,
+                            color: Colors.indigo, size: 40),
                         onTap: () async {
                           final DateTime? date = await showDatePicker(
                             context: context,
-                            initialDate: task.date ?? DateTime.now(),
+                            initialDate: task.date,
                             firstDate: DateTime(2000),
                             lastDate: DateTime(2100),
                           );
@@ -266,7 +288,6 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                   ],
                 ),
               ),
-              
             ),
           ],
         ),
@@ -290,12 +311,11 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
                   ),
                 );
               }
-              context.go('/patient-tasks',
-                  extra: {
-                    'patientId': widget.patientId,
-                    'patientName': widget.patientName,
-                  });
-                        } catch (e) {
+              context.go('/patient-tasks', extra: {
+                'patientId': widget.patientId,
+                'patientName': widget.patientName,
+              });
+            } catch (e) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Error: $e')),
               );
@@ -305,7 +325,8 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
             backgroundColor: Colors.indigo,
             padding: const EdgeInsets.symmetric(vertical: 20),
           ),
-          child: const Text('Save', style: TextStyle(fontSize: 18, color: Colors.white)),
+          child: const Text('Save',
+              style: TextStyle(fontSize: 18, color: Colors.white)),
         ),
       ),
     );

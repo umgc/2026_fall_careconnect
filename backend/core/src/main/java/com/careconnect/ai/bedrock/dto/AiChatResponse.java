@@ -6,10 +6,10 @@ package com.careconnect.ai.bedrock.dto;
  */
 
 public class AiChatResponse {
-    
+
     private String response;
 
-    public AiChatResponse(String response)  {
+    public AiChatResponse(String response) {
         this.response = response;
     }
 

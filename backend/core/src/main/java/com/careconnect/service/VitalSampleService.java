@@ -58,25 +58,25 @@ public class VitalSampleService {
     @Transactional
     public VitalSampleDTO createVitalSample(VitalSampleDTO dto) {
         Patient patient = patientRepository.findById(dto.patientId())
-            .orElseThrow(() -> new IllegalArgumentException("Patient not found with id: " + dto.patientId()));
-        
+                .orElseThrow(() -> new IllegalArgumentException("Patient not found with id: " + dto.patientId()));
+
         VitalSample vitalSample = VitalSample.builder()
-            .patient(patient)
-            .timestamp(dto.timestamp() != null ? dto.timestamp() : Instant.now())
-            .heartRate(dto.heartRate())
-            .spo2(dto.spo2())
-            .systolic(dto.systolic())
-            .diastolic(dto.diastolic())
-            .weight(dto.weight())
-            .moodValue(dto.moodValue())
-            .painValue(dto.painValue())
-            .build();
-        
+                .patient(patient)
+                .timestamp(dto.timestamp() != null ? dto.timestamp() : Instant.now())
+                .heartRate(dto.heartRate())
+                .spo2(dto.spo2())
+                .systolic(dto.systolic())
+                .diastolic(dto.diastolic())
+                .weight(dto.weight())
+                .moodValue(dto.moodValue())
+                .painValue(dto.painValue())
+                .build();
+
         VitalSample saved = vitalSampleRepository.save(vitalSample);
-        
+
         // Check for vital alerts and send notifications asynchronously
         checkAndSendVitalAlerts(saved);
-        
+
         return mapToDTO(saved);
     }
 
@@ -186,15 +186,15 @@ public class VitalSampleService {
                 .rejectedReadings(rejected)
                 .build();
     }
-    
+
     /**
      * Update an existing vital sample
      */
     @Transactional
     public VitalSampleDTO updateVitalSample(Long id, VitalSampleDTO dto) {
         VitalSample existing = vitalSampleRepository.findById(id)
-            .orElseThrow(() -> new IllegalArgumentException("VitalSample not found with id: " + id));
-        
+                .orElseThrow(() -> new IllegalArgumentException("VitalSample not found with id: " + id));
+
         // Update only non-null fields
         if (dto.timestamp() != null) {
             existing.setTimestamp(dto.timestamp());
@@ -220,36 +220,36 @@ public class VitalSampleService {
         if (dto.painValue() != null) {
             existing.setPainValue(dto.painValue());
         }
-        
+
         VitalSample updated = vitalSampleRepository.save(existing);
         return mapToDTO(updated);
     }
-    
+
     /**
      * Get vital samples for a patient within a time period
      */
     public List<VitalSampleDTO> getVitalSamples(Long patientId, Period period) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new IllegalArgumentException("Patient not found with id: " + patientId));
-        
+                .orElseThrow(() -> new IllegalArgumentException("Patient not found with id: " + patientId));
+
         Instant fromTime = Instant.now().minus(period);
         Instant toTime = Instant.now();
-        
+
         return vitalSampleRepository.findByPatientAndTimestampBetweenOrderByTimestampDesc(
-                patient, fromTime, toTime)
-            .stream()
-            .map(this::mapToDTO)
-            .toList();
+                        patient, fromTime, toTime)
+                .stream()
+                .map(this::mapToDTO)
+                .toList();
     }
-    
+
     /**
      * Get a specific vital sample by ID
      */
     public Optional<VitalSampleDTO> getVitalSample(Long id) {
         return vitalSampleRepository.findById(id)
-            .map(this::mapToDTO);
+                .map(this::mapToDTO);
     }
-    
+
     /**
      * Delete a vital sample
      */
@@ -260,36 +260,36 @@ public class VitalSampleService {
         }
         vitalSampleRepository.deleteById(id);
     }
-    
+
     /**
      * Get the latest vital sample for a patient
      */
     public Optional<VitalSampleDTO> getLatestVitalSample(Long patientId) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new IllegalArgumentException("Patient not found with id: " + patientId));
-        
+                .orElseThrow(() -> new IllegalArgumentException("Patient not found with id: " + patientId));
+
         return vitalSampleRepository.findFirstByPatientOrderByTimestampDesc(patient)
-            .map(this::mapToDTO);
+                .map(this::mapToDTO);
     }
-    
+
     /**
      * Map VitalSample entity to DTO
      */
     private VitalSampleDTO mapToDTO(VitalSample vitalSample) {
         return VitalSampleDTO.builder()
-            .id(vitalSample.getId())
-            .patientId(vitalSample.getPatient().getId())
-            .timestamp(vitalSample.getTimestamp())
-            .heartRate(vitalSample.getHeartRate())
-            .spo2(vitalSample.getSpo2())
-            .systolic(vitalSample.getSystolic())
-            .diastolic(vitalSample.getDiastolic())
-            .weight(vitalSample.getWeight())
-            .moodValue(vitalSample.getMoodValue())
-            .painValue(vitalSample.getPainValue())
-            .build();
+                .id(vitalSample.getId())
+                .patientId(vitalSample.getPatient().getId())
+                .timestamp(vitalSample.getTimestamp())
+                .heartRate(vitalSample.getHeartRate())
+                .spo2(vitalSample.getSpo2())
+                .systolic(vitalSample.getSystolic())
+                .diastolic(vitalSample.getDiastolic())
+                .weight(vitalSample.getWeight())
+                .moodValue(vitalSample.getMoodValue())
+                .painValue(vitalSample.getPainValue())
+                .build();
     }
-    
+
     /**
      * Check vital signs and send alerts if necessary
      */
@@ -300,73 +300,73 @@ public class VitalSampleService {
                 return;
             }
             Long patientUserId = vitalSample.getPatient().getUser().getId();
-            
+
             // Check heart rate alerts
             if (vitalSample.getHeartRate() != null) {
                 String alertLevel = determineHeartRateAlert(vitalSample.getHeartRate());
                 if (!"NORMAL".equals(alertLevel)) {
                     sendVitalAlertIfEnabled(
-                        vitalSample.getPatient(),
-                        patientUserId,
-                        "heart_rate",
-                        vitalSample.getHeartRate() + " bpm",
-                        alertLevel
+                            vitalSample.getPatient(),
+                            patientUserId,
+                            "heart_rate",
+                            vitalSample.getHeartRate() + " bpm",
+                            alertLevel
                     );
                 }
             }
-            
+
             // Check SpO2 alerts
             if (vitalSample.getSpo2() != null) {
                 String alertLevel = determineSpO2Alert(vitalSample.getSpo2());
                 if (!"NORMAL".equals(alertLevel)) {
                     sendVitalAlertIfEnabled(
-                        vitalSample.getPatient(),
-                        patientUserId,
-                        "spo2",
-                        vitalSample.getSpo2() + "%",
-                        alertLevel
+                            vitalSample.getPatient(),
+                            patientUserId,
+                            "spo2",
+                            vitalSample.getSpo2() + "%",
+                            alertLevel
                     );
                 }
             }
-            
+
             // Check blood pressure alerts
             if (vitalSample.getSystolic() != null || vitalSample.getDiastolic() != null) {
                 String alertLevel = determineBPAlert(vitalSample.getSystolic(), vitalSample.getDiastolic());
                 if (!"NORMAL".equals(alertLevel)) {
-                    String bpValue = (vitalSample.getSystolic() != null ? vitalSample.getSystolic() : "?") + 
-                                   "/" + (vitalSample.getDiastolic() != null ? vitalSample.getDiastolic() : "?");
+                    String bpValue = (vitalSample.getSystolic() != null ? vitalSample.getSystolic() : "?") +
+                            "/" + (vitalSample.getDiastolic() != null ? vitalSample.getDiastolic() : "?");
                     sendVitalAlertIfEnabled(
-                        vitalSample.getPatient(),
-                        patientUserId,
-                        "blood_pressure",
-                        bpValue + " mmHg",
-                        alertLevel
+                            vitalSample.getPatient(),
+                            patientUserId,
+                            "blood_pressure",
+                            bpValue + " mmHg",
+                            alertLevel
                     );
                 }
             }
-            
+
             // Check mood alerts (severe depression or anxiety)
             if (vitalSample.getMoodValue() != null && vitalSample.getMoodValue() <= 2) {
                 sendVitalAlertIfEnabled(
-                    vitalSample.getPatient(),
-                    patientUserId,
-                    "mood",
-                    "score=" + vitalSample.getMoodValue(),
-                    "HIGH"
+                        vitalSample.getPatient(),
+                        patientUserId,
+                        "mood",
+                        "score=" + vitalSample.getMoodValue(),
+                        "HIGH"
                 );
             }
-            
+
             // Check pain alerts (severe pain)
             if (vitalSample.getPainValue() != null && vitalSample.getPainValue() >= 8) {
                 sendVitalAlertIfEnabled(
-                    vitalSample.getPatient(),
-                    patientUserId,
-                    "pain",
-                    "score=" + vitalSample.getPainValue(),
-                    "HIGH"
+                        vitalSample.getPatient(),
+                        patientUserId,
+                        "pain",
+                        "score=" + vitalSample.getPainValue(),
+                        "HIGH"
                 );
             }
-            
+
         } catch (Exception e) {
             // Log error but don't fail the vital recording
             LOG.warn("Error sending vital alerts: {}", e.getMessage(), e);
@@ -400,7 +400,8 @@ public class VitalSampleService {
             case ADMIN -> {
                 // Admin can ingest for any patient.
             }
-            default -> throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to ingest readings for this patient");
+            default ->
+                    throw new AppException(HttpStatus.FORBIDDEN, "Not authorized to ingest readings for this patient");
         }
 
         return patient;
@@ -452,6 +453,7 @@ public class VitalSampleService {
             }
         }
     }
+
     private boolean supportsVitalSampleMetric(WearableMetric.MetricType metricType) {
         return switch (metricType) {
             case HEART_RATE, SPO2, BLOOD_PRESSURE_SYS, BLOOD_PRESSURE_DIA, WEIGHT -> true;
@@ -493,7 +495,7 @@ public class VitalSampleService {
         }
         return message.length() > 180 ? message.substring(0, 180) + "..." : message;
     }
-    
+
     private String determineHeartRateAlert(Double heartRate) {
         if (heartRate == null) return "NORMAL";
         VitalAlertThresholdProperties.HeartRate policy = vitalAlertThresholdProperties.getHeartRate();
@@ -502,7 +504,7 @@ public class VitalSampleService {
         if (heartRate < policy.getLowMax()) return "LOW";
         return "NORMAL";
     }
-    
+
     private String determineSpO2Alert(Double spo2) {
         if (spo2 == null) return "NORMAL";
         VitalAlertThresholdProperties.Spo2 policy = vitalAlertThresholdProperties.getSpo2();
@@ -510,7 +512,7 @@ public class VitalSampleService {
         if (spo2 < policy.getHighMax()) return "HIGH";
         return "NORMAL";
     }
-    
+
     private String determineBPAlert(Integer systolic, Integer diastolic) {
         VitalAlertThresholdProperties.Thresholds systolicPolicy = vitalAlertThresholdProperties.getBloodPressure().getSystolic();
         VitalAlertThresholdProperties.Thresholds diastolicPolicy = vitalAlertThresholdProperties.getBloodPressure().getDiastolic();
@@ -522,7 +524,7 @@ public class VitalSampleService {
         if (diastolic != null && diastolic < diastolicPolicy.getLowMax()) return "LOW";
         return "NORMAL";
     }
-    
+
     /**
      * Helper method to send vital alerts only if Firebase is enabled
      */

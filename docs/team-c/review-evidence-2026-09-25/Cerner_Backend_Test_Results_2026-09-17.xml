@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="JUnit Jupiter" tests="39" skipped="0" failures="0" errors="0" time="0.122" hostname="Mac" timestamp="2026-09-17T10:30:19">
+<properties>
+<property name="file.encoding" value="UTF-8"/>
+<property name="file.separator" value="/"/>
+<property name="intellij.os.virtualization" value="none"/>
+<property name="java.class.path" value="/private/tmp/cerner-junit-console-1.12.1.jar"/>
+<property name="java.class.version" value="61.0"/>
+<property name="java.home" value="/Users/terenceboyce/Library/Java/JavaVirtualMachines/jbr-17.0.12/Contents/Home"/>
+<property name="java.io.tmpdir" value="/var/folders/j1/8grx5cmx7x31zrqnkjp621d40000gn/T/"/>
+<property name="java.library.path" value="/Users/terenceboyce/Library/Java/Extensions:/Library/Java/Extensions:/Network/Library/Java/Extensions:/System/Library/Java/Extensions:/usr/lib/java:."/>
+<property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
+<property name="java.runtime.version" value="17.0.12+1-b1207.37"/>
+<property name="java.specification.name" value="Java Platform API Specification"/>
+<property name="java.specification.vendor" value="Oracle Corporation"/>
+<property name="java.specification.version" value="17"/>
+<property name="java.vendor" value="JetBrains s.r.o."/>
+<property name="java.vendor.url" value="https://openjdk.java.net/"/>
+<property name="java.vendor.url.bug" value="https://bugreport.java.com/bugreport/"/>
+<property name="java.vendor.version" value="JBR-17.0.12+1-1207.37-nomod"/>
+<property name="java.version" value="17.0.12"/>
+<property name="java.version.date" value="2024-07-16"/>
+<property name="java.vm.compressedOopsMode" value="Zero based"/>
+<property name="java.vm.info" value="mixed mode, sharing"/>
+<property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
+<property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
+<property name="java.vm.specification.vendor" value="Oracle Corporation"/>
+<property name="java.vm.specification.version" value="17"/>
+<property name="java.vm.vendor" value="JetBrains s.r.o."/>
+<property name="java.vm.version" value="17.0.12+1-b1207.37"/>
+<property name="jbr.virtualization.information" value="No virtualization detected"/>
+<property name="jdk.debug" value="release"/>
+<property name="junit.docs.version" value="1.12.1"/>
+<property name="line.separator" value="&#10;"/>
+<property name="native.encoding" value="UTF-8"/>
+<property name="os.arch" value="aarch64"/>
+<property name="os.name" value="Mac OS X"/>
+<property name="os.version" value="26.6.2"/>
+<property name="path.separator" value=":"/>
+<property name="sun.arch.data.model" value="64"/>
+<property name="sun.boot.library.path" value="/Users/terenceboyce/Library/Java/JavaVirtualMachines/jbr-17.0.12/Contents/Home/lib"/>
+<property name="sun.cpu.endian" value="little"/>
+<property name="sun.io.unicode.encoding" value="UnicodeBig"/>
+<property name="sun.java.command" value="/private/tmp/cerner-junit-console-1.12.1.jar execute --class-path /Users/terenceboyce/.codex/.chatgpt-projects/g-p-6a883c167aa0819180c3756fced8de95/careconnect-cerner-backend/backend/core/target/cerner-mapping-tests/classes:/private/tmp/cerner-junit-console-1.12.1.jar:/Users/terenceboyce/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.18.3/jackson-annotations-2.18.3.jar:/Users/terenceboyce/.m2/repository/com/fasterxml/jackson/core/jackson-core/2.18.3/jackson-core-2.18.3.jar:/Users/terenceboyce/.m2/repository/com/fasterxml/jackson/core/jackson-databind/2.18.3/jackson-databind-2.18.3.jar --select-class com.careconnect.service.cerner.CernerResourceMapperTest --reports-dir /Users/terenceboyce/.codex/.chatgpt-projects/g-p-6a883c167aa0819180c3756fced8de95/careconnect-cerner-backend/backend/core/target/cerner-mapping-tests/reports --fail-if-no-tests --disable-ansi-colors"/>
+<property name="sun.java.launcher" value="SUN_STANDARD"/>
+<property name="sun.jnu.encoding" value="UTF-8"/>
+<property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
+<property name="user.country" value="US"/>
+<property name="user.dir" value="/Users/terenceboyce/.codex/.chatgpt-projects/g-p-6a883c167aa0819180c3756fced8de95/careconnect-cerner-backend"/>
+<property name="user.home" value="/Users/terenceboyce"/>
+<property name="user.language" value="en"/>
+<property name="user.name" value="terenceboyce"/>
+<property name="user.timezone" value="America/New_York"/>
+</properties>
+<testcase name="allowsUnscheduledStates(String)[3]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:allowsUnscheduledStates(java.lang.String)]/[test-template-invocation:#3]
+display-name: [3] waitlist
+]]></system-out>
+</testcase>
+<testcase name="allowsUnscheduledStates(String)[1]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:allowsUnscheduledStates(java.lang.String)]/[test-template-invocation:#1]
+display-name: [1] proposed
+]]></system-out>
+</testcase>
+<testcase name="allowsUnscheduledStates(String)[2]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:allowsUnscheduledStates(java.lang.String)]/[test-template-invocation:#2]
+display-name: [2] cancelled
+]]></system-out>
+</testcase>
+<testcase name="hidesEnteredInError()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:hidesEnteredInError()]
+display-name: hidesEnteredInError()
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnknownStatusAndInvalidDuration()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsUnknownStatusAndInvalidDuration()]
+display-name: rejectsUnknownStatusAndInvalidDuration()
+]]></system-out>
+</testcase>
+<testcase name="repeatMappingHasStableIdentity()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:repeatMappingHasStableIdentity()]
+display-name: repeatMappingHasStableIdentity()
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[7]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#7]
+display-name: [7] 
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[6]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#6]
+display-name: [6] #p1
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[5]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#5]
+display-name: [5] Patient/p1/_history/1
+]]></system-out>
+</testcase>
+<testcase name="normalizesTimeWithoutReplacingDuration()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:normalizesTimeWithoutReplacingDuration()]
+display-name: normalizesTimeWithoutReplacingDuration()
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[4]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#4]
+display-name: [4] Patient/p1?extra=1
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[3]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#3]
+display-name: [3] https://example.test/r4/tenant-two/Patient/p1
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafeBases(String)[4]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafeBases(java.lang.String)]/[test-template-invocation:#4]
+display-name: [4] https://example.test/a/../r4
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[2]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#2]
+display-name: [2] https://evil.test/Patient/p1
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafeBases(String)[3]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafeBases(java.lang.String)]/[test-template-invocation:#3]
+display-name: [3] https://example.test/r4?token=x
+]]></system-out>
+</testcase>
+<testcase name="preservesMultipleCodesAndSeparateNotesAndPartialCreated()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:preservesMultipleCodesAndSeparateNotesAndPartialCreated()]
+display-name: preservesMultipleCodesAndSeparateNotesAndPartialCreated()
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafePatientReferences(String)[1]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafePatientReferences(java.lang.String)]/[test-template-invocation:#1]
+display-name: [1] Patient/p2
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafeBases(String)[2]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafeBases(java.lang.String)]/[test-template-invocation:#2]
+display-name: [2] https://user@example.test/r4
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnsafeBases(String)[1]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsUnsafeBases(java.lang.String)]/[test-template-invocation:#1]
+display-name: [1] http://example.test/r4
+]]></system-out>
+</testcase>
+<testcase name="defensiveCopiesAndNoRawNarrative()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:defensiveCopiesAndNoRawNarrative()]
+display-name: defensiveCopiesAndNoRawNarrative()
+]]></system-out>
+</testcase>
+<testcase name="rejectsBadBirthDate(String)[4]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsBadBirthDate(java.lang.String)]/[test-template-invocation:#4]
+display-name: [4] 2026-1-1
+]]></system-out>
+</testcase>
+<testcase name="rejectsOneSidedTimes()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0.001">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsOneSidedTimes()]
+display-name: rejectsOneSidedTimes()
+]]></system-out>
+</testcase>
+<testcase name="rejectsBadBirthDate(String)[3]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsBadBirthDate(java.lang.String)]/[test-template-invocation:#3]
+display-name: [3] birthday
+]]></system-out>
+</testcase>
+<testcase name="acceptedParticipantDoesNotOverrideCancellation()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:acceptedParticipantDoesNotOverrideCancellation()]
+display-name: acceptedParticipantDoesNotOverrideCancellation()
+]]></system-out>
+</testcase>
+<testcase name="rejectsBadBirthDate(String)[2]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsBadBirthDate(java.lang.String)]/[test-template-invocation:#2]
+display-name: [2] 1990-13
+]]></system-out>
+</testcase>
+<testcase name="rejectsBadBirthDate(String)[1]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0.002">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:rejectsBadBirthDate(java.lang.String)]/[test-template-invocation:#1]
+display-name: [1] 1990-02-30
+]]></system-out>
+</testcase>
+<testcase name="doesNotSplitFreeTextNameOrInventFamily()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:doesNotSplitFreeTextNameOrInventFamily()]
+display-name: doesNotSplitFreeTextNameOrInventFamily()
+]]></system-out>
+</testcase>
+<testcase name="rejectsAdditionalDifferentPatient()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsAdditionalDifferentPatient()]
+display-name: rejectsAdditionalDifferentPatient()
+]]></system-out>
+</testcase>
+<testcase name="acceptsOnlyExactSameBaseAbsolutePatient()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:acceptsOnlyExactSameBaseAbsolutePatient()]
+display-name: acceptsOnlyExactSameBaseAbsolutePatient()
+]]></system-out>
+</testcase>
+<testcase name="patientCannotCrossLink()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:patientCannotCrossLink()]
+display-name: patientCannotCrossLink()
+]]></system-out>
+</testcase>
+<testcase name="rejectsUnscheduledBookedVisit()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsUnscheduledBookedVisit()]
+display-name: rejectsUnscheduledBookedVisit()
+]]></system-out>
+</testcase>
+<testcase name="rejectsMissingPatient()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsMissingPatient()]
+display-name: rejectsMissingPatient()
+]]></system-out>
+</testcase>
+<testcase name="preservesBirthPrecision(String)[3]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:preservesBirthPrecision(java.lang.String)]/[test-template-invocation:#3]
+display-name: [3] 1990-01-03
+]]></system-out>
+</testcase>
+<testcase name="selectsCurrentOfficialNameAndAllGivenParts()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0.011">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:selectsCurrentOfficialNameAndAllGivenParts()]
+display-name: selectsCurrentOfficialNameAndAllGivenParts()
+]]></system-out>
+</testcase>
+<testcase name="preservesBirthPrecision(String)[1]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:preservesBirthPrecision(java.lang.String)]/[test-template-invocation:#1]
+display-name: [1] 1990
+]]></system-out>
+</testcase>
+<testcase name="preservesBirthPrecision(String)[2]" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[test-template:preservesBirthPrecision(java.lang.String)]/[test-template-invocation:#2]
+display-name: [2] 1990-01
+]]></system-out>
+</testcase>
+<testcase name="isolatesTenantsAndKeepsOpaqueVersion()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:isolatesTenantsAndKeepsOpaqueVersion()]
+display-name: isolatesTenantsAndKeepsOpaqueVersion()
+]]></system-out>
+</testcase>
+<testcase name="rejectsReversedTimes()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0.002">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsReversedTimes()]
+display-name: rejectsReversedTimes()
+]]></system-out>
+</testcase>
+<testcase name="rejectsOffsetFreeTimeWithoutLeakingValue()" classname="com.careconnect.service.cerner.CernerResourceMapperTest" time="0">
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]/[class:com.careconnect.service.cerner.CernerResourceMapperTest]/[method:rejectsOffsetFreeTimeWithoutLeakingValue()]
+display-name: rejectsOffsetFreeTimeWithoutLeakingValue()
+]]></system-out>
+</testcase>
+<system-out><![CDATA[
+unique-id: [engine:junit-jupiter]
+display-name: JUnit Jupiter
+]]></system-out>
+</testsuite>

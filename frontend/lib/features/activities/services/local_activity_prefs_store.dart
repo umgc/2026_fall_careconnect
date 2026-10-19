@@ -13,7 +13,8 @@ class LocalActivityPrefsStore {
     required String category,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList(_key(clientId, category)) ?? const <String>[];
+    final list =
+        prefs.getStringList(_key(clientId, category)) ?? const <String>[];
     return list.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
   }
 
@@ -42,4 +43,3 @@ class LocalActivityPrefsStore {
     await prefs.setStringList(k, current.toList()..sort());
   }
 }
-

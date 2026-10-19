@@ -10,12 +10,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link WebClientConfig}.
- *
+ * <p>
  * WebClientConfig creates a Spring {@code @Bean} of type {@link RestTemplate} that
  * wraps its underlying HTTP factory in a {@link BufferingClientHttpRequestFactory}.
  * Buffering is required so that response bodies can be read more than once —
  * for example by both a logging interceptor and the calling service.
- *
+ * <p>
  * One test ({@link #shouldCreateRestTemplateBean}) spins up a minimal Spring context
  * using {@link AnnotationConfigApplicationContext} to verify that the bean is properly
  * registered and retrievable via the container. The remaining tests instantiate
@@ -30,7 +30,7 @@ class WebClientConfigTest {
         // in a real (minimal) Spring context, confirming Spring can discover and wire it.
         // The context is closed immediately after to avoid resource leaks.
         try (AnnotationConfigApplicationContext context =
-                new AnnotationConfigApplicationContext(WebClientConfig.class)) {
+                     new AnnotationConfigApplicationContext(WebClientConfig.class)) {
             final RestTemplate restTemplate = context.getBean(RestTemplate.class);
 
             assertNotNull(restTemplate);

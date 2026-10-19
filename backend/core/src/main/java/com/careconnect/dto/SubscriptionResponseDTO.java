@@ -2,6 +2,7 @@ package com.careconnect.dto;
 
 import com.careconnect.model.Plan;
 import com.careconnect.model.Subscription;
+
 import java.time.Instant;
 
 public class SubscriptionResponseDTO {
@@ -18,19 +19,20 @@ public class SubscriptionResponseDTO {
     private Instant startedAt;
     private Instant currentPeriodEnd;
 
-    public SubscriptionResponseDTO() {}
-    
+    public SubscriptionResponseDTO() {
+    }
+
     public SubscriptionResponseDTO(Subscription subscription) {
         this.id = subscription.getId();
         this.paymentSubscriptionId = subscription.getPaymentSubscriptionId();
         this.paymentCustomerId = subscription.getPaymentCustomerId();
         this.priceId = subscription.getPriceId();
-        
+
         // Safely extract user ID
         if (subscription.getUser() != null) {
             this.userId = subscription.getUser().getId();
         }
-        
+
         // Safely extract plan details
         if (subscription.getPlan() != null) {
             Plan plan = subscription.getPlan();
@@ -39,7 +41,7 @@ public class SubscriptionResponseDTO {
             this.planCode = plan.getCode();
             this.priceCents = plan.getPriceCents();
         }
-        
+
         this.status = subscription.getStatus();
         this.startedAt = subscription.getStartedAt();
         this.currentPeriodEnd = subscription.getCurrentPeriodEnd();
@@ -133,11 +135,11 @@ public class SubscriptionResponseDTO {
     public void setCurrentPeriodEnd(Instant currentPeriodEnd) {
         this.currentPeriodEnd = currentPeriodEnd;
     }
-    
+
     public Integer getPriceCents() {
         return priceCents;
     }
-    
+
     public void setPriceCents(Integer priceCents) {
         this.priceCents = priceCents;
     }

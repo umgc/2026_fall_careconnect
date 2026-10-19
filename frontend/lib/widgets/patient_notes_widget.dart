@@ -363,8 +363,8 @@ class _PatientNotesWidgetState extends State<PatientNotesWidget> {
                   Text(
                     'Patient Notes & Documents',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 8),
                   // Category filter
@@ -468,10 +468,10 @@ class _PatientNotesWidgetState extends State<PatientNotesWidget> {
                         ? 'No notes found'
                         : 'No ${_categories[_selectedCategory]?.toLowerCase() ?? 'notes'} found',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.6),
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -479,10 +479,10 @@ class _PatientNotesWidgetState extends State<PatientNotesWidget> {
                         ? 'No ${_selectedCategory == 'all' ? 'notes' : _categories[_selectedCategory]?.toLowerCase()} have been uploaded for ${widget.patientName}'
                         : 'Upload your first ${_selectedCategory == 'all' ? 'note' : _categories[_selectedCategory]?.toLowerCase()} to get started',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.6),
+                        ),
                     textAlign: TextAlign.center,
                   ),
                 ],

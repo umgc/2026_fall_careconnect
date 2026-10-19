@@ -24,7 +24,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
-@Service @RequiredArgsConstructor
+@Service
+@RequiredArgsConstructor
 public class ConfirmationService {
 
     private final ConfirmationItemRepository repository;
@@ -35,6 +36,14 @@ public class ConfirmationService {
      * queue review items, and confirming a CAREGIVER_VISIBILITY item grants that visibility.
      */
     private final ObjectProvider<CaregiverVisibilityService> visibilityServiceProvider;
+
+    public static ConfirmationSourceType parseSourceType(String raw) {
+        try {
+            return ConfirmationSourceType.valueOf(raw);
+        } catch (IllegalArgumentException ex) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Unknown sourceType: " + raw);
+        }
+    }
 
     @Transactional
     public ConfirmationItem createItem(
@@ -81,9 +90,9 @@ public class ConfirmationService {
         }
         auditLedgerService.logConfirmation(source, resolverUserId, null, null,
                 Map.of("itemId", item.getId(),
-                       "referenceId", item.getReferenceId() == null ? "" : item.getReferenceId(),
-                       "resolution", resolution.name(),
-                       "note", note == null ? "" : note));
+                        "referenceId", item.getReferenceId() == null ? "" : item.getReferenceId(),
+                        "resolution", resolution.name(),
+                        "note", note == null ? "" : note));
     }
 
     @Transactional
@@ -94,14 +103,6 @@ public class ConfirmationService {
                 req.getReferenceId(),
                 req.getRequestedBy(),
                 req.getPatientId());
-    }
-
-    public static ConfirmationSourceType parseSourceType(String raw) {
-        try {
-            return ConfirmationSourceType.valueOf(raw);
-        } catch (IllegalArgumentException ex) {
-            throw new AppException(HttpStatus.BAD_REQUEST, "Unknown sourceType: " + raw);
-        }
     }
 
     @Transactional

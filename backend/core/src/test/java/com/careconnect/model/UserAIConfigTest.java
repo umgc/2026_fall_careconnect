@@ -143,6 +143,11 @@ class UserAIConfigTest {
     @Test
     void aiProvider_values() throws Exception {
         assertThat(AIProvider.values())
-                .containsExactly(AIProvider.DEFAULT, AIProvider.OPENAI, AIProvider.DEEPSEEK);
+                .containsExactly(
+                        AIProvider.DEFAULT,
+                        AIProvider.OPENAI,
+                        AIProvider.DEEPSEEK,
+                        AIProvider.OLLAMA,
+                        AIProvider.COLIBRI);
     }
 }

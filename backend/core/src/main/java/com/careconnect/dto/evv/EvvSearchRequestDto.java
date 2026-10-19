@@ -4,9 +4,13 @@ import lombok.*;
 
 import java.time.LocalDate;
 
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class EvvSearchRequestDto {
-    
+
     private String patientName;
     private String serviceType;
     private Long caregiverId;

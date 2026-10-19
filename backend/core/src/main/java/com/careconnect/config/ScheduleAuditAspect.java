@@ -26,7 +26,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class ScheduleAuditAspect {
     private static final Logger log = LoggerFactory.getLogger(ScheduleAuditAspect.class);
-    
+
     private final ScheduledVisitAuditRepository auditRepository;
     private final ObjectMapper objectMapper;
 

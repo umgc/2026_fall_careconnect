@@ -44,36 +44,6 @@ public class RetrievalQueryPlanner {
             "\\b(?:on|taking|take|started|stopped|changed)\\s+([a-z][a-z0-9-]{2,})",
             Pattern.CASE_INSENSITIVE);
 
-    public RetrievalPlan plan(final String query) {
-        if (query == null || query.isBlank()) {
-            return RetrievalPlan.general();
-        }
-        final String lower = query.toLowerCase(Locale.ROOT);
-        final boolean medCue = MEDICATION_CUE.matcher(lower).find();
-        final boolean timelineCue = TIMELINE_CUE.matcher(lower).find();
-        if (!medCue && !timelineCue) {
-            return RetrievalPlan.general();
-        }
-        // Structured medication timeline only when both medication and
-        // timeline/status cues are present (or timeline cues clearly ask about meds).
-        if (medCue && timelineCue) {
-            return new RetrievalPlan(
-                    QueryIntent.MEDICATION_TIMELINE,
-                    extractMedicationHint(query));
-        }
-        if (timelineCue && looksLikeMedicationQuestion(lower)) {
-            return new RetrievalPlan(
-                    QueryIntent.MEDICATION_TIMELINE,
-                    extractMedicationHint(query));
-        }
-        // Bare medication questions stay GENERAL (optionally with a med name hint)
-        // so hybrid retrieval is not over-narrowed to timeline event chunks.
-        if (medCue) {
-            return new RetrievalPlan(QueryIntent.GENERAL, extractMedicationHint(query));
-        }
-        return RetrievalPlan.general();
-    }
-
     private static boolean looksLikeMedicationQuestion(final String lower) {
         return lower.contains("med") || lower.contains("pill") || lower.contains("rx");
     }
@@ -112,5 +82,35 @@ public class RetrievalQueryPlanner {
             }
         }
         return null;
+    }
+
+    public RetrievalPlan plan(final String query) {
+        if (query == null || query.isBlank()) {
+            return RetrievalPlan.general();
+        }
+        final String lower = query.toLowerCase(Locale.ROOT);
+        final boolean medCue = MEDICATION_CUE.matcher(lower).find();
+        final boolean timelineCue = TIMELINE_CUE.matcher(lower).find();
+        if (!medCue && !timelineCue) {
+            return RetrievalPlan.general();
+        }
+        // Structured medication timeline only when both medication and
+        // timeline/status cues are present (or timeline cues clearly ask about meds).
+        if (medCue && timelineCue) {
+            return new RetrievalPlan(
+                    QueryIntent.MEDICATION_TIMELINE,
+                    extractMedicationHint(query));
+        }
+        if (timelineCue && looksLikeMedicationQuestion(lower)) {
+            return new RetrievalPlan(
+                    QueryIntent.MEDICATION_TIMELINE,
+                    extractMedicationHint(query));
+        }
+        // Bare medication questions stay GENERAL (optionally with a med name hint)
+        // so hybrid retrieval is not over-narrowed to timeline event chunks.
+        if (medCue) {
+            return new RetrievalPlan(QueryIntent.GENERAL, extractMedicationHint(query));
+        }
+        return RetrievalPlan.general();
     }
 }

@@ -9,7 +9,8 @@ import '../../services/hiring_form_submission_service.dart';
 /// each field, reviews a confirmation summary, and on confirmation the data is
 /// submitted to the backend and stored in the database.
 class HiringFormFillPage extends StatefulWidget {
-  const HiringFormFillPage({super.key, required this.definition, this.patientId});
+  const HiringFormFillPage(
+      {super.key, required this.definition, this.patientId});
 
   final FormDefinition definition;
   final int? patientId;
@@ -61,7 +62,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
       _formKey.currentState?.validate();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please complete required fields: ${missing.join(', ')}'),
+          content:
+              Text('Please complete required fields: ${missing.join(', ')}'),
           backgroundColor: AppTheme.error,
         ),
       );
@@ -86,7 +88,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
     if (result.ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${t.hiringformfill_submitted} "${d.title}" — ${t.hiringformfill_copySaved}'),
+          content: Text(
+              '${t.hiringformfill_submitted} "${d.title}" — ${t.hiringformfill_copySaved}'),
           backgroundColor: AppTheme.success,
         ),
       );
@@ -95,7 +98,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
       await _showErrorsDialog(result.message, result.errors);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message), backgroundColor: AppTheme.error),
+        SnackBar(
+            content: Text(result.message), backgroundColor: AppTheme.error),
       );
     }
   }
@@ -142,7 +146,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
                 '${t.hiringformfill_submit} "${d.title}" (v${d.version})? '
                 '${t.hiringformfill_confirmInfo} — '
                 '${t.hiringformfill_saveToRecord}',
-                style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+                style: const TextStyle(
+                    fontSize: 13, color: AppTheme.textSecondary),
               ),
               const SizedBox(height: 12),
               Flexible(
@@ -154,7 +159,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
                           children: [
                             for (final e in entries)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 3),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -214,7 +220,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text('• '),
-                      Expanded(child: Text(e, style: const TextStyle(fontSize: 13))),
+                      Expanded(
+                          child: Text(e, style: const TextStyle(fontSize: 13))),
                     ],
                   ),
                 ),
@@ -259,7 +266,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, color: AppTheme.primary, size: 18),
+                    const Icon(Icons.info_outline,
+                        color: AppTheme.primary, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -285,17 +293,20 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
               )
             : const Icon(Icons.check_circle_outline),
-        label: Text(_submitting ? '${t.hiringformfill_submitting}…' : t.hiringformfill_reviewSub),
+        label: Text(_submitting
+            ? '${t.hiringformfill_submitting}…'
+            : t.hiringformfill_reviewSub),
       ),
     );
   }
 
-
   Widget _sectionCard(FormSectionDef section) {
-    final fields = [...section.fields]..sort((a, b) => a.order.compareTo(b.order));
+    final fields = [...section.fields]
+      ..sort((a, b) => a.order.compareTo(b.order));
     final visible = fields.where(_visible).toList();
     final t = AppLocalizations.of(context)!;
     if (visible.isEmpty) return const SizedBox.shrink();
@@ -307,11 +318,13 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(section.title,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             if (section.completedBy != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text('${t.hiringformfill_completedBy} ${section.completedBy!.toLowerCase()}',
+                child: Text(
+                    '${t.hiringformfill_completedBy} ${section.completedBy!.toLowerCase()}',
                     style: const TextStyle(
                         fontSize: 11, color: AppTheme.textSecondary)),
               ),
@@ -350,7 +363,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
     }
   }
 
-  String _label(FormFieldDef field) => field.required ? '${field.label} *' : field.label;
+  String _label(FormFieldDef field) =>
+      field.required ? '${field.label} *' : field.label;
 
   Widget _textField(String key, FormFieldDef field) {
     final t = AppLocalizations.of(context)!;
@@ -387,8 +401,9 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
         for (final o in field.options)
           DropdownMenuItem(value: o.value, child: Text(o.label)),
       ],
-      validator: (v) =>
-          field.required && (v == null || v.isEmpty) ? t.hiringformfill_required : null,
+      validator: (v) => field.required && (v == null || v.isEmpty)
+          ? t.hiringformfill_required
+          : null,
       onChanged: (v) => setState(() => _values[key] = v),
     );
   }
@@ -402,7 +417,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
       title: Text(_label(field), style: const TextStyle(fontSize: 14)),
       subtitle: field.helpText != null
           ? Text(field.helpText!,
-              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary))
+              style:
+                  const TextStyle(fontSize: 12, color: AppTheme.textSecondary))
           : null,
       onChanged: (v) => setState(() => _values[key] = v ?? false),
     );
@@ -421,10 +437,10 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
           lastDate: DateTime(now.year + 10),
         );
         if (picked != null) {
-          setState(() => _values[key] =
-              '${picked.year.toString().padLeft(4, '0')}-'
-              '${picked.month.toString().padLeft(2, '0')}-'
-              '${picked.day.toString().padLeft(2, '0')}');
+          setState(
+              () => _values[key] = '${picked.year.toString().padLeft(4, '0')}-'
+                  '${picked.month.toString().padLeft(2, '0')}-'
+                  '${picked.day.toString().padLeft(2, '0')}');
         }
       },
       child: InputDecorator(
@@ -490,7 +506,8 @@ class _HiringFormFillPageState extends State<HiringFormFillPage> {
       border: const OutlineInputBorder(),
       isDense: true,
       suffixIcon: field.sensitive
-          ? const Icon(Icons.lock_outline, size: 16, color: AppTheme.textSecondary)
+          ? const Icon(Icons.lock_outline,
+              size: 16, color: AppTheme.textSecondary)
           : null,
     );
   }

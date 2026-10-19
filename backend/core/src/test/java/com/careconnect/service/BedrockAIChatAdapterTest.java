@@ -33,13 +33,19 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BedrockAIChatAdapterTest {
 
-    @Mock AIServiceFactory aiServiceFactory;
-    @Mock AIService downstream;
-    @Mock AiOutputValidationService outputValidationService;
-    @Mock MedicalContextService medicalContextService;
-    @Mock UserAIConfigService userAIConfigService;
+    @Mock
+    AIServiceFactory aiServiceFactory;
+    @Mock
+    AIService downstream;
+    @Mock
+    AiOutputValidationService outputValidationService;
+    @Mock
+    MedicalContextService medicalContextService;
+    @Mock
+    UserAIConfigService userAIConfigService;
 
-    @InjectMocks BedrockAIChatAdapter adapter;
+    @InjectMocks
+    BedrockAIChatAdapter adapter;
 
     // --- WBS 3.15.3: output validation gate ---
 

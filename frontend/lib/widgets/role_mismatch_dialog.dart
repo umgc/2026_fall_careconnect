@@ -59,9 +59,9 @@ class RoleMismatchDialog extends StatelessWidget {
                     Text(
                       'Account Information',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.blue.shade700,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            color: Colors.blue.shade700,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                   ],
                 ),
@@ -75,10 +75,10 @@ class RoleMismatchDialog extends StatelessWidget {
                 Text(
                   'Current login page: $expectedRoleDisplay Login',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.6),
-                  ),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.6),
+                      ),
                 ),
               ],
             ),

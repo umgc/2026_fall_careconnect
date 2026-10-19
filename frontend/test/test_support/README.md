@@ -33,5 +33,12 @@ await pumpCareConnectApp(
 );
 ```
 
+`pumpCareConnectApp` wraps the child in a `MaterialApp` with the app's
+localization delegates (English by default; pass `locale:` for another
+language), so widgets that call `AppLocalizations.of(context)!` render
+without extra setup. `providers` is optional. Prefer it over a hand-rolled
+`MaterialApp` in new tests; existing tests can move over when they are next
+touched.
+
 ## Ownership
 Owned by the testing workstream for REQ-2.2 (Flutter mock data framework).

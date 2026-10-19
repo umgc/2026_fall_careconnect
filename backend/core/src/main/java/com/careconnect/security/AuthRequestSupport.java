@@ -1,18 +1,23 @@
 package com.careconnect.security;
 
-import org.springframework.security.oauth2.jwt.Jwt;
+import com.careconnect.model.User;
 
 /**
- * Shared JWT presence checks for patient-scoped API endpoints.
+ * Shared authentication checks for patient-scoped API endpoints.
+ *
+ * <p>{@code JwtAuthenticationFilter} sets a {@code UserDetails} principal, so an
+ * {@code @AuthenticationPrincipal Jwt} parameter is always null. Check the resolved
+ * current user instead.
  */
 public final class AuthRequestSupport {
 
     private AuthRequestSupport() {
     }
 
-    public static void requireAuthenticated(Jwt jwt) throws UnauthorizedException {
-        if (jwt == null) {
+    public static User requireAuthenticated(User currentUser) throws UnauthorizedException {
+        if (currentUser == null) {
             throw new UnauthorizedException("Missing or invalid authentication token");
         }
+        return currentUser;
     }
 }

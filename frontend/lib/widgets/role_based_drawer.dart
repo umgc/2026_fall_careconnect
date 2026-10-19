@@ -13,7 +13,7 @@ class RoleBasedDrawer extends StatelessWidget {
     return Consumer<UserProvider>(
       builder: (context, userProvider, child) {
         final user = userProvider.userSession;
-        
+
         if (user == null) {
           return const Drawer(
             child: Center(
@@ -97,14 +97,6 @@ class RoleBasedDrawer extends StatelessWidget {
                       onTap: () {
                         Navigator.pop(context);
                         context.go('/admin/users');
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.security),
-                      title: const Text('Role Management'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        Navigator.pushNamed(context, '/admin/roles');
                       },
                     ),
                     ListTile(
@@ -281,10 +273,10 @@ class RoleBasedDrawer extends StatelessWidget {
     if (shouldLogout == true && context.mounted) {
       // Call logout from AuthService
       await AuthService.logout();
-      
+
       // Clear user provider
       await userProvider.logout();
-      
+
       if (context.mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }

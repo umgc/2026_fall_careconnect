@@ -23,12 +23,48 @@ public enum RetrievalRecordType {
     SUMMARY_CONDITION,
     SUMMARY_SOAP,
     SUMMARY_CLINICAL_OBSERVATION,
-    /** Derived from careInstructions type=medication (FR-AI-11 / Task 4.5). */
+    /**
+     * Derived from careInstructions type=medication (FR-AI-11 / Task 4.5).
+     */
     MEDICATION_TIMELINE_EVENT,
     MEDICATION,
     TASK,
     EVV_RECORD,
-    VITAL_SIGN;
+    VITAL_SIGN,
+    // --- Epic SMART-on-FHIR sourced clinical data (source_kind='epic'). ---
+    EPIC_CONDITION,
+    EPIC_MEDICATION,
+    EPIC_ALLERGY,
+    EPIC_OBSERVATION,
+    EPIC_DIAGNOSTIC_REPORT,
+    EPIC_IMMUNIZATION,
+    EPIC_PROCEDURE,
+    EPIC_DOCUMENT,
+    EPIC_ENCOUNTER,
+    EPIC_CARE_PLAN,
+    EPIC_GOAL,
+    EPIC_CARE_TEAM,
+    EPIC_FAMILY_HISTORY,
+    EPIC_COVERAGE,
+    EPIC_DEVICE;
+
+    /** Epic-sourced record types (Findings R2; discriminated by chunk source_kind='epic'). */
+    public static final Set<RetrievalRecordType> EPIC_TYPES = Collections.unmodifiableSet(EnumSet.of(
+            EPIC_CONDITION,
+            EPIC_MEDICATION,
+            EPIC_ALLERGY,
+            EPIC_OBSERVATION,
+            EPIC_DIAGNOSTIC_REPORT,
+            EPIC_IMMUNIZATION,
+            EPIC_PROCEDURE,
+            EPIC_DOCUMENT,
+            EPIC_ENCOUNTER,
+            EPIC_CARE_PLAN,
+            EPIC_GOAL,
+            EPIC_CARE_TEAM,
+            EPIC_FAMILY_HISTORY,
+            EPIC_COVERAGE,
+            EPIC_DEVICE));
 
     private static final Set<RetrievalRecordType> ALL = Collections.unmodifiableSet(EnumSet.allOf(RetrievalRecordType.class));
 
@@ -72,7 +108,23 @@ public enum RetrievalRecordType {
                 MEDICATION_TIMELINE_EVENT,
                 MEDICATION,
                 TASK,
-                VITAL_SIGN
+                VITAL_SIGN,
+                // Epic-sourced clinical data is visible to the care circle, family included.
+                EPIC_CONDITION,
+                EPIC_MEDICATION,
+                EPIC_ALLERGY,
+                EPIC_OBSERVATION,
+                EPIC_DIAGNOSTIC_REPORT,
+                EPIC_IMMUNIZATION,
+                EPIC_PROCEDURE,
+                EPIC_DOCUMENT,
+                EPIC_ENCOUNTER,
+                EPIC_CARE_PLAN,
+                EPIC_GOAL,
+                EPIC_CARE_TEAM,
+                EPIC_FAMILY_HISTORY,
+                EPIC_COVERAGE,
+                EPIC_DEVICE
         ));
     }
 

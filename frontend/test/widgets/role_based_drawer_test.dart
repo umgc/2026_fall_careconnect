@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/widgets/role_based_drawer.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
@@ -22,7 +23,6 @@ Widget _wrap({UserProvider? provider, GlobalKey<NavigatorState>? navKey}) {
     routes: {
       '/dashboard': (_) => const Scaffold(body: Text('Dashboard Page')),
       '/admin/users': (_) => const Scaffold(body: Text('User Mgmt Page')),
-      '/admin/roles': (_) => const Scaffold(body: Text('Role Mgmt Page')),
       '/patients': (_) => const Scaffold(body: Text('Patients Page')),
       '/patients/add': (_) => const Scaffold(body: Text('Add Patient Page')),
       '/tasks': (_) => const Scaffold(body: Text('Tasks Page')),
@@ -47,6 +47,34 @@ Widget _wrap({UserProvider? provider, GlobalKey<NavigatorState>? navKey}) {
   );
 }
 
+// GoRouter variant for drawer items that navigate with context.go().
+Widget _wrapRouter({required UserProvider provider}) {
+  final router = GoRouter(
+    routes: [
+      GoRoute(
+        path: '/',
+        builder: (_, __) => Scaffold(
+          drawer: const RoleBasedDrawer(),
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/admin/users',
+        builder: (_, __) => const Scaffold(body: Text('User Mgmt Page')),
+      ),
+    ],
+  );
+  return ChangeNotifierProvider<UserProvider>.value(
+    value: provider,
+    child: MaterialApp.router(routerConfig: router),
+  );
+}
+
 class _SessionUserProvider extends MockUserProvider {
   _SessionUserProvider({
     required String name,
@@ -68,7 +96,8 @@ void main() {
   // Mock flutter_secure_storage and connectivity method channels
   setUp(() {
     TestWidgetsFlutterBinding.ensureInitialized();
-    const channel = MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+    const channel =
+        MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
       if (methodCall.method == 'read') return null;
@@ -87,7 +116,8 @@ void main() {
       expect(find.byType(Drawer), findsOneWidget);
     });
 
-    testWidgets('shows "Not logged in" when userSession is null', (tester) async {
+    testWidgets('shows "Not logged in" when userSession is null',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
@@ -253,7 +283,8 @@ void main() {
       expect(find.text('Settings'), findsOneWidget);
     });
 
-    testWidgets('role badge shows Caregiver for CAREGIVER role', (tester) async {
+    testWidgets('role badge shows Caregiver for CAREGIVER role',
+        (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
         email: 'd@t.com',
@@ -265,7 +296,8 @@ void main() {
       expect(find.text('Caregiver'), findsOneWidget);
     });
 
-    testWidgets('role badge shows Administrator for ADMIN role', (tester) async {
+    testWidgets('role badge shows Administrator for ADMIN role',
+        (tester) async {
       final provider = _SessionUserProvider(
         name: 'Admin',
         email: 'a@t.com',
@@ -277,7 +309,8 @@ void main() {
       expect(find.text('Administrator'), findsOneWidget);
     });
 
-    testWidgets('role badge shows Family Member for FAMILY_MEMBER role', (tester) async {
+    testWidgets('role badge shows Family Member for FAMILY_MEMBER role',
+        (tester) async {
       final provider = _SessionUserProvider(
         name: 'Fam',
         email: 'f@t.com',
@@ -293,7 +326,9 @@ void main() {
   group('RoleBasedDrawer – drawer structure and icons', () {
     testWidgets('drawer contains UserAccountsDrawerHeader', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Alice', email: 'a@t.com', role: 'PATIENT',
+        name: 'Alice',
+        email: 'a@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -303,7 +338,9 @@ void main() {
 
     testWidgets('header shows first letter of name in avatar', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Zach', email: 'z@t.com', role: 'PATIENT',
+        name: 'Zach',
+        email: 'z@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -313,7 +350,9 @@ void main() {
 
     testWidgets('header shows ? for empty name', (tester) async {
       final provider = _SessionUserProvider(
-        name: '', email: 'e@t.com', role: 'PATIENT',
+        name: '',
+        email: 'e@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -323,7 +362,9 @@ void main() {
 
     testWidgets('drawer has dashboard icon', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -333,7 +374,9 @@ void main() {
 
     testWidgets('drawer has health_and_safety icon', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -343,7 +386,9 @@ void main() {
 
     testWidgets('drawer has message icon', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -353,7 +398,9 @@ void main() {
 
     testWidgets('drawer has settings icon', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -363,7 +410,9 @@ void main() {
 
     testWidgets('drawer has logout icon', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -373,7 +422,9 @@ void main() {
 
     testWidgets('drawer has task icon for PATIENT', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -383,7 +434,9 @@ void main() {
 
     testWidgets('drawer has analytics icon for ADMIN', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'ADMIN',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'ADMIN',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -393,7 +446,9 @@ void main() {
 
     testWidgets('ADMIN drawer has admin_panel_settings icon', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'ADMIN',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'ADMIN',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -401,9 +456,13 @@ void main() {
       expect(find.byIcon(Icons.admin_panel_settings), findsOneWidget);
     });
 
-    testWidgets('CAREGIVER drawer has people_outline icon for Patient Management', (tester) async {
+    testWidgets(
+        'CAREGIVER drawer has people_outline icon for Patient Management',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'CAREGIVER',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'CAREGIVER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -413,7 +472,9 @@ void main() {
 
     testWidgets('Dividers present in drawer', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -425,7 +486,9 @@ void main() {
   group('RoleBasedDrawer – role-specific menu visibility', () {
     testWidgets('PATIENT does NOT see Patient Management', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Pat', email: 'p@t.com', role: 'PATIENT',
+        name: 'Pat',
+        email: 'p@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -435,7 +498,9 @@ void main() {
 
     testWidgets('PATIENT does NOT see Analytics', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Pat', email: 'p@t.com', role: 'PATIENT',
+        name: 'Pat',
+        email: 'p@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -445,7 +510,9 @@ void main() {
 
     testWidgets('PATIENT sees Tasks', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Pat', email: 'p@t.com', role: 'PATIENT',
+        name: 'Pat',
+        email: 'p@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -455,7 +522,9 @@ void main() {
 
     testWidgets('FAMILY_MEMBER does NOT see Analytics', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Fam', email: 'f@t.com', role: 'FAMILY_MEMBER',
+        name: 'Fam',
+        email: 'f@t.com',
+        role: 'FAMILY_MEMBER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -463,9 +532,12 @@ void main() {
       expect(find.text('Analytics'), findsNothing);
     });
 
-    testWidgets('FAMILY_MEMBER does NOT see Patient Management', (tester) async {
+    testWidgets('FAMILY_MEMBER does NOT see Patient Management',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Fam', email: 'f@t.com', role: 'FAMILY_MEMBER',
+        name: 'Fam',
+        email: 'f@t.com',
+        role: 'FAMILY_MEMBER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -475,7 +547,9 @@ void main() {
 
     testWidgets('FAMILY_MEMBER does NOT see Administration', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Fam', email: 'f@t.com', role: 'FAMILY_MEMBER',
+        name: 'Fam',
+        email: 'f@t.com',
+        role: 'FAMILY_MEMBER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -483,9 +557,12 @@ void main() {
       expect(find.text('Administration'), findsNothing);
     });
 
-    testWidgets('FAMILY_MEMBER sees Dashboard, Health Data, Messages, Settings', (tester) async {
+    testWidgets('FAMILY_MEMBER sees Dashboard, Health Data, Messages, Settings',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Fam', email: 'f@t.com', role: 'FAMILY_MEMBER',
+        name: 'Fam',
+        email: 'f@t.com',
+        role: 'FAMILY_MEMBER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -496,9 +573,13 @@ void main() {
       expect(find.text('Settings'), findsOneWidget);
     });
 
-    testWidgets('ADMIN sees Administration, Patient Management, Tasks, Analytics', (tester) async {
+    testWidgets(
+        'ADMIN sees Administration, Patient Management, Tasks, Analytics',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Admin', email: 'a@t.com', role: 'ADMIN',
+        name: 'Admin',
+        email: 'a@t.com',
+        role: 'ADMIN',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -509,9 +590,12 @@ void main() {
       expect(find.text('Analytics'), findsOneWidget);
     });
 
-    testWidgets('FAMILY_LINK sees Patient Management and Analytics', (tester) async {
+    testWidgets('FAMILY_LINK sees Patient Management and Analytics',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Link', email: 'l@t.com', role: 'FAMILY_LINK',
+        name: 'Link',
+        email: 'l@t.com',
+        role: 'FAMILY_LINK',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -522,7 +606,9 @@ void main() {
 
     testWidgets('FAMILY_LINK role badge shows Family Link', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Link', email: 'l@t.com', role: 'FAMILY_LINK',
+        name: 'Link',
+        email: 'l@t.com',
+        role: 'FAMILY_LINK',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -532,7 +618,9 @@ void main() {
 
     testWidgets('unknown role shows raw role text', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Unknown', email: 'u@t.com', role: 'CUSTOM_ROLE',
+        name: 'Unknown',
+        email: 'u@t.com',
+        role: 'CUSTOM_ROLE',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -544,7 +632,9 @@ void main() {
   group('RoleBasedDrawer – menu item navigation', () {
     testWidgets('tapping Dashboard navigates to /dashboard', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -558,7 +648,9 @@ void main() {
 
     testWidgets('tapping Health Data navigates to /health', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -572,7 +664,9 @@ void main() {
 
     testWidgets('tapping Messages navigates to /messages', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -586,7 +680,9 @@ void main() {
 
     testWidgets('tapping Settings navigates to /settings', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -600,7 +696,9 @@ void main() {
 
     testWidgets('tapping Tasks navigates to /tasks', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -612,9 +710,12 @@ void main() {
       expect(find.text('Tasks Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Analytics navigates to /analytics for CAREGIVER', (tester) async {
+    testWidgets('tapping Analytics navigates to /analytics for CAREGIVER',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Dan', email: 'd@t.com', role: 'CAREGIVER',
+        name: 'Dan',
+        email: 'd@t.com',
+        role: 'CAREGIVER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -626,9 +727,12 @@ void main() {
       expect(find.text('Analytics Page'), findsOneWidget);
     });
 
-    testWidgets('tapping My Patients navigates to /patients for CAREGIVER', (tester) async {
+    testWidgets('tapping My Patients navigates to /patients for CAREGIVER',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Dan', email: 'd@t.com', role: 'CAREGIVER',
+        name: 'Dan',
+        email: 'd@t.com',
+        role: 'CAREGIVER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -644,9 +748,12 @@ void main() {
       expect(find.text('Patients Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Add Patient navigates to /patients/add for CAREGIVER', (tester) async {
+    testWidgets('tapping Add Patient navigates to /patients/add for CAREGIVER',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Dan', email: 'd@t.com', role: 'CAREGIVER',
+        name: 'Dan',
+        email: 'd@t.com',
+        role: 'CAREGIVER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -662,11 +769,15 @@ void main() {
       expect(find.text('Add Patient Page'), findsOneWidget);
     });
 
-    testWidgets('tapping User Management navigates to /admin/users for ADMIN', (tester) async {
+    testWidgets('tapping User Management navigates to /admin/users for ADMIN',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Admin', email: 'a@t.com', role: 'ADMIN',
+        name: 'Admin',
+        email: 'a@t.com',
+        role: 'ADMIN',
       );
-      await tester.pumpWidget(_wrap(provider: provider));
+      // User Management navigates with context.go(), so it needs a GoRouter.
+      await tester.pumpWidget(_wrapRouter(provider: provider));
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -679,30 +790,14 @@ void main() {
 
       expect(find.text('User Mgmt Page'), findsOneWidget);
     });
-
-    testWidgets('tapping Role Management navigates to /admin/roles for ADMIN', (tester) async {
-      final provider = _SessionUserProvider(
-        name: 'Admin', email: 'a@t.com', role: 'ADMIN',
-      );
-      await tester.pumpWidget(_wrap(provider: provider));
-      await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
-
-      // Expand Administration
-      await tester.tap(find.text('Administration'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Role Management'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Role Mgmt Page'), findsOneWidget);
-    });
   });
 
   group('RoleBasedDrawer – logout functionality', () {
     testWidgets('tapping Logout shows confirmation dialog', (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -718,9 +813,12 @@ void main() {
       expect(find.text('Logout'), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('cancelling logout dialog does not navigate away', (tester) async {
+    testWidgets('cancelling logout dialog does not navigate away',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Test', email: 't@t.com', role: 'PATIENT',
+        name: 'Test',
+        email: 't@t.com',
+        role: 'PATIENT',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -741,9 +839,13 @@ void main() {
   });
 
   group('RoleBasedDrawer – ExpansionTile children visibility', () {
-    testWidgets('Administration ExpansionTile has User Management and Role Management', (tester) async {
+    testWidgets(
+        'Administration ExpansionTile has User Management and no dead Role Management link',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Admin', email: 'a@t.com', role: 'ADMIN',
+        name: 'Admin',
+        email: 'a@t.com',
+        role: 'ADMIN',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));
@@ -754,14 +856,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('User Management'), findsOneWidget);
-      expect(find.text('Role Management'), findsOneWidget);
       expect(find.byIcon(Icons.people), findsOneWidget);
-      expect(find.byIcon(Icons.security), findsOneWidget);
+      // No /admin/roles route exists, so the drawer must not link to it.
+      expect(find.text('Role Management'), findsNothing);
+      expect(find.byIcon(Icons.security), findsNothing);
     });
 
-    testWidgets('Patient Management ExpansionTile has My Patients and Add Patient', (tester) async {
+    testWidgets(
+        'Patient Management ExpansionTile has My Patients and Add Patient',
+        (tester) async {
       final provider = _SessionUserProvider(
-        name: 'Care', email: 'c@t.com', role: 'CAREGIVER',
+        name: 'Care',
+        email: 'c@t.com',
+        role: 'CAREGIVER',
       );
       await tester.pumpWidget(_wrap(provider: provider));
       await tester.tap(find.text('Open'));

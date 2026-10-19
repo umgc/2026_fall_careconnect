@@ -23,7 +23,9 @@ public class GoogleOAuthService {
 
     private static final String TOKEN_URL = "https://oauth2.googleapis.com/token";
     private static final int TOKEN_REFRESH_MAX_ATTEMPTS = 3;
-    /** Short backoff keeps unit tests fast while still spacing retries. */
+    /**
+     * Short backoff keeps unit tests fast while still spacing retries.
+     */
     private static final long TOKEN_REFRESH_BACKOFF_MS = 25L;
 
     private final RestTemplate http;
@@ -40,6 +42,29 @@ public class GoogleOAuthService {
     @Value("${google.oauth.redirect-uri:}")
     String redirectUri;
 
+    /**
+     * Token-endpoint auth revocation: {@code invalid_grant} body and/or HTTP 401.
+     * Non-{@code invalid_grant} 400s are not treated as revocation.
+     */
+    static boolean isAuthRevocationSignal(final HttpStatusCodeException ex) {
+        if (ex == null) {
+            return false;
+        }
+        if (ex.getStatusCode().value() == 401) {
+            return true;
+        }
+        final String body = ex.getResponseBodyAsString();
+        return body != null && body.toLowerCase().contains("invalid_grant");
+    }
+
+    static boolean isTransientTokenHttpError(final HttpStatusCodeException ex) {
+        if (ex == null) {
+            return false;
+        }
+        final int status = ex.getStatusCode().value();
+        return status == 429 || ex.getStatusCode().is5xxServerError();
+    }
+
     public void exchange(String userId, String code) {
         exchange(userId, code, EmailCredential.Provider.GMAIL, redirectUri);
     }
@@ -50,11 +75,11 @@ public class GoogleOAuthService {
                 : redirectUriOverride;
 
         if (clientId == null || clientId.isBlank() ||
-            clientSecret == null || clientSecret.isBlank() ||
-            effectiveRedirectUri == null || effectiveRedirectUri.isBlank()) {
+                clientSecret == null || clientSecret.isBlank() ||
+                effectiveRedirectUri == null || effectiveRedirectUri.isBlank()) {
 
             throw new IllegalStateException(
-                "Google OAuth not configured (missing clientId/clientSecret/redirectUri)"
+                    "Google OAuth not configured (missing clientId/clientSecret/redirectUri)"
             );
         }
 
@@ -213,29 +238,6 @@ public class GoogleOAuthService {
                 current.getUserId(),
                 "Gmail access was revoked or expired. Reconnect to resume mail sync.",
                 EmailCredentialLifecycleService.RECONNECT_PATH);
-    }
-
-    /**
-     * Token-endpoint auth revocation: {@code invalid_grant} body and/or HTTP 401.
-     * Non-{@code invalid_grant} 400s are not treated as revocation.
-     */
-    static boolean isAuthRevocationSignal(final HttpStatusCodeException ex) {
-        if (ex == null) {
-            return false;
-        }
-        if (ex.getStatusCode().value() == 401) {
-            return true;
-        }
-        final String body = ex.getResponseBodyAsString();
-        return body != null && body.toLowerCase().contains("invalid_grant");
-    }
-
-    static boolean isTransientTokenHttpError(final HttpStatusCodeException ex) {
-        if (ex == null) {
-            return false;
-        }
-        final int status = ex.getStatusCode().value();
-        return status == 429 || ex.getStatusCode().is5xxServerError();
     }
 
     private void sleepBeforeTokenRetry(final int attempt) {

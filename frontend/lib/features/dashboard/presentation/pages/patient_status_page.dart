@@ -152,7 +152,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       // Extract flagged risks for the persistent banner
       if (user.role.toUpperCase() == 'CAREGIVER' ||
           user.role.toUpperCase() == 'FAMILY_LINK') {
-        final raw = responseData['flaggedRisks'] ?? responseData['flagged_risks'];
+        final raw =
+            responseData['flaggedRisks'] ?? responseData['flagged_risks'];
         if (raw is List) {
           _flaggedRiskNames = raw
               .map((e) => e is Map ? (e['riskTypeName'] as String?) : null)
@@ -165,10 +166,10 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
             if (risksRes.statusCode == 200) {
               final list = json.decode(risksRes.body) as List?;
               _flaggedRiskNames = list
-                  ?.map((e) =>
-                      e is Map ? (e['riskTypeName'] as String?) : null)
-                  .whereType<String>()
-                  .toList() ??
+                      ?.map((e) =>
+                          e is Map ? (e['riskTypeName'] as String?) : null)
+                      .whereType<String>()
+                      .toList() ??
                   [];
             } else {
               _flaggedRiskNames = [];
@@ -184,10 +185,10 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
           if (risksRes.statusCode == 200) {
             final list = json.decode(risksRes.body) as List?;
             _flaggedRiskNames = list
-                ?.map((e) =>
-                    e is Map ? (e['riskTypeName'] as String?) : null)
-                .whereType<String>()
-                .toList() ??
+                    ?.map(
+                        (e) => e is Map ? (e['riskTypeName'] as String?) : null)
+                    .whereType<String>()
+                    .toList() ??
                 [];
           } else {
             _flaggedRiskNames = [];
@@ -298,7 +299,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${t.ptstatusscreen_saveFailed}: ${resp.statusCode}'),
+              content:
+                  Text('${t.ptstatusscreen_saveFailed}: ${resp.statusCode}'),
             ),
           );
         }
@@ -405,130 +407,122 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   ),
                 ),
               ),
-                    if (canEdit)
-                      ElevatedButton.icon(
-                        onPressed: _isSavingPersonalization
-                            ? null
-                            : () {
-                                if (_isEditingPersonalization) {
-                                  _saveInHomePersonalization();
-                                } else {
-                                  setState(() {
-                                    _isEditingPersonalization = true;
-                                  });
-                                }
-                              },
-                        icon: _isSavingPersonalization
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(
-                                _isEditingPersonalization
-                                    ? Icons.check
-                                    : Icons.edit,
-                              ),
-                        label: Text(
-                          _isEditingPersonalization ? t.save : t.ptstatusscreen_edit,
+              if (canEdit)
+                ElevatedButton.icon(
+                  onPressed: _isSavingPersonalization
+                      ? null
+                      : () {
+                          if (_isEditingPersonalization) {
+                            _saveInHomePersonalization();
+                          } else {
+                            setState(() {
+                              _isEditingPersonalization = true;
+                            });
+                          }
+                        },
+                  icon: _isSavingPersonalization
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _isEditingPersonalization ? Icons.check : Icons.edit,
                         ),
-                      ),
+                  label: Text(
+                    _isEditingPersonalization ? t.save : t.ptstatusscreen_edit,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
-                row(
-                  icon: Icons.thumb_up_alt_outlined,
-                  label: t.ptstatusscreen_likes,
-                  controller: _likesController,
+          row(
+            icon: Icons.thumb_up_alt_outlined,
+            label: t.ptstatusscreen_likes,
+            controller: _likesController,
+          ),
+          const SizedBox(height: 12),
+          row(
+            icon: Icons.thumb_down_alt_outlined,
+            label: t.ptstatusscreen_dislikes,
+            controller: _dislikesController,
+          ),
+          const SizedBox(height: 12),
+          row(
+            icon: Icons.repeat_rounded,
+            label: t.ptstatusscreen_habits,
+            controller: _habitsController,
+          ),
+          const SizedBox(height: 12),
+          row(
+            icon: Icons.warning_amber_outlined,
+            label: t.ptstatusscreen_phobia,
+            controller: _phobiasController,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 10, right: 8),
+                child: Icon(
+                  Icons.chat_bubble_outline,
+                  size: 20,
+                  color: theme.colorScheme.primary.withOpacity(0.8),
                 ),
-                const SizedBox(height: 12),
-                row(
-                  icon: Icons.thumb_down_alt_outlined,
-                  label: t.ptstatusscreen_dislikes,
-                  controller: _dislikesController,
-                ),
-                const SizedBox(height: 12),
-                row(
-                  icon: Icons.repeat_rounded,
-                  label: t.ptstatusscreen_habits,
-                  controller: _habitsController,
-                ),
-                const SizedBox(height: 12),
-                row(
-                  icon: Icons.warning_amber_outlined,
-                  label: t.ptstatusscreen_phobia,
-                  controller: _phobiasController,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(top: 10, right: 8),
-                      child: Icon(
-                        Icons.chat_bubble_outline,
-                        size: 20,
-                        color: theme.colorScheme.primary.withOpacity(0.8),
-                      ),
-                    ),
-                    Expanded(
-                      child: _isEditingPersonalization
-                          ? DropdownButtonFormField<String>(
-                              initialValue: _preferredCommunicationMethod,
-                              items: [
-                                DropdownMenuItem(
-                                  value: 'verbal',
-                                  child: Text(t.ptstatusscreen_verbal),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'visual',
-                                  child: Text(t.ptstatusscreen_visual),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'written',
-                                  child: Text(t.ptstatusscreen_written),
-                                ),
-                                DropdownMenuItem(
-                                  value: 'gesture',
-                                  child: Text(t.ptstatusscreen_gesture),
-                                ),
-                              ],
-                              onChanged: (v) => setState(
-                                        () =>
-                                            _preferredCommunicationMethod = v,
-                                      ),
-                              decoration:
-                                  deco(t.ptstatusscreen_preferComMethod),
-                            )
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  t.ptstatusscreen_preferComMethod,
-                                  style:
-                                      theme.textTheme.bodySmall?.copyWith(
-                                    color: Colors.grey.shade700,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  (_preferredCommunicationMethod ?? '')
-                                          .isEmpty
-                                      ? t.ptstatusscreen_notSaved
-                                      : _preferredCommunicationMethod!
-                                          .substring(0, 1)
-                                          .toUpperCase() +
-                                          _preferredCommunicationMethod!
-                                              .substring(1),
-                                  style: theme.textTheme.bodyMedium,
-                                ),
-                              ],
+              ),
+              Expanded(
+                child: _isEditingPersonalization
+                    ? DropdownButtonFormField<String>(
+                        initialValue: _preferredCommunicationMethod,
+                        items: [
+                          DropdownMenuItem(
+                            value: 'verbal',
+                            child: Text(t.ptstatusscreen_verbal),
+                          ),
+                          DropdownMenuItem(
+                            value: 'visual',
+                            child: Text(t.ptstatusscreen_visual),
+                          ),
+                          DropdownMenuItem(
+                            value: 'written',
+                            child: Text(t.ptstatusscreen_written),
+                          ),
+                          DropdownMenuItem(
+                            value: 'gesture',
+                            child: Text(t.ptstatusscreen_gesture),
+                          ),
+                        ],
+                        onChanged: (v) => setState(
+                          () => _preferredCommunicationMethod = v,
+                        ),
+                        decoration: deco(t.ptstatusscreen_preferComMethod),
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            t.ptstatusscreen_preferComMethod,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w600,
                             ),
-                    ),
-                  ],
-                ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            (_preferredCommunicationMethod ?? '').isEmpty
+                                ? t.ptstatusscreen_notSaved
+                                : _preferredCommunicationMethod!
+                                        .substring(0, 1)
+                                        .toUpperCase() +
+                                    _preferredCommunicationMethod!.substring(1),
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -556,9 +550,9 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   child: Text(
                     title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -668,8 +662,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     // Add allergies (always show)
     final allergiesText = hasAllergies
         ? (patient!.allergies is List
-              ? (patient!.allergies as List).join(', ')
-              : patient!.allergies.toString())
+            ? (patient!.allergies as List).join(', ')
+            : patient!.allergies.toString())
         : t.ptstatusscreen_noAllergies;
     children.add(_buildInfoRow(t.ptstatusscreen_allergies, allergiesText));
 
@@ -686,7 +680,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
       if (vitals.containsKey('heartRate') && vitals['heartRate'] != null) {
         final heartRate = vitals['heartRate'].toString();
         if (heartRate.isNotEmpty && heartRate != 'null') {
-          children.add(_buildInfoRow(t.ptstatusscreen_heartRate, '$heartRate ${t.ptstatusscreen_bpm}'));
+          children.add(_buildInfoRow(t.ptstatusscreen_heartRate,
+              '$heartRate ${t.ptstatusscreen_bpm}'));
         }
       }
 
@@ -694,7 +689,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
           vitals['bloodPressure'] != null) {
         final bloodPressure = vitals['bloodPressure'].toString();
         if (bloodPressure.isNotEmpty && bloodPressure != 'null') {
-          children.add(_buildInfoRow(t.ptstatusscreen_bloodPressure, '$bloodPressure mmHg'));
+          children.add(_buildInfoRow(
+              t.ptstatusscreen_bloodPressure, '$bloodPressure mmHg'));
         }
       }
 
@@ -765,7 +761,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
         bottom: false,
         child: Row(
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24),
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.white, size: 24),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -790,11 +787,12 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
     final user = Provider.of<UserProvider>(context).user;
     final isCaregiver = user != null &&
         (user.role.toUpperCase() == 'CAREGIVER' ||
-         user.role.toUpperCase() == 'FAMILY_LINK');
+            user.role.toUpperCase() == 'FAMILY_LINK');
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBarHelper.createAppBar(context, title: t.ptstatusscreen_ptStatus),
+      appBar:
+          AppBarHelper.createAppBar(context, title: t.ptstatusscreen_ptStatus),
       drawer: const CommonDrawer(currentRoute: '/patient'),
       body: _buildDashboardBody(context, isMobile, isCaregiver),
     );
@@ -844,9 +842,12 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                           children: [
                             Text(
                               '${patient!.firstName} ${patient!.lastName}',
-                              style: Theme.of(context).textTheme.titleLarge
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
                                   ?.copyWith(
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),
@@ -886,7 +887,9 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                             children: [
                               Text(
                                 '${patient!.firstName} ${patient!.lastName}',
-                                style: Theme.of(context).textTheme.titleLarge
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
@@ -895,11 +898,14 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                                     ),
                               ),
                               if (patient!.dob.isNotEmpty)
-                                Text('${t.ptstatusscreen_age}: ${_calculateAge(patient!.dob)}'),
+                                Text(
+                                    '${t.ptstatusscreen_age}: ${_calculateAge(patient!.dob)}'),
                               if (patient!.phone.isNotEmpty)
-                                Text('${t.ptstatusscreen_phone}: ${patient!.phone}'),
+                                Text(
+                                    '${t.ptstatusscreen_phone}: ${patient!.phone}'),
                               if (patient!.email.isNotEmpty)
-                                Text('${t.resetpassword_emailTitle}: ${patient!.email}'),
+                                Text(
+                                    '${t.resetpassword_emailTitle}: ${patient!.email}'),
                             ],
                           ),
                         ),
@@ -911,30 +917,37 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   ? Column(
                       children: [
                         // Patient Information Section
-                        _buildInfoSection(t.ptstatusscreen_ptInfo, Icons.person, [
+                        _buildInfoSection(
+                            t.ptstatusscreen_ptInfo, Icons.person, [
                           if (patient!.relationship.isNotEmpty)
-                            _buildInfoRow(t.ptstatusscreen_relationship, patient!.relationship),
+                            _buildInfoRow(t.ptstatusscreen_relationship,
+                                patient!.relationship),
                           if (patient!.gender != null &&
                               patient!.gender!.isNotEmpty)
-                            _buildInfoRow(t.signup_accountGender, patient!.gender!),
+                            _buildInfoRow(
+                                t.signup_accountGender, patient!.gender!),
                           if (patient!.dob.isNotEmpty)
                             _buildInfoRow('Date of Birth', patient!.dob),
                         ]),
                         const SizedBox(height: 16),
                         // Address Section
                         if (patient!.address != null) ...[
-                          _buildInfoSection(t.signup_accountAddress, Icons.location_on, [
+                          _buildInfoSection(
+                              t.signup_accountAddress, Icons.location_on, [
                             if (patient!.address!.line1?.isNotEmpty == true)
                               _buildInfoRow(
                                 t.signup_accountAddress,
                                 '${patient!.address!.line1}${patient!.address!.line2?.isNotEmpty == true ? '\n${patient!.address!.line2}' : ''}',
                               ),
                             if (patient!.address!.city?.isNotEmpty == true)
-                              _buildInfoRow(t.signup_accountCity, patient!.address!.city!),
+                              _buildInfoRow(t.signup_accountCity,
+                                  patient!.address!.city!),
                             if (patient!.address!.state?.isNotEmpty == true)
-                              _buildInfoRow(t.signup_accountState, patient!.address!.state!),
+                              _buildInfoRow(t.signup_accountState,
+                                  patient!.address!.state!),
                             if (patient!.address!.zip?.isNotEmpty == true)
-                              _buildInfoRow(t.signup_accountZIP, patient!.address!.zip!),
+                              _buildInfoRow(
+                                  t.signup_accountZIP, patient!.address!.zip!),
                           ]),
                           const SizedBox(height: 16),
                         ],
@@ -961,7 +974,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                         const SizedBox(height: 16),
                         PatientTasksWidget(
                           patientId: patient!.id,
-                          patientName: '${patient!.firstName} ${patient!.lastName}',
+                          patientName:
+                              '${patient!.firstName} ${patient!.lastName}',
                           isCaregiver: isCaregiver,
                         ),
                       ],
@@ -969,30 +983,37 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                   : Column(
                       children: [
                         // Patient Information Section
-                        _buildInfoSection(t.ptstatusscreen_ptInfo, Icons.person, [
+                        _buildInfoSection(
+                            t.ptstatusscreen_ptInfo, Icons.person, [
                           if (patient!.relationship.isNotEmpty)
-                            _buildInfoRow(t.ptstatusscreen_relationship, patient!.relationship),
+                            _buildInfoRow(t.ptstatusscreen_relationship,
+                                patient!.relationship),
                           if (patient!.gender != null &&
                               patient!.gender!.isNotEmpty)
-                            _buildInfoRow(t.signup_accountGender, patient!.gender!),
+                            _buildInfoRow(
+                                t.signup_accountGender, patient!.gender!),
                           if (patient!.dob.isNotEmpty)
                             _buildInfoRow(t.signup_accountDOB, patient!.dob),
                         ]),
                         const SizedBox(height: 24),
                         // Address Section
                         if (patient!.address != null) ...[
-                          _buildInfoSection(t.signup_accountAddress, Icons.location_on, [
+                          _buildInfoSection(
+                              t.signup_accountAddress, Icons.location_on, [
                             if (patient!.address!.line1?.isNotEmpty == true)
                               _buildInfoRow(
                                 t.signup_accountAddress,
                                 '${patient!.address!.line1}${patient!.address!.line2?.isNotEmpty == true ? '\n${patient!.address!.line2}' : ''}',
                               ),
                             if (patient!.address!.city?.isNotEmpty == true)
-                              _buildInfoRow(t.signup_accountCity, patient!.address!.city!),
+                              _buildInfoRow(t.signup_accountCity,
+                                  patient!.address!.city!),
                             if (patient!.address!.state?.isNotEmpty == true)
-                              _buildInfoRow(t.signup_accountState, patient!.address!.state!),
+                              _buildInfoRow(t.signup_accountState,
+                                  patient!.address!.state!),
                             if (patient!.address!.zip?.isNotEmpty == true)
-                              _buildInfoRow(t.signup_accountZIP, patient!.address!.zip!),
+                              _buildInfoRow(
+                                  t.signup_accountZIP, patient!.address!.zip!),
                           ]),
                           const SizedBox(height: 24),
                         ],
@@ -1019,7 +1040,8 @@ class _PatientStatusPageState extends State<PatientStatusPage> {
                         const SizedBox(height: 24),
                         PatientTasksWidget(
                           patientId: patient!.id,
-                          patientName: '${patient!.firstName} ${patient!.lastName}',
+                          patientName:
+                              '${patient!.firstName} ${patient!.lastName}',
                           isCaregiver: isCaregiver,
                         ),
                       ],

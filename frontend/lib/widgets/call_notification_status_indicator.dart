@@ -19,8 +19,6 @@ class _CallNotificationStatusIndicatorState
     extends State<CallNotificationStatusIndicator> {
   @override
   Widget build(BuildContext context) {
-    final isConnected = CallNotificationService.isConnected;
-
     final theme = Theme.of(context);
     final colorOnline = theme.colorScheme.secondary;
     final colorConnecting = theme.colorScheme.tertiary;

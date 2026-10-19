@@ -56,4 +56,29 @@ class ForbiddenScopeExceptionTest {
         assertThat(ex.getMessage()).isEqualTo(detail);
         assertThat(ex.getDenialReason()).isEqualTo(ScopeDenialReason.UNSUPPORTED_ROLE);
     }
+
+    @Test
+    @DisplayName("of leaves correlation ids empty; withCorrelation copies the denial and adds them")
+    void withCorrelationKeepsDenialAndAddsIds() {
+        ForbiddenScopeException ex = ForbiddenScopeException.of(
+                ScopeDenialReason.PATIENT_OUT_OF_SCOPE, 42L, 10L, "out of scope", AUDIT_ID);
+        assertThat(ex.getPatientId()).isEqualTo(42L);
+        assertThat(ex.getCallerUserId()).isEqualTo(10L);
+        assertThat(ex.getRequestId()).isNull();
+        assertThat(ex.getSessionId()).isNull();
+
+        UUID requestId = UUID.randomUUID();
+        UUID auditId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        ForbiddenScopeException correlated = ex.withCorrelation(requestId, auditId, sessionId);
+
+        assertThat(correlated).isNotSameAs(ex);
+        assertThat(correlated.getMessage()).isEqualTo("out of scope");
+        assertThat(correlated.getDenialReason()).isEqualTo(ScopeDenialReason.PATIENT_OUT_OF_SCOPE);
+        assertThat(correlated.getPatientId()).isEqualTo(42L);
+        assertThat(correlated.getCallerUserId()).isEqualTo(10L);
+        assertThat(correlated.getRequestId()).isEqualTo(requestId);
+        assertThat(correlated.getAuditId()).isEqualTo(auditId);
+        assertThat(correlated.getSessionId()).isEqualTo(sessionId);
+    }
 }

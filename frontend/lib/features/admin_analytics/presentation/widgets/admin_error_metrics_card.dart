@@ -54,7 +54,8 @@ class AdminErrorMetricsCard extends StatelessWidget {
             if (buckets.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
-                child: Center(child: Text('No errors recorded in this period.')),
+                child:
+                    Center(child: Text('No errors recorded in this period.')),
               )
             else ...[
               LayoutBuilder(
@@ -195,11 +196,11 @@ class _BucketTable extends StatelessWidget {
         rows: buckets
             .map(
               (bucket) => DataRow(
-                onSelectChanged: onErrorTap == null
-                    ? null
-                    : (_) => onErrorTap!(bucket),
+                onSelectChanged:
+                    onErrorTap == null ? null : (_) => onErrorTap!(bucket),
                 cells: [
-                  DataCell(Text(bucket.endpoint.isEmpty ? 'unknown' : bucket.endpoint)),
+                  DataCell(Text(
+                      bucket.endpoint.isEmpty ? 'unknown' : bucket.endpoint)),
                   DataCell(Text('${bucket.count}')),
                   DataCell(Text('${(bucket.rate * 100).toStringAsFixed(1)}%')),
                 ],

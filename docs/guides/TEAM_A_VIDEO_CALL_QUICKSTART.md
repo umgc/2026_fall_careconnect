@@ -562,14 +562,9 @@ If speaker ID falls back to mixed MP4 / no role labels:
 
 ## 9) ECS Fargate path (parallel, minimal coupling)
 
-Terraform module added at:
-- terraform_aws/5_ecs_fargate
-
-Local syntax check already passes:
-- terraform init -backend=false
-- terraform validate
-
-For team integration later, keep this module parallel and avoid touching shared migration work unless requested.
+Use the active [CloudFormation Fargate stack set](../../cloudformation-fargate/README.md)
+for ECS deployment and validation. Keep infrastructure changes isolated from
+shared migration work unless requested.
 
 **Conference / Chime note:** `ChimeService` join-credential cache and `CallNotificationHandler` WebSocket sessions are **in-memory per JVM**. For Fargate dev/demo, keep the backend ECS service at **`DesiredCount: 1`** (already the default in `cloudformation-fargate/parameters/*-service.json`). Scaling out requires sticky sessions or a distributed cache — not implemented in this repo yet.
 

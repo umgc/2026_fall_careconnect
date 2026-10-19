@@ -22,4 +22,5 @@ public record DashboardDTO(
         Double avgPain,            // 1-10 scale
         Integer moodEntries,       // number of mood entries in period
         Integer painEntries        // number of pain entries in period
-) {}
+) {
+}

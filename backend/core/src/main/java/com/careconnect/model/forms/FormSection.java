@@ -24,10 +24,14 @@ public class FormSection {
     private int order;
     @Builder.Default
     private boolean required = true;
-    /** True when the section may be completed multiple times (e.g., references). */
+    /**
+     * True when the section may be completed multiple times (e.g., references).
+     */
     @Builder.Default
     private boolean repeatable = false;
-    /** Role responsible for completing the section: EMPLOYEE, EMPLOYER, etc. */
+    /**
+     * Role responsible for completing the section: EMPLOYEE, EMPLOYER, etc.
+     */
     private String completedBy;
     private List<FormField> fields;
 }

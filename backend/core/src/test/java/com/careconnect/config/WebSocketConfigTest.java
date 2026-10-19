@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link WebSocketConfig}.
- *
+ * <p>
  * WebSocketConfig registers three WebSocket handlers at distinct endpoints:
  * <ul>
  *   <li>{@code /ws/calls} — call notifications (with SockJS fallback)</li>
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.*;
  *       endpoint is configurable via property)</li>
  *   <li>{@code /ws/notifications} — push notifications (plain WebSocket, no SockJS)</li>
  * </ul>
- *
+ * <p>
  * All three handler beans and the registry are mocked with Mockito so the test is
  * purely about wiring behaviour — that the correct handler reaches the correct endpoint
  * with the correct options (SockJS, allowed origins). {@link ReflectionTestUtils} injects

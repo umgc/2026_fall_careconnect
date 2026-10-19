@@ -35,7 +35,8 @@ class InvoiceOverviewCard extends StatelessWidget {
                   color: Colors.blue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.receipt_long, size: 28, color: Colors.blue),
+                child: const Icon(Icons.receipt_long,
+                    size: 28, color: Colors.blue),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -44,23 +45,29 @@ class InvoiceOverviewCard extends StatelessWidget {
                   children: [
                     const Text(
                       'Invoices',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 4),
                     FutureBuilder<int>(
                       future: getUnpaidCount(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Text('Loading unpaid invoices...');
                         }
                         if (snapshot.hasError) {
-                          return const Text('Unable to load unpaid invoice count');
+                          return const Text(
+                              'Unable to load unpaid invoice count');
                         }
                         final count = snapshot.data ?? 0;
-                        final label = count == 1 ? 'invoice not paid' : 'invoices not paid';
+                        final label = count == 1
+                            ? 'invoice not paid'
+                            : 'invoices not paid';
                         return Text(
                           '$count $label',
-                          style: const TextStyle(fontSize: 14, color: Colors.black54),
+                          style: const TextStyle(
+                              fontSize: 14, color: Colors.black54),
                         );
                       },
                     ),
@@ -68,7 +75,8 @@ class InvoiceOverviewCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.black54),
+              const Icon(Icons.arrow_forward_ios,
+                  size: 16, color: Colors.black54),
             ],
           ),
         ),

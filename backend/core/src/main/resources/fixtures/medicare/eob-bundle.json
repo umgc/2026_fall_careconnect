@@ -1,0 +1,165 @@
+{
+  "resourceType": "Bundle",
+  "id": "a7f1d0c2-0000-4b00-9c00-000000000003",
+  "meta": { "lastUpdated": "2026-09-15T18:20:11.000-04:00" },
+  "type": "searchset",
+  "total": 3,
+  "entry": [
+    {
+      "fullUrl": "https://sandbox.bluebutton.cms.gov/v2/fhir/ExplanationOfBenefit/carrier--22639159481",
+      "resource": {
+        "resourceType": "ExplanationOfBenefit",
+        "id": "carrier--22639159481",
+        "meta": { "lastUpdated": "2026-08-22T09:14:03.000-04:00" },
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "system": "https://bluebutton.cms.gov/resources/codesystem/eob-type",
+              "code": "CARRIER",
+              "display": "Carrier"
+            }
+          ],
+          "text": "Professional"
+        },
+        "use": "claim",
+        "patient": { "reference": "Patient/-20140000008325" },
+        "billablePeriod": { "start": "2026-07-14", "end": "2026-07-14" },
+        "created": "2026-07-21T00:00:00-04:00",
+        "insurer": { "identifier": { "value": "Centers for Medicare and Medicaid Services" } },
+        "provider": { "display": "Mercy Internal Medicine Associates" },
+        "diagnosis": [
+          {
+            "sequence": 1,
+            "diagnosisCodeableConcept": {
+              "coding": [
+                { "system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "I10", "display": "Essential (primary) hypertension" }
+              ],
+              "text": "Essential (primary) hypertension"
+            }
+          }
+        ],
+        "item": [
+          {
+            "sequence": 1,
+            "productOrService": {
+              "coding": [
+                { "system": "https://bluebutton.cms.gov/resources/codesystem/hcpcs", "code": "99214", "display": "Office or other outpatient visit, established patient" }
+              ],
+              "text": "Office or other outpatient visit, established patient"
+            },
+            "servicedDate": "2026-07-14",
+            "locationCodeableConcept": {
+              "coding": [
+                { "system": "https://bluebutton.cms.gov/resources/variables/line_place_of_srvc_cd", "code": "11", "display": "Office" }
+              ]
+            },
+            "adjudication": [
+              {
+                "category": { "coding": [ { "code": "submitted", "display": "Submitted Amount" } ] },
+                "amount": { "value": 185.00, "currency": "USD" }
+              },
+              {
+                "category": { "coding": [ { "code": "benefit", "display": "Benefit Amount" } ] },
+                "amount": { "value": 118.42, "currency": "USD" }
+              }
+            ]
+          }
+        ],
+        "total": [
+          {
+            "category": { "coding": [ { "code": "submitted", "display": "Submitted Amount" } ] },
+            "amount": { "value": 185.00, "currency": "USD" }
+          }
+        ],
+        "payment": { "amount": { "value": 118.42, "currency": "USD" } }
+      }
+    },
+    {
+      "fullUrl": "https://sandbox.bluebutton.cms.gov/v2/fhir/ExplanationOfBenefit/inpatient--4411138162",
+      "resource": {
+        "resourceType": "ExplanationOfBenefit",
+        "id": "inpatient--4411138162",
+        "meta": { "lastUpdated": "2026-05-02T11:02:55.000-04:00" },
+        "status": "active",
+        "type": {
+          "coding": [
+            {
+              "system": "https://bluebutton.cms.gov/resources/codesystem/eob-type",
+              "code": "INPATIENT",
+              "display": "Inpatient"
+            }
+          ],
+          "text": "Institutional"
+        },
+        "use": "claim",
+        "patient": { "reference": "Patient/-20140000008325" },
+        "billablePeriod": { "start": "2026-04-18", "end": "2026-04-22" },
+        "created": "2026-04-29T00:00:00-04:00",
+        "insurer": { "identifier": { "value": "Centers for Medicare and Medicaid Services" } },
+        "provider": { "display": "Saint Agnes Hospital" },
+        "facility": { "display": "Saint Agnes Hospital" },
+        "diagnosis": [
+          {
+            "sequence": 1,
+            "diagnosisCodeableConcept": {
+              "coding": [
+                { "system": "http://hl7.org/fhir/sid/icd-10-cm", "code": "J18.9", "display": "Pneumonia, unspecified organism" }
+              ],
+              "text": "Pneumonia, unspecified organism"
+            }
+          }
+        ],
+        "item": [
+          {
+            "sequence": 1,
+            "productOrService": {
+              "coding": [
+                { "system": "https://bluebutton.cms.gov/resources/variables/clm_drg_cd", "code": "194", "display": "Simple pneumonia and pleurisy with CC" }
+              ],
+              "text": "Simple pneumonia and pleurisy with CC"
+            },
+            "servicedPeriod": { "start": "2026-04-18", "end": "2026-04-22" }
+          }
+        ],
+        "total": [
+          {
+            "category": { "coding": [ { "code": "submitted", "display": "Submitted Amount" } ] },
+            "amount": { "value": 14320.55, "currency": "USD" }
+          }
+        ],
+        "payment": { "amount": { "value": 9861.13, "currency": "USD" } }
+      }
+    },
+    {
+      "fullUrl": "https://sandbox.bluebutton.cms.gov/v2/fhir/ExplanationOfBenefit/carrier--22639159999",
+      "resource": {
+        "resourceType": "ExplanationOfBenefit",
+        "id": "carrier--22639159999",
+        "meta": { "lastUpdated": "2026-06-01T08:00:00.000-04:00" },
+        "status": "entered-in-error",
+        "type": {
+          "coding": [
+            {
+              "system": "https://bluebutton.cms.gov/resources/codesystem/eob-type",
+              "code": "CARRIER",
+              "display": "Carrier"
+            }
+          ],
+          "text": "Professional"
+        },
+        "use": "claim",
+        "patient": { "reference": "Patient/-20140000008325" },
+        "billablePeriod": { "start": "2026-05-30", "end": "2026-05-30" },
+        "created": "2026-06-01T00:00:00-04:00",
+        "provider": { "display": "Duplicate Submission Clinic" },
+        "total": [
+          {
+            "category": { "coding": [ { "code": "submitted", "display": "Submitted Amount" } ] },
+            "amount": { "value": 92.00, "currency": "USD" }
+          }
+        ]
+      }
+    }
+  ]
+}

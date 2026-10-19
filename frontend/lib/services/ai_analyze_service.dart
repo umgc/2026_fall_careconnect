@@ -22,9 +22,12 @@ class AiAnalyzeService {
       "patientId": patientId,
       "text": transcript,
       "context": {
-        if (allergen != null && allergen.trim().isNotEmpty) "allergen": allergen.trim(),
-        if (severity != null && severity.trim().isNotEmpty) "severity": severity.trim(),
-        if (reaction != null && reaction.trim().isNotEmpty) "reaction": reaction.trim(),
+        if (allergen != null && allergen.trim().isNotEmpty)
+          "allergen": allergen.trim(),
+        if (severity != null && severity.trim().isNotEmpty)
+          "severity": severity.trim(),
+        if (reaction != null && reaction.trim().isNotEmpty)
+          "reaction": reaction.trim(),
       }
     };
 
@@ -87,7 +90,8 @@ class AiAnalyzeService {
           "symptomKey": symptomKeyHint.trim(),
         if (severityHint != null && severityHint.trim().isNotEmpty)
           "severity": severityHint.trim(),
-        if (notesHint != null && notesHint.trim().isNotEmpty) "notes": notesHint.trim(),
+        if (notesHint != null && notesHint.trim().isNotEmpty)
+          "notes": notesHint.trim(),
         if (context != null) ...context,
       }
     };
@@ -103,7 +107,8 @@ class AiAnalyzeService {
     );
 
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('AI symptom analyze failed (${res.statusCode}): ${res.body}');
+      throw Exception(
+          'AI symptom analyze failed (${res.statusCode}): ${res.body}');
     }
 
     final decoded = json.decode(res.body);

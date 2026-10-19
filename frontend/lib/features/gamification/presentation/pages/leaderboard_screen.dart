@@ -65,49 +65,52 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : leaderboard.isEmpty
-          ? const Center(child: Text('No leaderboard data available.'))
-          : ListView.builder(
-        itemCount: leaderboard.length,
-        itemBuilder: (context, index) {
-          final user = leaderboard[index];
-          final medal = getMedalEmoji(index);
+              ? const Center(child: Text('No leaderboard data available.'))
+              : ListView.builder(
+                  itemCount: leaderboard.length,
+                  itemBuilder: (context, index) {
+                    final user = leaderboard[index];
+                    final medal = getMedalEmoji(index);
 
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            elevation: 2,
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundImage: user['profileImageUrl'] != null &&
-                    user['profileImageUrl'].toString().isNotEmpty
-                    ? NetworkImage(user['profileImageUrl'])
-                    : null,
-                child: user['profileImageUrl'] == null || user['profileImageUrl'].toString().isEmpty
-                    ? const Icon(Icons.person)
-                    : null,
-              ),
-              title: Text(
-                user['name'] ?? 'Anonymous',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text('XP: ${user['xp']}  |  Level: ${user['level']}'),
-              trailing: Text(
-                medal,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: index == 0
-                      ? Colors.amber
-                      : index == 1
-                      ? Colors.grey
-                      : index == 2
-                      ? Colors.brown
-                      : Colors.black54,
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      elevation: 2,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: user['profileImageUrl'] != null &&
+                                  user['profileImageUrl'].toString().isNotEmpty
+                              ? NetworkImage(user['profileImageUrl'])
+                              : null,
+                          child: user['profileImageUrl'] == null ||
+                                  user['profileImageUrl'].toString().isEmpty
+                              ? const Icon(Icons.person)
+                              : null,
+                        ),
+                        title: Text(
+                          user['name'] ?? 'Anonymous',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                            'XP: ${user['xp']}  |  Level: ${user['level']}'),
+                        trailing: Text(
+                          medal,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: index == 0
+                                ? Colors.amber
+                                : index == 1
+                                    ? Colors.grey
+                                    : index == 2
+                                        ? Colors.brown
+                                        : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }

@@ -28,7 +28,8 @@ Widget buildChimeMeetingEmbed({
   VoidCallback? onEndCallRequested,
   void Function(Map<String, dynamic> transcriptSample)? onTranscriptSample,
   void Function(String status, String? detail)? onTranscriptStatus,
-  void Function(double averageLevel, double speechRatio, double variability)? onVoiceMetricsSample,
+  void Function(double averageLevel, double speechRatio, double variability)?
+      onVoiceMetricsSample,
   void Function(String imageBase64)? onVideoSample,
   void Function(String channel, bool muted)? onSentimentChannelState,
 }) {
@@ -318,4 +319,3 @@ class _StubMeetingController extends ChangeNotifier {
     super.dispose();
   }
 }
-

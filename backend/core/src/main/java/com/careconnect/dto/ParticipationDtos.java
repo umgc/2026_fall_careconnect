@@ -36,7 +36,9 @@ public class ParticipationDtos {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class ParticipationResponse {
-        /** "IMPROVING", "STABLE", or "DECLINING" based on last 2 weeks vs prior 2 weeks. */
+        /**
+         * "IMPROVING", "STABLE", or "DECLINING" based on last 2 weeks vs prior 2 weeks.
+         */
         private String status;
         private List<WeekCount> weeklyCounts;
         private List<ActivityParticipation> activities;

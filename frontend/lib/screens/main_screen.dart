@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../services/auth_token_manager.dart';
 
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +15,7 @@ import '../services/local_db/offline_sync_service.dart';
 import '../features/telemetry/telemetry.dart';
 import '../services/call_notification_service.dart';
 import '../widgets/hybrid_video_call_widget.dart';
+import '../widgets/menu/menu_page.dart';
 
 /// Main screen of the application. This is where the user is navigated to
 /// after logging in. This contains the bottom nav bar and main screens
@@ -163,6 +165,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return;
     }
     _isOfflineSyncInProgress = true;
+    var anySucceeded = false;
 
     try {
       while (mounted && _pendingSyncQueue.isNotEmpty) {
@@ -186,6 +189,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         setState(() {
           _currentlySyncingRequestId = null;
           if (synced) {
+            anySucceeded = true;
             _pendingSyncQueue = _pendingSyncQueue
                 .where((queued) => queued.id != item.id)
                 .toList();
@@ -202,8 +206,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           }
         });
 
+        // Drop items the backend can never accept. Once a request exhausts its
+        // replay attempts it is marked terminal ('dead') in the DB and excluded
+        // from getOfflineSyncQueue(), so reconciling here lets a permanently
+        // unreachable backend stop pinning the sync banner open forever.
+        final live = await ApiService.getOfflineSyncQueue();
+        if (!mounted) {
+          break;
+        }
+        final liveIds = live.map((queued) => queued.id).toSet();
+        setState(() {
+          _pendingSyncQueue = _pendingSyncQueue
+              .where((queued) => liveIds.contains(queued.id))
+              .toList();
+        });
+
         if (_pendingSyncQueue.isEmpty) {
-          _showSyncCompleteToastBanner();
+          // Only celebrate a genuine sync; if every item was abandoned we clear
+          // the banner silently rather than falsely reporting completion.
+          if (anySucceeded) {
+            _showSyncCompleteToastBanner();
+          }
           break;
         }
 
@@ -383,7 +406,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _startUnreadMessageBadgePolling() {
     _messageBadgeTimer?.cancel();
-    _messageBadgeTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _messageBadgeTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       _refreshUnreadMessageBadge();
     });
   }
@@ -401,7 +424,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final user = Provider.of<UserProvider>(context, listen: false).user;
     if (user == null) return;
 
-    final hasMessagesTab = _navItems.any((item) => item.routeName == 'messages');
+    final hasMessagesTab =
+        _navItems.any((item) => item.routeName == 'messages');
     if (!hasMessagesTab) return;
 
     try {
@@ -442,7 +466,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             decoration: BoxDecoration(
               color: Colors.red.shade700,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 1.5),
+              border: Border.all(
+                  color: Theme.of(context).scaffoldBackgroundColor, width: 1.5),
             ),
             child: Center(
               child: Text(
@@ -478,7 +503,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String _trimmed(dynamic value) => (value ?? '').toString().trim();
 
   String _fullName(String first, String last, String fallback) {
-    final name = [first.trim(), last.trim()].where((e) => e.isNotEmpty).join(' ').trim();
+    final name =
+        [first.trim(), last.trim()].where((e) => e.isNotEmpty).join(' ').trim();
     if (name.isNotEmpty) return name;
     return fallback;
   }
@@ -493,26 +519,35 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final role = user.role.trim().toUpperCase();
     if (role == 'PATIENT') {
       final links = await ApiService.getPatientLinkedCaregiverLinks(user.id);
-      return links.where((link) {
-        final enabledRaw = link['patientVideoCallsEnabled'];
-        return enabledRaw is bool ? enabledRaw : '$enabledRaw'.toLowerCase() != 'false';
-      }).map((link) {
-        final caregiverUserId = _toInt(link['caregiverUserId']);
-        if (caregiverUserId == null || caregiverUserId <= 0) {
-          return null;
-        }
-        final caregiverName = _trimmed(link['caregiverName']);
-        final caregiverEmail = _trimmed(link['caregiverEmail']);
-        return _QuickCallTarget(
-          userId: caregiverUserId,
-          role: 'CAREGIVER',
-          title: caregiverName.isNotEmpty ? caregiverName : '${t.signup_caregiver} $caregiverUserId',
-          subtitle: t.mainscreen_cgCallEnabled,
-          email: caregiverEmail,
-          phone: null,
-        );
-      }).whereType<_QuickCallTarget>().toList()
-        ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      return links
+          .where((link) {
+            final enabledRaw = link['patientVideoCallsEnabled'];
+            return enabledRaw is bool
+                ? enabledRaw
+                : '$enabledRaw'.toLowerCase() != 'false';
+          })
+          .map((link) {
+            final caregiverUserId = _toInt(link['caregiverUserId']);
+            if (caregiverUserId == null || caregiverUserId <= 0) {
+              return null;
+            }
+            final caregiverName = _trimmed(link['caregiverName']);
+            final caregiverEmail = _trimmed(link['caregiverEmail']);
+            return _QuickCallTarget(
+              userId: caregiverUserId,
+              role: 'CAREGIVER',
+              title: caregiverName.isNotEmpty
+                  ? caregiverName
+                  : '${t.signup_caregiver} $caregiverUserId',
+              subtitle: t.mainscreen_cgCallEnabled,
+              email: caregiverEmail,
+              phone: null,
+            );
+          })
+          .whereType<_QuickCallTarget>()
+          .toList()
+        ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     }
 
     if (role != 'CAREGIVER') {
@@ -543,11 +578,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (item is! Map<String, dynamic>) continue;
       final link = item['link'];
       final patient = item['patient'];
-      final linkMap = link is Map<String, dynamic> ? link : const <String, dynamic>{};
-      final patientMap = patient is Map<String, dynamic> ? patient : const <String, dynamic>{};
+      final linkMap =
+          link is Map<String, dynamic> ? link : const <String, dynamic>{};
+      final patientMap =
+          patient is Map<String, dynamic> ? patient : const <String, dynamic>{};
 
-      final patientUserId = _toInt(linkMap['patientUserId']) ?? _toInt(patientMap['userId']);
-      if (patientUserId == null || patientUserId <= 0 || patientUserIds.contains(patientUserId)) {
+      final patientUserId =
+          _toInt(linkMap['patientUserId']) ?? _toInt(patientMap['userId']);
+      if (patientUserId == null ||
+          patientUserId <= 0 ||
+          patientUserIds.contains(patientUserId)) {
         continue;
       }
       patientUserIds.add(patientUserId);
@@ -577,10 +617,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
 
     for (final patientTarget in patientTargets) {
-      final links = await ApiService.getPatientLinkedCaregiverLinks(patientTarget.userId);
+      final links =
+          await ApiService.getPatientLinkedCaregiverLinks(patientTarget.userId);
       for (final link in links) {
         final caregiverUserId = _toInt(link['caregiverUserId']);
-        if (caregiverUserId == null || caregiverUserId <= 0 || caregiverUserId == currentUserId) {
+        if (caregiverUserId == null ||
+            caregiverUserId <= 0 ||
+            caregiverUserId == currentUserId) {
           continue;
         }
         final caregiverName = _trimmed(link['caregiverName']);
@@ -589,7 +632,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           caregiverUserId,
           () => _CareTeamAggregate(
             userId: caregiverUserId,
-            name: caregiverName.isNotEmpty ? caregiverName : '${t.signup_caregiver} $caregiverUserId',
+            name: caregiverName.isNotEmpty
+                ? caregiverName
+                : '${t.signup_caregiver} $caregiverUserId',
             email: caregiverEmail.isNotEmpty ? caregiverEmail : null,
           ),
         );
@@ -603,7 +648,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     final careTeamTargets = careTeamByUserId.values.map((entry) {
       final context = entry.patientNames.toList()..sort();
-      final summary = context.isEmpty ? t.mainscreen_careTeam : '${t.mainscreen_careTeamFor}: ${context.join(', ')}';
+      final summary = context.isEmpty
+          ? t.mainscreen_careTeam
+          : '${t.mainscreen_careTeamFor}: ${context.join(', ')}';
       return _QuickCallTarget(
         userId: entry.userId,
         role: 'CAREGIVER',
@@ -616,7 +663,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }).toList()
       ..sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
-    patientTargets.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    patientTargets
+        .sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
     return [...patientTargets, ...careTeamTargets];
   }
 
@@ -742,7 +790,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, index) {
                           final target = targets[index];
-                          final roleBadge = target.role == 'PATIENT' ? 'PATIENT' : 'CAREGIVER';
+                          final roleBadge = target.role == 'PATIENT'
+                              ? 'PATIENT'
+                              : 'CAREGIVER';
                           return ListTile(
                             leading: CircleAvatar(
                               child: Text(
@@ -781,8 +831,75 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     return FloatingActionButton(
       heroTag: 'globalVoiceFab',
       tooltip: AppLocalizations.of(context)!.mainscreen_voiceCommandsTooltip,
-      onPressed: () => context.push('/voice'),
+      onPressed: _showVoiceCommandsOverlay,
       child: const Icon(Icons.mic),
+    );
+  }
+
+  Future<void> _showVoiceCommandsOverlay() async {
+    if (!mounted) return;
+
+    // Use the root navigator so the flyout can overlay any tab content
+    // consistently and dismiss cleanly from callback handlers.
+    final overlayNavigator = Navigator.of(context, rootNavigator: true);
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        return VoiceCommandAI(
+          // Flyout mode keeps users in context instead of route-switching to a
+          // dedicated voice page, which reduces navigation side effects.
+          presentationMode: VoiceCommandPresentation.flyout,
+          theme: VoiceCommandTheme.classic,
+          onCloseRequested: () {
+            if (overlayNavigator.canPop()) {
+              overlayNavigator.pop();
+            }
+          },
+          onNavigateRequested: (destination) {
+            if (overlayNavigator.canPop()) {
+              overlayNavigator.pop();
+            }
+
+            if (!mounted) return;
+
+            if (destination == '/dashboard') {
+              _onItemTapped(0);
+              return;
+            }
+
+            if (destination == '/dashboard?tab=menu') {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => const MenuPage(),
+              );
+              return;
+            }
+
+            context.go(destination);
+          },
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0.12, 0),
+          end: Offset.zero,
+        ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: slide,
+            child: child,
+          ),
+        );
+      },
     );
   }
 
@@ -1134,7 +1251,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).shadowColor.withOpacity(0.1),
+            color: Theme.of(context).shadowColor.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),

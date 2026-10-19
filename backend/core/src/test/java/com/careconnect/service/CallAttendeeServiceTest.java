@@ -7,9 +7,11 @@ import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallParticipantRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.security.Role;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,10 +36,14 @@ class CallAttendeeServiceTest {
     private static final String ROLE = "CAREGIVER";
     private static final String MEETING_ID = "meeting-uuid";
 
-    @Mock private CallAttendeeRepository callAttendeeRepository;
-    @Mock private CallParticipantRepository callParticipantRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private ChimeService chimeService;
+    @Mock
+    private CallAttendeeRepository callAttendeeRepository;
+    @Mock
+    private CallParticipantRepository callParticipantRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private ChimeService chimeService;
 
     private CallAttendeeService service;
 

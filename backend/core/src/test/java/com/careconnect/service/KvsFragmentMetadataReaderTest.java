@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -22,8 +23,8 @@ class KvsFragmentMetadataReaderTest {
                         .getBytes(StandardCharsets.UTF_8);
 
         assertThat(
-                        KvsFragmentMetadataReader.matchAttendeeId(
-                                payload, MEETING_ID, Set.of(ATTENDEE_ID, "other-id")))
+                KvsFragmentMetadataReader.matchAttendeeId(
+                        payload, MEETING_ID, Set.of(ATTENDEE_ID, "other-id")))
                 .contains(ATTENDEE_ID);
     }
 
@@ -34,8 +35,8 @@ class KvsFragmentMetadataReaderTest {
                 ("attendeeId-" + ATTENDEE_ID).getBytes(StandardCharsets.UTF_8);
 
         assertThat(
-                        KvsFragmentMetadataReader.matchAttendeeId(
-                                payload, MEETING_ID, Set.of(ATTENDEE_ID)))
+                KvsFragmentMetadataReader.matchAttendeeId(
+                        payload, MEETING_ID, Set.of(ATTENDEE_ID)))
                 .isEmpty();
     }
 
@@ -48,8 +49,8 @@ class KvsFragmentMetadataReaderTest {
 
         assertThat(KvsFragmentMetadataReader.containsMeetingId(payload, MEETING_ID)).isTrue();
         assertThat(
-                        KvsFragmentMetadataReader.matchAttendeeId(
-                                payload, MEETING_ID, Set.of(ATTENDEE_ID)))
+                KvsFragmentMetadataReader.matchAttendeeId(
+                        payload, MEETING_ID, Set.of(ATTENDEE_ID)))
                 .contains(ATTENDEE_ID);
     }
 }

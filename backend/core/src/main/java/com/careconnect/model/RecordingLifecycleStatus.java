@@ -1,6 +1,8 @@
 package com.careconnect.model;
 
-/** Durable recording lifecycle, including ownership-preserving retry states. */
+/**
+ * Durable recording lifecycle, including ownership-preserving retry states.
+ */
 public enum RecordingLifecycleStatus {
     RESERVED,
     STARTING,

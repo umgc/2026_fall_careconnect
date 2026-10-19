@@ -5,7 +5,6 @@
 // EvvRecordRequest constructor, EvvCorrectionRequest.toJson,
 // EvvSearchRequest defaults, EvvSearchResult.fromJson.
 
-import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/services/evv_service.dart';
 

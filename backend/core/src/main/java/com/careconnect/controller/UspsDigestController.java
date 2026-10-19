@@ -16,8 +16,6 @@ import com.careconnect.service.ai.retrieval.ForbiddenScopeException;
 import com.careconnect.util.SecurityUtil;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -54,14 +52,12 @@ public class UspsDigestController {
 
     @GetMapping("/latest")
     public ResponseEntity<USPSDigest> getLatestDigest(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
 
-        AuthRequestSupport.requireAuthenticated(jwt);
-        User currentUser = securityUtil.resolveCurrentUser();
+        User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
@@ -77,13 +73,11 @@ public class UspsDigestController {
 
     @GetMapping("/search")
     public ResponseEntity<List<Map<String, Object>>> search(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId,
             @RequestParam String keyword) throws UnauthorizedException {
 
-        AuthRequestSupport.requireAuthenticated(jwt);
-        User currentUser = securityUtil.resolveCurrentUser();
+        User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 
@@ -116,12 +110,10 @@ public class UspsDigestController {
 
     @PostMapping("/clear-cache")
     public ResponseEntity<String> clearCache(
-            @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String patientEmail,
             @RequestParam(required = false) String userId) throws UnauthorizedException {
 
-        AuthRequestSupport.requireAuthenticated(jwt);
-        User currentUser = securityUtil.resolveCurrentUser();
+        User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
         authorizationService.requirePatientAccess(currentUser, patientUser.getId());
 

@@ -14,16 +14,16 @@ public class WebConfig {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
-                    .allowedOrigins(
-                        "http://localhost:8080",
-                        "http://127.0.0.1:8080",
-                        "http://localhost:5173",  // Vite default (if used)
-                        "http://localhost",       // fallback
-                        "http://127.0.0.1"
-                    )
-                    .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
-                    .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                    .allowCredentials(true);
+                        .allowedOrigins(
+                                "http://localhost:8080",
+                                "http://127.0.0.1:8080",
+                                "http://localhost:5173",  // Vite default (if used)
+                                "http://localhost",       // fallback
+                                "http://127.0.0.1"
+                        )
+                        .allowedOriginPatterns("http://localhost:*", "http://127.0.0.1:*")
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowCredentials(true);
             }
         };
     }

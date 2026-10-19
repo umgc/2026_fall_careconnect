@@ -58,9 +58,10 @@ public class AIChatServiceConfig {
         LOG.info("  - Temperature: {}", temperature);
 
         try {
+            String effectiveApiKey = StringUtils.hasText(apiKey) ? apiKey : "ollama";
             // Any OpenAI-spec provider works by swapping baseUrl and apiKey
             return OpenAiChatModel.builder()
-                    .apiKey(apiKey)
+                    .apiKey(effectiveApiKey)
                     .baseUrl(apiUrl)
                     .modelName(modelName)
                     .temperature(temperature)
@@ -72,8 +73,10 @@ public class AIChatServiceConfig {
     }
 
     private void validateConfiguration() {
-        // API key present
-        if (!StringUtils.hasText(apiKey)) {
+        boolean isLocalProvider = "ollama".equalsIgnoreCase(provider) || "colibri".equalsIgnoreCase(provider) || "local".equalsIgnoreCase(provider);
+
+        // API key present (not required for local Ollama/Colibri)
+        if (!isLocalProvider && !StringUtils.hasText(apiKey)) {
             String error = "API key is required but not configured";
             securityAuditService.logConfigurationValidationError(provider, "API_KEY", error);
             throw new IllegalStateException(error);
@@ -86,15 +89,15 @@ public class AIChatServiceConfig {
             throw new IllegalStateException(error);
         }
 
-        // URL must be HTTPS
-        if (!apiUrl.startsWith("https://")) {
+        // URL must be HTTPS (except for local testing/Ollama)
+        if (!isLocalProvider && !apiUrl.startsWith("https://")) {
             String warning = "API URL should use HTTPS for security: " + apiUrl;
             LOG.warn(warning);
             securityAuditService.logConfigurationValidationError(provider, "API_URL_SECURITY", warning);
         }
 
         // Basic key length sanity check
-        if (apiKey.length() < 20) {
+        if (!isLocalProvider && StringUtils.hasText(apiKey) && apiKey.length() < 20) {
             String warning = "API key appears to be too short. Please verify configuration";
             LOG.warn(warning);
         }

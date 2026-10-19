@@ -1,13 +1,17 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.ConsentGrant;
+
 import java.time.Instant;
 import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** Repository for scoped patient consent grants (Task 2.4). */
+/**
+ * Repository for scoped patient consent grants (Task 2.4).
+ */
 public interface ConsentGrantRepository extends JpaRepository<ConsentGrant, Long> {
 
     /**
@@ -16,8 +20,8 @@ public interface ConsentGrantRepository extends JpaRepository<ConsentGrant, Long
      *
      * @param patientUserId patient granting consent
      * @param granteeUserId user consent was granted to (e.g. caregiver)
-     * @param scope consent scope (e.g. {@code AI_RETRIEVAL})
-     * @param now current instant used to evaluate expiry
+     * @param scope         consent scope (e.g. {@code AI_RETRIEVAL})
+     * @param now           current instant used to evaluate expiry
      * @return true when an active grant covers the tuple
      */
     @Query(

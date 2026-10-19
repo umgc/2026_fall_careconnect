@@ -13,22 +13,23 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-@Service @RequiredArgsConstructor @Slf4j
+@Service
+@RequiredArgsConstructor
+@Slf4j
 public class EvvOfflineSyncService {
-    
+
+    private static final int MAX_SYNC_ATTEMPTS = 3;
+    private static final int RETRY_DELAY_MINUTES = 30;
     private final EvvOfflineQueueRepository offlineQueueRepository;
     private final EvvRecordRepository recordRepository;
     private final EvvSubmissionService submissionService;
     private final AuditLogger audit;
-    
-    private static final int MAX_SYNC_ATTEMPTS = 3;
-    private static final int RETRY_DELAY_MINUTES = 30;
-    
+
     @Scheduled(fixedDelay = 60000) // Run every minute
     public void syncOfflineRecords() {
         try {
             List<EvvOfflineQueue> pendingItems = offlineQueueRepository.findPendingSyncItems(MAX_SYNC_ATTEMPTS);
-            
+
             for (EvvOfflineQueue queueItem : pendingItems) {
                 try {
                     syncQueueItem(queueItem);
@@ -42,42 +43,42 @@ public class EvvOfflineSyncService {
             log.error("Error in offline sync process: {}", e.getMessage());
         }
     }
-    
+
     @Transactional
     public void syncQueueItem(EvvOfflineQueue queueItem) {
         queueItem.markSyncing();
         offlineQueueRepository.save(queueItem);
-        
+
         try {
             EvvRecord record = recordRepository.findById(queueItem.getRecordId())
                     .orElseThrow(() -> new RuntimeException("Record not found"));
-            
+
             // Update record status based on operation type
             switch (queueItem.getOperationType()) {
                 case "CREATE":
                     record.markSynced();
                     record.setStatus("PENDING_REVIEW");
                     recordRepository.save(record);
-                    
+
                     // Queue for submission if confirmed
                     if ("CONFIRMED".equals(record.getStatus())) {
                         submissionService.queueForSubmission(record, queueItem.getCaregiverId());
                     }
                     break;
-                    
+
                 case "UPDATE":
                     record.markSynced();
                     recordRepository.save(record);
                     break;
-                    
+
                 case "DELETE":
                     // Handle deletion if needed
                     break;
             }
-            
+
             queueItem.markSynced();
             offlineQueueRepository.save(queueItem);
-            
+
             // Build audit details with location information
             var auditDetails = new java.util.HashMap<String, Object>();
             auditDetails.put("queueItemId", queueItem.getId());
@@ -97,19 +98,19 @@ public class EvvOfflineSyncService {
                 auditDetails.put("checkoutLocationLng", record.getCheckoutLocationLng());
             }
             audit.log(record, queueItem.getCaregiverId(), "OFFLINE_SYNCED", auditDetails);
-            
+
         } catch (Exception e) {
             queueItem.markFailed(e.getMessage());
             offlineQueueRepository.save(queueItem);
             throw e;
         }
     }
-    
+
     @Transactional
     public void retryFailedSyncs() {
         OffsetDateTime retryAfter = OffsetDateTime.now().minusMinutes(RETRY_DELAY_MINUTES);
         List<EvvOfflineQueue> failedItems = offlineQueueRepository.findFailedItemsForRetry(retryAfter);
-        
+
         for (EvvOfflineQueue queueItem : failedItems) {
             if (queueItem.getSyncAttempts() < MAX_SYNC_ATTEMPTS) {
                 queueItem.setSyncStatus("PENDING");
@@ -117,11 +118,11 @@ public class EvvOfflineSyncService {
             }
         }
     }
-    
+
     @Transactional
     public void syncCaregiverOfflineData(Long caregiverId) {
         List<EvvOfflineQueue> caregiverItems = offlineQueueRepository.findPendingItemsByCaregiver(caregiverId);
-        
+
         for (EvvOfflineQueue queueItem : caregiverItems) {
             try {
                 syncQueueItem(queueItem);
@@ -130,7 +131,7 @@ public class EvvOfflineSyncService {
             }
         }
     }
-    
+
     public List<EvvOfflineQueue> getOfflineQueueStatus(Long caregiverId) {
         return offlineQueueRepository.findByCaregiverIdAndSyncStatus(caregiverId, "PENDING");
     }

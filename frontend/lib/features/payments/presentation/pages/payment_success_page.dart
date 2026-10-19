@@ -203,8 +203,8 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
                       widget.isRegistration == true
                           ? t.paysuccess_continueLogin
                           : widget.fromPortal
-                          ? t.paysuccess_returnSubManage
-                          : t.paysuccess_continueDash,
+                              ? t.paysuccess_returnSubManage
+                              : t.paysuccess_continueDash,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -262,12 +262,10 @@ class _PaymentSuccessPageState extends State<PaymentSuccessPage>
               ),
             ),
           TextSpan(
-            text:
-                t.paysuccess_accountCreated,
+            text: t.paysuccess_accountCreated,
           ),
         ],
       ),
     );
   }
 }
-

@@ -3,7 +3,7 @@ import 'package:care_connect_app/l10n/app_localizations.dart';
 class Subscription {
   final String id; // Database ID
   final String
-  paymentSubscriptionId; // Payment subscription ID for API operations
+      paymentSubscriptionId; // Payment subscription ID for API operations
   final String customerId; // Payment customer ID
   final String status;
   final String currentPeriodStart;
@@ -41,8 +41,7 @@ class Subscription {
         id: json['id']?.toString() ?? '', // Database ID
         paymentSubscriptionId:
             paymentSubId, // Payment subscription ID for API operations
-        customerId:
-            json['paymentCustomerId']?.toString() ??
+        customerId: json['paymentCustomerId']?.toString() ??
             json['customer']?.toString() ??
             json['customerId']?.toString() ??
             '',
@@ -61,8 +60,7 @@ class Subscription {
     }
 
     // Original Payment format
-    final planData =
-        json['plan'] as Map<String, dynamic>? ??
+    final planData = json['plan'] as Map<String, dynamic>? ??
         json['items']?['data']?[0]?['plan'] as Map<String, dynamic>? ??
         {};
 

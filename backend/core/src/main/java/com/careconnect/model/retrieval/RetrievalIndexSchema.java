@@ -21,7 +21,9 @@ public final class RetrievalIndexSchema {
      */
     public static final String FTS_TEXT_SEARCH_CONFIG = "english";
 
-    /** Soft cap on user query length passed to {@code plainto_tsquery}. */
+    /**
+     * Soft cap on user query length passed to {@code plainto_tsquery}.
+     */
     public static final int FTS_QUERY_MAX_LENGTH = 500;
 
     public static final int RECORD_TYPE_MAX_LENGTH = 40;

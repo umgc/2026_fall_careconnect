@@ -57,9 +57,8 @@ class PatientData {
       age: (j['age'] ?? 0) as int,
       moodLabel: j['currentMoodLabel'] ?? '—',
       moodEmoji: j['currentMoodEmoji'] ?? '🙂',
-      lastCheckIn: j['lastCheckIn'] != null
-          ? DateTime.tryParse(j['lastCheckIn'])
-          : null,
+      lastCheckIn:
+          j['lastCheckIn'] != null ? DateTime.tryParse(j['lastCheckIn']) : null,
       diagnoses: (j['diagnoses'] as List?)?.cast<String>() ?? const [],
       allergies: (j['allergies'] as List?)?.cast<String>() ?? const [],
       emergencyPhones: ((j['emergencyContacts'] as List?) ?? [])
@@ -76,10 +75,10 @@ class PatientData {
       dizziness: p['dizziness'],
       fatigue: p['fatigue'],
       symptoms: ((j['symptoms'] as List?) ?? []).cast<Map<String, dynamic>>(),
-      medications: ((j['medications'] as List?) ?? [])
-          .cast<Map<String, dynamic>>(),
-      checkIns: ((j['virtualCheckIns'] as List?) ?? [])
-          .cast<Map<String, dynamic>>(),
+      medications:
+          ((j['medications'] as List?) ?? []).cast<Map<String, dynamic>>(),
+      checkIns:
+          ((j['virtualCheckIns'] as List?) ?? []).cast<Map<String, dynamic>>(),
     );
   }
 }

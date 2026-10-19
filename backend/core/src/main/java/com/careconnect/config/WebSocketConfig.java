@@ -16,11 +16,11 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 /**
  * WebSocket Configuration
- *
+ * <p>
  * This configuration is profile-aware:
  * - Local Development (dev profile): Enables Spring WebSocket for real-time connections
  * - Production (prod profile): Disabled - Uses AWS API Gateway WebSocket instead
- *
+ * <p>
  * Configuration is controlled by:
  * - careconnect.websocket.enabled: Enable/disable WebSocket support
  * - careconnect.websocket.mode: "local" for Spring WebSocket, "aws" for API Gateway
@@ -50,12 +50,12 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Value("${careconnect.websocket.allowed-origins:*}")
     private String allowedOrigins;
 
-        private String[] allowedOriginPatterns() {
-                return java.util.Arrays.stream(allowedOrigins.split(","))
-                                .map(String::trim)
-                                .filter(s -> !s.isEmpty())
-                                .toArray(String[]::new);
-        }
+    private String[] allowedOriginPatterns() {
+        return java.util.Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+    }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {

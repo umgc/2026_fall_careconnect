@@ -138,9 +138,8 @@ class _MessagingWidgetState extends State<MessagingWidget> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
         child: Column(
-          crossAxisAlignment: isMyMessage
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              isMyMessage ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Container(
               constraints: BoxConstraints(
@@ -263,32 +262,32 @@ class _MessagingWidgetState extends State<MessagingWidget> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _messages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: Theme.of(context).hintColor,
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 64,
+                              color: Theme.of(context).hintColor,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Start a conversation',
+                              style: AppTheme.bodyLarge.copyWith(
+                                color: Theme.of(context).hintColor,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Start a conversation',
-                          style: AppTheme.bodyLarge.copyWith(
-                            color: Theme.of(context).hintColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      return _buildMessageBubble(_messages[index]);
-                    },
-                  ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          return _buildMessageBubble(_messages[index]);
+                        },
+                      ),
           ),
           Container(
             padding: const EdgeInsets.all(16),
@@ -303,52 +302,58 @@ class _MessagingWidgetState extends State<MessagingWidget> {
               children: [
                 Row(
                   children: [
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Theme.of(context).colorScheme.surface,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(25),
+                            borderSide: BorderSide.none,
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(context).colorScheme.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
+                        ),
+                        maxLength: _maxChars,
+                        buildCounter: (_,
+                                {required currentLength,
+                                required isFocused,
+                                maxLength}) =>
+                            null,
+                        maxLines: null,
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
-                    maxLength: _maxChars,
-                    buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
-                    maxLines: null,
-                    textCapitalization: TextCapitalization.sentences,
-                    onSubmitted: (_) => _sendMessage(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FloatingActionButton.small(
-                  onPressed: (_isSending || _charCount > _maxChars) ? null : _sendMessage,
-                  backgroundColor: _charCount > _maxChars
-                      ? Theme.of(context).colorScheme.error
-                      : Theme.of(context).colorScheme.primary,
-                  child: _isSending
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Theme.of(context).colorScheme.onPrimary,
+                    const SizedBox(width: 8),
+                    FloatingActionButton.small(
+                      onPressed: (_isSending || _charCount > _maxChars)
+                          ? null
+                          : _sendMessage,
+                      backgroundColor: _charCount > _maxChars
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.primary,
+                      child: _isSending
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).colorScheme.onPrimary,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.send,
+                              color: Theme.of(context).colorScheme.onPrimary,
                             ),
-                          ),
-                        )
-                      : Icon(
-                          Icons.send,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                        ),
-                ),
-              ],
+                    ),
+                  ],
                 ),
                 if (_charCount >= 1800)
                   Padding(

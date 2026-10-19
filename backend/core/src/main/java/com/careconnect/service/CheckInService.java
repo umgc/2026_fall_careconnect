@@ -2,6 +2,7 @@ package com.careconnect.service;
 
 import com.careconnect.model.CheckIn;
 import org.springframework.stereotype.Service;
+
 import java.util.List;
 
 @Service

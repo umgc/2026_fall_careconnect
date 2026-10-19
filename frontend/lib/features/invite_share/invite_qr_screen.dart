@@ -75,7 +75,8 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Something went wrong generating the invite. Please try again.';
+        _error =
+            'Something went wrong generating the invite. Please try again.';
         _loading = false;
       });
     }
@@ -133,7 +134,8 @@ class _InviteQrScreenState extends State<InviteQrScreen> {
     final text = reason != null && reason.isNotEmpty
         ? '$reason\n\nJoin my CareConnect care circle: $url'
         : 'Join my CareConnect care circle: $url';
-    await SharePlus.instance.share(ShareParams(text: text, subject: 'CareConnect care-circle invite'));
+    await SharePlus.instance.share(
+        ShareParams(text: text, subject: 'CareConnect care-circle invite'));
   }
 
   Future<void> _openDeepLink(BuildContext context) async {

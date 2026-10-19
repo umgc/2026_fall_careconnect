@@ -32,9 +32,9 @@ public class AiSymptomService {
                                        List<SymptomEntry> symptomsForContext) {
 
         String system = "You are a medical assistant. Extract structured symptom info from the user's sentence.\n" +
-            "Return ONLY a compact JSON object:\n" +
-            "{\"symptomKey\":\"...\", \"symptomValue\":\"...\", \"severity\":\"MILD|MODERATE|SEVERE\"}.\n" +
-            "If something is missing, leave it as an empty string. Do NOT add extra keys or text.\n";
+                "Return ONLY a compact JSON object:\n" +
+                "{\"symptomKey\":\"...\", \"symptomValue\":\"...\", \"severity\":\"MILD|MODERATE|SEVERE\"}.\n" +
+                "If something is missing, leave it as an empty string. Do NOT add extra keys or text.\n";
 
         String allergyBlock = contextBuilder.buildAllergyContext(req.getPatientId(), allergiesForContext);
         String symptomBlock = contextBuilder.buildSymptomContext(req.getPatientId(), symptomsForContext);
@@ -42,15 +42,15 @@ public class AiSymptomService {
         Map<String, Object> ctx = Optional.ofNullable(req.getContext()).orElse(Map.of());
 
         String user = String.format(
-            "Patient context (allergies for safety):\n" +
-            "%s\n\n" +
-            "Recent Symptom History:\n" +
-            "%s\n\n" +
-            "Current input (voice transcript):\n" +
-            "\"%s\"\n\n" +
-            "Hints (optional context from UI): %s\n\n" +
-            "Output JSON only.\n",
-            allergyBlock, symptomBlock, req.getText(), ctx);
+                "Patient context (allergies for safety):\n" +
+                        "%s\n\n" +
+                        "Recent Symptom History:\n" +
+                        "%s\n\n" +
+                        "Current input (voice transcript):\n" +
+                        "\"%s\"\n\n" +
+                        "Hints (optional context from UI): %s\n\n" +
+                        "Output JSON only.\n",
+                allergyBlock, symptomBlock, req.getText(), ctx);
 
         String content = AiParsingUtils.normalizeModelContent(
                 bedrockAnalysisService.complete(system, user));

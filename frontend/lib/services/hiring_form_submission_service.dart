@@ -67,28 +67,30 @@ class HiringFormSubmissionService {
         final id = data is Map ? data['id'] as int? : null;
         return FormSubmitResult(
           ok: true,
-          message: (decoded['message'] ?? 'Form submitted successfully').toString(),
+          message:
+              (decoded['message'] ?? 'Form submitted successfully').toString(),
           submissionId: id,
         );
       }
 
       // Validation failure -> surface the per-field error list.
       if (response.statusCode == 422) {
-        final details = (decoded['details'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            const <String>[];
+        final details =
+            (decoded['details'] as List?)?.map((e) => e.toString()).toList() ??
+                const <String>[];
         return FormSubmitResult(
           ok: false,
-          message: (decoded['error'] ?? 'Form has validation errors').toString(),
+          message:
+              (decoded['error'] ?? 'Form has validation errors').toString(),
           errors: details,
         );
       }
 
       return FormSubmitResult(
         ok: false,
-        message: (decoded['error'] ?? 'Submission failed (${response.statusCode})')
-            .toString(),
+        message:
+            (decoded['error'] ?? 'Submission failed (${response.statusCode})')
+                .toString(),
       );
     } catch (e) {
       return FormSubmitResult(ok: false, message: 'Submission failed: $e');

@@ -3,6 +3,7 @@ package com.careconnect.service.ai.ask;
 import com.careconnect.ai.bedrock.BedrockModelSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,7 +15,9 @@ import software.amazon.awssdk.services.bedrockruntime.model.BedrockRuntimeExcept
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelRequest;
 import software.amazon.awssdk.services.bedrockruntime.model.InvokeModelResponse;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,8 +118,10 @@ public class GroundedAskLlmService {
                 final String raw = response.body().asUtf8String();
                 text = BedrockModelSupport.parseTextResponse(modelId, raw, objectMapper);
             } catch (final RuntimeException ex) {
+                log.warn("Grounded Ask AI Bedrock response payload was malformed");
                 throw new GroundedOutputValidationException(
-                        "Bedrock response payload was malformed", ex);
+                        "Bedrock response payload was malformed",
+                        GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
             }
             return parseStructured(text, modelId);
         } catch (final BedrockRuntimeException ex) {
@@ -166,16 +171,41 @@ public class GroundedAskLlmService {
 
     private Optional<GroundedLlmResult> parseStructured(final String text, final String modelId) {
         if (text == null || text.isBlank()) {
+            log.warn("Grounded model returned an empty response");
             throw new GroundedOutputValidationException(
-                    "Grounded model response was empty");
+                    "Grounded model response was empty",
+                    GroundedOutputValidationException.Kind.EMPTY_RESPONSE);
         }
         try {
             final String json = unwrapJson(text.trim());
             final JsonNode root = objectMapper.readTree(json);
-            final JsonNode claimsNode = root.get("claims");
+            // Nova has been observed returning claims in three different shapes:
+            // (a) {"claims": [...]} — the documented contract
+            // (b) [...claim objects directly...] — top-level array of claims
+            // (c) [{"claims": [...]}, {"claims": [...]}, ...] — one wrapper object
+            //     per source, most common when citing multiple retrieved chunks
+            // Flatten (c) into (b) by unwrapping any array element that itself
+            // carries a "claims" array, so a claim's actual text/citations fields
+            // are never mistaken for a missing claim.
+            final JsonNode claimsNode;
+            if (root.isArray()) {
+                final ArrayNode flattened = objectMapper.createArrayNode();
+                for (final JsonNode element : root) {
+                    if (element.has("claims") && element.get("claims").isArray()) {
+                        flattened.addAll((ArrayNode) element.get("claims"));
+                    } else {
+                        flattened.add(element);
+                    }
+                }
+                claimsNode = flattened;
+            } else {
+                claimsNode = root.get("claims");
+            }
             if (claimsNode == null || !claimsNode.isArray() || claimsNode.isEmpty()) {
+                log.warn("Grounded model response did not contain a claims array");
                 throw new GroundedOutputValidationException(
-                        "Grounded model response did not contain claims");
+                        "Grounded model response did not contain claims",
+                        GroundedOutputValidationException.Kind.MISSING_CLAIMS);
             }
             final List<GroundedClaim> claims = new ArrayList<>();
             final List<String> refs = new ArrayList<>();
@@ -199,8 +229,10 @@ public class GroundedAskLlmService {
                     }
                 }
                 if (claimText.isBlank() || claimRefs.isEmpty()) {
+                    log.warn("Grounded model claim was missing text or evidence");
                     throw new GroundedOutputValidationException(
-                            "Each grounded claim requires text and extractive evidence");
+                            "Each grounded claim requires text and extractive evidence",
+                            GroundedOutputValidationException.Kind.INCOMPLETE_CLAIM);
                 }
                 claims.add(new GroundedClaim(
                         claimText,
@@ -217,27 +249,99 @@ public class GroundedAskLlmService {
         } catch (final GroundedOutputValidationException ex) {
             throw ex;
         } catch (final Exception ex) {
-            log.warn("Unable to parse grounded Ask AI JSON");
+            // The Jackson message carries the parse offset; the raw model text may contain
+            // PHI, so only preview it at debug level.
+            if (log.isDebugEnabled()) {
+                final String preview = text.length() > 300 ? text.substring(0, 300) + "…" : text;
+                log.debug("Unable to parse grounded Ask AI JSON: {} | raw[0:300]={}",
+                        ex.getMessage(), preview);
+            } else {
+                log.warn("Unable to parse grounded Ask AI JSON: {}", ex.getMessage());
+            }
             throw new GroundedOutputValidationException(
-                    "Grounded model response was malformed", ex);
+                    "Grounded model response was malformed",
+                    GroundedOutputValidationException.Kind.MALFORMED_RESPONSE, ex);
         }
     }
 
+    /**
+     * Extracts a JSON object from raw model text, tolerating the ways LLMs deviate from a
+     * strict "JSON only" instruction: a markdown code fence, leading/trailing prose, and
+     * miscounted brackets (e.g. Nova occasionally emits {@code ...}]]} instead of
+     * {@code ...}]}}). Starting at the outer '{' or '[' (whichever opens first, so a bare
+     * top-level array is not mistaken for an object), it walks string-aware and keeps a
+     * bracket stack, dropping stray/mismatched closers and appending any missing closers so
+     * the result is balanced. Well-formed JSON passes through unchanged.
+     */
     private static String unwrapJson(final String text) {
-        String candidate = text;
-        if (candidate.startsWith("```")) {
-            final int firstNl = candidate.indexOf('\n');
-            final int lastFence = candidate.lastIndexOf("```");
-            if (firstNl > 0 && lastFence > firstNl) {
-                candidate = candidate.substring(firstNl + 1, lastFence).trim();
+        String candidate = text.trim();
+        // Strip a markdown code fence wherever it appears (```json ... ``` or ``` ... ```).
+        final int fence = candidate.indexOf("```");
+        if (fence >= 0) {
+            final int firstNl = candidate.indexOf('\n', fence);
+            final int closeFence = candidate.lastIndexOf("```");
+            if (firstNl > fence && closeFence > firstNl) {
+                candidate = candidate.substring(firstNl + 1, closeFence).trim();
             }
         }
-        final int start = candidate.indexOf('{');
-        final int end = candidate.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return candidate.substring(start, end + 1);
+        // Whichever bracket type appears first is the true outer container —
+        // slicing to a hardcoded '{' start silently strips a bare array's own
+        // brackets (turning `[{"a":1}]` into `{"a":1}`) when a model (observed:
+        // Nova) returns claims as a top-level array. Feed that start into the
+        // balanced-bracket walk below so both container shapes are repaired.
+        final int firstBrace = candidate.indexOf('{');
+        final int firstBracket = candidate.indexOf('[');
+        final boolean isArray = firstBracket >= 0 && (firstBrace < 0 || firstBracket < firstBrace);
+        final int start = isArray ? firstBracket : firstBrace;
+        if (start < 0) {
+            return candidate;
         }
-        return candidate;
+        final StringBuilder out = new StringBuilder(candidate.length());
+        final Deque<Character> stack = new ArrayDeque<>();
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = start; i < candidate.length(); i++) {
+            final char ch = candidate.charAt(i);
+            if (inString) {
+                out.append(ch);
+                if (escaped) {
+                    escaped = false;
+                } else if (ch == '\\') {
+                    escaped = true;
+                } else if (ch == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (ch == '"') {
+                inString = true;
+                out.append(ch);
+            } else if (ch == '{' || ch == '[') {
+                stack.push(ch);
+                out.append(ch);
+            } else if (ch == '}' || ch == ']') {
+                final Character open = stack.peek();
+                if (open != null && ((ch == '}' && open == '{') || (ch == ']' && open == '['))) {
+                    stack.pop();
+                    out.append(ch);
+                    if (stack.isEmpty()) {
+                        // Root object closed — ignore any trailing content.
+                        return out.toString();
+                    }
+                }
+                // else: drop a stray/mismatched closer (e.g. a duplicated ']').
+            } else {
+                out.append(ch);
+            }
+        }
+        // Unterminated output (truncated or a missing final closer): close what is open.
+        if (inString) {
+            out.append('"');
+        }
+        while (!stack.isEmpty()) {
+            out.append(stack.pop() == '{' ? '}' : ']');
+        }
+        return out.toString();
     }
 
     private static String textOrEmpty(final JsonNode root, final String field) {

@@ -78,9 +78,8 @@ class ScheduledNotification {
       body: json['body'],
       notificationType: json['notificationType'],
       scheduledTime: DateTime.parse(json['scheduledTime']),
-      sentTime: json['sentTime'] != null
-          ? DateTime.parse(json['sentTime'])
-          : null,
+      sentTime:
+          json['sentTime'] != null ? DateTime.parse(json['sentTime']) : null,
       status: json['status'] ?? "PENDING",
       messageId: json['messageId'],
       errorMessage: json['errorMessage'],

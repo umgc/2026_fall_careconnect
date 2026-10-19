@@ -45,32 +45,52 @@ public class HhaExchangeVisit {
     // Nested types
     // -------------------------------------------------------------------------
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class Office {
         private String qualifier;
         private String identifier;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class Member {
         private String qualifier;
         private String identifier;
         private String admissionID;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class Caregiver {
         private String qualifier;
         private String identifier;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class EvvData {
         private ClockEvent clockIn;
         private ClockEvent clockOut;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class ClockEvent {
         private String callDateTime;
@@ -80,13 +100,21 @@ public class HhaExchangeVisit {
         private String originatingPhoneNumber;
         private String locationType;
         private ServiceAddress serviceAddress;
-        /** Populated only for clockOut events when tasks were completed. */
+        /**
+         * Populated only for clockOut events when tasks were completed.
+         */
         private List<TaskCode> performedTasks;
-        /** Populated only for clockOut events when tasks were refused. */
+        /**
+         * Populated only for clockOut events when tasks were refused.
+         */
         private List<TaskCode> refusedTasks;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class ServiceAddress {
         private String addressLine1;
         private String addressLine2;
@@ -95,12 +123,20 @@ public class HhaExchangeVisit {
         private String zipcode;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class TaskCode {
         private String code;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class MissedVisit {
         private Boolean missed;
         private String reasonCode;
@@ -108,7 +144,11 @@ public class HhaExchangeVisit {
         private String notes;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class EditVisit {
         private Boolean edited;
         private String reasonCode;
@@ -116,7 +156,11 @@ public class HhaExchangeVisit {
         private String notes;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Billing {
         private String externalInvoiceNumber;
@@ -126,7 +170,11 @@ public class HhaExchangeVisit {
         private List<String> diagnosisCodes;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class SecondaryPayer {
         private Boolean enableSecondaryBilling;
@@ -151,7 +199,11 @@ public class HhaExchangeVisit {
         private Double otherPayerPaidAmount;
     }
 
-    @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class ShiftSignOff {
         private String employerInternalNumber;
         private String employerName;

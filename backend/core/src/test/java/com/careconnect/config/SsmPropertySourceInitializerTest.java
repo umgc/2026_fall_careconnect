@@ -221,8 +221,7 @@ class SsmPropertySourceInitializerTest {
         // Verifies that loadParametersFromSsm() iterates every entry in SSM_PARAMETERS
         // and populates the map with the matching Spring property key from
         // PARAMETER_MAPPING. JWT and DB credentials are excluded (ECS Secrets Manager).
-        // With 12 parameters defined and all calls succeeding, the result must contain
-        // exactly 12 entries.
+        // With 13 parameters defined, including the KVS stream pool, all should load.
 
         final SsmClient ssmClient = Mockito.mock(SsmClient.class);
 
@@ -244,8 +243,8 @@ class SsmPropertySourceInitializerTest {
         final Map<String, Object> result =
                 (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
-        // All 12 SSM_PARAMETERS entries are in PARAMETER_MAPPING, so all should load.
-        assertEquals(12, result.size());
+        // Keep the expected count explicit so a new unmapped parameter cannot pass silently.
+        assertEquals(13, result.size());
 
         // Spot-check a representative sample of the PARAMETER_MAPPING entries.
         assertEquals("mock-value", result.get("stripe.secret-key"));
@@ -256,6 +255,7 @@ class SsmPropertySourceInitializerTest {
         assertEquals("mock-value", result.get("aws.s3.access-key"));
         assertEquals("mock-value", result.get("aws.s3.secret-key"));
         assertEquals("mock-value", result.get("firebase.service-account-key"));
+        assertEquals("mock-value", result.get("careconnect.kvs.stream-pool-arn"));
     }
 
     // ==========================================

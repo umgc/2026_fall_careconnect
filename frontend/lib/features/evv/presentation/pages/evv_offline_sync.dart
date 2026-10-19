@@ -13,7 +13,6 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
   bool _isLoading = true;
   bool _isSyncing = false;
   List<EvvOfflineQueue> _offlineQueue = [];
-  List<EvvOfflineQueue> _syncStatus = [];
 
   @override
   void initState() {
@@ -24,11 +23,9 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
   Future<void> _loadOfflineData() async {
     try {
       final queue = await _evvService.getOfflineQueue();
-      final status = await _evvService.getOfflineStatus();
 
       setState(() {
         _offlineQueue = queue;
-        _syncStatus = status;
         _isLoading = false;
       });
     } catch (e) {
@@ -91,7 +88,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                 // Sync Status Overview
                 Card(
                   margin: const EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 1,
                   child: Padding(
                     padding: const EdgeInsets.all(14),
@@ -122,10 +120,13 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
                                   )
                                 : const Icon(Icons.sync),
-                            label: Text(_isSyncing ? 'Syncing...' : 'Sync All Offline Data'),
+                            label: Text(_isSyncing
+                                ? 'Syncing...'
+                                : 'Sync All Offline Data'),
                           ),
                         ),
                       ],
@@ -140,13 +141,16 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.cloud_done, size: 56, color: Colors.green),
+                              Icon(Icons.cloud_done,
+                                  size: 56, color: Colors.green),
                               SizedBox(height: 10),
                               Text('All data is synced',
-                                  style: TextStyle(fontSize: 16, color: Colors.grey)),
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.grey)),
                               SizedBox(height: 6),
                               Text('No offline records to sync',
-                                  style: TextStyle(fontSize: 14, color: Colors.grey)),
+                                  style: TextStyle(
+                                      fontSize: 14, color: Colors.grey)),
                             ],
                           ),
                         )
@@ -162,24 +166,31 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                   borderRadius: BorderRadius.circular(10)),
                               child: ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: _getStatusColor(item.syncStatus),
-                                  child: Icon(_getStatusIcon(item.syncStatus), color: Colors.white),
+                                  backgroundColor:
+                                      _getStatusColor(item.syncStatus),
+                                  child: Icon(_getStatusIcon(item.syncStatus),
+                                      color: Colors.white),
                                 ),
                                 title: Text(
                                   '${item.operationType} Record #${item.recordId}',
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('Caregiver ID: ${item.caregiverId}'),
-                                    Text('Queued: ${_formatDateTime(item.queuedAt)}'),
+                                    Text(
+                                        'Queued: ${_formatDateTime(item.queuedAt)}'),
                                     if (item.lastSyncAttempt != null)
-                                      Text('Last Attempt: ${_formatDateTime(item.lastSyncAttempt!)}'),
-                                    if (item.syncAttempts > 0) Text('Attempts: ${item.syncAttempts}'),
+                                      Text(
+                                          'Last Attempt: ${_formatDateTime(item.lastSyncAttempt!)}'),
+                                    if (item.syncAttempts > 0)
+                                      Text('Attempts: ${item.syncAttempts}'),
                                     if (item.lastError != null)
                                       Text('Error: ${item.lastError}',
-                                          style: const TextStyle(color: Colors.red)),
+                                          style: const TextStyle(
+                                              color: Colors.red)),
                                     const SizedBox(height: 4),
                                     Row(
                                       children: [
@@ -194,7 +205,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                 ),
                                 trailing: PopupMenuButton<String>(
                                   onSelected: (value) {
-                                    if (value == 'retry' && item.syncStatus == 'FAILED') {
+                                    if (value == 'retry' &&
+                                        item.syncStatus == 'FAILED') {
                                       _retrySync(item);
                                     } else if (value == 'details') {
                                       _showItemDetails(item);
@@ -216,9 +228,12 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                         value: 'retry',
                                         child: Row(
                                           children: [
-                                            Icon(Icons.refresh, size: 20, color: Colors.blue),
+                                            Icon(Icons.refresh,
+                                                size: 20, color: Colors.blue),
                                             SizedBox(width: 8),
-                                            Text('Retry', style: TextStyle(color: Colors.blue)),
+                                            Text('Retry',
+                                                style: TextStyle(
+                                                    color: Colors.blue)),
                                           ],
                                         ),
                                       ),
@@ -296,7 +311,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
     });
   }
 
-  Widget _buildStatusCard(String title, String count, IconData icon, Color color) {
+  Widget _buildStatusCard(
+      String title, String count, IconData icon, Color color) {
     final border = color.withOpacity(0.28);
     final bg = color.withOpacity(0.08);
     return Container(
@@ -315,7 +331,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
             const SizedBox(height: 6),
             Text(
               count,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color),
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w800, color: color),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
@@ -323,7 +340,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
             const SizedBox(height: 2),
             Text(
               title,
-              style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                  fontSize: 12, color: color, fontWeight: FontWeight.w600),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
@@ -345,7 +363,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
       ),
       child: Text(
         text,
-        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style:
+            TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         softWrap: false,
@@ -380,23 +399,31 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
               _buildDetailRow('Sync Status', item.syncStatus),
               _buildDetailRow('Sync Attempts', item.syncAttempts.toString()),
               if (item.lastSyncAttempt != null)
-                _buildDetailRow('Last Sync Attempt', _formatDateTime(item.lastSyncAttempt!)),
-              if (item.lastError != null) _buildDetailRow('Last Error', item.lastError!),
+                _buildDetailRow('Last Sync Attempt',
+                    _formatDateTime(item.lastSyncAttempt!)),
+              if (item.lastError != null)
+                _buildDetailRow('Last Error', item.lastError!),
               _buildDetailRow('Priority', _getPriorityText(item.priority)),
               const SizedBox(height: 12),
-              const Text('Record Data:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Record Data:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8)),
                 child: Text(item.recordData.toString(),
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12)),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close')),
         ],
       ),
     );
@@ -408,7 +435,10 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 120, child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w600))),
+          SizedBox(
+              width: 120,
+              child: Text('$label:',
+                  style: const TextStyle(fontWeight: FontWeight.w600))),
           Expanded(child: Text(value)),
         ],
       ),
@@ -473,7 +503,7 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
 
   String _formatDateTime(DateTime dt) {
     return '${dt.day}/${dt.month}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
+  }
 
   @override
   void dispose() {

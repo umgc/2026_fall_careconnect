@@ -48,15 +48,11 @@ class RecurrenceUtils {
     int? intervalToSend = interval;
     int? countToSend = count;
 
-    // Preserve original task type safely
-    final normalizedTaskType = baseTask.taskType?.toLowerCase();
-
     // Default effective start date
     DateTime effectiveDate = (startDate ?? baseTask.date).toLocal();
     // Normalize end date if provided
-    DateTime? normalizedEndDate = endDate != null
-        ? TaskUtils.normalizeDate(endDate)
-        : null;
+    DateTime? normalizedEndDate =
+        endDate != null ? TaskUtils.normalizeDate(endDate) : null;
 
     if (isRecurring == true && recurrenceType != null) {
       switch (recurrenceType.toLowerCase()) {
@@ -237,8 +233,7 @@ class RecurrenceUtils {
         return count;
 
       case "monthly":
-        int months =
-            (endDate.year - startDate.year) * 12 +
+        int months = (endDate.year - startDate.year) * 12 +
             (endDate.month - startDate.month);
         return (months ~/ interval) + 1;
 

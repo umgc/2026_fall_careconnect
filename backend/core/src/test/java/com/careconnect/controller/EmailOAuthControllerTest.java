@@ -31,31 +31,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-
 class EmailOAuthControllerTest {
 
-    @Mock private GoogleOAuthService googleOAuthService;
-
+    private static final String USER_ID = "user-123";
+    private static final String CLIENT_ID = "test-client-id";
+    private static final String REDIRECT_URI = "http://localhost/callback";
+    private static final String SCOPE = "openid email";
+    private static final String FRONTEND_URL = "http://localhost:3000";
+    private static final String AUTH_CODE = "auth-code-abc";
+    @Mock
+    private GoogleOAuthService googleOAuthService;
     private OAuthStateSigner oauthStateSigner;
-
     private OAuthRedirectValidator oauthRedirectValidator;
-
     private EmailOAuthController controller;
 
-    private static final String USER_ID      = "user-123";
-
-    private static final String CLIENT_ID    = "test-client-id";
-
-    private static final String REDIRECT_URI = "http://localhost/callback";
-
-    private static final String SCOPE        = "openid email";
-
-    private static final String FRONTEND_URL = "http://localhost:3000";
-
-    private static final String AUTH_CODE    = "auth-code-abc";
-
     @BeforeEach
-
     void setUp() {
 
         oauthStateSigner = new OAuthStateSigner("unit-test-secret-32-bytes-long!!!");
@@ -64,22 +54,20 @@ class EmailOAuthControllerTest {
 
         controller = new EmailOAuthController(googleOAuthService, oauthStateSigner, oauthRedirectValidator);
 
-        controller.clientId       = CLIENT_ID;
+        controller.clientId = CLIENT_ID;
 
-        controller.redirectUri    = REDIRECT_URI;
+        controller.redirectUri = REDIRECT_URI;
 
-        controller.scope          = SCOPE;
+        controller.scope = SCOPE;
 
         controller.frontendBaseUrl = FRONTEND_URL;
 
     }
 
     @Nested
-
     class Start {
 
         @Test
-
         void returns302Found() {
 
             final String startToken = oauthStateSigner.signStartToken(USER_ID, null);
@@ -91,7 +79,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void redirectsToGoogleAuthEndpoint() {
 
             final String startToken = oauthStateSigner.signStartToken(USER_ID, null);
@@ -103,7 +90,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void includesSignedStateParameter() {
 
             final String startToken = oauthStateSigner.signStartToken(USER_ID, FRONTEND_URL + "/page");
@@ -115,7 +101,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void rejectsUnsignedStartToken() {
 
             ResponseEntity<Void> response = controller.start("not-a-valid-token");
@@ -125,7 +110,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void doesNotInteractWithGoogleOAuthService() {
 
             controller.start(oauthStateSigner.signStartToken(USER_ID, null));
@@ -137,11 +121,9 @@ class EmailOAuthControllerTest {
     }
 
     @Nested
-
     class Callback {
 
         @Test
-
         void redirectsToReturnUrl_whenSuccessful() {
 
             final String returnUrl = "http://localhost:3000/settings";
@@ -159,7 +141,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void redirectsToFallbackUrl_whenNoReturnUrl() {
 
             final String state = oauthStateSigner.sign(USER_ID, null);
@@ -171,7 +152,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void redirectsWithOauthError_whenExchangeFails() {
 
             final String state = oauthStateSigner.sign(USER_ID, null);
@@ -189,7 +169,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void redirectsWithOauthErrorOnReturnUrl_whenExchangeFails() {
 
             final String returnUrl = "http://localhost:3000/usps-test";
@@ -209,7 +188,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void rejectsLegacyUnsignedState() {
 
             final String state = "u:" + USER_ID + "|r:http://localhost:3000/page";
@@ -223,7 +201,6 @@ class EmailOAuthControllerTest {
         }
 
         @Test
-
         void rejectsStartTokenUsedAsCallbackState() {
 
             final String state = oauthStateSigner.signStartToken(USER_ID, FRONTEND_URL + "/usps-test");

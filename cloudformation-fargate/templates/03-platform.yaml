@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Description: CareConnect platform stack for ECR, ECS cluster, roles, and logs.
 
 Parameters:
@@ -67,7 +67,7 @@ Resources:
     Properties:
       RoleName: !Sub careconnect-${Environment}-ecsTaskExecutionRole
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -79,7 +79,7 @@ Resources:
       Policies:
         - PolicyName: !Sub careconnect-${Environment}-ecs-secrets
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -95,7 +95,7 @@ Resources:
     Properties:
       RoleName: !Sub careconnect-${Environment}-ecsTaskRole
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -105,7 +105,7 @@ Resources:
       Policies:
         - PolicyName: !Sub careconnect-${Environment}-ecs-task-app
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Sid: ChimeMeetings
                 Effect: Allow
@@ -121,7 +121,7 @@ Resources:
                   - chime:StartMeetingTranscription
                   - chime:StopMeetingTranscription
                   - chime:GetMeetingTranscriptionStatus
-                Resource: '*'
+                Resource: "*"
               - Sid: ChimeMediaPipelines
                 Effect: Allow
                 Action:
@@ -132,7 +132,7 @@ Resources:
                   - chime:GetMediaCapturePipeline
                   - chime:GetMediaPipeline
                   - chime:CreateMediaStreamPipeline
-                Resource: '*'
+                Resource: "*"
               - Sid: KinesisVideoStreams
                 Effect: Allow
                 Action:
@@ -148,7 +148,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - kinesisvideo:ListStreams
-                Resource: '*'
+                Resource: "*"
               - Sid: S3CareConnectBuckets
                 Effect: Allow
                 Action:
@@ -174,13 +174,13 @@ Resources:
                 Effect: Allow
                 Action:
                   - s3:GetBucketPolicy
-                Resource: '*'
+                Resource: "*"
               - Sid: BedrockInvoke
                 Effect: Allow
                 Action:
                   - bedrock:InvokeModel
                   - bedrock:InvokeModelWithResponseStream
-                Resource: '*'
+                Resource: "*"
               - Sid: TranscribeJobs
                 Effect: Allow
                 Action:
@@ -188,21 +188,21 @@ Resources:
                   - transcribe:GetTranscriptionJob
                   - transcribe:DeleteTranscriptionJob
                   - transcribe:ListTranscriptionJobs
-                Resource: '*'
+                Resource: "*"
               - Sid: TextractOcr
                 Effect: Allow
                 Action:
                   - textract:StartDocumentTextDetection
                   - textract:GetDocumentTextDetection
                   - textract:DetectDocumentText
-                Resource: '*'
+                Resource: "*"
               - Sid: Notifications
                 Effect: Allow
                 Action:
                   - ses:SendEmail
                   - ses:SendRawEmail
                   - sns:Publish
-                Resource: '*'
+                Resource: "*"
               # Covers kvs-stream-pool-arn and other env-scoped SSM params.
               - Sid: SsmParameters
                 Effect: Allow
@@ -232,7 +232,7 @@ Resources:
                 Effect: Allow
                 Action:
                   - sts:GetCallerIdentity
-                Resource: '*'
+                Resource: "*"
 
   # Chime KVS Stream Pool for media stream pipeline ingest (create once via CLI/console).
   # aws chime-sdk-media-pipelines create-media-pipeline-kinesis-video-stream-pool ...
@@ -244,7 +244,7 @@ Resources:
       Description: >-
         Chime media-pipeline-kinesis-video-stream-pool ARN for CreateMediaStreamPipeline ingest.
         Set manually after creating the pool (not provisioned by this stack).
-      Value: REPLACE_WITH_CHIME_KVS_STREAM_POOL_ARN
+      Value: arn:aws:chime:us-east-1:354326796818:media-pipeline-kinesis-video-stream-pool/careConnectKVSPool
 
 Outputs:
   # Exported outputs are consumed by the service stack.

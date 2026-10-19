@@ -87,15 +87,18 @@ class _PasswordResetPageState extends State<PasswordResetPage> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     // Detect if this is a setup token (family member) based on UUID format
-    final isSetupToken =
-        widget.token != null &&
+    final isSetupToken = widget.token != null &&
         widget.token!.contains('-') &&
         widget.token!.length > 20;
-    final title = isSetupToken ? t.passwordresetpage_setPasswordFirst : t.passwordresetpage_resetPasswordExisting;
+    final title = isSetupToken
+        ? t.passwordresetpage_setPasswordFirst
+        : t.passwordresetpage_resetPasswordExisting;
     final description = isSetupToken
         ? t.passwordresetpage_firstTimeDescription
         : t.passwordresetpage_resetPasswordDescription;
-    final buttonText = isSetupToken ? t.passwordresetpage_setPassword : t.resetpassword_resetPasswordTitle;
+    final buttonText = isSetupToken
+        ? t.passwordresetpage_setPassword
+        : t.resetpassword_resetPasswordTitle;
 
     return Scaffold(
       backgroundColor: Colors.white,

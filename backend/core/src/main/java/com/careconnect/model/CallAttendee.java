@@ -8,12 +8,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+
 import java.time.LocalDateTime;
+
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Persisted Chime attendee identity for a call (speaker-ID roster source of truth). */
+/**
+ * Persisted Chime attendee identity for a call (speaker-ID roster source of truth).
+ */
 @Entity
 @Getter
 @Setter
@@ -21,26 +25,34 @@ import lombok.Setter;
 @Table(
         name = "call_attendees",
         uniqueConstraints = {
-            @UniqueConstraint(
-                    name = "uq_call_attendees_call_chime",
-                    columnNames = {"call_id", "chime_attendee_id"})
+                @UniqueConstraint(
+                        name = "uq_call_attendees_call_chime",
+                        columnNames = {"call_id", "chime_attendee_id"})
         },
         indexes = {
-            @Index(name = "idx_call_attendees_call_id", columnList = "call_id"),
-            @Index(name = "idx_call_attendees_user_id", columnList = "user_id")
+                @Index(name = "idx_call_attendees_call_id", columnList = "call_id"),
+                @Index(name = "idx_call_attendees_user_id", columnList = "user_id")
         })
 public class CallAttendee {
 
-    /** Maximum length for call identifier columns. */
+    /**
+     * Maximum length for call identifier columns.
+     */
     private static final int CALL_ID_LENGTH = 120;
 
-    /** Maximum length for Chime attendee identifier values. */
+    /**
+     * Maximum length for Chime attendee identifier values.
+     */
     private static final int CHIME_ATTENDEE_ID_LENGTH = 255;
 
-    /** Maximum length for persisted KVS stream ARNs. */
+    /**
+     * Maximum length for persisted KVS stream ARNs.
+     */
     private static final int KVS_STREAM_ARN_LENGTH = 512;
 
-    /** Maximum length for role values. */
+    /**
+     * Maximum length for role values.
+     */
     private static final int ROLE_LENGTH = 40;
 
     @Id

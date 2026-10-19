@@ -9,6 +9,7 @@ import '../models/notification_settings.dart';
 import '../services/notification_settings_service.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/language/language_picker.dart';
+import '../widgets/epic_connect_tile.dart';
 import '../utils/responsive_utils.dart';
 
 import '../features/telemetry/telemetry.dart';
@@ -83,7 +84,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     if (user != null) {
       final settings =
-      await NotificationSettingsService.getNotificationSettings(user.id);
+          await NotificationSettingsService.getNotificationSettings(user.id);
       if (!mounted) return;
       setState(() {
         _notificationSettings = settings;
@@ -129,18 +130,26 @@ class _SettingsPageState extends State<SettingsPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ?? 'Telemetry is enabled'),
+          title: Text(
+              AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ??
+                  'Telemetry is enabled'),
           content: Text(
-            AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogDescription ?? 'CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability.\nYou can opt out at any time.',
+            AppLocalizations.of(ctx)
+                    ?.settings_telemetryDefaultDialogDescription ??
+                'CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability.\nYou can opt out at any time.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
-              child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
+              child: Text(AppLocalizations.of(ctx)
+                      ?.settings_telemetryDefaultDialogOptOut ??
+                  'Opt out'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogKeepEnabled ?? 'Keep enabled'),
+              child: Text(AppLocalizations.of(ctx)
+                      ?.settings_telemetryDefaultDialogKeepEnabled ??
+                  'Keep enabled'),
             ),
           ],
         );
@@ -234,9 +243,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ?? 'Opt out of telemetry?'),
+        title: Text(
+            AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ??
+                'Opt out of telemetry?'),
         content: Text(
-          AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogDescription ?? 'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
+          AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogDescription ??
+              'If you opt out, CareConnect will stop collecting anonymous diagnostics and performance metrics.',
         ),
         actions: [
           TextButton(
@@ -245,7 +257,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogOptOut ?? 'Opt out'),
+            child: Text(AppLocalizations.of(ctx)
+                    ?.settings_telemetryDefaultDialogOptOut ??
+                'Opt out'),
           ),
         ],
       ),
@@ -260,9 +274,12 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ?? 'Enable telemetry?'),
+        title: Text(
+            AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ??
+                'Enable telemetry?'),
         content: Text(
-          AppLocalizations.of(ctx)?.settings_telemetryOptInDialogDescription ?? 'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
+          AppLocalizations.of(ctx)?.settings_telemetryOptInDialogDescription ??
+              'This will allow CareConnect to collect anonymous diagnostics and performance metrics to improve reliability.',
         ),
         actions: [
           TextButton(
@@ -271,7 +288,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text(AppLocalizations.of(ctx)?.settings_telemetryOptInDialogEnable ?? 'Enable'),
+            child: Text(
+                AppLocalizations.of(ctx)?.settings_telemetryOptInDialogEnable ??
+                    'Enable'),
           ),
         ],
       ),
@@ -286,22 +305,22 @@ class _SettingsPageState extends State<SettingsPage> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
       ),
     );
   }
 
   Widget _buildSettingsCard(
-      BuildContext context, {
-        required IconData icon,
-        required String title,
-        required String subtitle,
-        required VoidCallback onTap,
-        Color? textColor,
-        Color? iconColor,
-      }) {
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color? textColor,
+    Color? iconColor,
+  }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -313,9 +332,9 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(
           title,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: textColor,
-            fontWeight: FontWeight.w500,
-          ),
+                color: textColor,
+                fontWeight: FontWeight.w500,
+              ),
         ),
         subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
         trailing: Icon(
@@ -328,14 +347,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildNotificationToggleCard(
-      BuildContext context, {
-        required IconData icon,
-        required String title,
-        required String subtitle,
-        required bool value,
-        required Function(bool) onChanged,
-        Color? iconColor,
-      }) {
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required Function(bool) onChanged,
+    Color? iconColor,
+  }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -361,15 +380,15 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildToggleCard(
-      BuildContext context, {
-        required IconData icon,
-        required String title,
-        required String subtitle,
-        required bool value,
-        required ValueChanged<bool> onChanged,
-        Color? iconColor,
-        bool loading = false,
-      }) {
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    Color? iconColor,
+    bool loading = false,
+  }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -387,15 +406,15 @@ class _SettingsPageState extends State<SettingsPage> {
         subtitle: Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
         trailing: loading
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
             : Switch(
-          value: value,
-          onChanged: onChanged,
-          activeThumbColor: Theme.of(context).colorScheme.primary,
-        ),
+                value: value,
+                onChanged: onChanged,
+                activeThumbColor: Theme.of(context).colorScheme.primary,
+              ),
       ),
     );
   }
@@ -528,17 +547,20 @@ class _SettingsPageState extends State<SettingsPage> {
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
 
-    final shouldHideSubscription =
-        user != null &&
-            (user.role.toLowerCase() == 'patient' ||
-                user.role.toLowerCase() == 'family member');
+    final shouldHideSubscription = user != null &&
+        (user.role.toLowerCase() == 'patient' ||
+            user.role.toLowerCase() == 'family member');
 
     return Scaffold(
       appBar: AppBar(
         title: Text(t.settings), // use existing "Settings" key
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          // Router-safe back: Settings can be reached via context.go(...) (a
+          // replace, e.g. from the Epic return page), leaving nothing to pop.
+          // Navigator.pop() then asserts "popped the last page off the stack".
+          onPressed: () =>
+              context.canPop() ? context.pop() : context.go('/dashboard'),
         ),
       ),
       body: SafeArea(
@@ -563,31 +585,30 @@ class _SettingsPageState extends State<SettingsPage> {
                           backgroundColor: Theme.of(
                             context,
                           ).colorScheme.primary.withValues(alpha: 0.1),
-                          child:
-                          (user != null &&
-                              user.name != null &&
-                              user.name!.isNotEmpty)
+                          child: (user != null &&
+                                  user.name != null &&
+                                  user.name!.isNotEmpty)
                               ? Text(
-                            user.name![0].toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 32,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          )
+                                  user.name![0].toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
                               : Icon(
-                            Icons.person,
-                            size: 32,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
+                                  Icons.person,
+                                  size: 32,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           (user != null &&
-                              user.name != null &&
-                              user.name!.isNotEmpty)
+                                  user.name != null &&
+                                  user.name!.isNotEmpty)
                               ? user.name!
                               : t.fallbackUser,
                           style: Theme.of(context).textTheme.titleMedium,
@@ -699,13 +720,19 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 24),
 
+                  // Connected Services (Epic SMART-on-FHIR connect — Epic Phase 0)
+                  _buildSectionHeader(context, 'Connected Services'),
+                  const EpicConnectTile(),
+                  const SizedBox(height: 24),
+
                   // Privacy
                   _buildSectionHeader(context, t.settings_privacySectionHeader),
                   _buildToggleCard(
                     context,
                     icon: Icons.privacy_tip,
                     title: t.settings_privacySectionTelemetrySetting,
-                    subtitle: t.settings_privacySectionTelemetrySettingDescription,
+                    subtitle:
+                        t.settings_privacySectionTelemetrySettingDescription,
                     value: _telemetryEnabled,
                     loading: _loadingTelemetry,
                     onChanged: (enabled) async {
@@ -748,7 +775,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       }
                     },
                   ),
-
 
                   const SizedBox(height: 24),
 

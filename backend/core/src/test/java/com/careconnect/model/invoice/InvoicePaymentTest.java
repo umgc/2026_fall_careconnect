@@ -48,7 +48,7 @@ class InvoicePaymentTest {
         final InvoicePayment payment = new InvoicePayment();
         final Invoice invoice = Invoice.builder().id("INV-500").build();
         final OffsetDateTime paymentDate = OffsetDateTime.of(2025, 4, 10, 12, 0, 0, 0, ZoneOffset.UTC);
-        final OffsetDateTime createdAt   = OffsetDateTime.of(2025, 4, 10, 12, 0, 0, 0, ZoneOffset.UTC);
+        final OffsetDateTime createdAt = OffsetDateTime.of(2025, 4, 10, 12, 0, 0, 0, ZoneOffset.UTC);
 
         payment.setId("custom-id-123");
         payment.setInvoice(invoice);

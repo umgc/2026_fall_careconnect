@@ -9,6 +9,7 @@ import 'package:care_connect_app/features/activities/presentation/pages/client_a
 class ClientActivitiesSection extends StatefulWidget {
   final int clientId;
   final String clientName;
+
   /// Height for the tab content area when embedded (e.g. in a ListView). If null, expands.
   final double? contentHeight;
 
@@ -20,7 +21,8 @@ class ClientActivitiesSection extends StatefulWidget {
   });
 
   @override
-  State<ClientActivitiesSection> createState() => _ClientActivitiesSectionState();
+  State<ClientActivitiesSection> createState() =>
+      _ClientActivitiesSectionState();
 }
 
 class _ClientActivitiesSectionState extends State<ClientActivitiesSection>
@@ -53,7 +55,8 @@ class _ClientActivitiesSectionState extends State<ClientActivitiesSection>
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
         final activities = (list ?? [])
-            .map((e) => ClientActivity.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) =>
+                ClientActivity.fromJson(Map<String, dynamic>.from(e as Map)))
             .where((a) => a.enabled)
             .toList();
         setState(() {
@@ -93,7 +96,8 @@ class _ClientActivitiesSectionState extends State<ClientActivitiesSection>
           children: [
             Row(
               children: [
-                Icon(Icons.self_improvement, color: theme.colorScheme.primary, size: 22),
+                Icon(Icons.self_improvement,
+                    color: theme.colorScheme.primary, size: 22),
                 const SizedBox(width: 8),
                 Text(
                   'Activities',

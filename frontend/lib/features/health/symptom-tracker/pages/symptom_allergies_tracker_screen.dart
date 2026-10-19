@@ -76,14 +76,15 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final isLandscape =
-                      MediaQuery.of(context).orientation == Orientation.landscape;
+                  final isLandscape = MediaQuery.of(context).orientation ==
+                      Orientation.landscape;
 
                   return Container(
-                    margin: EdgeInsets.all(isLandscape? 8 : 16),
+                    margin: EdgeInsets.all(isLandscape ? 8 : 16),
                     decoration: BoxDecoration(
                       color: Theme.of(context).cardColor,
-                      borderRadius: BorderRadius.circular(isLandscape? 16 : 32),
+                      borderRadius:
+                          BorderRadius.circular(isLandscape ? 16 : 32),
                       boxShadow: [
                         BoxShadow(
                           color: Theme.of(context)
@@ -137,10 +138,10 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
 
   Widget _buildHeader(bool isLandscape) {
     return Padding(
-      padding: EdgeInsets.all(isLandscape? 12 : 20),
+      padding: EdgeInsets.all(isLandscape ? 12 : 20),
       child: Column(
         children: [
-          if (!isLandscape)...[
+          if (!isLandscape) ...[
             Icon(
               Icons.medical_information_outlined,
               color: Theme.of(context).primaryColor,
@@ -151,7 +152,7 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (isLandscape)...[
+              if (isLandscape) ...[
                 Icon(
                   Icons.medical_information_outlined,
                   color: Theme.of(context).primaryColor,
@@ -173,7 +174,7 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
               ),
             ],
           ),
-          if (!isLandscape)...[
+          if (!isLandscape) ...[
             const SizedBox(height: 8),
             Text(
               'Track your health symptoms and medication allergies',
@@ -194,7 +195,7 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
   Widget _buildTabBar(bool isLandscape) {
     return Container(
       color: Theme.of(context).cardColor,
-      padding: EdgeInsets.fromLTRB(20, 0, 20, isLandscape? 8 : 0),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, isLandscape ? 8 : 0),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.grey[100],
@@ -211,7 +212,7 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
           unselectedLabelColor: Colors.grey[600],
           labelStyle: TextStyle(
             fontWeight: FontWeight.w600,
-            fontSize: isLandscape? 12 : 14,
+            fontSize: isLandscape ? 12 : 14,
           ),
           tabs: const [
             Tab(text: 'Mental Health\nSymptoms'),
@@ -226,7 +227,7 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
     if (_isResolving) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_errorMessage!= null) {
+    if (_errorMessage != null) {
       return Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -241,8 +242,10 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
                 child: Text(
                   _errorMessage!,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: Theme.of(context).colorScheme.error),
                 ),
               ),
               const SizedBox(height: 12),
@@ -256,7 +259,7 @@ class _SymptomsAllergiesPageState extends State<SymptomsAllergiesPage>
         ),
       );
     }
-    if (_patientId!= null) {
+    if (_patientId != null) {
       return TabBarView(
         controller: _tabController,
         children: [

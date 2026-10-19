@@ -6,7 +6,7 @@ import lombok.Data;
 
 /**
  * Configuration properties for ChatMemory settings
- *
+ * <p>
  * This allows fine-tuning of chat memory behavior through application properties
  */
 @Configuration

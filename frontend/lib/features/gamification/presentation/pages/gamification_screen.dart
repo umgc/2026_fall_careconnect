@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'achievement_detail_screen.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 class GamificationScreen extends StatefulWidget {
   const GamificationScreen({super.key});
@@ -48,14 +49,20 @@ class _GamificationScreenState extends State<GamificationScreen> {
   late String dailyMessage;
 
   void pickDailyMessage() {
-    final dayIndex = DateTime.now().day % motivationalMessages.length;
-    dailyMessage = motivationalMessages[dayIndex];
+    final l10n = AppLocalizations.of(context)!;
+    final messages = [
+      l10n.gamificationDailyMessage1,
+      l10n.gamificationDailyMessage2,
+      l10n.gamificationDailyMessage3,
+      l10n.gamificationDailyMessage4,
+      l10n.gamificationDailyMessage5,
+    ];
+    dailyMessage = messages[DateTime.now().day % messages.length];
   }
 
   Future<void> initializePrefsAndLoad() async {
     _prefs = await SharedPreferences.getInstance();
-    userId =
-        int.tryParse(_prefs.getString('userId') ?? '') ?? 1;
+    userId = int.tryParse(_prefs.getString('userId') ?? '') ?? 1;
 
     previousAchievementCount = _prefs.getInt('achievement_count') ?? 0;
     await loadGamificationData();
@@ -85,8 +92,9 @@ class _GamificationScreenState extends State<GamificationScreen> {
 
       List<Map<String, dynamic>> merged = (all).map<Map<String, dynamic>>((a) {
         final match = earned.firstWhere(
-              (e) =>
-          (e['achievement']?['title']?.toString().trim().toLowerCase() ?? '') ==
+          (e) =>
+              (e['achievement']?['title']?.toString().trim().toLowerCase() ??
+                  '') ==
               (a['title']?.toString().trim().toLowerCase() ?? ''),
           orElse: () => null,
         );
@@ -110,6 +118,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
@@ -117,7 +126,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
     return Scaffold(
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'Achievements',
+        title: l10n.gamificationTitle,
         additionalActions: [
           IconButton(
             icon: const Icon(Icons.emoji_events),
@@ -149,7 +158,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
                     children: [
                       const SizedBox(height: 10),
                       Text(
-                        'Gamification',
+                        l10n.gamificationHeading,
                         style: textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: colorScheme.primary,
@@ -159,7 +168,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
                       Icon(Icons.shield, size: 80, color: colorScheme.primary),
                       const SizedBox(height: 12),
                       Text(
-                        'Level $level',
+                        l10n.gamificationLevel(level),
                         style: textTheme.titleMedium?.copyWith(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -170,7 +179,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Text(
                           dailyMessage,
-                         style: textTheme.bodyMedium?.copyWith(
+                          style: textTheme.bodyMedium?.copyWith(
                             fontStyle: FontStyle.italic,
                             color: colorScheme.onSurface,
                           ),
@@ -200,7 +209,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          'Achievements',
+                          l10n.gamificationAchievements,
                           style: textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: colorScheme.primary,
@@ -210,9 +219,13 @@ class _GamificationScreenState extends State<GamificationScreen> {
                       const SizedBox(height: 20),
                       Expanded(
                         child: ListView.builder(
-                          itemCount: allAchievements.where((a) => a['unlocked'] == true).length,
+                          itemCount: allAchievements
+                              .where((a) => a['unlocked'] == true)
+                              .length,
                           itemBuilder: (context, index) {
-                            final unlockedAchievements = allAchievements.where((a) => a['unlocked'] == true).toList();
+                            final unlockedAchievements = allAchievements
+                                .where((a) => a['unlocked'] == true)
+                                .toList();
                             final achievement = unlockedAchievements[index];
                             return buildAchievement(achievement);
                           },
@@ -223,11 +236,12 @@ class _GamificationScreenState extends State<GamificationScreen> {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const LeaderboardScreen()),
+                            MaterialPageRoute(
+                                builder: (_) => const LeaderboardScreen()),
                           );
                         },
                         icon: const Icon(Icons.leaderboard),
-                        label: const Text("View Leaderboard"),
+                        label: Text(l10n.gamificationLeaderboard),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.secondary,
                           foregroundColor: colorScheme.onSecondary,
@@ -273,11 +287,13 @@ class _GamificationScreenState extends State<GamificationScreen> {
           children: [
             Expanded(
               child: Text(
-                achievement['title'] ?? 'Unnamed Achievement',
+                achievement['title'] ??
+                    AppLocalizations.of(context)!
+                        .gamificationUnnamedAchievement,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                 fontWeight: FontWeight.w500,
-                 color: Theme.of(context).colorScheme.onSurface,
-                ),
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
               ),
             ),
             Container(

@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * RBAC tests for WebSocketController.
- *
+ * <p>
  * Tests that the defense-in-depth resolveCurrentUser() calls on /init, /register-user,
  * /call-invitation, and /sms-notification throw RuntimeException when no authenticated
  * user is present. Also tests the existing role-based checks on other endpoints.

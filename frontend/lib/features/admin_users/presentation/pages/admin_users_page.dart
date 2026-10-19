@@ -258,9 +258,8 @@ class _RoleChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: isAdmin
-            ? scheme.primaryContainer
-            : scheme.surfaceContainerHighest,
+        color:
+            isAdmin ? scheme.primaryContainer : scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

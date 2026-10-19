@@ -66,7 +66,7 @@ class ShortcutSearchDelegate extends SearchDelegate<void> {
         return ListTile(
           leading: Icon(d.icon),
           title: Text(d.label),
-         // subtitle: Text(resolved, maxLines: 1, overflow: TextOverflow.ellipsis),
+          // subtitle: Text(resolved, maxLines: 1, overflow: TextOverflow.ellipsis),
           trailing: allowPinToggle && !isActive
               ? const Icon(Icons.push_pin_outlined, size: 18)
               : null,

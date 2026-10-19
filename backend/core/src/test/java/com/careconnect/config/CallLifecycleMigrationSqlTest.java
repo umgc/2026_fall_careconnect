@@ -1,12 +1,15 @@
 package com.careconnect.config;
 
 import java.nio.charset.StandardCharsets;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Static contract for the recoverable call-termination production schema. */
+/**
+ * Static contract for the recoverable call-termination production schema.
+ */
 class CallLifecycleMigrationSqlTest {
 
     @Test

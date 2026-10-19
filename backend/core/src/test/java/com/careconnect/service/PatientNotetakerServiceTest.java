@@ -33,13 +33,20 @@ import static org.mockito.Mockito.*;
 
 class PatientNotetakerServiceTest {
 
-    @Mock private PatientNoteRepository patientNoteRepository;
-    @Mock private PatientNotetakerConfigRepository patientNotetakerConfigRepository;
-    @Mock private PatientService patientService;
-    @Mock private AIChatService aiChatService;
-    @Mock private TaskServiceV2 taskService;
-    @Mock private IndexingEventEmitter indexingEventEmitter;
-    @Mock private RetrievalIndexService retrievalIndexService;
+    @Mock
+    private PatientNoteRepository patientNoteRepository;
+    @Mock
+    private PatientNotetakerConfigRepository patientNotetakerConfigRepository;
+    @Mock
+    private PatientService patientService;
+    @Mock
+    private AIChatService aiChatService;
+    @Mock
+    private TaskServiceV2 taskService;
+    @Mock
+    private IndexingEventEmitter indexingEventEmitter;
+    @Mock
+    private RetrievalIndexService retrievalIndexService;
 
     private PatientNotetakerService service;
 

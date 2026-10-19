@@ -29,16 +29,14 @@ class PaymentSection extends StatelessWidget {
     final isPaid = value.paymentStatus == PaymentStatus.paid;
 
     // Flags for online card and QR behavior
-    final hasQrDataPreferred =
-        (refs.qrCodeUrl?.trim().isNotEmpty ??
+    final hasQrDataPreferred = (refs.qrCodeUrl?.trim().isNotEmpty ??
         false); // use this first if present
     final hasPaymentLink =
         (refs.paymentLink?.trim().isNotEmpty ?? false); // fallback for QR
     final canOpenPaymentLink = _isHttpUrl(
       refs.paymentLink,
     ); // only show button for http(s)
-    final showOnlineCard =
-        methodsSet.contains(kMethodOnline) ||
+    final showOnlineCard = methodsSet.contains(kMethodOnline) ||
         hasQrDataPreferred ||
         hasPaymentLink;
 
@@ -109,11 +107,11 @@ class PaymentSection extends StatelessWidget {
                               planEnabled: result.planEnabled,
                               planDurationMonths: result.planDurationMonths,
                             );
-                            final updated = await InvoiceService.instance
-                                .recordPayment(
-                                  invoiceId: value.id,
-                                  record: rec,
-                                );
+                            final updated =
+                                await InvoiceService.instance.recordPayment(
+                              invoiceId: value.id,
+                              record: rec,
+                            );
 
                             if (updated != null) {
                               onChanged(updated);
@@ -126,11 +124,10 @@ class PaymentSection extends StatelessWidget {
                               // optimistic fallback if the API fails
                               final newList = [...?value.payments, rec];
                               final newAmounts = _applyPayment(value, result);
-                              final dueLeft =
-                                  (newAmounts.amountDue ??
-                                          newAmounts.total ??
-                                          0)
-                                      .toDouble();
+                              final dueLeft = (newAmounts.amountDue ??
+                                      newAmounts.total ??
+                                      0)
+                                  .toDouble();
                               final newStatus = dueLeft <= 0
                                   ? PaymentStatus.paid
                                   : PaymentStatus.partialPayment;
@@ -263,29 +260,28 @@ class PaymentSection extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white,                
-                              borderRadius: BorderRadius.circular(8),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: QrImageView(
+                            data: refs.qrCodeUrl!.trim(),
+                            version: QrVersions.auto,
+                            size: 140,
+                            gapless: true,
+                            backgroundColor: Colors.white,
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: Colors.black,
                             ),
-                            padding: const EdgeInsets.all(12),   
-                            child: QrImageView(
-                              data: refs.qrCodeUrl!.trim(),      
-                              version: QrVersions.auto,
-                              size: 140,
-                              gapless: true,
-                              backgroundColor: Colors.white,    
-                              dataModuleStyle: const QrDataModuleStyle(
-                                dataModuleShape: QrDataModuleShape.square,
-                                color: Colors.black,            
-                              ),
-                              eyeStyle: const QrEyeStyle(
-                                eyeShape: QrEyeShape.square,
-                                color: Colors.black,
-                              ),
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: Colors.black,
                             ),
-                          )
-                          ,
+                          ),
+                        ),
                         Expanded(
                           child: Text(
                             'Scan this QR code to open the destination URL.',
@@ -305,34 +301,34 @@ class PaymentSection extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,             
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.all(12),   
-                    child: QrImageView(
-                      data: refs.qrCodeUrl!.trim(),     
-                      version: QrVersions.auto,
-                      size: 140,
-                      gapless: true,
-                      backgroundColor: Colors.white,     
-                      dataModuleStyle: const QrDataModuleStyle(
-                        dataModuleShape: QrDataModuleShape.square,
-                        color: Colors.black,            
-                      ),
-                      eyeStyle: const QrEyeStyle(
-                        eyeShape: QrEyeShape.square,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ),
-                  SizedBox( height: 10,),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: QrImageView(
+                            data: refs.qrCodeUrl!.trim(),
+                            version: QrVersions.auto,
+                            size: 140,
+                            gapless: true,
+                            backgroundColor: Colors.white,
+                            dataModuleStyle: const QrDataModuleStyle(
+                              dataModuleShape: QrDataModuleShape.square,
+                              color: Colors.black,
+                            ),
+                            eyeStyle: const QrEyeStyle(
+                              eyeShape: QrEyeShape.square,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          height: 10,
+                        ),
                         Expanded(
                           child: Column(
-                            
-                            crossAxisAlignment: CrossAxisAlignment.start, 
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               if (canOpenPaymentLink)
                                 OutlinedButton.icon(
@@ -450,14 +446,13 @@ class PaymentSection extends StatelessWidget {
                       ),
                     ),
                     onChanged: (v) {
-                      final dst =
-                          (value.checkPayableTo ??
-                                  CheckPayableTo(
-                                    name: '',
-                                    address: '',
-                                    reference: value.invoiceNumber,
-                                  ))
-                              .copyWith(name: v);
+                      final dst = (value.checkPayableTo ??
+                              CheckPayableTo(
+                                name: '',
+                                address: '',
+                                reference: value.invoiceNumber,
+                              ))
+                          .copyWith(name: v);
                       onChanged(value.copyWith(checkPayableTo: dst));
                     },
                   ),
@@ -474,14 +469,13 @@ class PaymentSection extends StatelessWidget {
                       ),
                     ),
                     onChanged: (v) {
-                      final dst =
-                          (value.checkPayableTo ??
-                                  CheckPayableTo(
-                                    name: '',
-                                    address: '',
-                                    reference: value.invoiceNumber,
-                                  ))
-                              .copyWith(address: v);
+                      final dst = (value.checkPayableTo ??
+                              CheckPayableTo(
+                                name: '',
+                                address: '',
+                                reference: value.invoiceNumber,
+                              ))
+                          .copyWith(address: v);
                       onChanged(value.copyWith(checkPayableTo: dst));
                     },
                   ),
@@ -498,14 +492,13 @@ class PaymentSection extends StatelessWidget {
                       ),
                     ),
                     onChanged: (v) {
-                      final dst =
-                          (value.checkPayableTo ??
-                                  CheckPayableTo(
-                                    name: '',
-                                    address: '',
-                                    reference: value.invoiceNumber,
-                                  ))
-                              .copyWith(reference: v);
+                      final dst = (value.checkPayableTo ??
+                              CheckPayableTo(
+                                name: '',
+                                address: '',
+                                reference: value.invoiceNumber,
+                              ))
+                          .copyWith(reference: v);
                       onChanged(value.copyWith(checkPayableTo: dst));
                     },
                   ),
@@ -582,14 +575,12 @@ class PaymentSection extends StatelessWidget {
     final t = s.trim();
     if (t.isEmpty) return false;
     final uri = Uri.tryParse(t);
-    return uri != null;// && (uri.isScheme('http') || uri.isScheme('https'));
+    return uri != null; // && (uri.isScheme('http') || uri.isScheme('https'));
   }
 
   static Future<void> _openUrl(String url) async {
-     final link = url.trim();
-     final normalized = link.startsWith('http')
-                              ? link
-                              : 'https://$link';
+    final link = url.trim();
+    final normalized = link.startsWith('http') ? link : 'https://$link';
     if (await canLaunchUrlString(normalized)) {
       await launchUrlString(normalized, mode: LaunchMode.externalApplication);
     }
@@ -758,7 +749,7 @@ class _RecordPaymentDialogState extends State<_RecordPaymentDialog> {
                     borderRadius: BorderRadius.all(Radius.circular(12)),
                   ),
                 ),
-                items: const [1, 3, 6, 9, 12,24,36]
+                items: const [1, 3, 6, 9, 12, 24, 36]
                     .map(
                       (m) =>
                           DropdownMenuItem(value: m, child: Text('$m months')),

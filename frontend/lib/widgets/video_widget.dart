@@ -1,15 +1,14 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-class VideoWidget extends StatefulWidget{
+class VideoWidget extends StatefulWidget {
   ///TODO: Figure out what a key is in this context and add it.
   const VideoWidget({super.key});
   @override
   State<VideoWidget> createState() => VideoWidgetState();
 }
 
-class VideoWidgetState extends State<VideoWidget>
-{
+class VideoWidgetState extends State<VideoWidget> {
   CameraController? controller;
   Future<void>? controllerFuture;
 
@@ -78,5 +77,4 @@ class VideoWidgetState extends State<VideoWidget>
       },
     );
   }
-
 }

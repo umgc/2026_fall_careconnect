@@ -21,9 +21,23 @@ public class Comment {
     private LocalDateTime createdAt;
 
     // Explicit setters to ensure compilation works if Lombok isn't processing
-    public void setPostId(Long postId) { this.postId = postId; }
-    public void setUserId(Long userId) { this.userId = userId; }
-    public void setUsername(String username) { this.username = username; }
-    public void setContent(String content) { this.content = content; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setPostId(Long postId) {
+        this.postId = postId;
+    }
+
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }

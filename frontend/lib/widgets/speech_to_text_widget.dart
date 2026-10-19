@@ -15,7 +15,12 @@ class SpeechToTextCard extends StatefulWidget {
   final Function(FileUploadResponse)? onUploadSuccess;
   final Function(String)? onUploadError;
 
-  const SpeechToTextCard({super.key, this.allowedCategories, this.patientId, this.onUploadSuccess, this.onUploadError});
+  const SpeechToTextCard(
+      {super.key,
+      this.allowedCategories,
+      this.patientId,
+      this.onUploadSuccess,
+      this.onUploadError});
 
   @override
   State<SpeechToTextCard> createState() => _SpeechToTextCardState();
@@ -31,7 +36,6 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
   @override
   void initState() {
     super.initState();
-    final categories = _availableCategories;
     _speech = stt.SpeechToText();
   }
 
@@ -64,9 +68,7 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
   }
 
   Future<void> _saveRecognizedText() async {
-    if (_recognizedText
-        .trim()
-        .isEmpty) {
+    if (_recognizedText.trim().isEmpty) {
       return;
     }
 
@@ -85,64 +87,58 @@ class _SpeechToTextCardState extends State<SpeechToTextCard> {
     final t = AppLocalizations.of(context)!;
     return Row(
       children: [
-        Icon(Icons.mic, color: Theme
-            .of(context)
-            .colorScheme
-            .primary),
+        Icon(Icons.mic, color: Theme.of(context).colorScheme.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             t.speechtextwidget_speechToText,
-            style: Theme
-                .of(context)
-                .textTheme
-                .headlineSmall,
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
         ),
       ],
     );
   }
 
-String _translateCategory(String name){
+  String _translateCategory(String name) {
     final t = AppLocalizations.of(context)!;
-    switch(name){
-      case('Medical Report'):
+    switch (name) {
+      case ('Medical Report'):
         return t.filemanage_medReport;
-      case('Lab Result'):
+      case ('Lab Result'):
         return t.filemanage_labResult;
-      case('Prescription'):
+      case ('Prescription'):
         return t.filemanage_prescription;
-      case('Clinical Notes'): 
+      case ('Clinical Notes'):
         return t.filemanage_clinicNotes;
-      case('Profile Picture'): 
+      case ('Profile Picture'):
         return t.filemanage_profilePic;
-      case('Emergency Contact'):
+      case ('Emergency Contact'):
         return t.filemanage_emgContact;
-      case('Insurance Document'):
+      case ('Insurance Document'):
         return t.filemanage_insurDocument;
-      case('AI Chat File'):
+      case ('AI Chat File'):
         return t.filemanage_aiChatFile;
-      case('General Document'):
+      case ('General Document'):
         return t.filemanage_genDocument;
-      case('Health Data Import'):
+      case ('Health Data Import'):
         return t.filemanage_hlthDataImport;
-      case('Backup File'):
+      case ('Backup File'):
         return t.filemanage_backupFile;
-      case('Employment Application'):
+      case ('Employment Application'):
         return t.filemanage_empApplication;
-      case('Onboarding Form'):
+      case ('Onboarding Form'):
         return t.filemanage_onboardForm;
-      case('Background Check'):
+      case ('Background Check'):
         return t.filemanage_backgroundCheck;
-      case('Certification / License'):
+      case ('Certification / License'):
         return t.filemanage_cert;
-      case('Reference'):
+      case ('Reference'):
         return t.filemanage_ref;
-      case('Employment Contract'):
+      case ('Employment Contract'):
         return t.filemanage_empContract;
-      case('Tax Form (W-4)'):
+      case ('Tax Form (W-4)'):
         return t.filemanage_taxForm;
-      case('Work Authorization (I-9)'):
+      case ('Work Authorization (I-9)'):
       default:
         return name;
     }
@@ -160,7 +156,8 @@ String _translateCategory(String name){
       items: categories.map((category) {
         return DropdownMenuItem<FileCategory>(
           value: category,
-          child: Text('${category.icon} ${_translateCategory(category.displayName)}'),
+          child: Text(
+              '${category.icon} ${_translateCategory(category.displayName)}'),
         );
       }).toList(),
       onChanged: (value) {
@@ -180,8 +177,8 @@ String _translateCategory(String name){
       // This shows when value is null
       decoration: InputDecoration(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
@@ -199,7 +196,8 @@ String _translateCategory(String name){
     }
   }
 
-  Future<void> _uploadSpeechToTextFileToWeb(String fileName, List<int> fileBytes) async {
+  Future<void> _uploadSpeechToTextFileToWeb(
+      String fileName, List<int> fileBytes) async {
     if (_selectedCategory == null || fileBytes.isEmpty || fileName.isEmpty) {
       return;
     }
@@ -264,91 +262,86 @@ String _translateCategory(String name){
 
   // Speech to Text Capture
   void _resetSpeechToText() {
-    _speech = stt.SpeechToText();  // Re-initialize the instance
+    _speech = stt.SpeechToText(); // Re-initialize the instance
   }
 
-    @override
-    Widget build(BuildContext context) {
-      final t = AppLocalizations.of(context)!;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
-          _buildCategorySelector(),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _fileNameController,
-            decoration: InputDecoration(
-              labelText: t.manualentrywidget_fileName,
-              hintText: t.manualentrywidget_enterFileName,
-            ),
-            validator: (value) {
-              if (value == null || value
-                  .trim()
-                  .isEmpty) {
-                return t.manualentrywidget_fileNameEmpty;
-              }
-              if (!RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(value.trim())) {
-                return t.manualentrywidget_invalidCharacters;
-              }
-              return null;
-            },
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeader(),
+        const SizedBox(height: 16),
+        _buildCategorySelector(),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _fileNameController,
+          decoration: InputDecoration(
+            labelText: t.manualentrywidget_fileName,
+            hintText: t.manualentrywidget_enterFileName,
           ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme
-                    .of(context)
-                    .dividerColor,
-                width: 2,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return t.manualentrywidget_fileNameEmpty;
+            }
+            if (!RegExp(r'^[a-zA-Z0-9_\-]+$').hasMatch(value.trim())) {
+              return t.manualentrywidget_invalidCharacters;
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Theme.of(context).dividerColor,
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(8),
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withOpacity(0.1),
+          ),
+          child: Column(
+            children: [
+              Text(
+                _recognizedText.isNotEmpty
+                    ? '${t.speechtextwidget_recoginizedText}:\n$_recognizedText'
+                    : t.speechtextwidget_tapButtonToStart,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 14),
               ),
-              borderRadius: BorderRadius.circular(8),
-              color: Theme
-                  .of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withOpacity(0.1),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  _recognizedText.isNotEmpty
-                      ? '${t.speechtextwidget_recoginizedText}:\n$_recognizedText'
-                      : t.speechtextwidget_tapButtonToStart,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    if (_selectedCategory == null) {
-                      _selectCategory();
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  if (_selectedCategory == null) {
+                    _selectCategory();
+                  } else {
+                    if (_isListening) {
+                      _stopListening();
                     } else {
-                      if (_isListening) {
-                        _stopListening();
-                      } else {
-                        _startListening();
-                      }
+                      _startListening();
                     }
-                  },
-                  child: Text(
-                      _isListening ? t.speechtextwidget_stopListening : t.speechtextwidget_startListening),
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: _recognizedText.isNotEmpty
-                      ? _saveRecognizedText
-                      : null,
-                  child: Text(t.manualentrywidget_saveToFile),
-                ),
-              ],
-            ),
+                  }
+                },
+                child: Text(_isListening
+                    ? t.speechtextwidget_stopListening
+                    : t.speechtextwidget_startListening),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed:
+                    _recognizedText.isNotEmpty ? _saveRecognizedText : null,
+                child: Text(t.manualentrywidget_saveToFile),
+              ),
+            ],
           ),
-        ],
-      );
-    }
+        ),
+      ],
+    );
   }
+}

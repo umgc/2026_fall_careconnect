@@ -156,7 +156,8 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                 const SizedBox(height: 8),
                 _EmergencyTile(
                   icon: Icons.contact_phone_rounded,
-                  label: 'Call ${widget.emergencyContactName ?? 'Emergency Contact'}',
+                  label:
+                      'Call ${widget.emergencyContactName ?? 'Emergency Contact'}',
                   subtitle: widget.emergencyContactPhone ?? 'No phone on file',
                   enabled: canCallContact,
                   onTap: () async {
@@ -200,11 +201,13 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.12)),
+                  border:
+                      Border.all(color: theme.dividerColor.withOpacity(0.12)),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded, color: cs.error, size: 32),
+                    Icon(Icons.warning_amber_rounded,
+                        color: cs.error, size: 32),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -255,7 +258,8 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
               // Countdown banner
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 decoration: BoxDecoration(
                   color: cs.secondaryContainer,
                   borderRadius: BorderRadius.circular(10),
@@ -302,7 +306,7 @@ class _ActionButton extends StatelessWidget {
   final Color background;
   final Color? border;
   final Color? textColor;
-  final IconData? trailing = null; 
+  final IconData? trailing = null;
 
   const _ActionButton({
     required this.icon,
@@ -335,7 +339,9 @@ class _ActionButton extends StatelessWidget {
             Icon(icon, color: effectiveText),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(label, style: TextStyle(color: effectiveText, fontWeight: FontWeight.w700)),
+              child: Text(label,
+                  style: TextStyle(
+                      color: effectiveText, fontWeight: FontWeight.w700)),
             ),
             if (trailing != null) Icon(trailing, color: effectiveText),
           ],
@@ -368,10 +374,15 @@ class _EmergencyTile extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       tileColor: cs.surface,
       leading: CircleAvatar(
-        backgroundColor: enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
+        backgroundColor:
+            enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
         child: Icon(icon, color: cs.onSecondaryContainer),
       ),
-      title: Text(label, style: Theme.of(context).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(label,
+          style: Theme.of(context)
+              .textTheme
+              .bodyLarge!
+              .copyWith(fontWeight: FontWeight.w600)),
       subtitle: subtitle != null ? Text(subtitle!) : null,
       onTap: enabled ? onTap : null,
     );

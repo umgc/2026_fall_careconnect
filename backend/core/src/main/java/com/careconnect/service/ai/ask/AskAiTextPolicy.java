@@ -4,7 +4,9 @@ import java.text.BreakIterator;
 import java.text.Normalizer;
 import java.util.Locale;
 
-/** Central Unicode policy for text crossing the Ask AI trust boundary. */
+/**
+ * Central Unicode policy for text crossing the Ask AI trust boundary.
+ */
 final class AskAiTextPolicy {
 
     private AskAiTextPolicy() {

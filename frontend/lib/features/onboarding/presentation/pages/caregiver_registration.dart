@@ -75,9 +75,8 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
         validationResult = _validateEmail(value);
         break;
       case 'phone':
-        validationResult = value.isEmpty
-            ? 'Please enter your phone number'
-            : null;
+        validationResult =
+            value.isEmpty ? 'Please enter your phone number' : null;
         break;
       case 'city':
         validationResult = _validateTextOnly(value, 'city');
@@ -216,15 +215,14 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: _name,
-                      decoration: AppTheme.inputDecoration('Full Name')
-                          .copyWith(
-                            helperText: 'Enter your full name (letters only)',
-                            errorText:
-                                _name.text.isNotEmpty &&
-                                    !_fieldValidStatus['name']!
+                      decoration:
+                          AppTheme.inputDecoration('Full Name').copyWith(
+                        helperText: 'Enter your full name (letters only)',
+                        errorText:
+                            _name.text.isNotEmpty && !_fieldValidStatus['name']!
                                 ? _validateTextOnly(_name.text, 'full name')
                                 : null,
-                          ),
+                      ),
                       validator: (value) =>
                           _validateTextOnly(value, 'full name'),
                       textCapitalization: TextCapitalization.words,
@@ -236,8 +234,7 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                       decoration: AppTheme.inputDecoration('Email').copyWith(
                         helperText:
                             'Must contain @ symbol (e.g., name@example.com)',
-                        errorText:
-                            _email.text.isNotEmpty &&
+                        errorText: _email.text.isNotEmpty &&
                                 !_fieldValidStatus['email']!
                             ? _validateEmail(_email.text)
                             : null,
@@ -249,15 +246,14 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _phone,
-                      decoration: AppTheme.inputDecoration('Phone Number')
-                          .copyWith(
-                            helperText: 'Enter a valid phone number',
-                            errorText:
-                                _phone.text.isNotEmpty &&
-                                    !_fieldValidStatus['phone']!
-                                ? 'Please enter your phone number'
-                                : null,
-                          ),
+                      decoration:
+                          AppTheme.inputDecoration('Phone Number').copyWith(
+                        helperText: 'Enter a valid phone number',
+                        errorText: _phone.text.isNotEmpty &&
+                                !_fieldValidStatus['phone']!
+                            ? 'Please enter your phone number'
+                            : null,
+                      ),
                       keyboardType: TextInputType.phone,
                       validator: (value) => value == null || value.isEmpty
                           ? 'Please enter your phone number'
@@ -270,15 +266,14 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                         Expanded(
                           child: TextFormField(
                             controller: _city,
-                            decoration: AppTheme.inputDecoration('City')
-                                .copyWith(
-                                  helperText: 'Text only, no numbers',
-                                  errorText:
-                                      _city.text.isNotEmpty &&
-                                          !_fieldValidStatus['city']!
-                                      ? _validateTextOnly(_city.text, 'city')
-                                      : null,
-                                ),
+                            decoration:
+                                AppTheme.inputDecoration('City').copyWith(
+                              helperText: 'Text only, no numbers',
+                              errorText: _city.text.isNotEmpty &&
+                                      !_fieldValidStatus['city']!
+                                  ? _validateTextOnly(_city.text, 'city')
+                                  : null,
+                            ),
                             validator: (value) =>
                                 _validateTextOnly(value, 'city'),
                             autovalidateMode:
@@ -289,15 +284,14 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                         Expanded(
                           child: TextFormField(
                             controller: _state,
-                            decoration: AppTheme.inputDecoration('State')
-                                .copyWith(
-                                  helperText: 'Text only, no numbers',
-                                  errorText:
-                                      _state.text.isNotEmpty &&
-                                          !_fieldValidStatus['state']!
-                                      ? _validateTextOnly(_state.text, 'state')
-                                      : null,
-                                ),
+                            decoration:
+                                AppTheme.inputDecoration('State').copyWith(
+                              helperText: 'Text only, no numbers',
+                              errorText: _state.text.isNotEmpty &&
+                                      !_fieldValidStatus['state']!
+                                  ? _validateTextOnly(_state.text, 'state')
+                                  : null,
+                            ),
                             validator: (value) =>
                                 _validateTextOnly(value, 'state'),
                             autovalidateMode:
@@ -314,8 +308,7 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                         helperText:
                             'Min. 9 chars with uppercase, lowercase, number, and special char',
                         helperMaxLines: 2,
-                        errorText:
-                            _password.text.isNotEmpty &&
+                        errorText: _password.text.isNotEmpty &&
                                 !_fieldValidStatus['password']!
                             ? _validatePassword(_password.text)
                             : null,
@@ -340,31 +333,30 @@ class _CaregiverRegistrationPageState extends State<CaregiverRegistrationPage> {
                     TextFormField(
                       controller: _confirmPassword,
                       obscureText: _obscureConfirmPassword,
-                      decoration: AppTheme.inputDecoration('Confirm Password')
-                          .copyWith(
-                            helperText: 'Must match password above',
-                            errorText:
-                                _confirmPassword.text.isNotEmpty &&
-                                    !_fieldValidStatus['confirmPassword']!
-                                ? _validateConfirmPassword(
-                                    _confirmPassword.text,
-                                  )
-                                : null,
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscureConfirmPassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: AppTheme.primary,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscureConfirmPassword =
-                                      !_obscureConfirmPassword;
-                                });
-                              },
-                            ),
+                      decoration:
+                          AppTheme.inputDecoration('Confirm Password').copyWith(
+                        helperText: 'Must match password above',
+                        errorText: _confirmPassword.text.isNotEmpty &&
+                                !_fieldValidStatus['confirmPassword']!
+                            ? _validateConfirmPassword(
+                                _confirmPassword.text,
+                              )
+                            : null,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscureConfirmPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: AppTheme.primary,
                           ),
+                          onPressed: () {
+                            setState(() {
+                              _obscureConfirmPassword =
+                                  !_obscureConfirmPassword;
+                            });
+                          },
+                        ),
+                      ),
                       validator: _validateConfirmPassword,
                       autovalidateMode: AutovalidateMode.onUserInteraction,
                     ),

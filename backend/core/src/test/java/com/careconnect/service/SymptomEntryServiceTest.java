@@ -39,7 +39,9 @@ class SymptomEntryServiceTest {
     @InjectMocks
     private SymptomEntryService symptomEntryService;
 
-    /** Shared patient instance reused across tests. */
+    /**
+     * Shared patient instance reused across tests.
+     */
     private Patient patient;
 
     @BeforeEach

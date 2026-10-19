@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:care_connect_app/features/invoices/services/ocr_service.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
- 
+
 class OcrReviewScreen extends StatefulWidget {
   final List<XFile> images;
 
@@ -111,14 +111,17 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
             onPressed: _busy || _images.isEmpty
                 ? null
                 : () => setState(() => _showBoxes = !_showBoxes),
-            icon: Icon(_showBoxes ? Icons.crop_square : Icons.crop_square_outlined),
+            icon: Icon(
+                _showBoxes ? Icons.crop_square : Icons.crop_square_outlined),
           ),
           TextButton(
             onPressed: (_busy || _images.isEmpty) ? null : _finish,
             child: Text(
               'Done',
               style: TextStyle(
-                color: (_busy || _images.isEmpty) ? cs.onSurface.withOpacity(0.38) : cs.onPrimary,
+                color: (_busy || _images.isEmpty)
+                    ? cs.onSurface.withOpacity(0.38)
+                    : cs.onPrimary,
               ),
             ),
           ),
@@ -140,7 +143,8 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.error_outline, color: cs.onErrorContainer),
+                            Icon(Icons.error_outline,
+                                color: cs.onErrorContainer),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -163,11 +167,14 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                         itemBuilder: (context, i) {
                           final img = _images[i];
                           final path = img.path;
-                          final controller = _controllers[path] ?? TextEditingController();
+                          final controller =
+                              _controllers[path] ?? TextEditingController();
                           _controllers[path] = controller;
 
                           final rich = _richByPath[path];
-                          final boxes = rich?.lines.map((e) => e.box).toList() ?? const <BBox>[];
+                          final boxes =
+                              rich?.lines.map((e) => e.box).toList() ??
+                                  const <BBox>[];
                           final qrs = rich?.qrcodes ?? const <OcrQr>[];
 
                           return Card(
@@ -180,12 +187,14 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                                     children: [
                                       AspectRatio(
                                         aspectRatio: 4 / 3,
-                                        child: Image.file(File(path), fit: BoxFit.cover),
+                                        child: Image.file(File(path),
+                                            fit: BoxFit.cover),
                                       ),
                                       if (_showBoxes && boxes.isNotEmpty)
                                         Positioned.fill(
                                           child: IgnorePointer(
-                                            child: CustomPaint(painter: BoxesPainter(boxes)),
+                                            child: CustomPaint(
+                                                painter: BoxesPainter(boxes)),
                                           ),
                                         ),
                                       Positioned(
@@ -196,13 +205,18 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                                           children: [
                                             IconButton(
                                               tooltip: 'Re-run OCR',
-                                              onPressed: _busy ? null : () => _rerunSingle(i),
+                                              onPressed: _busy
+                                                  ? null
+                                                  : () => _rerunSingle(i),
                                               icon: const Icon(Icons.refresh),
                                             ),
                                             IconButton(
                                               tooltip: 'Remove',
-                                              onPressed: _busy ? null : () => _removeAt(i),
-                                              icon: const Icon(Icons.delete_outline),
+                                              onPressed: _busy
+                                                  ? null
+                                                  : () => _removeAt(i),
+                                              icon: const Icon(
+                                                  Icons.delete_outline),
                                             ),
                                           ],
                                         ),
@@ -217,7 +231,9 @@ class _OcrReviewScreenState extends State<OcrReviewScreen> {
                                       children: qrs
                                           .map(
                                             (q) => InputChip(
-                                              label: Text(q.value.isEmpty ? '(empty)' : q.value),
+                                              label: Text(q.value.isEmpty
+                                                  ? '(empty)'
+                                                  : q.value),
                                               onPressed: () {
                                                 // optionally copy or open URLs here
                                               },

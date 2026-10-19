@@ -5,7 +5,20 @@ class PatientReportsScreen extends StatelessWidget {
   const PatientReportsScreen({super.key});
 
   String _getMonthAbbreviation(int month) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return months[month - 1];
   }
 
@@ -17,12 +30,14 @@ class PatientReportsScreen extends StatelessWidget {
     // Generate last 7 days with actual dates
     final now = DateTime.now();
     final moodTrend = List.generate(7, (index) {
-      final date = now.subtract(Duration(days: 6 - index)); // Last 7 days including today
+      final date = now
+          .subtract(Duration(days: 6 - index)); // Last 7 days including today
       final moodValues = [6, 8, 7, 9, 6, 8, 7]; // Your mood values
       return {
         'date': date,
         'mood': moodValues[index],
-        'displayDate': '${_getMonthAbbreviation(date.month)} ${date.day}', // Format: Oct 9
+        'displayDate':
+            '${_getMonthAbbreviation(date.month)} ${date.day}', // Format: Oct 9
       };
     });
 
@@ -37,8 +52,10 @@ class PatientReportsScreen extends StatelessWidget {
     ];
 
     // compute adherence percentage (taken / (taken + missed))
-    final totalTaken = adherenceData.fold<int>(0, (s, d) => s + (d['taken'] as int));
-    final totalMissed = adherenceData.fold<int>(0, (s, d) => s + (d['missed'] as int));
+    final totalTaken =
+        adherenceData.fold<int>(0, (s, d) => s + (d['taken'] as int));
+    final totalMissed =
+        adherenceData.fold<int>(0, (s, d) => s + (d['missed'] as int));
     final adherencePercent = (totalTaken + totalMissed) > 0
         ? (totalTaken / (totalTaken + totalMissed)) * 100
         : 0.0;
@@ -84,8 +101,10 @@ class PatientReportsScreen extends StatelessWidget {
                   verticalInterval: 1,
                 ),
                 titlesData: FlTitlesData(
-                  topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -93,7 +112,8 @@ class PatientReportsScreen extends StatelessWidget {
                       getTitlesWidget: (value, meta) {
                         // show integers 0,2,4,6,8,10 only
                         if (value % 2 == 0) {
-                          return Text(value.toInt().toString(), style: const TextStyle(fontSize: 12));
+                          return Text(value.toInt().toString(),
+                              style: const TextStyle(fontSize: 12));
                         }
                         return const SizedBox.shrink();
                       },
@@ -107,10 +127,12 @@ class PatientReportsScreen extends StatelessWidget {
                       getTitlesWidget: (value, meta) {
                         final i = value.toInt();
                         if (i >= 0 && i < moodTrend.length) {
-                          final displayDate = moodTrend[i]['displayDate'] as String;
+                          final displayDate =
+                              moodTrend[i]['displayDate'] as String;
                           return Padding(
                             padding: const EdgeInsets.only(top: 6.0),
-                            child: Text(displayDate, style: const TextStyle(fontSize: 12)),
+                            child: Text(displayDate,
+                                style: const TextStyle(fontSize: 12)),
                           );
                         }
                         return const SizedBox.shrink();
@@ -118,7 +140,8 @@ class PatientReportsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                borderData: FlBorderData(show: true, border: Border.all(color: Colors.black12)),
+                borderData: FlBorderData(
+                    show: true, border: Border.all(color: Colors.black12)),
                 minX: 0,
                 maxX: (moodTrend.length - 1).toDouble(),
                 minY: 0,
@@ -127,13 +150,15 @@ class PatientReportsScreen extends StatelessWidget {
                   LineChartBarData(
                     spots: List.generate(
                       moodTrend.length,
-                          (i) => FlSpot(i.toDouble(), (moodTrend[i]['mood'] as num).toDouble()),
+                      (i) => FlSpot(i.toDouble(),
+                          (moodTrend[i]['mood'] as num).toDouble()),
                     ),
                     isCurved: true,
                     color: Colors.green,
                     barWidth: 3,
                     dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.08)),
+                    belowBarData: BarAreaData(
+                        show: true, color: Colors.green.withOpacity(0.08)),
                   ),
                 ],
               ),
@@ -155,14 +180,18 @@ class PatientReportsScreen extends StatelessWidget {
                   BarChartData(
                     gridData: FlGridData(show: false),
                     titlesData: FlTitlesData(
-                      topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      topTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles:
+                          AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
                           getTitlesWidget: (value, meta) {
-                            if (value % 1 == 0) { // Show integer values only
-                              return Text(value.toInt().toString(), style: const TextStyle(fontSize: 12));
+                            if (value % 1 == 0) {
+                              // Show integer values only
+                              return Text(value.toInt().toString(),
+                                  style: const TextStyle(fontSize: 12));
                             }
                             return const SizedBox.shrink();
                           },
@@ -179,7 +208,8 @@ class PatientReportsScreen extends StatelessWidget {
                               final day = adherenceData[i]['day'] as String;
                               return Padding(
                                 padding: const EdgeInsets.only(top: 6.0),
-                                child: Text(day, style: const TextStyle(fontSize: 12)),
+                                child: Text(day,
+                                    style: const TextStyle(fontSize: 12)),
                               );
                             }
                             return const SizedBox.shrink();
@@ -190,8 +220,10 @@ class PatientReportsScreen extends StatelessWidget {
                     borderData: FlBorderData(show: false),
                     // create grouped bars (two rods per group)
                     barGroups: List.generate(adherenceData.length, (i) {
-                      final taken = (adherenceData[i]['taken'] as num).toDouble();
-                      final missed = (adherenceData[i]['missed'] as num).toDouble();
+                      final taken =
+                          (adherenceData[i]['taken'] as num).toDouble();
+                      final missed =
+                          (adherenceData[i]['missed'] as num).toDouble();
                       return BarChartGroupData(
                         x: i,
                         groupVertically: false,
@@ -231,10 +263,12 @@ class PatientReportsScreen extends StatelessWidget {
   }
 
   static BoxDecoration _panelDecoration() => BoxDecoration(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
-    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))],
-  );
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3))
+        ],
+      );
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -242,7 +276,8 @@ class _SummaryCard extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _SummaryCard({required this.title, required this.value, required this.color});
+  const _SummaryCard(
+      {required this.title, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -254,9 +289,12 @@ class _SummaryCard extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+        Text(title,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
         const SizedBox(height: 8),
-        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        Text(value,
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: color)),
       ]),
     );
   }
@@ -270,7 +308,11 @@ class _LegendDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+      Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+              color: color, borderRadius: BorderRadius.circular(3))),
       const SizedBox(width: 6),
       Text(label, style: const TextStyle(fontSize: 13)),
     ]);

@@ -37,8 +37,6 @@ build/
 .env.local
 .env.*.local
 *.env
-# Keep .env.example for developers
-!.env.example
 
 ### Firebase Security ###
 firebase-service-account.json

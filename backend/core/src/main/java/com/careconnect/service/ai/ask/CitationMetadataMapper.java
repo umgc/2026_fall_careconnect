@@ -13,7 +13,9 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** Parses untrusted chunk metadata into the small, typed surface used by API citations. */
+/**
+ * Parses untrusted chunk metadata into the small, typed surface used by API citations.
+ */
 @Component
 final class CitationMetadataMapper {
 
@@ -24,30 +26,6 @@ final class CitationMetadataMapper {
 
     CitationMetadataMapper(final ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-    }
-
-    CitationMetadata map(
-            final RetrievalRecordType recordType,
-            final String metadataJson) {
-        final JsonNode source = parseMetadata(metadataJson);
-        final Instant occurredAt = extractOccurredAt(source);
-        return new CitationMetadata(
-                buildTitle(recordType, source, occurredAt),
-                occurredAt,
-                extractConfidence(source),
-                whitelistedMetadata(recordType, source));
-    }
-
-    private JsonNode parseMetadata(final String metadataJson) {
-        if (metadataJson == null || metadataJson.isBlank()) {
-            return objectMapper.createObjectNode();
-        }
-        try {
-            final JsonNode node = objectMapper.readTree(metadataJson);
-            return node != null && node.isObject() ? node : objectMapper.createObjectNode();
-        } catch (final Exception ignored) {
-            return objectMapper.createObjectNode();
-        }
     }
 
     private static Map<String, Object> whitelistedMetadata(
@@ -67,8 +45,8 @@ final class CitationMetadataMapper {
                 copyText(source, metadata, "source", "source");
             }
             case CALL_SUMMARY, SUMMARY_ACTION_ITEM, SUMMARY_APPOINTMENT,
-                    SUMMARY_CARE_INSTRUCTION, SUMMARY_CONDITION, SUMMARY_SOAP,
-                    SUMMARY_CLINICAL_OBSERVATION -> {
+                 SUMMARY_CARE_INSTRUCTION, SUMMARY_CONDITION, SUMMARY_SOAP,
+                 SUMMARY_CLINICAL_OBSERVATION -> {
                 copyText(source, metadata, "callId", "callId");
                 copyText(source, metadata, "episodeType", "episodeType");
             }
@@ -138,6 +116,21 @@ final class CitationMetadataMapper {
             case TASK -> "Task";
             case EVV_RECORD -> "Visit record";
             case VITAL_SIGN -> "Vital sign";
+            case EPIC_CONDITION -> "Epic condition";
+            case EPIC_MEDICATION -> "Epic medication";
+            case EPIC_ALLERGY -> "Epic allergy";
+            case EPIC_OBSERVATION -> "Epic observation";
+            case EPIC_DIAGNOSTIC_REPORT -> "Epic report";
+            case EPIC_IMMUNIZATION -> "Epic immunization";
+            case EPIC_PROCEDURE -> "Epic procedure";
+            case EPIC_DOCUMENT -> "Epic document";
+            case EPIC_ENCOUNTER -> "Epic visit";
+            case EPIC_CARE_PLAN -> "Epic care plan";
+            case EPIC_GOAL -> "Epic goal";
+            case EPIC_CARE_TEAM -> "Epic care team";
+            case EPIC_FAMILY_HISTORY -> "Epic family history";
+            case EPIC_COVERAGE -> "Epic coverage";
+            case EPIC_DEVICE -> "Epic device";
         };
         return occurredAt == null ? label : label + " — " + occurredAt.toString().substring(0, 10);
     }
@@ -201,6 +194,30 @@ final class CitationMetadataMapper {
         }
         final int end = normalized.offsetByCodePoints(0, maxCodePoints - 1);
         return normalized.substring(0, end).stripTrailing() + "…";
+    }
+
+    CitationMetadata map(
+            final RetrievalRecordType recordType,
+            final String metadataJson) {
+        final JsonNode source = parseMetadata(metadataJson);
+        final Instant occurredAt = extractOccurredAt(source);
+        return new CitationMetadata(
+                buildTitle(recordType, source, occurredAt),
+                occurredAt,
+                extractConfidence(source),
+                whitelistedMetadata(recordType, source));
+    }
+
+    private JsonNode parseMetadata(final String metadataJson) {
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            final JsonNode node = objectMapper.readTree(metadataJson);
+            return node != null && node.isObject() ? node : objectMapper.createObjectNode();
+        } catch (final Exception ignored) {
+            return objectMapper.createObjectNode();
+        }
     }
 
     record CitationMetadata(

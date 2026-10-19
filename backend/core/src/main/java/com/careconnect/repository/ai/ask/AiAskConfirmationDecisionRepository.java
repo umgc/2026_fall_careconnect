@@ -10,16 +10,16 @@ public interface AiAskConfirmationDecisionRepository
         extends JpaRepository<AiAskConfirmationDecision, UUID> {
 
     Optional<AiAskConfirmationDecision>
-            findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                    UUID sessionId,
-                    Long patientId,
-                    Long callerUserId,
-                    String decision);
+    findFirstBySessionIdAndPatientIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+            UUID sessionId,
+            Long patientId,
+            Long callerUserId,
+            String decision);
 
     boolean existsByRequestIdAndCallerUserIdAndDecision(
             UUID requestId, Long callerUserId, String decision);
 
     Optional<AiAskConfirmationDecision>
-            findFirstByRequestIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
-                    UUID requestId, Long callerUserId, String decision);
+    findFirstByRequestIdAndCallerUserIdAndDecisionOrderByCreatedAtDesc(
+            UUID requestId, Long callerUserId, String decision);
 }

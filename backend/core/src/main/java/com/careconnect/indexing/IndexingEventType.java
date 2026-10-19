@@ -10,6 +10,8 @@ public final class IndexingEventType {
     public static final String MAILPIECE_INDEXED = "MAILPIECE_INDEXED";
     public static final String CLINICAL_NOTE_INDEXED = "CLINICAL_NOTE_INDEXED";
     public static final String DOCUMENT_INDEXED = "DOCUMENT_INDEXED";
+    /** Epic SMART-on-FHIR resource ready to index (Epic Phase 2). */
+    public static final String EPIC_FHIR_INDEXED = "EPIC_FHIR_INDEXED";
 
     private IndexingEventType() {
     }

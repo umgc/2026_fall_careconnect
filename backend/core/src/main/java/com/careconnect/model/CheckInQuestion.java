@@ -54,7 +54,8 @@ public class CheckInQuestion {
     @Column(name = "score_weight_snapshot", precision = 8, scale = 2)
     private java.math.BigDecimal scoreWeightSnapshot;
 
-    public CheckInQuestion() {}
+    public CheckInQuestion() {
+    }
 
     public CheckInQuestion(
             CheckIn checkIn,
@@ -81,8 +82,8 @@ public class CheckInQuestion {
         this.fieldKeySnapshot = fieldKeySnapshot;
         this.scoreWeightSnapshot = scoreWeightSnapshot;
         this.id = new CheckInQuestionId(
-            checkIn.getId(), 
-            question.getId()
+                checkIn.getId(),
+                question.getId()
         );
     }
 

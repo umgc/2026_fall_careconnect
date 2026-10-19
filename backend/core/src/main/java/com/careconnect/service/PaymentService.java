@@ -9,12 +9,13 @@ import com.careconnect.repository.PaymentRepository;
 import com.careconnect.model.Payment;
 import com.careconnect.repository.SubscriptionRepository;
 import com.careconnect.model.Subscription;
+
 import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
 public class PaymentService {
-	@Autowired
+    @Autowired
     private PaymentRepository paymentRepository;
     @Autowired
     private SubscriptionRepository subscriptionRepository;

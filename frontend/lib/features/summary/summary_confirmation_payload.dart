@@ -21,7 +21,8 @@ class SummaryConfirmationPayload {
 
   factory SummaryConfirmationPayload.fromJson(String raw) {
     if (raw.isEmpty) {
-      return const SummaryConfirmationPayload(headline: 'Unreadable summary item');
+      return const SummaryConfirmationPayload(
+          headline: 'Unreadable summary item');
     }
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
@@ -36,7 +37,8 @@ class SummaryConfirmationPayload {
       );
     } catch (_) {
       // Tolerate a malformed/legacy payload rather than crashing the whole card.
-      return const SummaryConfirmationPayload(headline: 'Unreadable summary item');
+      return const SummaryConfirmationPayload(
+          headline: 'Unreadable summary item');
     }
   }
 

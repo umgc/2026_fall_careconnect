@@ -33,8 +33,14 @@ class ExcelService {
       final Sheet sheet = excel[excel.getDefaultSheet()!];
 
       final List<String> headers = [
-        'Invoice ID', 'Patient', 'Provider', 'Service Date', 'Due Date',
-        'Status', 'Total Amount', 'Amount Due',
+        'Invoice ID',
+        'Patient',
+        'Provider',
+        'Service Date',
+        'Due Date',
+        'Status',
+        'Total Amount',
+        'Amount Due',
       ];
       sheet.appendRow(headers.map((header) => TextCellValue(header)).toList());
 
@@ -43,33 +49,37 @@ class ExcelService {
           TextCellValue(invoice.id),
           TextCellValue(invoice.patient.name),
           TextCellValue(invoice.provider.name),
-          DateCellValue(year: invoice.dates.statementDate.year, month: invoice.dates.statementDate.month, day: invoice.dates.statementDate.day),
-          DateCellValue(year: invoice.dates.dueDate.year, month: invoice.dates.dueDate.month, day: invoice.dates.dueDate.day),
+          DateCellValue(
+              year: invoice.dates.statementDate.year,
+              month: invoice.dates.statementDate.month,
+              day: invoice.dates.statementDate.day),
+          DateCellValue(
+              year: invoice.dates.dueDate.year,
+              month: invoice.dates.dueDate.month,
+              day: invoice.dates.dueDate.day),
           TextCellValue(_formatPaymentStatus(invoice.paymentStatus)),
           DoubleCellValue(invoice.amounts.total ?? 0),
           DoubleCellValue(invoice.amounts.amountDue ?? 0),
         ];
         sheet.appendRow(row);
       }
-      
+
       for (var i = 0; i < headers.length; i++) {
         sheet.setColumnAutoFit(i);
       }
-       final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
-        final String fileName = 'Invoices_Export_$timestamp.xlsx';
+      final timestamp =
+          DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+      final String fileName = 'Invoices_Export_$timestamp.xlsx';
       final fileBytes = excel.save(fileName: fileName);
-      
+
       if (fileBytes != null && !kIsWeb) {
         // --- THIS IS THE FIX ---
         // Create a filename-safe timestamp (e.g., '2025-10-10_15-18-18')
-       
-      
-        
+
         await saveAndOpenFile(fileBytes, fileName, context);
       } else {
         throw Exception('Could not save Excel file.');
       }
-
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error exporting file: $e')),

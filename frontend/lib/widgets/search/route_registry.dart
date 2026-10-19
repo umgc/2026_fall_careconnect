@@ -7,12 +7,13 @@ import 'package:flutter/material.dart';
 // Imports for widgetBuilder entries used below
 
 enum AppRole { PATIENT, CAREGIVER, FAMILY_LINK, ADMIN }
+
 enum NavKind { routePath, routeName, widgetBuilder }
 
 class RouteParam {
-  final String key;           // query or path param name
-  final String label;         // prompt text
-  final bool isPathParam;     // set true if this is a :param in path
+  final String key; // query or path param name
+  final String label; // prompt text
+  final bool isPathParam; // set true if this is a :param in path
   final String? defaultValue;
   const RouteParam({
     required this.key,
@@ -28,14 +29,15 @@ class RouteMeta {
   final List<String> keywords;
 
   final NavKind kind;
-  final String? path;     // use when kind == routePath
+  final String? path; // use when kind == routePath
   final String? routeName; // use when kind == routeName
-  final Widget Function(Map<String, String> args)? builder; // when kind == widgetBuilder
+  final Widget Function(Map<String, String> args)?
+      builder; // when kind == widgetBuilder
 
   final Set<AppRole> roles;
   final List<RouteParam> params;
   final IconData icon;
-  final bool launchable;  // false when page requires complex extras
+  final bool launchable; // false when page requires complex extras
 
   const RouteMeta({
     required this.title,
@@ -90,8 +92,6 @@ final routeCatalog = <RouteMeta>[
     roles: allRoles,
     icon: Icons.home,
   ),
-  
- 
 
   // Dashboards and role flows
   RouteMeta(
@@ -114,14 +114,15 @@ final routeCatalog = <RouteMeta>[
   ),
   RouteMeta(
     title: 'Dashboard Caregiver',
-    description: 'Caregiver dashboard via path with caregiverId and optional patientId',
+    description:
+        'Caregiver dashboard via path with caregiverId and optional patientId',
     keywords: ['dashboard', 'caregiver'],
     kind: NavKind.routePath,
     path: '/dashboard/caregiver',
     roles: {AppRole.CAREGIVER, AppRole.ADMIN},
     icon: Icons.health_and_safety,
   ),
- 
+
   RouteMeta(
     title: 'Home',
     description: 'Redirects to dashboard if logged in',
@@ -172,7 +173,6 @@ final routeCatalog = <RouteMeta>[
     icon: Icons.dynamic_feed,
   ),
 
-  
   RouteMeta(
     title: 'Subscription',
     description: 'Subscription management',
@@ -182,8 +182,7 @@ final routeCatalog = <RouteMeta>[
     roles: allRoles,
     icon: Icons.subscriptions,
   ),
- 
- 
+
   // Password flows
   RouteMeta(
     title: 'Reset Password',
@@ -194,7 +193,7 @@ final routeCatalog = <RouteMeta>[
     roles: allRoles,
     icon: Icons.lock_reset,
   ),
-   
+
   // Gamification
   RouteMeta(
     title: 'Gamification',
@@ -206,7 +205,6 @@ final routeCatalog = <RouteMeta>[
     icon: Icons.sports_esports,
   ),
 
- 
   // Video and calls
   RouteMeta(
     title: 'Video Call',
@@ -218,7 +216,7 @@ final routeCatalog = <RouteMeta>[
     icon: Icons.video_call,
     launchable: false,
   ),
-  
+
   // Wearables and integrations
   RouteMeta(
     title: 'Wearables',
@@ -267,7 +265,7 @@ final routeCatalog = <RouteMeta>[
     roles: staffRoles,
     icon: Icons.verified,
   ),
-    // Profile and settings
+  // Profile and settings
   RouteMeta(
     title: 'Profile Settings',
     description: 'Update profile settings',
@@ -323,7 +321,6 @@ final routeCatalog = <RouteMeta>[
     icon: Icons.notes,
   ),
 
-
   RouteMeta(
     title: 'Notetaker Search',
     description: 'Search notes',
@@ -333,7 +330,7 @@ final routeCatalog = <RouteMeta>[
     roles: staffRoles,
     icon: Icons.search,
   ),
- 
+
   // Calendar and check in
   RouteMeta(
     title: 'Calendar Assistant',
@@ -374,8 +371,6 @@ final routeCatalog = <RouteMeta>[
     icon: Icons.mark_email_read,
   ),
 
- 
- 
   RouteMeta(
     title: 'Invoice Dashboard',
     description: 'Invoices dashboard',
@@ -395,5 +390,4 @@ final routeCatalog = <RouteMeta>[
     roles: allRoles,
     icon: Icons.warning_amber,
   )
-
 ];

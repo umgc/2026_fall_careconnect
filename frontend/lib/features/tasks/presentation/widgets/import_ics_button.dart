@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:care_connect_app/features/tasks/models/task_model.dart';
 import 'package:care_connect_app/features/tasks/utils/recurrence_utils.dart';
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -31,11 +32,10 @@ class _ImportIcsButtonState extends State<ImportIcsButton> {
   int? _selectedPatientId;
 
   Future<void> _pickAndImportFile() async {
+    final t = AppLocalizations.of(context)!;
     if (_selectedPatientId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please select a patient before importing."),
-        ),
+        SnackBar(content: Text(t.calendarSelectPatientBeforeImport)),
       );
       return;
     }
@@ -266,15 +266,16 @@ class _ImportIcsButtonState extends State<ImportIcsButton> {
   }
 
   void _openDialog() {
+    final t = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Import ICS"),
+        title: Text(t.calendarImportIcs),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             DropdownButtonFormField<int>(
-              decoration: const InputDecoration(labelText: "Assign to patient"),
+              decoration: InputDecoration(labelText: t.calendarAssignToPatient),
               initialValue: _selectedPatientId,
               items: widget.patientNames.entries
                   .map(
@@ -288,14 +289,14 @@ class _ImportIcsButtonState extends State<ImportIcsButton> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
+            child: Text(t.cancel),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               _pickAndImportFile();
             },
-            child: const Text("Choose File"),
+            child: Text(t.calendarChooseFile),
           ),
         ],
       ),
@@ -304,12 +305,13 @@ class _ImportIcsButtonState extends State<ImportIcsButton> {
 
   @override
   Widget build(BuildContext context) {
+    final label = AppLocalizations.of(context)!.calendarImportIcs;
     final isCompact = MediaQuery.of(context).size.width < 500;
 
     if (isCompact) {
       // Compact version: icon-only
       return IconButton(
-        tooltip: 'Import ICS',
+        tooltip: label,
         icon: const Icon(Icons.file_upload),
         onPressed: _openDialog,
       );
@@ -319,7 +321,7 @@ class _ImportIcsButtonState extends State<ImportIcsButton> {
     return ElevatedButton.icon(
       onPressed: _openDialog,
       icon: const Icon(Icons.file_upload),
-      label: const Text("Import ICS"),
+      label: Text(label),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         textStyle: const TextStyle(fontSize: 14),

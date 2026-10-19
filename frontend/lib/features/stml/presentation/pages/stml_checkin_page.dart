@@ -190,7 +190,8 @@ class _EmptyCheckInState extends StatelessWidget {
               child: Text(
                 'Nothing to prepare for right now.',
                 textAlign: TextAlign.center,
-                style: AppTheme.bodyLarge.copyWith(color: AppTheme.textSecondary),
+                style:
+                    AppTheme.bodyLarge.copyWith(color: AppTheme.textSecondary),
               ),
             ),
           ),
@@ -218,7 +219,8 @@ class _ConsentDeniedState extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.lock_outline, size: 48, color: AppTheme.textSecondary),
+                  Icon(Icons.lock_outline,
+                      size: 48, color: AppTheme.textSecondary),
                   const SizedBox(height: 16),
                   Text(
                     disclaimer.isNotEmpty
@@ -264,7 +266,8 @@ class _ErrorState extends StatelessWidget {
                     style: const TextStyle(fontSize: 18),
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton(onPressed: onRetry, child: const Text('Try again')),
+                  ElevatedButton(
+                      onPressed: onRetry, child: const Text('Try again')),
                 ],
               ),
             ),

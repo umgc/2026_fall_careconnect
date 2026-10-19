@@ -21,8 +21,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/pages/notetaker_configuration_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
-import 'package:care_connect_app/services/user_role_storage_service.dart'
-    show UserData;
 
 import '../mock_user_provider.dart';
 
@@ -1058,41 +1056,3 @@ void main() {
   });
 }
 
-/// Provider that returns null user (to test the redirect-to-login path).
-class _NullUserProvider extends UserProvider {
-  @override
-  UserSession? get user => null;
-
-  @override
-  bool get isLoggedIn => false;
-
-  @override
-  Future<void> initializeUser() async {}
-
-  @override
-  Future<void> fetchUserDetails() async {}
-
-  @override
-  Future<void> clearUser() async {}
-
-  @override
-  Future<void> updateActivity() async {}
-
-  @override
-  Future<bool> validateSession() async => false;
-
-  @override
-  Future<bool> refreshToken() async => false;
-
-  @override
-  Future<void> updateUserRole(String newRole) async {}
-
-  @override
-  Future<void> updatePatientId(int? patientId) async {}
-
-  @override
-  void updateUserName(String newName) {}
-
-  @override
-  Future<UserData?> getUserDataFromStorage() async => null;
-}

@@ -108,7 +108,9 @@ public class FormSubmissionController {
         }
     }
 
-    /** List the current user's own submissions (most recent first). */
+    /**
+     * List the current user's own submissions (most recent first).
+     */
     @GetMapping("/submissions/mine")
     @Operation(summary = "List my submitted hiring/onboarding forms")
     public ResponseEntity<?> mySubmissions() {

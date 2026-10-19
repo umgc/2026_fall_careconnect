@@ -25,7 +25,7 @@ public class ParameterStoreService {
     /**
      * Retrieves a parameter from SSM Parameter Store
      *
-     * @param parameterName The name of the parameter to retrieve
+     * @param parameterName  The name of the parameter to retrieve
      * @param withDecryption Whether to decrypt the parameter (for SecureString type)
      * @return The parameter value or null if not found
      */

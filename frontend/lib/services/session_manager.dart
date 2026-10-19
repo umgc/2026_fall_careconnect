@@ -31,9 +31,8 @@ class SessionManager {
   Future<void> updateCookies(http.Response response) async {
     final rawCookie = response.headers['set-cookie'];
     if (rawCookie != null && rawCookie.contains('SESSION=')) {
-      _sessionCookie = rawCookie
-          .split(';')
-          .firstWhere((c) => c.startsWith('SESSION='));
+      _sessionCookie =
+          rawCookie.split(';').firstWhere((c) => c.startsWith('SESSION='));
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('session_cookie', _sessionCookie!);
       print("💾 Saved cookie: $_sessionCookie");
@@ -45,9 +44,7 @@ class SessionManager {
   /// Standard GET request with session
   Future<http.Response> get(String url) {
     print('📤 GET $url with headers: $headers');
-    return http
-        .get(Uri.parse(url), headers: headers)
-        .timeout(
+    return http.get(Uri.parse(url), headers: headers).timeout(
           const Duration(seconds: 180),
           onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
         );
@@ -57,9 +54,7 @@ class SessionManager {
   Future<http.Response> post(String url, {Object? body}) {
     try {
       print('📤 POST $url with headers: $headers');
-      return http
-          .post(Uri.parse(url), headers: headers, body: body)
-          .timeout(
+      return http.post(Uri.parse(url), headers: headers, body: body).timeout(
             const Duration(seconds: 180),
             onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
           );
@@ -71,9 +66,7 @@ class SessionManager {
 
   /// Optional PUT method for updates
   Future<http.Response> put(String url, {Object? body}) {
-    return http
-        .put(Uri.parse(url), headers: headers, body: body)
-        .timeout(
+    return http.put(Uri.parse(url), headers: headers, body: body).timeout(
           const Duration(seconds: 180),
           onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
         );

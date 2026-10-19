@@ -18,6 +18,9 @@ import java.util.Locale;
 @Transactional
 public class QuestionServiceImpl implements QuestionService {
 
+    private static final String DEFAULT_FORM_KEY = "virtual-checkin";
+    private static final int DEFAULT_FORM_VERSION = 1;
+    private static final String DEFAULT_SECTION_KEY = "general";
     private final QuestionRepository repo;
 
     public QuestionServiceImpl(QuestionRepository repo) {
@@ -156,8 +159,4 @@ public class QuestionServiceImpl implements QuestionService {
         }
         return normalized;
     }
-
-    private static final String DEFAULT_FORM_KEY = "virtual-checkin";
-    private static final int DEFAULT_FORM_VERSION = 1;
-    private static final String DEFAULT_SECTION_KEY = "general";
 }

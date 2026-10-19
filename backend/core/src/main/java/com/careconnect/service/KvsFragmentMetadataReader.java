@@ -4,10 +4,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Optional;
 
-/** Reads Chime media-stream MKV fragment bytes for {@code meetingId} / {@code attendeeId} tags. */
+/**
+ * Reads Chime media-stream MKV fragment bytes for {@code meetingId} / {@code attendeeId} tags.
+ */
 final class KvsFragmentMetadataReader {
 
-    private KvsFragmentMetadataReader() {}
+    private KvsFragmentMetadataReader() {
+    }
 
     /**
      * Returns the attendee id when the fragment payload contains both the meeting id and one of

@@ -9,6 +9,8 @@ import java.util.List;
 @Repository
 public interface InviteTokenAuditRepository extends JpaRepository<InviteTokenAudit, Long> {
 
-    /** Full lifecycle trail for a single token, newest first. */
+    /**
+     * Full lifecycle trail for a single token, newest first.
+     */
     List<InviteTokenAudit> findByTokenIdOrderByOccurredAtDesc(Long tokenId);
 }

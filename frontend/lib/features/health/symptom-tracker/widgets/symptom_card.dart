@@ -110,11 +110,13 @@ class SymptomCard extends StatelessWidget {
             style: TextStyle(
               color: severity == 'severe'
                   ? Theme.of(context).colorScheme.error
-                  : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
               fontSize: 14,
-              fontWeight: severity == 'severe'
-                  ? FontWeight.w500
-                  : FontWeight.normal,
+              fontWeight:
+                  severity == 'severe' ? FontWeight.w500 : FontWeight.normal,
             ),
           ),
           if (requiresAttention)

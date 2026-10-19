@@ -19,27 +19,26 @@ import java.util.Map;
 /**
  * WBS 3.15.6
  * Writes immutable AI governance events to the audit ledger
- *
+ * <p>
  * How to use it from any AI feature:
  * <pre>
  *   auditLedgerService.logQuery(AuditSourceFeature.ASK_AI, userId, patientId, sessionId,
  *       Map.of("query", queryText));
  * </pre>
- *
+ * <p>
  * Failures are caught / logged and audit recording should not crash the caller
  */
 @Service
 @RequiredArgsConstructor
 public class AiAuditLedgerService {
 
-    private static final Logger log = LoggerFactory.getLogger(AiAuditLedgerService.class);
-
     /**
-     * Max characters kept in each free-text payload value. The ledger stores a 
+     * Max characters kept in each free-text payload value. The ledger stores a
      * small note for traceability to minimize PHI exposure and
      * storage
      */
     static final int MAX_VALUE_LENGTH = 500;
+    private static final Logger log = LoggerFactory.getLogger(AiAuditLedgerService.class);
     private static final String TRUNCATION_SUFFIX = "…[truncated]";
 
     private final AiAuditLedgerRepository repository;
@@ -52,11 +51,11 @@ public class AiAuditLedgerService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AiAuditLedger log(AuditEventType eventType,
-                              AuditSourceFeature sourceFeature,
-                              Long actorUserId,
-                              Long patientId,
-                              String sessionId,
-                              Map<String, Object> payload) {
+                             AuditSourceFeature sourceFeature,
+                             Long actorUserId,
+                             Long patientId,
+                             String sessionId,
+                             Map<String, Object> payload) {
         AiAuditLedger entry = AiAuditLedger.builder()
                 .eventType(eventType.name())
                 .sourceFeature(sourceFeature.name())
@@ -121,22 +120,22 @@ public class AiAuditLedgerService {
     }
 
     public AiAuditLedger logQuery(AuditSourceFeature source, Long actorUserId, Long patientId,
-                                   String sessionId, Map<String, Object> payload) {
+                                  String sessionId, Map<String, Object> payload) {
         return log(AuditEventType.QUERY, source, actorUserId, patientId, sessionId, payload);
     }
 
     public AiAuditLedger logResponse(AuditSourceFeature source, Long actorUserId, Long patientId,
-                                      String sessionId, Map<String, Object> payload) {
+                                     String sessionId, Map<String, Object> payload) {
         return log(AuditEventType.RESPONSE, source, actorUserId, patientId, sessionId, payload);
     }
 
     public AiAuditLedger logValidation(AuditSourceFeature source, Long actorUserId, Long patientId,
-                                        String sessionId, Map<String, Object> payload) {
+                                       String sessionId, Map<String, Object> payload) {
         return log(AuditEventType.VALIDATION, source, actorUserId, patientId, sessionId, payload);
     }
 
     public AiAuditLedger logConfirmation(AuditSourceFeature source, Long actorUserId, Long patientId,
-                                          String sessionId, Map<String, Object> payload) {
+                                         String sessionId, Map<String, Object> payload) {
         return log(AuditEventType.CONFIRMATION, source, actorUserId, patientId, sessionId, payload);
     }
 }

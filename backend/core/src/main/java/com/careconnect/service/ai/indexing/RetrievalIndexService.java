@@ -2,6 +2,10 @@ package com.careconnect.service.ai.indexing;
 
 import com.careconnect.indexing.ClinicalNoteIndexedPayload;
 import com.careconnect.indexing.DocumentIndexedPayload;
+import com.careconnect.indexing.EpicFhirIndexedPayload;
+import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.service.ai.indexing.chunker.EpicResourceChunker;
 import com.careconnect.indexing.MailpieceIndexedPayload;
 import com.careconnect.indexing.SummaryCreatedPayload;
 import com.careconnect.indexing.TranscriptIndexedPayload;
@@ -81,6 +85,8 @@ public class RetrievalIndexService {
     private final MailpieceChunker mailpieceChunker;
     private final ClinicalNoteChunker clinicalNoteChunker;
     private final DocumentChunker documentChunker;
+    private final EpicResourceChunker epicResourceChunker;
+    private final EhrResourceRepository ehrResourceRepository;
     private final ObjectMapper objectMapper;
     private final ChunkEmbeddingService chunkEmbeddingService;
 
@@ -98,6 +104,8 @@ public class RetrievalIndexService {
             final MailpieceChunker mailpieceChunker,
             final ClinicalNoteChunker clinicalNoteChunker,
             final DocumentChunker documentChunker,
+            final EpicResourceChunker epicResourceChunker,
+            final EhrResourceRepository ehrResourceRepository,
             final ObjectMapper objectMapper,
             final ChunkEmbeddingService chunkEmbeddingService) {
         this.callSummaryRepository = callSummaryRepository;
@@ -113,8 +121,57 @@ public class RetrievalIndexService {
         this.mailpieceChunker = mailpieceChunker;
         this.clinicalNoteChunker = clinicalNoteChunker;
         this.documentChunker = documentChunker;
+        this.epicResourceChunker = epicResourceChunker;
+        this.ehrResourceRepository = ehrResourceRepository;
         this.objectMapper = objectMapper;
         this.chunkEmbeddingService = chunkEmbeddingService;
+    }
+
+    private static String firstNonBlank(final String a, final String b) {
+        return a != null && !a.isBlank() ? a : b;
+    }
+
+    private static void assertMailpieceEventMatches(
+            final MailpieceIndexedPayload payload,
+            final UspsMailpiece mailpiece) {
+        if (!Objects.equals(payload.patientId(), mailpiece.getPatientId())
+                || !Objects.equals(payload.sourceKey(), mailpiece.getSourceKey())
+                || !Objects.equals(payload.contentHash(), mailpiece.getContentHash())
+                || !Objects.equals(payload.sender(), mailpiece.getSender())
+                || !Objects.equals(payload.summary(), mailpiece.getSummary())
+                || !Objects.equals(payload.digestDate(), mailpiece.getDigestDate())
+                || !Objects.equals(payload.consentScope(), mailpiece.getConsentScope())) {
+            throw new IndexingDeferredException(
+                    "MAILPIECE_INDEXED event does not match authoritative UspsMailpiece");
+        }
+    }
+
+    private static boolean isVisitSummary(final SummaryCreatedPayload payload) {
+        final String sourceTable = payload.sourceTable();
+        final String episodeType = payload.episodeType();
+        return (sourceTable != null && sourceTable.trim().equalsIgnoreCase("visit_summaries"))
+                || (episodeType != null && episodeType.trim().equalsIgnoreCase("visit"));
+    }
+
+    private static String truncateSourceId(final String sourceRecordId) {
+        if (sourceRecordId == null) {
+            return null;
+        }
+        if (sourceRecordId.length() <= RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH) {
+            return sourceRecordId;
+        }
+        return sourceRecordId.substring(0, RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH);
+    }
+
+    private static String truncateConsent(final String consentScope) {
+        if (consentScope == null || consentScope.isBlank()) {
+            return null;
+        }
+        final String trimmed = consentScope.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.length() <= RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH) {
+            return trimmed;
+        }
+        return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
     }
 
     /**
@@ -200,9 +257,9 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneOffset.UTC)
-                                .toInstant()
-                                .toString());
+                        .atZone(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString());
         final List<RetrievalIndexChunk> existing =
                 chunkRepository.findCallSummaryChunksForReplacement(
                         patientId,
@@ -301,9 +358,9 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneOffset.UTC)
-                                .toInstant()
-                                .toString());
+                        .atZone(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString());
         final List<RetrievalIndexChunk> existing =
                 chunkRepository.findCallSummaryChunksForReplacement(
                         patientId,
@@ -393,9 +450,9 @@ public class RetrievalIndexService {
                 summary.getGeneratedAt() == null
                         ? null
                         : summary.getGeneratedAt()
-                                .atZone(ZoneOffset.UTC)
-                                .toInstant()
-                                .toString());
+                        .atZone(ZoneOffset.UTC)
+                        .toInstant()
+                        .toString());
         if (expectedDrafts.isEmpty()) {
             return SummaryCitationReplayOutcome.RETRYABLE;
         }
@@ -656,6 +713,63 @@ public class RetrievalIndexService {
     }
 
     /**
+     * Indexes one mirrored Epic FHIR resource into {@code retrieval_index_chunk} with
+     * {@code source_kind='epic'} (Epic Phase 2, Findings R2). Mirrors
+     * {@link #ingestClinicalNoteIndexed}: loads the authoritative {@link EhrResource} (never
+     * trusting the payload for patient ownership), hash-checks for idempotent re-index, replaces
+     * prior chunks for the {@code (patientId, sourceRecordId, recordType)} key, and persists.
+     *
+     * @return number of chunks written (0 when skipped or the resource type is not indexable)
+     */
+    @Transactional
+    public int ingestEpicFhir(final EpicFhirIndexedPayload payload) {
+        if (payload == null || payload.ehrResourceId() == null) {
+            throw new IllegalArgumentException("EPIC_FHIR_INDEXED payload requires ehrResourceId");
+        }
+        final EhrResource resource = ehrResourceRepository.findById(payload.ehrResourceId())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "EhrResource not found for id=" + payload.ehrResourceId()));
+        final Long patientId = resource.getUserId();
+        if (patientId == null) {
+            throw new IndexingDeferredException(
+                    "Cannot index ehrResourceId=" + payload.ehrResourceId()
+                            + " — authoritative patientId is required");
+        }
+        if (payload.patientId() != null && !payload.patientId().equals(patientId)) {
+            throw new IndexingDeferredException(
+                    "EPIC_FHIR_INDEXED patient scope does not match authoritative EhrResource");
+        }
+        final RetrievalRecordType recordType =
+                EpicResourceChunker.recordTypeFor(resource.getResourceType()).orElse(null);
+        if (recordType == null) {
+            // Non-indexable resource type (e.g. Patient, Practitioner) — nothing to embed.
+            return 0;
+        }
+        final String sourceRecordId = truncateSourceId("epic-" + resource.getResourceFhirId());
+        final String contentHash = resource.getContentHash();
+
+        chunkRepository.acquireSourceReplacementLock(patientId, recordType.name(), sourceRecordId);
+
+        if (chunkContentUnchanged(patientId, sourceRecordId, recordType, contentHash)) {
+            log.info("Skipping EPIC_FHIR_INDEXED for ehrResourceId={} — contentHash unchanged",
+                    payload.ehrResourceId());
+            return 0;
+        }
+
+        final List<IndexingChunkDraft> drafts =
+                epicResourceChunker.chunk(resource, payload.consentScope());
+        if (drafts.isEmpty()) {
+            log.warn("EPIC_FHIR_INDEXED produced no drafts for ehrResourceId={}; "
+                    + "leaving existing chunks unchanged", payload.ehrResourceId());
+            return 0;
+        }
+
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(
+                patientId, sourceRecordId, recordType.name());
+        return persistDrafts(patientId, sourceRecordId, drafts, "epic");
+    }
+
+    /**
      * Removes all retrieval chunks for a source (note, document, etc.) so deleted
      * records are no longer returned by Ask AI. Call before or as part of soft/hard delete.
      */
@@ -796,25 +910,6 @@ public class RetrievalIndexService {
         return true;
     }
 
-    private static String firstNonBlank(final String a, final String b) {
-        return a != null && !a.isBlank() ? a : b;
-    }
-
-    private static void assertMailpieceEventMatches(
-            final MailpieceIndexedPayload payload,
-            final UspsMailpiece mailpiece) {
-        if (!Objects.equals(payload.patientId(), mailpiece.getPatientId())
-                || !Objects.equals(payload.sourceKey(), mailpiece.getSourceKey())
-                || !Objects.equals(payload.contentHash(), mailpiece.getContentHash())
-                || !Objects.equals(payload.sender(), mailpiece.getSender())
-                || !Objects.equals(payload.summary(), mailpiece.getSummary())
-                || !Objects.equals(payload.digestDate(), mailpiece.getDigestDate())
-                || !Objects.equals(payload.consentScope(), mailpiece.getConsentScope())) {
-            throw new IndexingDeferredException(
-                    "MAILPIECE_INDEXED event does not match authoritative UspsMailpiece");
-        }
-    }
-
     private int persistDrafts(
             final Long patientId,
             final String sourceRecordId,
@@ -910,7 +1005,7 @@ public class RetrievalIndexService {
                     || !SummarySourceKey.CALL_KIND.equals(chunk.getSourceKind())
                     || !contentHash.equals(metadata.path("contentHash").asText(null))
                     || metadata.path("citationMetadataVersion").asInt(-1)
-                            < SummaryChunker.CITATION_METADATA_VERSION
+                    < SummaryChunker.CITATION_METADATA_VERSION
                     || !metadata.path("chunkIndex").isIntegralNumber()) {
                 return false;
             }
@@ -919,8 +1014,8 @@ public class RetrievalIndexService {
             final IndexingChunkDraft expected = expectedBySignature.remove(signature);
             if (expected == null
                     || !Objects.equals(
-                            truncateConsent(chunk.getConsentScope()),
-                            truncateConsent(expected.consentScope()))
+                    truncateConsent(chunk.getConsentScope()),
+                    truncateConsent(expected.consentScope()))
                     || !containsExpectedMetadata(metadata, expected.metadata())) {
                 return false;
             }
@@ -1037,34 +1132,6 @@ public class RetrievalIndexService {
         } catch (final JsonProcessingException ex) {
             throw new IllegalStateException("Failed to serialize chunk metadata", ex);
         }
-    }
-
-    private static boolean isVisitSummary(final SummaryCreatedPayload payload) {
-        final String sourceTable = payload.sourceTable();
-        final String episodeType = payload.episodeType();
-        return (sourceTable != null && sourceTable.trim().equalsIgnoreCase("visit_summaries"))
-                || (episodeType != null && episodeType.trim().equalsIgnoreCase("visit"));
-    }
-
-    private static String truncateSourceId(final String sourceRecordId) {
-        if (sourceRecordId == null) {
-            return null;
-        }
-        if (sourceRecordId.length() <= RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH) {
-            return sourceRecordId;
-        }
-        return sourceRecordId.substring(0, RetrievalIndexSchema.SOURCE_RECORD_ID_MAX_LENGTH);
-    }
-
-    private static String truncateConsent(final String consentScope) {
-        if (consentScope == null || consentScope.isBlank()) {
-            return null;
-        }
-        final String trimmed = consentScope.trim().toLowerCase(Locale.ROOT);
-        if (trimmed.length() <= RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH) {
-            return trimmed;
-        }
-        return trimmed.substring(0, RetrievalIndexSchema.CONSENT_SCOPE_MAX_LENGTH);
     }
 
 }

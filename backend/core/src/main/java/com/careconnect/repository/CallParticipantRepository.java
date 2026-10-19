@@ -1,10 +1,12 @@
 package com.careconnect.repository;
 
 import com.careconnect.model.CallParticipant;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,10 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 public interface CallParticipantRepository extends JpaRepository<CallParticipant, Long> {
     Optional<CallParticipant> findByCallSessionIdAndUserId(Long callSessionId, Long userId);
+
     List<CallParticipant> findByCallSessionId(Long callSessionId);
+
     List<CallParticipant> findByCallSessionIdAndStatus(Long callSessionId, String status);
 
-    /** Resolves opaque Chime externalUserId → durable participant (user id). */
+    /**
+     * Resolves opaque Chime externalUserId → durable participant (user id).
+     */
     Optional<CallParticipant> findFirstByChimeExternalUserId(String chimeExternalUserId);
 
     @Modifying

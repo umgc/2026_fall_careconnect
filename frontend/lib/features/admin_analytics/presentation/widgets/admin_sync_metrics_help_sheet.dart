@@ -40,8 +40,7 @@ class AdminSyncMetricsHelpSheet {
                 const SizedBox(height: 16),
                 _Section(
                   title: 'How to trigger sync events',
-                  body:
-                      '1. Enable offline mode in Settings (if available).\n'
+                  body: '1. Enable offline mode in Settings (if available).\n'
                       '2. Go offline (airplane mode or disable network).\n'
                       '3. Make a change that queues a write (for example, update a record).\n'
                       '4. Come back online — the app auto-syncs and emits telemetry.',

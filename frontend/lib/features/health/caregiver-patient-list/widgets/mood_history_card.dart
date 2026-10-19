@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 /// Row data. You can pass either (score5 + emoji) OR (score10) and it maps.
 class MoodHistoryEntry {
   final DateTime date;
-  final String label;        // "Poor" | "Fair" | "Good" | "Excellent"
-  final int? score5;         // 1..5
-  final int? score10;        // 0..10 (auto-mapped to 1..5)
-  final String? emoji;       // emoji for score5 path
+  final String label; // "Poor" | "Fair" | "Good" | "Excellent"
+  final int? score5; // 1..5
+  final int? score10; // 0..10 (auto-mapped to 1..5)
+  final String? emoji; // emoji for score5 path
   final String? note;
 
   const MoodHistoryEntry({
@@ -52,7 +52,8 @@ class MoodHistorySection extends StatelessWidget {
           // Section header (heart icon + title)
           Row(
             children: [
-              Icon(Icons.favorite_border, color: theme.colorScheme.primary, size: 20),
+              Icon(Icons.favorite_border,
+                  color: theme.colorScheme.primary, size: 20),
               const SizedBox(width: 8),
               Text(
                 title,
@@ -109,7 +110,20 @@ class MoodHistorySection extends StatelessWidget {
   }
 
   static String _fmtDate(DateTime d) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
     return '${months[d.month - 1]} ${d.day}';
   }
 }
@@ -125,12 +139,14 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
-          Icon(Icons.sentiment_neutral, size: 28, color: theme.colorScheme.onSurfaceVariant),
+          Icon(Icons.sentiment_neutral,
+              size: 28, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(height: 8),
           Text(
             message,
@@ -148,7 +164,7 @@ class _EmptyState extends StatelessWidget {
 class _MoodRow extends StatelessWidget {
   final DateTime date;
   final String label;
-  final int score5;     // 1..5
+  final int score5; // 1..5
   final String emoji;
   final String? note;
 
@@ -168,11 +184,15 @@ class _MoodRow extends StatelessWidget {
   }) {
     // Map 0..10 → 1..5 buckets (0-1→1, 2-3→2, 4-5→3, 6-7→4, 8-10→5)
     final s10 = score10.clamp(0, 10);
-    final mapped = (s10 <= 1) ? 1
-        : (s10 <= 3) ? 2
-        : (s10 <= 5) ? 3
-        : (s10 <= 7) ? 4
-        : 5;
+    final mapped = (s10 <= 1)
+        ? 1
+        : (s10 <= 3)
+            ? 2
+            : (s10 <= 5)
+                ? 3
+                : (s10 <= 7)
+                    ? 4
+                    : 5;
 
     return _MoodRow(
       date: date,
@@ -185,7 +205,8 @@ class _MoodRow extends StatelessWidget {
 
   static String _emojiForLabel(String label) {
     final l = label.toLowerCase();
-    if (l.contains('poor') || l.contains('sad') || l.contains('bad')) return '😟';
+    if (l.contains('poor') || l.contains('sad') || l.contains('bad'))
+      return '😟';
     if (l.contains('fair') || l.contains('ok')) return '😐';
     if (l.contains('good')) return '🙂';
     if (l.contains('excellent') || l.contains('great')) return '😄';
@@ -193,7 +214,20 @@ class _MoodRow extends StatelessWidget {
   }
 
   String _fmtDate(DateTime d) {
-    const months = ['Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov']; // keeps Dec visible in your sample order
+    const months = [
+      'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov'
+    ]; // keeps Dec visible in your sample order
     return '${months[(d.month % 12)]} ${d.day}';
   }
 
@@ -206,7 +240,8 @@ class _MoodRow extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -225,7 +260,8 @@ class _MoodRow extends StatelessWidget {
 
           // Emoji circular chip
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.9),
@@ -263,7 +299,8 @@ class _MoodRow extends StatelessWidget {
                     Text(
                       'Score: $score5/5',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.6),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -278,7 +315,8 @@ class _MoodRow extends StatelessWidget {
                   Text(
                     note!,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                      color:
+                          theme.colorScheme.onSurface.withValues(alpha: 0.75),
                     ),
                   ),
                 ],
@@ -328,4 +366,3 @@ class _ProgressLine extends StatelessWidget {
     );
   }
 }
-

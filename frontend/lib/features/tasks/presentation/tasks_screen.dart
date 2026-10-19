@@ -105,59 +105,60 @@ class _TasksScreenState extends State<TasksScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
-          ? Center(child: Text(error!))
-          : ListView.builder(
-              itemCount: tasks.length,
-              itemBuilder: (context, index) {
-                final task = tasks[index];
-                return Card(
-                  margin: const EdgeInsets.all(8.0),
-                  child: ListTile(
-                    title: Text(task.name),
-                    subtitle: Text(task.description),
-                    trailing: Semantics(
-                      label: 'Delete task',
-                      button: true,
-                      child: IconButton(
-                        icon: const Icon(Icons.delete),
-                        tooltip: 'Delete task',
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Task'),
-                              content: const Text(
-                                'Are you sure you want to delete this task?',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).pop(false),
-                                  child: const Text('Cancel'),
+              ? Center(child: Text(error!))
+              : ListView.builder(
+                  itemCount: tasks.length,
+                  itemBuilder: (context, index) {
+                    final task = tasks[index];
+                    return Card(
+                      margin: const EdgeInsets.all(8.0),
+                      child: ListTile(
+                        title: Text(task.name),
+                        subtitle: Text(task.description),
+                        trailing: Semantics(
+                          label: 'Delete task',
+                          button: true,
+                          child: IconButton(
+                            icon: const Icon(Icons.delete),
+                            tooltip: 'Delete task',
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Delete Task'),
+                                  content: const Text(
+                                    'Are you sure you want to delete this task?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      child: const Text('Delete'),
+                                    ),
+                                  ],
                                 ),
-                                TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(context).pop(true),
-                                  child: const Text('Delete'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            final prefs = await SharedPreferences.getInstance();
-                            final userId = prefs.getString('userId');
-                            if (userId != null) {
-                              await ApiService.deleteTask(task.id!);
-                              _fetchTasks();
-                            }
-                          }
-                        },
+                              );
+                              if (confirm == true) {
+                                final prefs =
+                                    await SharedPreferences.getInstance();
+                                final userId = prefs.getString('userId');
+                                if (userId != null) {
+                                  await ApiService.deleteTask(task.id!);
+                                  _fetchTasks();
+                                }
+                              }
+                            },
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              },
-            ),
+                    );
+                  },
+                ),
     );
   }
 }

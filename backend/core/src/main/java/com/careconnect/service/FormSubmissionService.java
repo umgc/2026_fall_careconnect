@@ -56,16 +56,6 @@ public class FormSubmissionService {
     }
 
     /**
-     * Outcome of a submission attempt: either a persisted {@link FormSubmission}
-     * or a non-empty list of human-readable validation errors.
-     */
-    public record SubmissionResult(FormSubmission submission, List<String> errors) {
-        public boolean isValid() {
-            return errors == null || errors.isEmpty();
-        }
-    }
-
-    /**
      * Validate the captured values against the form's schema and, when valid,
      * persist a SUBMITTED {@link FormSubmission} owned by {@code ownerId}.
      *
@@ -122,7 +112,9 @@ public class FormSubmissionService {
         return new SubmissionResult(saved, List.of());
     }
 
-    /** Return a copy of {@code values} with sensitive keys encrypted at rest. */
+    /**
+     * Return a copy of {@code values} with sensitive keys encrypted at rest.
+     */
     private Map<String, Object> encryptSensitive(Map<String, Object> values, Set<String> sensitiveKeys) {
         Map<String, Object> out = new LinkedHashMap<>(values);
         for (String key : sensitiveKeys) {
@@ -165,7 +157,9 @@ public class FormSubmissionService {
         }
     }
 
-    /** Submissions owned by a given subject, most recent first. */
+    /**
+     * Submissions owned by a given subject, most recent first.
+     */
     @Transactional(readOnly = true)
     public List<FormSubmission> listForOwner(Long ownerId, UserFile.OwnerType ownerType) {
         List<FormSubmission> list = submissionRepository.findByOwnerIdAndOwnerType(ownerId, ownerType);
@@ -197,5 +191,15 @@ public class FormSubmissionService {
                         schema.getFormType(), FormDefinition.FormStatus.ACTIVE))
                 .orElseThrow(() -> new IllegalStateException(
                         "No form definition registered for " + schema.getFormType()));
+    }
+
+    /**
+     * Outcome of a submission attempt: either a persisted {@link FormSubmission}
+     * or a non-empty list of human-readable validation errors.
+     */
+    public record SubmissionResult(FormSubmission submission, List<String> errors) {
+        public boolean isValid() {
+            return errors == null || errors.isEmpty();
+        }
     }
 }

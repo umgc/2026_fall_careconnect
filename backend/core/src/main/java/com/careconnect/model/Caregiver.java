@@ -4,7 +4,11 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class Caregiver {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -13,7 +17,7 @@ public class Caregiver {
     private String firstName;
     private String lastName;
     private String dob;
-    
+
     @Column(name = "gender")
     @Enumerated(EnumType.STRING)
     private Gender gender;
@@ -27,7 +31,7 @@ public class Caregiver {
     @Embedded
     private Address address;
 
-    private String caregiverType; 
+    private String caregiverType;
 
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "user_id")

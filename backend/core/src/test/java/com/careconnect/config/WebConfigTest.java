@@ -14,12 +14,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for {@link WebConfig}.
- *
+ * <p>
  * WebConfig is a Spring {@code @Configuration} class that exposes a
  * {@link WebMvcConfigurer} bean responsible for registering MVC-level CORS mappings.
  * These mappings allow the frontend (running on localhost development ports) to make
  * credentialed cross-origin requests to the backend.
- *
+ * <p>
  * In {@code setUp}, the configurer is exercised by invoking
  * {@code addCorsMappings(CorsRegistry)} on a real {@link CorsRegistry} instance.
  * The resulting {@link CorsConfiguration} is extracted from the registry via

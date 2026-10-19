@@ -3,9 +3,9 @@ import 'dart:convert';
 
 /// Model for a Google Places address suggestion
 class AddressSuggestion {
-  final String mainText;      // e.g., "123 Main Street"
+  final String mainText; // e.g., "123 Main Street"
   final String secondaryText; // e.g., "New York, NY"
-  final String placeId;       // For future place details lookup
+  final String placeId; // For future place details lookup
   final String fullDescription; // Complete address text
 
   AddressSuggestion({
@@ -30,9 +30,9 @@ class AddressSuggestion {
 
 /// Model for parsed address components
 class ParsedAddress {
-  final String street;      // Street address (line1)
+  final String street; // Street address (line1)
   final String city;
-  final String state;      // 2-letter state code
+  final String state; // 2-letter state code
   final String zip;
   final String country;
   final double? latitude;
@@ -56,7 +56,7 @@ class ParsedAddress {
     // Simple regex-based parsing (fallback)
     // Format: "street, city, state zip"
     final parts = address.split(',').map((p) => p.trim()).toList();
-    
+
     String street = '';
     String city = '';
     String state = '';
@@ -88,10 +88,6 @@ class ParsedAddress {
 class GooglePlacesService {
   final String? apiKey;
   final String backendBase;
-  static const String _placesSearchUrl =
-      'https://maps.googleapis.com/maps/api/place/autocomplete/json';
-  static const String _placeDetailsUrl =
-      'https://maps.googleapis.com/maps/api/place/details/json';
 
   GooglePlacesService({this.apiKey, required this.backendBase});
 
@@ -113,21 +109,22 @@ class GooglePlacesService {
       );
 
       final response = await http.get(uri).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => http.Response('timeout', 500),
-      );
+            const Duration(seconds: 5),
+            onTimeout: () => http.Response('timeout', 500),
+          );
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final status = json['status'] as String?;
-        
+
         // Check if API key is not configured
         if (status == 'NO_API_KEY') {
           print('⚠️ Google Places API key not configured on backend');
           return [];
         }
-        
-        final predictions = (json['predictions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+        final predictions =
+            (json['predictions'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
         return predictions
             .map((p) => AddressSuggestion(
@@ -162,9 +159,9 @@ class GooglePlacesService {
       );
 
       final response = await http.get(uri).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => http.Response('timeout', 500),
-      );
+            const Duration(seconds: 5),
+            onTimeout: () => http.Response('timeout', 500),
+          );
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -191,8 +188,10 @@ class GooglePlacesService {
     double? lng;
 
     // Parse address components
-    final components = (placeResult['address_components'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    
+    final components = (placeResult['address_components'] as List?)
+            ?.cast<Map<String, dynamic>>() ??
+        [];
+
     for (final component in components) {
       final types = (component['types'] as List?)?.cast<String>() ?? [];
       final longName = component['long_name'] as String? ?? '';

@@ -71,11 +71,13 @@ class _CheckInAnswerFormState extends State<CheckInAnswerForm> {
       decoration: InputDecoration(
         hintText: 'Enter your answer',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
       maxLines: null,
       validator: question.required
-          ? (value) => (value?.isEmpty ?? true) ? 'This field is required' : null
+          ? (value) =>
+              (value?.isEmpty ?? true) ? 'This field is required' : null
           : null,
       onChanged: (value) {
         _answers[questionId] = value;
@@ -214,18 +216,21 @@ class _CheckInAnswerFormState extends State<CheckInAnswerForm> {
       decoration: InputDecoration(
         hintText: 'Enter a number',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       validator: question.required
           ? (value) {
               if (value?.isEmpty ?? true) return 'This field is required';
-              if (num.tryParse(value!) == null) return 'Please enter a valid number';
+              if (num.tryParse(value!) == null)
+                return 'Please enter a valid number';
               return null;
             }
           : (value) {
               if (value?.isNotEmpty ?? false) {
-                if (num.tryParse(value!) == null) return 'Please enter a valid number';
+                if (num.tryParse(value!) == null)
+                  return 'Please enter a valid number';
               }
               return null;
             },
@@ -271,9 +276,10 @@ class _CheckInAnswerFormState extends State<CheckInAnswerForm> {
                       children: [
                         TextSpan(
                           text: question.prompt,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.w500,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
                         ),
                         if (question.required)
                           TextSpan(

@@ -25,13 +25,15 @@ public interface CallSummaryRepository
             String callId, String transcriptSnapshotVersion, String modelConfigVersion);
 
     Optional<CallSummary>
-            findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
-                    String callId,
-                    String transcriptSnapshotVersion,
-                    String modelConfigVersion,
-                    Collection<String> statuses);
+    findByCallIdAndTranscriptSnapshotVersionAndModelConfigVersionAndStatusIn(
+            String callId,
+            String transcriptSnapshotVersion,
+            String modelConfigVersion,
+            Collection<String> statuses);
 
-    /** Serializes creation for an idempotency key, including when no summary row exists yet. */
+    /**
+     * Serializes creation for an idempotency key, including when no summary row exists yet.
+     */
     @Query(
             value = "SELECT pg_advisory_xact_lock(hashtextextended(:lockKey, 0))",
             nativeQuery = true)

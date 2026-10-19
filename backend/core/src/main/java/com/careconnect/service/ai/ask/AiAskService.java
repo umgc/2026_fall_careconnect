@@ -48,6 +48,8 @@ import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Task 5.3 — Ask AI gateway orchestrator.
@@ -82,6 +84,7 @@ public class AiAskService {
     private final AiAskConfirmationService askConfirmationService;
     private final MedicationTimelineAggregator medicationTimelineAggregator;
     private final boolean hitlEnabled;
+    private final int maxGenerationAttempts;
 
     public AiAskService(
             final RetrievalScopeService retrievalScopeService,
@@ -96,7 +99,8 @@ public class AiAskService {
             final AiAskAuditService askAuditService,
             final AiAskConfirmationService askConfirmationService,
             final MedicationTimelineAggregator medicationTimelineAggregator,
-            @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled) {
+            @Value("${careconnect.ai.hitl.enabled:true}") final boolean hitlEnabled,
+            @Value("${careconnect.ai.grounding.max-generation-attempts:3}") final int maxGenerationAttempts) {
         this.retrievalScopeService = retrievalScopeService;
         this.hybridRetrievalService = hybridRetrievalService;
         this.retrievalQueryPlanner = retrievalQueryPlanner;
@@ -110,6 +114,7 @@ public class AiAskService {
         this.askConfirmationService = askConfirmationService;
         this.medicationTimelineAggregator = medicationTimelineAggregator;
         this.hitlEnabled = hitlEnabled;
+        this.maxGenerationAttempts = Math.max(1, maxGenerationAttempts);
     }
 
     /**
@@ -338,14 +343,14 @@ public class AiAskService {
         final long inferenceStarted = System.nanoTime();
         final Optional<GroundedAskLlmService.GroundedLlmResult> llmOpt;
         try {
-            llmOpt = groundedAskLlmService.generate(
-                    context.systemPrompt(), context.userPrompt());
+            llmOpt = generateWithRetry(requestId, context);
         } catch (final GroundedOutputValidationException ex) {
             throw groundingFailure(
                     requestId,
                     auditId,
                     sessionId,
-                    "Generated answer did not satisfy the grounded response contract");
+                    "Generated answer did not satisfy the grounded response contract",
+                    userMessageFor(ex.kind()));
         } catch (final GroundedProviderException ex) {
             final boolean configuration =
                     ex.getKind() == GroundedProviderException.Kind.CONFIGURATION;
@@ -388,33 +393,13 @@ public class AiAskService {
                             context.promptExcerptMap(),
                             context.citationRefMap())
                     || !claimCitations.grounded()) {
-                // Persist only claims that already passed verification — never the failing ones.
-                final String safeDraft = String.join(" ", verifiedClaimTexts);
-                final List<AiCitation> safeCitations = verifiedEvidenceByRef.isEmpty()
-                        ? List.of()
-                        : citationAssembler.assembleWithEvidence(
-                                List.copyOf(verifiedEvidenceByRef.keySet()),
-                                context.citationRefMap(),
-                                verifiedEvidenceByRef).citations();
-                return holdOrGroundingFailure(
-                        caller,
-                        request,
-                        auditSession,
-                        requestId,
-                        auditId,
-                        sessionId,
-                        locale,
-                        sanitizedQuery,
-                        safeDraft,
-                        safeCitations,
-                        List.of("UNSUPPORTED_CLAIM"),
-                        "Generated answer contains an unsupported factual claim",
-                        retrieval,
-                        context,
-                        retrievalLatencyMs,
-                        inferenceLatencyMs,
-                        llm.modelId(),
-                        askStartedNanos);
+                // Skip only the unsupported claim, not the whole answer — a model that
+                // pads its response with one extraneous or imperfectly-cited claim
+                // shouldn't cause an otherwise correctly-grounded claim to be withheld.
+                // If nothing survives this loop, the empty-answer check below still
+                // fails the request closed exactly as before.
+                log.debug("Ask AI dropping unsupported claim requestId={}", requestId);
+                continue;
             }
             verifiedClaimTexts.add(claim.text().trim());
             final String ref = claim.citationRefs().get(0);
@@ -793,20 +778,93 @@ public class AiAskService {
         return excerpt != null
                 && evidence != null
                 && evidence.codePointCount(0, evidence.length()) >= 20
-                && claim.text().equals(evidence)
+                && normalizedTextEquals(claim.text(), evidence)
                 && isCompleteSpan(excerpt, evidence)
                 && GroundingRelevancePolicy.isRelevant(
                         query, evidence, excerpt.text(), refMap.get(ref));
     }
 
+    private static final Pattern GROUNDING_WHITESPACE_RUN = Pattern.compile("\\s+");
+
+    /**
+     * Case/whitespace/quote-style differences are formatting drift, not evidence of an
+     * unsupported claim — different models "quote" a source sentence with varying
+     * fidelity (smart quotes, collapsed whitespace, minor capitalization) even when they
+     * genuinely identified the correct span. Comparing on a canonical form keeps the real
+     * safety property (claim text and evidence must be the same source sentence) without
+     * demanding byte-for-byte reproduction that in practice only one model family reliably
+     * produced (see aws-bedrock-grounding-contract-model-portability-fix.txt).
+     */
+    private static boolean normalizedTextEquals(final String a, final String b) {
+        return canonicalizeForMatch(collapseWhitespace(a))
+                .equals(canonicalizeForMatch(collapseWhitespace(b)));
+    }
+
+    private static String collapseWhitespace(final String value) {
+        return GROUNDING_WHITESPACE_RUN.matcher(value.trim()).replaceAll(" ");
+    }
+
+    /**
+     * Character-for-character substitutions only (quote/dash style + case folding) so the
+     * result stays the same length as the input — callers rely on offsets into the
+     * canonicalized text lining up with offsets into the original excerpt text.
+     */
+    private static String canonicalizeForMatch(final String value) {
+        final StringBuilder out = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            final char c = value.charAt(i);
+            switch (c) {
+                case '‘', '’', 'ʼ' -> out.append('\'');
+                case '“', '”' -> out.append('"');
+                case '–', '—' -> out.append('-');
+                default -> out.append(Character.toLowerCase(c));
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * Locates {@code evidence} inside the excerpt tolerant of whitespace-run, quote-style,
+     * and case drift, without collapsing the haystack itself — so the returned offsets
+     * still index into the real excerpt text for the sentence-boundary checks below.
+     * Returns {@code null} when there is no match, or more than one (ambiguous evidence
+     * is rejected exactly as the prior exact-match implementation rejected duplicates).
+     */
+    private static int[] findLenientSpan(final String haystackOriginal, final String evidence) {
+        final String haystackCanonical = canonicalizeForMatch(haystackOriginal);
+        final String needleCanonical = canonicalizeForMatch(evidence.trim());
+        if (needleCanonical.isEmpty()) {
+            return null;
+        }
+        final String[] tokens = GROUNDING_WHITESPACE_RUN.split(needleCanonical);
+        final StringBuilder patternSource = new StringBuilder();
+        for (int i = 0; i < tokens.length; i++) {
+            if (i > 0) {
+                patternSource.append("\\s+");
+            }
+            patternSource.append(Pattern.quote(tokens[i]));
+        }
+        final Matcher matcher = Pattern.compile(patternSource.toString()).matcher(haystackCanonical);
+        if (!matcher.find()) {
+            return null;
+        }
+        final int start = matcher.start();
+        final int end = matcher.end();
+        if (matcher.find(start + 1)) {
+            return null;
+        }
+        return new int[] {start, end};
+    }
+
     private static boolean isCompleteSpan(
             final RetrievalContextAssembler.PromptExcerpt excerpt,
             final String evidence) {
-        final int start = excerpt.text().indexOf(evidence);
-        if (start < 0 || excerpt.text().indexOf(evidence, start + 1) >= 0) {
+        final int[] span = findLenientSpan(excerpt.text(), evidence);
+        if (span == null) {
             return false;
         }
-        final int end = start + evidence.length();
+        final int start = span[0];
+        final int end = span[1];
         if ((start == 0 && excerpt.startTruncated())
                 || (end == excerpt.text().length() && excerpt.endTruncated())) {
             return false;
@@ -861,12 +919,71 @@ public class AiAskService {
         return excerpt.substring(contextStart, contextEnd).trim();
     }
 
+    /**
+     * The model occasionally returns output that fails structural validation (empty
+     * response, no claims array, malformed JSON) even for well-supported questions —
+     * observed with amazon.nova-lite-v1:0 at roughly a 15-30% per-call rate in manual
+     * testing. This is a format/reliability failure, not a content-safety judgment made
+     * by the model, so retrying is safe: it only re-invokes generation, not the claim
+     * verification loop below, which still fails closed on every attempt regardless of
+     * retry count. Deliberately does NOT retry {@link GroundedProviderException}
+     * (AWS/Bedrock-level failures, e.g. expired credentials, throttling) — those are
+     * unlikely to be fixed by an immediate retry and are surfaced to the caller as-is.
+     */
+    private Optional<GroundedAskLlmService.GroundedLlmResult> generateWithRetry(
+            final UUID requestId, final RetrievalContextAssembler.GroundedContext context) {
+        GroundedOutputValidationException lastFailure = null;
+        for (int attempt = 1; attempt <= maxGenerationAttempts; attempt++) {
+            try {
+                return groundedAskLlmService.generate(
+                        context.systemPrompt(), context.userPrompt());
+            } catch (final GroundedOutputValidationException ex) {
+                lastFailure = ex;
+                log.warn("Grounded Ask AI generation attempt {}/{} failed requestId={} kind={}",
+                        attempt, maxGenerationAttempts, requestId, ex.kind());
+            }
+        }
+        throw lastFailure;
+    }
+
+    private static String userMessageFor(final GroundedOutputValidationException.Kind kind) {
+        return switch (kind) {
+            case EMPTY_RESPONSE -> AskAiSafetyCopy.MODEL_NO_RESPONSE_EN;
+            case MISSING_CLAIMS -> AskAiSafetyCopy.MODEL_INCOMPLETE_RESPONSE_EN;
+            case MALFORMED_RESPONSE -> AskAiSafetyCopy.MODEL_MALFORMED_RESPONSE_EN;
+            // An incomplete individual claim is closest in spirit to a genuine
+            // grounding/content-verification gap rather than a transient technical
+            // hiccup, so it keeps the general "couldn't verify against your records"
+            // copy instead of a "try again" framing.
+            case INCOMPLETE_CLAIM -> AskAiSafetyCopy.UNGROUNDED_EN;
+        };
+    }
+
     private static AskAiGroundingException groundingFailure(
             final UUID requestId,
             final UUID auditId,
             final UUID sessionId,
-            final String message) {
-        return new AskAiGroundingException(requestId, auditId, sessionId, message);
+            final String reason) {
+        return groundingFailure(requestId, auditId, sessionId, reason, AskAiSafetyCopy.UNGROUNDED_EN);
+    }
+
+    private static AskAiGroundingException groundingFailure(
+            final UUID requestId,
+            final UUID auditId,
+            final UUID sessionId,
+            final String reason,
+            final String userMessage) {
+        // `reason` is a developer-facing diagnostic, not shown to callers — the exception
+        // carries a single, natural-language message so clients (including voice/TTS
+        // surfaces) never read a technical string like "did not satisfy the grounded
+        // response contract" back to a patient or caregiver. `userMessage` lets callers
+        // pick copy that's accurate for the specific failure (e.g. "no response from the
+        // model" reads very differently from "couldn't verify this against your records"),
+        // while still defaulting to the general UNGROUNDED_EN copy everywhere that
+        // distinction doesn't apply.
+        log.warn("Ask AI grounding failure requestId={} reason={}", requestId, reason);
+        return new AskAiGroundingException(
+                requestId, auditId, sessionId, userMessage);
     }
 
     private AiAskResponse noRecordsResponse(

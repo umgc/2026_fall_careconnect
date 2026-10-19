@@ -59,8 +59,8 @@ public class TaskControllerV2 {
     /**
      * Constructs a new {@code TaskControllerV2} with the given service.
      *
-     * @param taskService service layer handling business logic for tasks
-     * @param securityUtil utility for resolving the current user
+     * @param taskService          service layer handling business logic for tasks
+     * @param securityUtil         utility for resolving the current user
      * @param authorizationService service for enforcing RBAC
      */
     public TaskControllerV2(TaskServiceV2 taskService, SecurityUtil securityUtil, AuthorizationService authorizationService) {
@@ -92,7 +92,7 @@ public class TaskControllerV2 {
      *
      * @param id task ID
      * @return the matching {@link TaskDtoV2}, or {@code 404 Not Found} if none
-     *         exists
+     * exists
      */
     @GetMapping("/{id}")
     public ResponseEntity<TaskDtoV2> getTaskById(@PathVariable Long id) {
@@ -168,7 +168,7 @@ public class TaskControllerV2 {
      *
      * <p>
      * Example request body:
-     * 
+     *
      * <pre>
      * {
      *   "isComplete": true
@@ -177,7 +177,7 @@ public class TaskControllerV2 {
      *
      * <p>
      * Example cURL:
-     * 
+     *
      * <pre>
      * curl -X PUT "http://localhost:8080/v2/api/tasks/42/complete" \
      *      -H "Content-Type: application/json" \

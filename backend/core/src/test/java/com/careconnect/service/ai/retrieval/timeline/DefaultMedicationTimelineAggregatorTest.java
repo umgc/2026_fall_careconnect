@@ -7,8 +7,10 @@ import com.careconnect.dto.ai.MedicationTimelineEventDto;
 import com.careconnect.service.ai.retrieval.RankedChunk;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.List;
 import java.util.UUID;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

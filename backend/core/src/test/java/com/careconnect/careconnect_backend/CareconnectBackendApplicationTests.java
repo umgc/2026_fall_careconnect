@@ -11,21 +11,21 @@ import static org.mockito.Mockito.*;
 
 class CareconnectBackendApplicationTests {
 
-	@Test
-	void contextLoads() {
-		// Verify the application class is properly annotated for Spring Boot
-		assertThat(CareconnectBackendApplication.class.getAnnotation(SpringBootApplication.class)).isNotNull();
-	}
+    @Test
+    void contextLoads() {
+        // Verify the application class is properly annotated for Spring Boot
+        assertThat(CareconnectBackendApplication.class.getAnnotation(SpringBootApplication.class)).isNotNull();
+    }
 
-	@Test
-	void main_callsSpringApplicationRun() {
-		try (MockedConstruction<SpringApplication> construction =
-				     mockConstruction(SpringApplication.class)) {
+    @Test
+    void main_callsSpringApplicationRun() {
+        try (MockedConstruction<SpringApplication> construction =
+                     mockConstruction(SpringApplication.class)) {
 
-			CareconnectBackendApplication.main(new String[]{});
+            CareconnectBackendApplication.main(new String[]{});
 
-			assertThat(construction.constructed()).hasSize(1);
-			verify(construction.constructed().get(0)).run(new String[]{});
-		}
-	}
+            assertThat(construction.constructed()).hasSize(1);
+            verify(construction.constructed().get(0)).run(new String[]{});
+        }
+    }
 }

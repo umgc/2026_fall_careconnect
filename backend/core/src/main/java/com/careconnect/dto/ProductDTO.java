@@ -11,7 +11,8 @@ import java.util.List;
 @Builder
 
 public record ProductDTO(
-    String id,
-    boolean active,
-    String name
-) {}
+        String id,
+        boolean active,
+        String name
+) {
+}

@@ -40,60 +40,6 @@ public class UspsMailpiecePersistenceService {
         this.atomicPersistenceService = atomicPersistenceService;
     }
 
-    /**
-     * Persist each mailpiece in {@code digest} for the patient linked to {@code userId}.
-     * Skips when {@code userId} is non-numeric or no Patient row exists.
-     *
-     * @return number of mailpieces upserted (including no-op hash matches)
-     */
-    public int persistAndIndex(final String userId, final USPSDigest digest) {
-        if (digest == null || digest.mailpieces() == null || digest.mailpieces().isEmpty()) {
-            return 0;
-        }
-        final Long patientId = resolvePatientId(userId);
-        if (patientId == null) {
-            log.warn("Skipping USPS mailpiece persistence — no patient for userId={}", userId);
-            return 0;
-        }
-
-        int upserted = 0;
-        for (final MailPiece piece : digest.mailpieces()) {
-            if (piece == null) {
-                continue;
-            }
-            final MailpieceNormalizer.NormalizedMailpiece normalized =
-                    normalizer.normalize(piece, digest.digestDate());
-            final String persistedOcrText = mailpieceRepository
-                    .findByPatientIdAndSourceKey(patientId, normalized.sourceKey())
-                    .map(UspsMailpiece::getOcrText)
-                    .orElse(null);
-            final MailpieceImportanceResult classification =
-                    importanceClassifier == null
-                            ? null
-                            : importanceClassifier.classify(
-                                    normalized.sender(), normalized.summary(), persistedOcrText);
-            atomicPersistenceService.persist(
-                    patientId, userId, normalized, classification);
-            upserted++;
-        }
-        log.info("USPS mailpiece persistence upserted={} patientId={} userId={}",
-                upserted, patientId, userId);
-        return upserted;
-    }
-
-    Long resolvePatientId(final String userId) {
-        if (userId == null || userId.isBlank()) {
-            return null;
-        }
-        final String trimmed = userId.trim();
-        try {
-            final long userPk = Long.parseLong(trimmed);
-            return patientRepository.findByUserId(userPk).map(Patient::getId).orElse(null);
-        } catch (final NumberFormatException ex) {
-            return null;
-        }
-    }
-
     static void applyNormalized(
             final UspsMailpiece entity,
             final Long patientId,
@@ -125,5 +71,59 @@ public class UspsMailpiecePersistenceService {
         entity.setImportanceReasoning(result.reasoning());
         entity.setImportanceCategory(result.category());
         entity.setClassifiedAt(result.classifiedAt());
+    }
+
+    /**
+     * Persist each mailpiece in {@code digest} for the patient linked to {@code userId}.
+     * Skips when {@code userId} is non-numeric or no Patient row exists.
+     *
+     * @return number of mailpieces upserted (including no-op hash matches)
+     */
+    public int persistAndIndex(final String userId, final USPSDigest digest) {
+        if (digest == null || digest.mailpieces() == null || digest.mailpieces().isEmpty()) {
+            return 0;
+        }
+        final Long patientId = resolvePatientId(userId);
+        if (patientId == null) {
+            log.warn("Skipping USPS mailpiece persistence — no patient for userId={}", userId);
+            return 0;
+        }
+
+        int upserted = 0;
+        for (final MailPiece piece : digest.mailpieces()) {
+            if (piece == null) {
+                continue;
+            }
+            final MailpieceNormalizer.NormalizedMailpiece normalized =
+                    normalizer.normalize(piece, digest.digestDate());
+            final String persistedOcrText = mailpieceRepository
+                    .findByPatientIdAndSourceKey(patientId, normalized.sourceKey())
+                    .map(UspsMailpiece::getOcrText)
+                    .orElse(null);
+            final MailpieceImportanceResult classification =
+                    importanceClassifier == null
+                            ? null
+                            : importanceClassifier.classify(
+                            normalized.sender(), normalized.summary(), persistedOcrText);
+            atomicPersistenceService.persist(
+                    patientId, userId, normalized, classification);
+            upserted++;
+        }
+        log.info("USPS mailpiece persistence upserted={} patientId={} userId={}",
+                upserted, patientId, userId);
+        return upserted;
+    }
+
+    Long resolvePatientId(final String userId) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        final String trimmed = userId.trim();
+        try {
+            final long userPk = Long.parseLong(trimmed);
+            return patientRepository.findByUserId(userPk).map(Patient::getId).orElse(null);
+        } catch (final NumberFormatException ex) {
+            return null;
+        }
     }
 }

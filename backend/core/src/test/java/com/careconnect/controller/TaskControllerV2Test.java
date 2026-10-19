@@ -186,8 +186,8 @@ class TaskControllerV2Test {
         Mockito.when(taskService.createTask(eq(5L), any(TaskDtoV2.class))).thenReturn(sampleTask);
 
         mockMvc.perform(post("/v2/api/tasks/patient/5")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(sampleTask)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sampleTask)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("Check Blood Pressure")));
 
@@ -222,8 +222,8 @@ class TaskControllerV2Test {
         Mockito.when(taskService.updateTask(eq(1L), any(TaskDtoV2.class))).thenReturn(updated);
 
         mockMvc.perform(put("/v2/api/tasks/1")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(updated)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updated)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.completed", is(true)));
 
@@ -258,8 +258,8 @@ class TaskControllerV2Test {
         Mockito.when(taskService.updateCompletionStatus(1L, true)).thenReturn(updated);
 
         mockMvc.perform(put("/v2/api/tasks/1/complete")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("isComplete", true))))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("isComplete", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.completed", is(true)));
 
@@ -284,7 +284,7 @@ class TaskControllerV2Test {
     @DisplayName("DELETE /v2/api/tasks/{id} should call service and return 204")
     void testDeleteTask() throws Exception {
         mockMvc.perform(delete("/v2/api/tasks/1")
-                .param("deleteSeries", "false"))
+                        .param("deleteSeries", "false"))
                 .andExpect(status().isNoContent());
 
         Mockito.verify(taskService).deleteTask(1L, false);

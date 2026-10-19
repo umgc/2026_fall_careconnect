@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:uuid/uuid.dart';
 import '../features/dashboard/models/patient_model.dart';
@@ -12,10 +11,10 @@ import 'auth_token_manager.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/api_service_offline.dart';
 
-class EvvService { 
+class EvvService {
   static final String _baseUrl = ApiConstants.evv;
   static const String _deviceIdKey = 'evv_device_id';
-  
+
   final http.Client _client = ApiServiceOffline.httpClient;
   final Connectivity _connectivity = Connectivity();
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
@@ -29,8 +28,9 @@ class EvvService {
     final hours = offset.inHours.abs();
     final minutes = offset.inMinutes.abs() % 60;
     final sign = offset.isNegative ? '-' : '+';
-    final timezoneOffset = '$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-    
+    final timezoneOffset =
+        '$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+
     return utc.toIso8601String().replaceAll('Z', timezoneOffset);
   }
 
@@ -49,7 +49,7 @@ class EvvService {
   ];
 
   static const List<String> stateCodes = ['MD', 'DC', 'VA'];
-  
+
   static const List<String> correctionReasonCodes = [
     'TIME_ERROR',
     'LOCATION_ERROR',
@@ -70,16 +70,18 @@ class EvvService {
         'version': '1.0.0',
         'timestamp': DateTime.now().toIso8601String(),
       };
-      
+
       // Try to get basic device info without platform-specific calls
       try {
         final deviceInfo = _deviceInfo;
-        
+
         // Safe platform detection without using Platform.isAndroid/isIOS
         if (Platform.isAndroid) {
           try {
             final androidInfo = await deviceInfo.androidInfo;
+            // ignore: dead_null_aware_expression
             info['deviceModel'] = androidInfo.model ?? 'Unknown Android';
+            // ignore: dead_null_aware_expression
             info['deviceManufacturer'] = androidInfo.manufacturer ?? 'Unknown';
           } catch (e) {
             print('⚠️ Android info failed: $e');
@@ -87,7 +89,9 @@ class EvvService {
         } else if (Platform.isIOS) {
           try {
             final iosInfo = await deviceInfo.iosInfo;
+            // ignore: dead_null_aware_expression
             info['deviceModel'] = iosInfo.model ?? 'Unknown iOS';
+            // ignore: dead_null_aware_expression
             info['deviceName'] = iosInfo.name ?? 'Unknown';
           } catch (e) {
             print('⚠️ iOS info failed: $e');
@@ -97,7 +101,7 @@ class EvvService {
         print('⚠️ Device info collection failed: $e');
         // Continue with basic info
       }
-      
+
       return info;
     } catch (e) {
       print('❌ Device info error: $e');
@@ -115,12 +119,12 @@ class EvvService {
   Future<String> _getDeviceId() async {
     final prefs = await SharedPreferences.getInstance();
     String? deviceId = prefs.getString(_deviceIdKey);
-    
+
     if (deviceId == null) {
       deviceId = _uuid.v4();
       await prefs.setString(_deviceIdKey, deviceId);
     }
-    
+
     return deviceId;
   }
 
@@ -128,40 +132,6 @@ class EvvService {
   Future<bool> _isOnline() async {
     final connectivityResult = await _connectivity.checkConnectivity();
     return connectivityResult != ConnectivityResult.none;
-  }
-
-  // Get current location
-  Future<Map<String, double>?> _getCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        return null;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return null;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        return null;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      return {
-        'lat': position.latitude,
-        'lng': position.longitude,
-      };
-    } catch (e) {
-      print('Error getting location: $e');
-      return null;
-    }
   }
 
   // Get headers with JWT authentication
@@ -173,7 +143,7 @@ class EvvService {
     try {
       // Retrieve stored JWT token
       final jwtToken = await AuthTokenManager.getJwtToken();
-      
+
       if (jwtToken != null && jwtToken.isNotEmpty) {
         headers['Authorization'] = 'Bearer $jwtToken';
         print('✅ EVV Service: JWT token added to headers');
@@ -187,19 +157,18 @@ class EvvService {
     return headers;
   }
 
-
   // Create EVV Record
   Future<EvvRecord> createRecord(EvvRecordRequest request) async {
     final headers = await _getHeaders();
     final deviceId = await _getDeviceId();
     final deviceInfo = await _getDeviceInfo();
-    
+
     // Add device ID to headers for offline tracking
     headers['X-Device-ID'] = deviceId;
-    
+
     final timeInFormatted = _formatDateTimeWithTimezone(request.timeIn);
     final timeOutFormatted = _formatDateTimeWithTimezone(request.timeOut);
-    
+
     print('🔍 EVV Service: Formatted timeIn: $timeInFormatted');
     print('🔍 EVV Service: Formatted timeOut: $timeOutFormatted');
     print('🔍 EVV Service: ScheduledVisitId: ${request.scheduledVisitId}');
@@ -225,16 +194,21 @@ class EvvService {
       'stateCode': request.stateCode,
       'deviceInfo': deviceInfo,
       'scheduledVisitId': request.scheduledVisitId,
-      if (request.checkinNoGpsReason != null) 'checkinNoGpsReason': request.checkinNoGpsReason,
-      if (request.checkoutNoGpsReason != null) 'checkoutNoGpsReason': request.checkoutNoGpsReason,
-      if (request.checkinAccuracyM != null) 'checkinAccuracyM': request.checkinAccuracyM,
-      if (request.checkoutAccuracyM != null) 'checkoutAccuracyM': request.checkoutAccuracyM,
+      if (request.checkinNoGpsReason != null)
+        'checkinNoGpsReason': request.checkinNoGpsReason,
+      if (request.checkoutNoGpsReason != null)
+        'checkoutNoGpsReason': request.checkoutNoGpsReason,
+      if (request.checkinAccuracyM != null)
+        'checkinAccuracyM': request.checkinAccuracyM,
+      if (request.checkoutAccuracyM != null)
+        'checkoutAccuracyM': request.checkoutAccuracyM,
     });
-    
+
     print('📤 EVV Service: Request body: $body');
 
     final isOnline = await _isOnline();
-    final endpoint = isOnline ? '$_baseUrl/records' : '$_baseUrl/records/offline';
+    final endpoint =
+        isOnline ? '$_baseUrl/records' : '$_baseUrl/records/offline';
 
     final response = await _client.post(
       Uri.parse(endpoint),
@@ -299,11 +273,12 @@ class EvvService {
   Future<List<EvvRecord>> getRecordsByStatus(String status) async {
     final headers = await _getHeaders();
     final queryParams = <String, String>{'status': status};
-    
-    final uri = Uri.parse('$_baseUrl/records').replace(queryParameters: queryParams);
-    
+
+    final uri =
+        Uri.parse('$_baseUrl/records').replace(queryParameters: queryParams);
+
     final response = await _client.get(uri, headers: headers);
-    
+
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as List;
       return data.map((item) => EvvRecord.fromJson(item)).toList();
@@ -316,20 +291,28 @@ class EvvService {
   Future<EvvSearchResult> searchRecords(EvvSearchRequest request) async {
     final headers = await _getHeaders();
     final queryParams = <String, String>{};
-    
-    if (request.patientName != null) queryParams['patientName'] = request.patientName!;
-    if (request.serviceType != null) queryParams['serviceType'] = request.serviceType!;
-    if (request.caregiverId != null) queryParams['caregiverId'] = request.caregiverId.toString();
-    if (request.startDate != null) queryParams['startDate'] = request.startDate!.toIso8601String().split('T')[0];
-    if (request.endDate != null) queryParams['endDate'] = request.endDate!.toIso8601String().split('T')[0];
-    if (request.stateCode != null) queryParams['stateCode'] = request.stateCode!;
+
+    if (request.patientName != null)
+      queryParams['patientName'] = request.patientName!;
+    if (request.serviceType != null)
+      queryParams['serviceType'] = request.serviceType!;
+    if (request.caregiverId != null)
+      queryParams['caregiverId'] = request.caregiverId.toString();
+    if (request.startDate != null)
+      queryParams['startDate'] =
+          request.startDate!.toIso8601String().split('T')[0];
+    if (request.endDate != null)
+      queryParams['endDate'] = request.endDate!.toIso8601String().split('T')[0];
+    if (request.stateCode != null)
+      queryParams['stateCode'] = request.stateCode!;
     if (request.status != null) queryParams['status'] = request.status!;
     queryParams['page'] = request.page.toString();
     queryParams['size'] = request.size.toString();
     queryParams['sortBy'] = request.sortBy;
     queryParams['sortDirection'] = request.sortDirection;
 
-    final uri = Uri.parse('$_baseUrl/records/search').replace(queryParameters: queryParams);
+    final uri = Uri.parse('$_baseUrl/records/search')
+        .replace(queryParameters: queryParams);
 
     final response = await _client.get(uri, headers: headers);
 
@@ -409,7 +392,8 @@ class EvvService {
     final queryParams = <String, String>{};
     if (comment != null) queryParams['comment'] = comment;
 
-    final uri = Uri.parse('$_baseUrl/corrections/$correctionId/approve').replace(queryParameters: queryParams);
+    final uri = Uri.parse('$_baseUrl/corrections/$correctionId/approve')
+        .replace(queryParameters: queryParams);
 
     final response = await _client.post(uri, headers: headers);
 
@@ -451,7 +435,8 @@ class EvvService {
       final data = jsonDecode(response.body) as List;
       return data.map((item) => EvvRecord.fromJson(item)).toList();
     } else {
-      throw Exception('Failed to get HHAExchange eligible records: ${response.body}');
+      throw Exception(
+          'Failed to get HHAExchange eligible records: ${response.body}');
     }
   }
 
@@ -537,12 +522,12 @@ class EvvRecord {
   final DateTime dateOfService;
   final DateTime timeIn;
   final DateTime timeOut;
-  
+
   // Legacy location fields
   final double? locationLat;
   final double? locationLng;
   final String? locationSource;
-  
+
   // New check-in/check-out location fields
   final double? checkinLocationLat;
   final double? checkinLocationLng;
@@ -550,7 +535,7 @@ class EvvRecord {
   final double? checkoutLocationLat;
   final double? checkoutLocationLng;
   final String? checkoutLocationSource;
-  
+
   final String status;
   final String stateCode;
   final Map<String, dynamic>? deviceInfo;
@@ -611,7 +596,8 @@ class EvvRecord {
   factory EvvRecord.fromJson(Map<String, dynamic> json) {
     return EvvRecord(
       id: json['id'],
-      patient: json['patient'] != null ? Patient.fromJson(json['patient']) : null,
+      patient:
+          json['patient'] != null ? Patient.fromJson(json['patient']) : null,
       serviceType: json['serviceType'],
       individualName: json['individualName'],
       caregiverId: json['caregiverId'],
@@ -634,17 +620,23 @@ class EvvRecord {
       deviceInfo: json['deviceInfo'],
       isOffline: json['isOffline'] ?? false,
       syncStatus: json['syncStatus'],
-      lastSyncAttempt: json['lastSyncAttempt'] != null ? DateTime.parse(json['lastSyncAttempt']) : null,
+      lastSyncAttempt: json['lastSyncAttempt'] != null
+          ? DateTime.parse(json['lastSyncAttempt'])
+          : null,
       eorApprovalRequired: json['eorApprovalRequired'] ?? false,
       eorApprovedBy: json['eorApprovedBy'],
-      eorApprovedAt: json['eorApprovedAt'] != null ? DateTime.parse(json['eorApprovedAt']) : null,
+      eorApprovedAt: json['eorApprovedAt'] != null
+          ? DateTime.parse(json['eorApprovedAt'])
+          : null,
       eorApprovalComment: json['eorApprovalComment'],
       isCorrected: json['isCorrected'] ?? false,
       originalRecordId: json['originalRecordId'],
       correctionReasonCode: json['correctionReasonCode'],
       correctionExplanation: json['correctionExplanation'],
       correctedBy: json['correctedBy'],
-      correctedAt: json['correctedAt'] != null ? DateTime.parse(json['correctedAt']) : null,
+      correctedAt: json['correctedAt'] != null
+          ? DateTime.parse(json['correctedAt'])
+          : null,
       createdAt: DateTime.parse(json['createdAt']),
       updatedAt: DateTime.parse(json['updatedAt']),
     );
@@ -693,7 +685,9 @@ class EvvCorrection {
       correctedAt: DateTime.parse(json['correctedAt']),
       approvalRequired: json['approvalRequired'] ?? false,
       approvedBy: json['approvedBy'],
-      approvedAt: json['approvedAt'] != null ? DateTime.parse(json['approvedAt']) : null,
+      approvedAt: json['approvedAt'] != null
+          ? DateTime.parse(json['approvedAt'])
+          : null,
       approvalComment: json['approvalComment'],
       originalValues: json['originalValues'] ?? {},
       correctedValues: json['correctedValues'] ?? {},
@@ -739,7 +733,9 @@ class EvvOfflineQueue {
       deviceId: json['deviceId'],
       queuedAt: DateTime.parse(json['queuedAt']),
       syncAttempts: json['syncAttempts'] ?? 0,
-      lastSyncAttempt: json['lastSyncAttempt'] != null ? DateTime.parse(json['lastSyncAttempt']) : null,
+      lastSyncAttempt: json['lastSyncAttempt'] != null
+          ? DateTime.parse(json['lastSyncAttempt'])
+          : null,
       syncStatus: json['syncStatus'],
       lastError: json['lastError'],
       priority: json['priority'] ?? 1,
@@ -756,12 +752,12 @@ class EvvRecordRequest {
   final DateTime dateOfService;
   final DateTime timeIn;
   final DateTime timeOut;
-  
+
   // Legacy location fields (for backward compatibility)
   final double? locationLat;
   final double? locationLng;
   final String? locationSource;
-  
+
   // New check-in/check-out location fields
   final double? checkinLocationLat;
   final double? checkinLocationLng;
@@ -769,9 +765,9 @@ class EvvRecordRequest {
   final double? checkoutLocationLat;
   final double? checkoutLocationLng;
   final String? checkoutLocationSource;
-  
+
   final String stateCode;
-  
+
   // Optional link to scheduled visit
   final int? scheduledVisitId;
 
@@ -845,8 +841,9 @@ class EvvCorrectionRequest {
       final hours = offset.inHours.abs();
       final minutes = offset.inMinutes.abs() % 60;
       final sign = offset.isNegative ? '-' : '+';
-      final timezoneOffset = '$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-      
+      final timezoneOffset =
+          '$sign${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+
       return utc.toIso8601String().replaceAll('Z', timezoneOffset);
     }
 
@@ -856,7 +853,8 @@ class EvvCorrectionRequest {
       'explanation': explanation,
       if (serviceType != null) 'serviceType': serviceType,
       if (individualName != null) 'individualName': individualName,
-      if (dateOfService != null) 'dateOfService': dateOfService!.toIso8601String().split('T')[0],
+      if (dateOfService != null)
+        'dateOfService': dateOfService!.toIso8601String().split('T')[0],
       if (timeIn != null) 'timeIn': formatDateTimeWithTimezone(timeIn!),
       if (timeOut != null) 'timeOut': formatDateTimeWithTimezone(timeOut!),
       if (locationLat != null) 'locationLat': locationLat,
@@ -917,7 +915,9 @@ class EvvSearchResult {
 
   factory EvvSearchResult.fromJson(Map<String, dynamic> json) {
     return EvvSearchResult(
-      content: (json['content'] as List).map((item) => EvvRecord.fromJson(item)).toList(),
+      content: (json['content'] as List)
+          .map((item) => EvvRecord.fromJson(item))
+          .toList(),
       totalElements: json['totalElements'],
       totalPages: json['totalPages'],
       size: json['size'],
@@ -927,4 +927,3 @@ class EvvSearchResult {
     );
   }
 }
-

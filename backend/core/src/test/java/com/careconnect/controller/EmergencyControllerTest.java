@@ -17,16 +17,14 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class EmergencyControllerTest {
 
-    @Mock
-    private VialOfLifePdfService vialOfLifePdfService;
-
-    @InjectMocks
-    private EmergencyController controller;
+    private static final String EMERGENCY_ID = "VIAL123456";
+    private static final byte[] PDF_BYTES = {37, 80, 68, 70, 45, 49, 46, 52}; // %PDF-1.4
 
     // ── shared constants ──────────────────────────────────────────────────────
-
-    private static final String EMERGENCY_ID  = "VIAL123456";
-    private static final byte[] PDF_BYTES     = {37, 80, 68, 70, 45, 49, 46, 52}; // %PDF-1.4
+    @Mock
+    private VialOfLifePdfService vialOfLifePdfService;
+    @InjectMocks
+    private EmergencyController controller;
 
     // ── GET /{emergencyId}.pdf ────────────────────────────────────────────────
 

@@ -1,11 +1,13 @@
 package com.careconnect.service;
 
 import com.careconnect.model.CallAttendee;
+
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +51,14 @@ public class KvsAttendeeStreamResolver {
         this.registry = registry;
         this.poolStreamDiscoveryService = poolStreamDiscoveryService;
         this.kvsStreamPoolService = kvsStreamPoolService;
+    }
+
+    private static void sleep(final long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -190,14 +200,6 @@ public class KvsAttendeeStreamResolver {
                             + " discovery will continue but streams appear only after audio flows",
                     mediaStreamPipelineId,
                     lastStatus);
-        }
-    }
-
-    private static void sleep(final long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 }

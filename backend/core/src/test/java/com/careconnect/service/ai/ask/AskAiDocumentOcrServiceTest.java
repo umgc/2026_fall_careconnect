@@ -20,9 +20,11 @@ import com.careconnect.repository.UserFileRepository;
 import com.careconnect.repository.ai.ask.AskAiOcrOutboxRepository;
 import com.careconnect.service.S3StorageService;
 import com.careconnect.service.invoice.TextractService;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,12 +38,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ExtendWith(MockitoExtension.class)
 class AskAiDocumentOcrServiceTest {
 
-    @Mock private UserFileRepository userFileRepository;
-    @Mock private AskAiOcrOutboxRepository ocrOutboxRepository;
-    @Mock private IndexingEventEmitter indexingEventEmitter;
-    @Mock private TextractService textractService;
-    @Mock private S3StorageService s3StorageService;
-    @Mock private AskAiDocumentOcrService selfProxy;
+    @Mock
+    private UserFileRepository userFileRepository;
+    @Mock
+    private AskAiOcrOutboxRepository ocrOutboxRepository;
+    @Mock
+    private IndexingEventEmitter indexingEventEmitter;
+    @Mock
+    private TextractService textractService;
+    @Mock
+    private S3StorageService s3StorageService;
+    @Mock
+    private AskAiDocumentOcrService selfProxy;
 
     private AskAiDocumentOcrService service;
     private UserFile userFile;
@@ -62,7 +70,7 @@ class AskAiDocumentOcrServiceTest {
                 .patientId(1L)
                 .fileCategory(UserFile.FileCategory.MEDICAL_RECORD)
                 .storageType(UserFile.StorageType.DATABASE)
-                .fileData(new byte[] {1, 2, 3, 4})
+                .fileData(new byte[]{1, 2, 3, 4})
                 .build();
     }
 
@@ -188,7 +196,7 @@ class AskAiDocumentOcrServiceTest {
         when(ocrOutboxRepository.findByFileId(10L)).thenReturn(Optional.empty());
         when(userFileRepository.findById(10L)).thenReturn(Optional.of(userFile));
         when(userFileRepository.save(any(UserFile.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(s3StorageService.download("ask-ai-docs/scan.pdf")).thenReturn(new byte[] {9, 9});
+        when(s3StorageService.download("ask-ai-docs/scan.pdf")).thenReturn(new byte[]{9, 9});
         when(textractService.analyzeAndGetResult(anyList(), eq("ask-ai-docs/")))
                 .thenReturn(new com.careconnect.dto.chat.AiRequest.AnalysisResult(
                         "S3 OCR text", "ask-ai-docs/x.pdf"));
@@ -473,7 +481,7 @@ class AskAiDocumentOcrServiceTest {
     @Test
     @DisplayName("InMemoryMultipartFile exposes bytes and metadata")
     void inMemoryMultipartFile_exposesContent() throws Exception {
-        final byte[] bytes = new byte[] {9, 8, 7};
+        final byte[] bytes = new byte[]{9, 8, 7};
         final AskAiDocumentOcrService.InMemoryMultipartFile file =
                 new AskAiDocumentOcrService.InMemoryMultipartFile(
                         "file", "scan.png", "image/png", bytes);

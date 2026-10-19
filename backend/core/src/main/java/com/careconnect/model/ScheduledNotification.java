@@ -170,18 +170,6 @@ public class ScheduledNotification {
     @Builder.Default
     @Column(nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
-
-    /**
-     * Callback executed before each entity update.
-     * <p>
-     * Updates the {@code updatedAt} field to the current timestamp.
-     * </p>
-     */
-    @PreUpdate
-    public void setLastUpdate() {
-        this.updatedAt = LocalDateTime.now();
-    }
-
     /**
      * Task that this notification is associated with.
      *
@@ -203,4 +191,15 @@ public class ScheduledNotification {
     @JoinColumn(name = "task_id", nullable = false)
     @JsonBackReference
     private Task task;
+
+    /**
+     * Callback executed before each entity update.
+     * <p>
+     * Updates the {@code updatedAt} field to the current timestamp.
+     * </p>
+     */
+    @PreUpdate
+    public void setLastUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 }

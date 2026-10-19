@@ -48,8 +48,7 @@ class PatientParser {
 
             // Get relationship from link type if available
             if (linkData.containsKey('linkType')) {
-              relationship =
-                  patientData['relationship'] ??
+              relationship = patientData['relationship'] ??
                   linkData['linkType'] ??
                   'Unknown';
             }

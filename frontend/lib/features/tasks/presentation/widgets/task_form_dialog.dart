@@ -190,17 +190,15 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
     }
 
     // Use first (earliest) notification
-    final notif =
-        (t.notifications!..sort((a, b) {
-              final da =
-                  DateTime.tryParse(a.scheduledTime.toIso8601String()) ??
-                  DateTime(1900);
-              final db =
-                  DateTime.tryParse(b.scheduledTime.toIso8601String()) ??
-                  DateTime(1900);
-              return da.compareTo(db);
-            }))
-            .first;
+    final notif = (t.notifications!
+          ..sort((a, b) {
+            final da = DateTime.tryParse(a.scheduledTime.toIso8601String()) ??
+                DateTime(1900);
+            final db = DateTime.tryParse(b.scheduledTime.toIso8601String()) ??
+                DateTime(1900);
+            return da.compareTo(db);
+          }))
+        .first;
 
     if (startDate == null) {
       selectedReminder = "None";
@@ -335,13 +333,12 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                     labelText: "Task Type",
                     border: OutlineInputBorder(),
                   ),
-                  initialValue:
-                      selectedTaskType != null &&
+                  initialValue: selectedTaskType != null &&
                           taskTypes.contains(selectedTaskType)
                       ? selectedTaskType
                       : (taskTypes.contains("general")
-                            ? "general"
-                            : taskTypes.firstOrNull),
+                          ? "general"
+                          : taskTypes.firstOrNull),
                   items: taskTypes.map((type) {
                     final color = manager.getColor(type);
                     final icon = manager.getIcon(type);
@@ -483,7 +480,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                                         }
                                         assignToAll =
                                             selectedPatientIds.length ==
-                                            widget.patients.length;
+                                                widget.patients.length;
                                       });
                                     },
                                   );
@@ -526,31 +523,29 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                   initialDayOfMonth: dayOfMonth,
                   showApplyToSeries: widget.initialTask != null,
                   anchorStartDate: widget.seriesAnchorDate,
-                  onChanged:
-                      ({
-                        bool? isRecurring,
-                        String? recurrenceType,
-                        List<bool>? daysOfWeek,
-                        int? interval,
-                        int? count,
-                        DateTime? startDate,
-                        DateTime? endDate,
-                        int? dayOfMonth,
-                        bool? applyToSeries,
-                      }) {
-                        setState(() {
-                          this.isRecurring = isRecurring ?? false;
-                          this.recurrenceType = recurrenceType;
-                          this.daysOfWeek = daysOfWeek;
-                          this.interval = interval;
-                          this.count = count;
-                          this.startDate = startDate ?? this.startDate;
-                          this.endDate = endDate;
-                          this.dayOfMonth = dayOfMonth;
-                          this.applyToSeries =
-                              applyToSeries ?? this.applyToSeries;
-                        });
-                      },
+                  onChanged: ({
+                    bool? isRecurring,
+                    String? recurrenceType,
+                    List<bool>? daysOfWeek,
+                    int? interval,
+                    int? count,
+                    DateTime? startDate,
+                    DateTime? endDate,
+                    int? dayOfMonth,
+                    bool? applyToSeries,
+                  }) {
+                    setState(() {
+                      this.isRecurring = isRecurring ?? false;
+                      this.recurrenceType = recurrenceType;
+                      this.daysOfWeek = daysOfWeek;
+                      this.interval = interval;
+                      this.count = count;
+                      this.startDate = startDate ?? this.startDate;
+                      this.endDate = endDate;
+                      this.dayOfMonth = dayOfMonth;
+                      this.applyToSeries = applyToSeries ?? this.applyToSeries;
+                    });
+                  },
                 ),
 
                 const SizedBox(height: 20),
@@ -575,8 +570,8 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                                 timeOfDay: selectedTime,
                                 assignedPatientId: widget.isCaregiver
                                     ? (selectedPatientIds.isNotEmpty
-                                          ? selectedPatientIds.first
-                                          : null)
+                                        ? selectedPatientIds.first
+                                        : null)
                                     : widget.defaultPatientId,
                                 isComplete:
                                     widget.initialTask?.isComplete ?? false,
@@ -586,11 +581,10 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                                 interval: interval,
                                 count: count,
                                 daysOfWeek: daysOfWeek,
-                                taskType:
-                                    (selectedTaskType ??
-                                            widget.initialTask?.taskType ??
-                                            "general")
-                                        .toLowerCase(),
+                                taskType: (selectedTaskType ??
+                                        widget.initialTask?.taskType ??
+                                        "general")
+                                    .toLowerCase(),
                               );
 
                               // ---- Notifications ----
@@ -610,9 +604,8 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                                   rawTask.timeOfDay?.hour ?? 0,
                                   rawTask.timeOfDay?.minute ?? 0,
                                 );
-                                final reminderTime = off == null
-                                    ? base
-                                    : base.subtract(off);
+                                final reminderTime =
+                                    off == null ? base : base.subtract(off);
                                 notificationsToSave = [
                                   ScheduledNotification(
                                     scheduledTime: reminderTime,

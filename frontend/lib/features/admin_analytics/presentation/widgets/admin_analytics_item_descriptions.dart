@@ -31,7 +31,8 @@ class AdminAnalyticsItemDescriptions {
 
   static const Map<String, String> _features = {
     'chat_room': 'Anonymous usage of the in-app chat room feature.',
-    'medications_tracker': 'Anonymous usage of the medication tracker workflow.',
+    'medications_tracker':
+        'Anonymous usage of the medication tracker workflow.',
     'evv_start_visit': 'Anonymous usage of the EVV start-visit flow.',
     'video_call': 'Anonymous usage of the hybrid video call feature.',
     'dashboard': 'Anonymous usage of the main dashboard experience.',
@@ -39,10 +40,14 @@ class AdminAnalyticsItemDescriptions {
   };
 
   static const Map<String, String> _errorEndpoints = {
-    '/api/tasks': 'HTTP errors encountered while calling task-related API endpoints.',
-    '/api/users': 'HTTP errors encountered while calling user account API endpoints.',
-    '/api/patients': 'HTTP errors encountered while calling patient API endpoints.',
-    '/api/messages': 'HTTP errors encountered while calling messaging API endpoints.',
+    '/api/tasks':
+        'HTTP errors encountered while calling task-related API endpoints.',
+    '/api/users':
+        'HTTP errors encountered while calling user account API endpoints.',
+    '/api/patients':
+        'HTTP errors encountered while calling patient API endpoints.',
+    '/api/messages':
+        'HTTP errors encountered while calling messaging API endpoints.',
   };
 
   static String event(String eventName) {

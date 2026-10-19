@@ -168,7 +168,8 @@ class PatientHeaderCard extends StatelessWidget {
                         radius: 32,
                         backgroundColor: cs.primary.withValues(alpha: .12),
                         child: Text(
-                          (fullName.isNotEmpty ? fullName[0] : '?').toUpperCase(),
+                          (fullName.isNotEmpty ? fullName[0] : '?')
+                              .toUpperCase(),
                           style: TextStyle(
                             color: cs.primary,
                             fontSize: 22,
@@ -408,8 +409,7 @@ class _CallActions extends StatelessWidget {
     }
 
     final startButton = OutlinedButton.icon(
-      onPressed:
-          onStartVideoCall ??
+      onPressed: onStartVideoCall ??
           () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const _VideoCallScreen()),

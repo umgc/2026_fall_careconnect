@@ -9,7 +9,6 @@ import '../../services/invoice_service.dart';
 import 'widgets/overdue_block.dart';
 import 'widgets/kpi_card.dart';
 import 'widgets/activity_and_charts.dart';
- 
 
 class InvoiceDashboardPage extends StatefulWidget {
   const InvoiceDashboardPage({super.key});
@@ -55,7 +54,8 @@ class _InvoiceDashboardPageState extends State<InvoiceDashboardPage> {
                         clipBehavior: Clip.antiAlias,
                         child: Padding(
                           padding: const EdgeInsets.all(12),
-                          child: OverdueBlock(invoices: invoices, loading: loading),
+                          child: OverdueBlock(
+                              invoices: invoices, loading: loading),
                         ),
                       ),
                     ),
@@ -72,7 +72,8 @@ class _InvoiceDashboardPageState extends State<InvoiceDashboardPage> {
 
               Widget rightGrid({bool scrollable = true}) => Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: maxContentWidth),
+                      constraints:
+                          const BoxConstraints(maxWidth: maxContentWidth),
                       child: scrollable
                           ? SingleChildScrollView(
                               padding: const EdgeInsets.all(16),

@@ -8,7 +8,15 @@ param(
 
     [string]$ImageTag,
 
-    [switch]$RunTests
+    [switch]$RunTests,
+
+    # Omit to leave CareConnectAiEnabled as whatever parameters/{env}-service.json
+    # already has committed; pass "true"/"false" to override it for this deploy.
+    [string]$AiEnabled,
+
+    # Omit to leave AiModel as whatever parameters/{env}-service.json already
+    # has committed; pass a Bedrock model ID to override it for this deploy.
+    [string]$AiModel
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +46,22 @@ $RepoRoot = Split-Path -Parent $ScriptRoot
 $TemplateDir = Join-Path $ScriptRoot "templates"
 $ParameterDir = Join-Path $ScriptRoot "parameters"
 $BackendDir = Join-Path $RepoRoot "backend\core"
+
+# Local, gitignored secret overrides — CARECONNECT_DATABASE_MASTER_PASSWORD and
+# CARECONNECT_JWT_SECRET, used below to override the committed parameter
+# files' REPLACE_ME_... placeholders. See .env.example. Never commit
+# .env.deploy itself; .gitignore's .env* pattern already excludes it.
+$EnvDeployFile = Join-Path $ScriptRoot ".env.deploy"
+if (Test-Path $EnvDeployFile) {
+    Write-Host "Loading deploy secrets from $EnvDeployFile"
+    Get-Content $EnvDeployFile | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $key, $value = $line.Split("=", 2)
+            [Environment]::SetEnvironmentVariable($key.Trim(), $value.Trim(), "Process")
+        }
+    }
+}
 
 $StackPrefix = "careconnect"
 $NetworkingStackName = "$StackPrefix-networking-$Environment"
@@ -635,12 +659,19 @@ Write-Step "Checking prerequisites"
     $ServiceOverrides = @{
         BackendImageUri = $ImageUri
     }
+    if ($AiEnabled) {
+        $ServiceOverrides["CareConnectAiEnabled"] = $AiEnabled
+    }
+    if ($AiModel) {
+        $ServiceOverrides["AiModel"] = $AiModel
+    }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 
-    # Print the final API Gateway endpoint so the frontend or health checks can use it.
+    # Print the final API Gateway endpoints so the frontend or health checks can use them.
     Write-Step "Reading final API endpoint"
     $script:CurrentOperation = "Reading final API endpoint"
     $ApiEndpoint = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "ApiEndpoint").Trim()
+    $WebSocketUrl = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "WebSocketUrl").Trim()
     $script:CurrentStackName = $null
     $script:CurrentOperation = $null
 
@@ -651,6 +682,7 @@ Write-Step "Checking prerequisites"
     Write-Host "Image URI:     $ImageUri"
     Write-Host "API Endpoint:  $ApiEndpoint"
     Write-Host "Health check:  $ApiEndpoint/v1/api/test/health"
+    Write-Host "WebSocket URL: $WebSocketUrl   (frontend WEBSOCKET_GATEWAY_URL)"
     Write-Host "Elapsed time:  $(Get-ElapsedTimeText)"
 }
 catch {

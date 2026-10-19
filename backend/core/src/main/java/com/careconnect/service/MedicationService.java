@@ -206,10 +206,10 @@ public class MedicationService {
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Medication not found with id: " + medicationId));
 
         if (!caregiverPatientLinkService.hasActiveLink(caregiverId, patientId)) {
-            throw new AppException(HttpStatus.FORBIDDEN, 
-                "Caregiver does not have active link to patient");   
+            throw new AppException(HttpStatus.FORBIDDEN,
+                    "Caregiver does not have active link to patient");
         }
-        
+
         if (!medication.getPatient().getId().equals(patientId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Medication does not belong to patient");
         }

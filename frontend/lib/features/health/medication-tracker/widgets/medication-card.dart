@@ -1,8 +1,10 @@
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/telemetry/telemetry.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 
 class MedicationCard extends StatefulWidget {
   final Medication medication;
@@ -69,6 +71,11 @@ class _MedicationCardState extends State<MedicationCard> {
       final response = await ApiService.removePatientMedication(
         patientId,
         widget.medication.id!,
+      );
+
+      unawaited(
+        Telemetry.event('feature.medications.delete_soft',
+            {'statusCode': response.statusCode}),
       );
 
       if (response.statusCode == 204 || response.statusCode == 200) {
@@ -156,24 +163,25 @@ class _MedicationCardState extends State<MedicationCard> {
                     Text(
                       widget.medication.medicationName,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${widget.medication.dosage} • ${widget.medication.frequency}',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
                     ),
                   ],
                 ),
               ),
               // Remove button - only show when medication is active and NOT a prescription
               if (widget.medication.isActive &&
-                  widget.medication.medicationType != MedicationType.PRESCRIPTION)
+                  widget.medication.medicationType !=
+                      MedicationType.PRESCRIPTION)
                 IconButton(
                   onPressed: _isRemoving ? null : _removeMedication,
                   icon: _isRemoving
@@ -217,13 +225,13 @@ class _MedicationCardState extends State<MedicationCard> {
                   Expanded(
                     child: Text(
                       'Medication is pending caregiver approval for removal. '
-                          'Please continue to take medication as proscribed. '
-                          'If medication is causing sever symptoms, please call '
-                          'your care giver immediately.',
+                      'Please continue to take medication as prescribed. '
+                      'If medication is causing severe symptoms, please call '
+                      'your caregiver immediately.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.orange[700],
-                        fontWeight: FontWeight.w500,
-                      ),
+                            color: Colors.orange[700],
+                            fontWeight: FontWeight.w500,
+                          ),
                     ),
                   ),
                 ],
@@ -245,10 +253,10 @@ class _MedicationCardState extends State<MedicationCard> {
               Text(
                 'Next dose: ${widget.medication.nextDose ?? "Not specified"}',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
               ),
             ],
           ),
@@ -266,8 +274,8 @@ class _MedicationCardState extends State<MedicationCard> {
                 child: Text(
                   'Route: ${widget.medication.route}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
                 ),
               ),
             ],
@@ -291,10 +299,10 @@ class _MedicationCardState extends State<MedicationCard> {
                   child: Text(
                     'Prescribed by: ${widget.medication.prescribedBy}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
                   ),
                 ),
               ],
@@ -319,75 +327,17 @@ class _MedicationCardState extends State<MedicationCard> {
                   child: Text(
                     widget.medication.notes!,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                      fontStyle: FontStyle.italic,
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          fontStyle: FontStyle.italic,
+                        ),
                   ),
                 ),
               ],
             ),
           ],
         ],
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(MedicationStatus status) {
-    Color backgroundColor;
-    Color textColor;
-    String text;
-
-    switch (status) {
-      case MedicationStatus.upcoming:
-        backgroundColor = Colors.blue[100]!;
-        textColor = Colors.blue[700]!;
-        text = 'upcoming';
-        break;
-      case MedicationStatus.taken:
-        backgroundColor = Colors.green[100]!;
-        textColor = Colors.green[700]!;
-        text = 'taken';
-        break;
-      case MedicationStatus.missed:
-        backgroundColor = Colors.red[100]!;
-        textColor = Colors.red[700]!;
-        text = 'missed';
-        break;
-    }
-
-    return GestureDetector(
-      onTap: () {
-        // Cycle through statuses when tapped
-        MedicationStatus newStatus;
-        switch (status) {
-          case MedicationStatus.upcoming:
-            newStatus = MedicationStatus.taken;
-            break;
-          case MedicationStatus.taken:
-            newStatus = MedicationStatus.missed;
-            break;
-          case MedicationStatus.missed:
-            newStatus = MedicationStatus.upcoming;
-            break;
-        }
-        widget.onStatusChanged(newStatus);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            color: textColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
       ),
     );
   }

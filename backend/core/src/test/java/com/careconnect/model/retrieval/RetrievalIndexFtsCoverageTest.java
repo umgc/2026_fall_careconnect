@@ -15,6 +15,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RetrievalIndexFtsCoverageTest {
 
+    private static String readClasspath(final String path) throws Exception {
+        try (var stream = RetrievalIndexFtsCoverageTest.class.getClassLoader().getResourceAsStream(path)) {
+            assertThat(stream).as("classpath resource %s", path).isNotNull();
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
     @Test
     @DisplayName("V2607071921 trigger maintains search_vector on INSERT/UPDATE of chunk_text")
     void precursorMigration_hasEnglishTrigger() throws Exception {
@@ -85,12 +92,5 @@ class RetrievalIndexFtsCoverageTest {
     void schemaConstants_ftsConfig() {
         assertThat(RetrievalIndexSchema.FTS_TEXT_SEARCH_CONFIG).isEqualTo("english");
         assertThat(RetrievalIndexSchema.FTS_QUERY_MAX_LENGTH).isEqualTo(500);
-    }
-
-    private static String readClasspath(final String path) throws Exception {
-        try (var stream = RetrievalIndexFtsCoverageTest.class.getClassLoader().getResourceAsStream(path)) {
-            assertThat(stream).as("classpath resource %s", path).isNotNull();
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
     }
 }

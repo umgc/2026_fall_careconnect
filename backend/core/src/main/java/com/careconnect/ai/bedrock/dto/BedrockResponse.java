@@ -2,7 +2,7 @@ package com.careconnect.ai.bedrock.dto;
 
 /**
  * DTO used to return a structured AI response
- * 
+ * <p>
  * Instead of returning raw strings, we wrap the response
  * in a JSON object for cleaner frontend integration.
  */

@@ -92,8 +92,7 @@ class _WeekCalendarViewState extends State<WeekCalendarView> {
       itemBuilder: (context, index) {
         final date = _weekStart.add(Duration(days: index));
         final dayVisits = _getVisitsForDate(date);
-        final isToday =
-            date.year == DateTime.now().year &&
+        final isToday = date.year == DateTime.now().year &&
             date.month == DateTime.now().month &&
             date.day == DateTime.now().day;
 

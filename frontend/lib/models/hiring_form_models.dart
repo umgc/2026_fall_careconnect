@@ -120,7 +120,8 @@ class ValidationRule {
   final dynamic value;
   final String? pattern;
   final String? message;
-  const ValidationRule({required this.type, this.value, this.pattern, this.message});
+  const ValidationRule(
+      {required this.type, this.value, this.pattern, this.message});
 
   factory ValidationRule.fromJson(Map<String, dynamic> json) => ValidationRule(
         type: (json['type'] ?? '').toString().toUpperCase(),
@@ -251,10 +252,12 @@ class FormFieldDef {
             .map((v) => ValidationRule.fromJson(v as Map<String, dynamic>))
             .toList(),
         sourceMapping: json['sourceMapping'] != null
-            ? SourceMapping.fromJson(json['sourceMapping'] as Map<String, dynamic>)
+            ? SourceMapping.fromJson(
+                json['sourceMapping'] as Map<String, dynamic>)
             : null,
         visibleWhen: json['visibleWhen'] != null
-            ? VisibilityCondition.fromJson(json['visibleWhen'] as Map<String, dynamic>)
+            ? VisibilityCondition.fromJson(
+                json['visibleWhen'] as Map<String, dynamic>)
             : null,
       );
 }
@@ -323,8 +326,7 @@ class FormDefinition {
     this.sections = const [],
   });
 
-  int get fieldCount =>
-      sections.fold(0, (sum, s) => sum + s.fields.length);
+  int get fieldCount => sections.fold(0, (sum, s) => sum + s.fields.length);
 
   factory FormDefinition.fromJson(Map<String, dynamic> json) {
     final source = json['sourceDocument'] as Map<String, dynamic>?;
@@ -339,8 +341,8 @@ class FormDefinition {
       expirationDate: json['expirationDate']?.toString(),
       sourceFormNumber: source != null ? source['formNumber'] as String? : null,
       sourceEdition: source != null ? source['edition'] as String? : null,
-      fileCategory:
-          (attach != null ? attach['category'] : null)?.toString() ?? 'ONBOARDING_FORM',
+      fileCategory: (attach != null ? attach['category'] : null)?.toString() ??
+          'ONBOARDING_FORM',
       sections: (json['sections'] as List<dynamic>? ?? [])
           .map((s) => FormSectionDef.fromJson(s as Map<String, dynamic>))
           .toList()

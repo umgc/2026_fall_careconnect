@@ -1,3 +1,4 @@
 package com.careconnect.dto;
 
-public record SubscriptionResponse(String subscriptionId, String clientSecret) {}
+public record SubscriptionResponse(String subscriptionId, String clientSecret) {
+}

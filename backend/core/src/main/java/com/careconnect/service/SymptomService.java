@@ -43,12 +43,12 @@ public class SymptomService {
         SymptomEntry e = symptomRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Symptom not found: " + id));
 
-        if (dto.symptomKey()   != null) e.setSymptomKey(dto.symptomKey());
+        if (dto.symptomKey() != null) e.setSymptomKey(dto.symptomKey());
         if (dto.symptomValue() != null) e.setSymptomValue(dto.symptomValue());
-        if (dto.severity()     != null) e.setSeverity(dto.severity());
-        if (dto.notes()        != null) e.setNotes(dto.notes());
-        if (dto.completed()    != null) e.setCompleted(dto.completed());
-        if (dto.takenAt()      != null) e.setTakenAt(dto.takenAt());
+        if (dto.severity() != null) e.setSeverity(dto.severity());
+        if (dto.notes() != null) e.setNotes(dto.notes());
+        if (dto.completed() != null) e.setCompleted(dto.completed());
+        if (dto.takenAt() != null) e.setTakenAt(dto.takenAt());
 
         return toDto(symptomRepo.save(e));
     }

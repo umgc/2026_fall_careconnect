@@ -11,7 +11,9 @@ public final class H2Compatibility {
     private H2Compatibility() {
     }
 
-    /** Mirrors {@code hashtextextended(text, seed)} enough for deterministic lock keys. */
+    /**
+     * Mirrors {@code hashtextextended(text, seed)} enough for deterministic lock keys.
+     */
     public static long hashTextExtended(final String text, final Long seed) {
         final long seedValue = seed == null ? 0L : seed;
         if (text == null) {
@@ -20,7 +22,9 @@ public final class H2Compatibility {
         return (((long) text.hashCode()) << 32) ^ seedValue;
     }
 
-    /** No-op stand-in for {@code pg_advisory_xact_lock(bigint)}. */
+    /**
+     * No-op stand-in for {@code pg_advisory_xact_lock(bigint)}.
+     */
     public static void pgAdvisoryXactLock(final Long key) {
         // Intentionally empty for H2.
     }

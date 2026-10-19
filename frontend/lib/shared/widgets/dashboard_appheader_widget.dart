@@ -116,7 +116,9 @@ class DashboardAppHeader extends StatelessWidget
                             child: IconButton(
                               padding: EdgeInsets.zero,
                               onPressed: () {
-                                final userProvider = Provider.of<UserProvider>(context, listen: false);
+                                final userProvider = Provider.of<UserProvider>(
+                                    context,
+                                    listen: false);
                                 final patient = userProvider.patientModel;
                                 final user = userProvider.user;
 
@@ -128,7 +130,8 @@ class DashboardAppHeader extends StatelessWidget
                                   } catch (e) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text(t.appheaderwidget_invalidDOB),
+                                        content:
+                                            Text(t.appheaderwidget_invalidDOB),
                                       ),
                                     );
                                     return;
@@ -137,17 +140,21 @@ class DashboardAppHeader extends StatelessWidget
                                   // Calculate accurate age
                                   final now = DateTime.now();
                                   int age = now.year - dobDate.year;
-                                  if (now.month < dobDate.month || (now.month == dobDate.month && now.day < dobDate.day)) {
+                                  if (now.month < dobDate.month ||
+                                      (now.month == dobDate.month &&
+                                          now.day < dobDate.day)) {
                                     age--;
                                   }
 
                                   // Create emergency ID from patient ID
-                                  final emergencyId = 'VIAL${user.patientId ?? user.id}';
+                                  final emergencyId =
+                                      'VIAL${user.patientId ?? user.id}';
 
                                   final emergencyInfo = EmergencyInfo(
                                     firstName: patient.firstName,
                                     lastName: patient.lastName,
-                                    bloodType: '', // Will be filled from backend
+                                    bloodType:
+                                        '', // Will be filled from backend
                                     dob: dobDate,
                                     age: age,
                                     gender: patient.gender,
@@ -171,7 +178,8 @@ class DashboardAppHeader extends StatelessWidget
                                   // Show error if no patient data available
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text(t.appheaderwidget_missingPtData),
+                                      content:
+                                          Text(t.appheaderwidget_missingPtData),
                                     ),
                                   );
                                 }

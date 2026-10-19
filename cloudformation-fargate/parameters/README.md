@@ -11,30 +11,35 @@ parameter file is for and what values need to be replaced before deployment.
 
 ### Files
 
-1. `dev-networking.json`
+1. `cost-guardrails.example.json`
+- sanitized reference for the account-level cost-guardrails stack; replace the
+  email address(es) and approved dollar thresholds in the documented
+  `Key=Value` deployment command before deployment
+
+2. `dev-networking.json`
 - baseline networking parameters for the `dev` environment
 
-2. `dev-data.json`
+3. `dev-data.json`
 - checked-in placeholder values for the `dev` environment data stack
-3. `dev-platform.json`
+4. `dev-platform.json`
 - ECR repository name and log retention for the `dev` environment
 
-4. `dev-service.json`
+5. `dev-service.json`
 - image URI and service/runtime settings for the `dev` environment
 
-5. `cfdemo-networking.json`
+6. `cfdemo-networking.json`
 - networking parameters for the parallel CloudFormation demo environment
 
-6. `cfdemo-data.json`
+7. `cfdemo-data.json`
 - checked-in placeholder values for the parallel CloudFormation demo environment data stack
 
-7. `cfdemo-platform.json`
+8. `cfdemo-platform.json`
 - ECR repository name and log retention for the parallel CloudFormation demo environment
 
-8. `cfdemo-service.json`
+9. `cfdemo-service.json`
 - image URI and service/runtime settings for the parallel CloudFormation demo environment
 
-9. `staging-*.json` / `prod-*.json`
+10. `staging-*.json` / `prod-*.json`
 - parameter sets for staging and production (SpringProfile `prod`, AI enabled, pgvector RDS)
 
 ### P0 Ask AI deploy unblock (Tasks 0.1)
@@ -59,10 +64,9 @@ These CloudFormation changes must be deployed **in stack order** for Bedrock cha
    - `google-client-id`
    - `google-client-secret`
 3. Optional but commonly needed: `stripe-secret-key`, `stripe-webhook-secret`, `firebase-service-account-key`, OAuth/Fitbit keys.
-4. Leave `WebSocketApiGatewayEndpoint` empty in checked-in `*-service.json` files (same as `dev`).
-   Set the real `wss://...` value at deploy time when the WebSocket API exists
-   (maps to `AWS_WEBSOCKET_API_GATEWAY_ENDPOINT`). Do not use a placeholder string —
-   it is treated as a fake URL.
+4. Websockets need no parameter: `04-service.yaml` creates the API Gateway WebSocket API and
+   passes its callback URL to the task. Keep `DesiredCount` at `1` (the template rejects more)
+   — websocket sessions live in task memory.
 5. After service stack update, confirm ECS logs: `SSM PropertySource initialized with N parameters`.
 
 Example copy (adjust environment name and region):

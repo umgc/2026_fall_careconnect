@@ -9,6 +9,7 @@ import 'package:care_connect_app/config/theme/color_utils.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/widgets/responsive_container.dart';
 import 'models/vital_model.dart';
 import 'models/dashboard_analytics_model.dart';
@@ -404,30 +405,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
       periodStart: DateTime.now().subtract(Duration(days: selectedDays)),
       periodEnd: DateTime.now(),
     );
-  }
-
-  String _getShortTitle(String title) {
-    // Create shortened titles for mobile view to save space
-    switch (title) {
-      case 'Adherence Rate':
-        return 'Adherence';
-      case 'Avg Heart Rate':
-        return 'HR';
-      case 'Avg SpO₂':
-        return 'SpO₂';
-      case 'Avg Systolic':
-        return 'Systolic';
-      case 'Avg Diastolic':
-        return 'Diastolic';
-      case 'Avg Weight':
-        return 'Weight';
-      case 'Avg Mood':
-        return 'Mood';
-      case 'Avg Pain Level':
-        return 'Pain';
-      default:
-        return title.length > 8 ? title.substring(0, 8) : title;
-    }
   }
 
   String _getHealthDataContext() {
@@ -1602,10 +1579,15 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     if (loading) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBarHelper.createAppBar(context, title: 'Patient Analytics'),
+        appBar: AppBarHelper.createAppBar(
+          context,
+          title: t.analyticsPatientAnalytics,
+        ),
         drawer: const CommonDrawer(currentRoute: '/analytics'),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -1614,7 +1596,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     if (error != null) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBarHelper.createAppBar(context, title: 'Patient Analytics'),
+        appBar: AppBarHelper.createAppBar(
+          context,
+          title: t.analyticsPatientAnalytics,
+        ),
         drawer: const CommonDrawer(currentRoute: '/analytics'),
         body: Center(
           child: Column(
@@ -1631,7 +1616,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ElevatedButton.icon(
                 onPressed: fetchAnalytics,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(t.analyticsRetry),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -1675,7 +1660,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
             );
           },
-          tooltip: 'Ask AI about analytics',
+          tooltip: t.analyticsAskAiTooltip,
           child: const Icon(Icons.chat_bubble_outline),
         ),
       );
@@ -1740,7 +1725,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           color: Theme.of(context).colorScheme.onPrimary,
         ),
         title: Text(
-          'Patient Analytics',
+          t.analyticsPatientAnalytics,
           style: TextStyle(
             color: Theme.of(context).colorScheme.onPrimary,
             fontWeight: FontWeight.bold,
@@ -1751,7 +1736,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           Container(
             margin: const EdgeInsets.only(right: 4),
             child: Tooltip(
-              message: 'Download CSV',
+              message: t.analyticsDownloadCsv,
               child: ElevatedButton.icon(
                 onPressed: () => exportFile('csv'),
                 icon: const Icon(Icons.download, size: 18),
@@ -1780,7 +1765,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           Container(
             margin: const EdgeInsets.only(right: 8),
             child: Tooltip(
-              message: 'Download PDF',
+              message: t.analyticsDownloadPdf,
               child: ElevatedButton.icon(
                 onPressed: () => exportFile('pdf'),
                 icon: const Icon(Icons.picture_as_pdf, size: 18),
@@ -1823,7 +1808,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       children: [
                         // Welcome header
                         Text(
-                          'Analytics Overview',
+                          t.analyticsOverview,
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -1832,7 +1817,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Patient health metrics and trends',
+                          t.analyticsMetricsAndTrends,
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey.shade600,
@@ -1853,7 +1838,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Time Range:',
+                                    t.analyticsTimeRange,
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -1869,7 +1854,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                               return Row(
                                 children: [
                                   Text(
-                                    'Time Range:',
+                                    t.analyticsTimeRange,
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -1938,7 +1923,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Health Summary',
+                                              t.analyticsHealthSummary,
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontSize: MediaQuery.of(
@@ -1956,7 +1941,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                                 if (constraints.maxWidth <
                                                     200) {
                                                   return Text(
-                                                    'Last ${selectedDays}d',
+                                                    t.analyticsLastDaysShort(
+                                                      selectedDays,
+                                                    ),
                                                     style: const TextStyle(
                                                       color: Colors.white70,
                                                       fontSize: 12,
@@ -1967,7 +1954,9 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                                   );
                                                 } else {
                                                   return Text(
-                                                    'Last $selectedDays days overview',
+                                                    t.analyticsLastDaysOverview(
+                                                      selectedDays,
+                                                    ),
                                                     style: TextStyle(
                                                       color: Colors.white70,
                                                       fontSize: MediaQuery.of(
@@ -2017,7 +2006,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
                         // Charts Section
                         Text(
-                          'Detailed Charts',
+                          t.analyticsDetailedCharts,
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -2092,7 +2081,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 if (loading)
                   Container(
                     color: Colors.black.withOpacity(0.3),
-                    child: const Center(
+                    child: Center(
                       child: Card(
                         child: Padding(
                           padding: EdgeInsets.all(20),
@@ -2102,8 +2091,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                               CircularProgressIndicator(),
                               SizedBox(height: 16),
                               Text(
-                                'Loading analytics data...',
-                                style: TextStyle(fontSize: 16),
+                                t.analyticsLoadingData,
+                                style: const TextStyle(fontSize: 16),
                               ),
                             ],
                           ),
@@ -2146,7 +2135,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             ),
           );
         },
-        tooltip: 'Ask AI about analytics',
+        tooltip: t.analyticsAskAiTooltip,
       ),
       */
     );

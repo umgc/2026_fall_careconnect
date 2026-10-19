@@ -303,9 +303,8 @@ class HybridVideoCallService {
                     final newAudioState = !_webService.isAudioEnabled;
                     await toggleAudio(newAudioState);
                   },
-                  backgroundColor: _webService.isAudioEnabled
-                      ? Colors.green
-                      : Colors.grey,
+                  backgroundColor:
+                      _webService.isAudioEnabled ? Colors.green : Colors.grey,
                   child: Icon(
                     _webService.isAudioEnabled ? Icons.mic : Icons.mic_off,
                     color: Colors.white,

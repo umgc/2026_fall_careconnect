@@ -14,10 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-/*
- * MockitoExtension enables strict stubbing and manages mock lifecycle.
- * No Spring context needed — the controller has no injected dependencies.
- */
+        /*
+         * MockitoExtension enables strict stubbing and manages mock lifecycle.
+         * No Spring context needed — the controller has no injected dependencies.
+         */
 class FallBackControllerTest {
 
     @InjectMocks

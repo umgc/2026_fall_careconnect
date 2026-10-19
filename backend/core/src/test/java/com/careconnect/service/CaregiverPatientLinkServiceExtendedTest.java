@@ -49,10 +49,14 @@ import static org.mockito.Mockito.when;
 @DisplayName("CaregiverPatientLinkService Extended Tests")
 class CaregiverPatientLinkServiceExtendedTest {
 
-    @Mock private CaregiverPatientLinkRepository linkRepo;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private CaregiverRepository caregiverRepository;
+    @Mock
+    private CaregiverPatientLinkRepository linkRepo;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private CaregiverRepository caregiverRepository;
 
     @InjectMocks
     private CaregiverPatientLinkService service;
@@ -65,8 +69,8 @@ class CaregiverPatientLinkServiceExtendedTest {
     @BeforeEach
     void setUp() {
         caregiverUser = buildUser(1L, "caregiver@test.com", Role.CAREGIVER);
-        patientUser   = buildUser(2L, "patient@test.com",   Role.PATIENT);
-        adminUser     = buildUser(3L, "admin@test.com",     Role.ADMIN);
+        patientUser = buildUser(2L, "patient@test.com", Role.PATIENT);
+        adminUser = buildUser(3L, "admin@test.com", Role.ADMIN);
 
         activeLink = buildLink(10L, caregiverUser, patientUser, LinkStatus.ACTIVE, null);
 
@@ -77,6 +81,36 @@ class CaregiverPatientLinkServiceExtendedTest {
 
     // ──────────────────────────────────────────────────────────────────
     //  createLink
+    // ──────────────────────────────────────────────────────────────────
+
+    private User buildUser(Long id, String email, Role role) {
+        User u = new User();
+        u.setId(id);
+        u.setEmail(email);
+        u.setRole(role);
+        u.setName(role.name().toLowerCase() + "-" + id);
+        return u;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  updateLink
+    // ──────────────────────────────────────────────────────────────────
+
+    private CaregiverPatientLink buildLink(Long id, User caregiver, User patient,
+                                           LinkStatus status, LocalDateTime expiresAt) {
+        CaregiverPatientLink link = new CaregiverPatientLink();
+        link.setId(id);
+        link.setCaregiverUser(caregiver);
+        link.setPatientUser(patient);
+        link.setCreatedBy(caregiver);
+        link.setLinkType(LinkType.PERMANENT);
+        link.setStatus(status);
+        link.setExpiresAt(expiresAt);
+        return link;
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    //  suspendLink / reactivateLink / revokeLink
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -134,7 +168,7 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  updateLink
+    //  getPatientsByCaregiver / getCaregiversByPatient
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -168,7 +202,7 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  suspendLink / reactivateLink / revokeLink
+    //  setPatientVideoCallsEnabled
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -235,7 +269,7 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  getPatientsByCaregiver / getCaregiversByPatient
+    //  getAllLinks / cleanupExpiredLinks
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -278,7 +312,7 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  setPatientVideoCallsEnabled
+    //  createPermanentLink
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -334,7 +368,7 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  getAllLinks / cleanupExpiredLinks
+    //  hasActiveLink
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -368,7 +402,8 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  createPermanentLink
+    //  hasAccessToPatient / isPatientVideoCallsEnabled (already in
+    //  CallPermissionServiceTest but testing directly for coverage)
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -404,7 +439,7 @@ class CaregiverPatientLinkServiceExtendedTest {
     }
 
     // ──────────────────────────────────────────────────────────────────
-    //  hasActiveLink
+    //  Helpers
     // ──────────────────────────────────────────────────────────────────
 
     @Nested
@@ -432,11 +467,6 @@ class CaregiverPatientLinkServiceExtendedTest {
                     .hasMessageContaining("Caregiver user not found");
         }
     }
-
-    // ──────────────────────────────────────────────────────────────────
-    //  hasAccessToPatient / isPatientVideoCallsEnabled (already in
-    //  CallPermissionServiceTest but testing directly for coverage)
-    // ──────────────────────────────────────────────────────────────────
 
     @Nested
     @DisplayName("hasAccessToPatient and isPatientVideoCallsEnabled")
@@ -484,31 +514,5 @@ class CaregiverPatientLinkServiceExtendedTest {
 
             assertThat(service.isPatientVideoCallsEnabled(1L, 2L)).isTrue();
         }
-    }
-
-    // ──────────────────────────────────────────────────────────────────
-    //  Helpers
-    // ──────────────────────────────────────────────────────────────────
-
-    private User buildUser(Long id, String email, Role role) {
-        User u = new User();
-        u.setId(id);
-        u.setEmail(email);
-        u.setRole(role);
-        u.setName(role.name().toLowerCase() + "-" + id);
-        return u;
-    }
-
-    private CaregiverPatientLink buildLink(Long id, User caregiver, User patient,
-                                           LinkStatus status, LocalDateTime expiresAt) {
-        CaregiverPatientLink link = new CaregiverPatientLink();
-        link.setId(id);
-        link.setCaregiverUser(caregiver);
-        link.setPatientUser(patient);
-        link.setCreatedBy(caregiver);
-        link.setLinkType(LinkType.PERMANENT);
-        link.setStatus(status);
-        link.setExpiresAt(expiresAt);
-        return link;
     }
 }

@@ -31,7 +31,8 @@ class DateField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         hintText: optional ? 'Not set' : null,
       ),
       onTap: !enabled
@@ -44,7 +45,8 @@ class DateField extends StatelessWidget {
                 lastDate: DateTime(now.year + 3),
                 initialDate: value ?? now,
               );
-              if (picked != null) onChanged(DateTime(picked.year, picked.month, picked.day));
+              if (picked != null)
+                onChanged(DateTime(picked.year, picked.month, picked.day));
             },
     );
   }

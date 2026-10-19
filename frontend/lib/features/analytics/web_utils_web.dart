@@ -17,7 +17,9 @@ void downloadFile(String fileName, dynamic bytes, [String? contentType]) {
   final jsArray = data.toJS;
   final blob = web.Blob(
     [jsArray].toJS,
-    contentType != null ? web.BlobPropertyBag(type: contentType) : web.BlobPropertyBag(),
+    contentType != null
+        ? web.BlobPropertyBag(type: contentType)
+        : web.BlobPropertyBag(),
   );
 
   final url = web.URL.createObjectURL(blob);

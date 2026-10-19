@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'widgets/calendar_view.dart';
 import 'widgets/schedule_visit_dialog.dart';
 
@@ -19,15 +20,23 @@ class _CaregiverShiftSchedulingScreenState
   TimeOfDay? selectedEndTime;
   var isRecurring = false; // Toggle for recurring shifts
 
-  // Add state for selected days
-  final List<String> days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   final Set<int> selectedDayIndexes = {};
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final days = [
+      l10n.shiftSunday,
+      l10n.shiftMonday,
+      l10n.shiftTuesday,
+      l10n.shiftWednesday,
+      l10n.shiftThursday,
+      l10n.shiftFriday,
+      l10n.shiftSaturday,
+    ];
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Caregiver Shift Scheduling'),
+        title: Text(l10n.shiftTitle),
         centerTitle: true,
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
@@ -42,8 +51,8 @@ class _CaregiverShiftSchedulingScreenState
                   children: [
                     // toggle for if the shift is Recurring
                     SwitchListTile(
-                      title: const Text(
-                        'Recurring Shift',
+                      title: Text(
+                        l10n.shiftRecurring,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -59,8 +68,8 @@ class _CaregiverShiftSchedulingScreenState
                     // Shift Start Time
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text(
-                        'Start Time',
+                      child: Text(
+                        l10n.shiftStartTime,
                         textAlign: TextAlign.left,
                         style: TextStyle(
                           fontSize: 20,
@@ -78,19 +87,17 @@ class _CaregiverShiftSchedulingScreenState
                         title: Text(
                           selectedStartTime != null
                               ? selectedStartTime!.format(context)
-                              : 'No time selected',
+                              : l10n.shiftNoTimeSelected,
                         ),
                         leading: const Icon(
                           Icons.access_time,
                           color: Colors.indigo,
                           size: 40,
                         ),
-
                         onTap: () async {
                           final TimeOfDay? time = await showTimePicker(
                             context: context,
-                            initialTime:
-                                selectedStartTime ??
+                            initialTime: selectedStartTime ??
                                 TimeOfDay(
                                   hour: 9,
                                   minute: 0,
@@ -107,8 +114,8 @@ class _CaregiverShiftSchedulingScreenState
                     // Shift End Time
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text(
-                        'End Time',
+                      child: Text(
+                        l10n.shiftEndTime,
                         textAlign: TextAlign.left,
                         style: TextStyle(
                           fontSize: 20,
@@ -126,19 +133,17 @@ class _CaregiverShiftSchedulingScreenState
                         title: Text(
                           selectedEndTime != null
                               ? selectedEndTime!.format(context)
-                              : 'No time selected',
+                              : l10n.shiftNoTimeSelected,
                         ),
                         leading: const Icon(
                           Icons.access_time,
                           color: Colors.indigo,
                           size: 40,
                         ),
-
                         onTap: () async {
                           final TimeOfDay? time = await showTimePicker(
                             context: context,
-                            initialTime:
-                                selectedEndTime ??
+                            initialTime: selectedEndTime ??
                                 TimeOfDay(
                                   hour: 17,
                                   minute: 0,
@@ -155,8 +160,8 @@ class _CaregiverShiftSchedulingScreenState
                     // Days of the Week Selection
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: const Text(
-                        'Days',
+                      child: Text(
+                        l10n.shiftDays,
                         textAlign: TextAlign.left,
                         style: TextStyle(
                           fontSize: 20,
@@ -208,8 +213,8 @@ class _CaregiverShiftSchedulingScreenState
             backgroundColor: Colors.indigo,
             padding: const EdgeInsets.symmetric(vertical: 20),
           ),
-          child: const Text(
-            'Save',
+          child: Text(
+            l10n.shiftSave,
             style: TextStyle(fontSize: 18, color: Colors.white),
           ),
         ),
@@ -230,6 +235,7 @@ class ShiftScheduleScreen extends StatefulWidget {
 class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -240,7 +246,9 @@ class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
               onSave: (visit) {
                 // Save visit logic here
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Visit saved: ${visit.patientName}')),
+                  SnackBar(
+                    content: Text(l10n.shiftVisitSaved(visit.patientName)),
+                  ),
                 );
               },
             ),
@@ -257,4 +265,3 @@ class _ShiftScheduleScreenState extends State<ShiftScheduleScreen> {
     );
   }
 }
-

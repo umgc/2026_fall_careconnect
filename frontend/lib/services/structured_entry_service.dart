@@ -40,7 +40,8 @@ class DocumentFieldTemplates {
     ],
     'ONBOARDING_FORM': [
       DocumentFieldSpec('employeeName', 'Employee name', required: true),
-      DocumentFieldSpec('startDate', 'Start date', required: true, isDate: true),
+      DocumentFieldSpec('startDate', 'Start date',
+          required: true, isDate: true),
       DocumentFieldSpec('supervisorName', 'Supervisor name'),
       DocumentFieldSpec('notes', 'Notes'),
     ],
@@ -66,7 +67,8 @@ class DocumentFieldTemplates {
       DocumentFieldSpec('holderName', 'Holder name', required: true),
       DocumentFieldSpec('issuingAuthority', 'Issuing authority',
           required: true),
-      DocumentFieldSpec('issueDate', 'Issue date', required: true, isDate: true),
+      DocumentFieldSpec('issueDate', 'Issue date',
+          required: true, isDate: true),
       DocumentFieldSpec('expirationDate', 'Expiration date', isDate: true),
     ],
     'REFERENCE': [
@@ -282,7 +284,8 @@ class StructuredEntryService {
             .toList();
       }
       final errorData = json.decode(response.body);
-      throw Exception(errorData['error'] ?? 'Failed to list structured entries');
+      throw Exception(
+          errorData['error'] ?? 'Failed to list structured entries');
     } catch (e) {
       print('Error listing structured entries: $e');
       return [];

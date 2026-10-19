@@ -18,7 +18,7 @@ import static org.mockito.Mockito.mock;
 
 /**
  * Unit tests for {@link WebMvcConfig}.
- *
+ * <p>
  * WebMvcConfig is a Spring {@link org.springframework.web.servlet.config.annotation.WebMvcConfigurer}
  * that configures two concerns:
  * <ol>
@@ -27,7 +27,7 @@ import static org.mockito.Mockito.mock;
  *   <li><b>Static resource handler</b> — serves uploaded files from a local filesystem
  *       path under the {@code /uploads/**} URL pattern.</li>
  * </ol>
- *
+ * <p>
  * CORS configuration is extracted from a real {@link CorsRegistry} via
  * {@link ReflectionTestUtils#invokeMethod} (the map is not public API).
  * Resource handler registrations are similarly extracted from a {@link ResourceHandlerRegistry}

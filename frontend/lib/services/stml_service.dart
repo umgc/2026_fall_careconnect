@@ -248,7 +248,8 @@ class StmlService {
       );
     }
     if (response.statusCode != 200) throw _errorFor(response.statusCode);
-    return StmlBrief.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return StmlBrief.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   /// STML-1: "What did we discuss?" recall.
@@ -298,7 +299,8 @@ class StmlService {
       );
     }
     if (response.statusCode != 200) throw _errorFor(response.statusCode);
-    return StmlCheckIn.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return StmlCheckIn.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   /// STML-4: search recall history by keyword, sender, or date.

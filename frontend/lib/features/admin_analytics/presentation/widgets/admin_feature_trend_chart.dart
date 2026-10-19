@@ -30,7 +30,8 @@ class AdminFeatureTrendChart extends StatelessWidget {
     final spots = points
         .asMap()
         .entries
-        .map((entry) => FlSpot(entry.key.toDouble(), entry.value.count.toDouble()))
+        .map((entry) =>
+            FlSpot(entry.key.toDouble(), entry.value.count.toDouble()))
         .toList();
 
     return SizedBox(
@@ -117,7 +118,8 @@ class AdminFeatureTrendChart extends StatelessWidget {
               barWidth: 3,
               dotData: FlDotData(
                 show: points.length <= 31,
-                getDotPainter: (spot, percent, bar, index) => FlDotCirclePainter(
+                getDotPainter: (spot, percent, bar, index) =>
+                    FlDotCirclePainter(
                   radius: 3,
                   color: theme.colorScheme.primary,
                   strokeWidth: 1,

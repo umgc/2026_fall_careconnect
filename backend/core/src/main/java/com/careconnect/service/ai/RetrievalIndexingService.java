@@ -9,7 +9,9 @@ import com.careconnect.repository.TaskRepository;
 import com.careconnect.repository.VitalsRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
+
 import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

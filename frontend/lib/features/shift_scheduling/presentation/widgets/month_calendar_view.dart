@@ -128,8 +128,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     for (int day = 1; day <= daysInMonth; day++) {
       final date = DateTime(_currentMonth.year, _currentMonth.month, day);
       final dayVisits = _getVisitsForDate(date);
-      final isToday =
-          date.year == DateTime.now().year &&
+      final isToday = date.year == DateTime.now().year &&
           date.month == DateTime.now().month &&
           date.day == DateTime.now().day;
 
@@ -153,8 +152,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     List<ScheduledVisit> visits,
     bool isToday,
   ) {
-    final hasConflicts =
-        visits.length > 1 &&
+    final hasConflicts = visits.length > 1 &&
         visits.any(
           (v1) =>
               visits.any((v2) => v1.id != v2.id && _timeRangesOverlap(v1, v2)),
@@ -196,8 +194,8 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                                 ),
                                 decoration: BoxDecoration(
                                   color: visit.getPriorityColor().withOpacity(
-                                    0.7,
-                                  ),
+                                        0.7,
+                                      ),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                                 child: Text(

@@ -161,7 +161,7 @@ class HhaExchangeVisitTest {
                     .locationType("HOME")
                     .serviceAddress(addr)
                     .performedTasks(List.of(
-                        HhaExchangeVisit.TaskCode.builder().code("BATH").build()))
+                            HhaExchangeVisit.TaskCode.builder().code("BATH").build()))
                     .refusedTasks(List.of())
                     .build();
 

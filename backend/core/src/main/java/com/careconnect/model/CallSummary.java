@@ -42,44 +42,64 @@ import java.time.LocalDateTime;
 )
 public class CallSummary extends Auditable {
 
-    /** Maximum length for call identifier columns. */
+    /**
+     * Maximum length for call identifier columns.
+     */
     private static final int
             CALL_ID_LENGTH = 120;
 
-    /** Maximum length for status columns. */
+    /**
+     * Maximum length for status columns.
+     */
     private static final int
             STATUS_LENGTH = 24;
 
-    /** Maximum length for the SOAP risk-level column. */
+    /**
+     * Maximum length for the SOAP risk-level column.
+     */
     private static final int
             RISK_LEVEL_LENGTH = 16;
 
-    /** Maximum length for the caregiver-visibility column. */
+    /**
+     * Maximum length for the caregiver-visibility column.
+     */
     private static final int
             CAREGIVER_VISIBILITY_LENGTH = 16;
 
-    /** Maximum length for the summarization-engine column. */
+    /**
+     * Maximum length for the summarization-engine column.
+     */
     private static final int
             SUMMARIZATION_ENGINE_LENGTH = 128;
 
-    /** Precision (total digits) for the summary-confidence decimal column. */
+    /**
+     * Precision (total digits) for the summary-confidence decimal column.
+     */
     private static final int
             SUMMARY_CONFIDENCE_PRECISION = 3;
 
-    /** Scale (digits after the decimal point) for the summary-confidence column. */
+    /**
+     * Scale (digits after the decimal point) for the summary-confidence column.
+     */
     private static final int
             SUMMARY_CONFIDENCE_SCALE = 2;
 
-    /** Default caregiver-visibility value when not explicitly set. */
+    /**
+     * Default caregiver-visibility value when not explicitly set.
+     */
     private static final String
             DEFAULT_CAREGIVER_VISIBILITY = "on_consent";
 
-    /** Database identifier for the summary row. */
+    /**
+     * Database identifier for the summary row.
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** Call identifier associated with the generated summary. */
+    /**
+     * Call identifier associated with the generated summary.
+     */
     @Column(name = "call_id", nullable = false, length = CALL_ID_LENGTH)
     private String callId;
 
@@ -92,11 +112,15 @@ public class CallSummary extends Auditable {
     @Column(name = "patient_id")
     private Long patientId;
 
-    /** Serialized summary payload stored as JSON text. */
+    /**
+     * Serialized summary payload stored as JSON text.
+     */
     @Column(name = "summary_json", nullable = false, columnDefinition = "TEXT")
     private String summaryJson;
 
-    /** Current summary generation status. */
+    /**
+     * Current summary generation status.
+     */
     @Column(name = "status", nullable = false, length = STATUS_LENGTH)
     private String status;
 
@@ -112,7 +136,9 @@ public class CallSummary extends Auditable {
     @Column(name = "generated_by_user_id")
     private Long generatedByUserId;
 
-    /** Error details captured during summary generation. */
+    /**
+     * Error details captured during summary generation.
+     */
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
@@ -160,11 +186,15 @@ public class CallSummary extends Auditable {
     @Column(name = "summarization_engine", length = SUMMARIZATION_ENGINE_LENGTH)
     private String summarizationEngine;
 
-    /** Deterministic version of the authoritative transcript snapshot. */
+    /**
+     * Deterministic version of the authoritative transcript snapshot.
+     */
     @Column(name = "transcript_snapshot_version", length = 80)
     private String transcriptSnapshotVersion;
 
-    /** Version of the model and server-side summary configuration. */
+    /**
+     * Version of the model and server-side summary configuration.
+     */
     @Column(name = "model_config_version", length = 160)
     private String modelConfigVersion;
 

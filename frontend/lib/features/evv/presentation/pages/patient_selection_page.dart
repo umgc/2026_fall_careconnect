@@ -34,7 +34,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
 
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
-      
+
       if (user == null) {
         throw Exception('User not authenticated');
       }
@@ -114,15 +114,15 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    
+
     if (_error != null) {
       return _buildErrorState();
     }
-    
+
     if (_patients.isEmpty) {
       return _buildEmptyState();
     }
-    
+
     return _buildPatientList();
   }
 
@@ -265,10 +265,11 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   Widget _buildPatientCard(Patient patient) {
     final theme = Theme.of(context);
     final fullName = '${patient.firstName} ${patient.lastName}';
-    
+
     // Use MA number from backend, or generate fallback if not available
-    final maNumber = patient.maNumber ?? 'MA${patient.id.toString().padLeft(9, '0')}';
-    
+    final maNumber =
+        patient.maNumber ?? 'MA${patient.id.toString().padLeft(9, '0')}';
+
     // Format address
     final address = _formatAddress(patient);
 
@@ -280,8 +281,8 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: theme.brightness == Brightness.dark 
-                ? theme.colorScheme.surface 
+            color: theme.brightness == Brightness.dark
+                ? theme.colorScheme.surface
                 : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
@@ -310,7 +311,8 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
                       maNumber,
                       style: TextStyle(
                         fontSize: 14,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -319,7 +321,8 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
                       address,
                       style: TextStyle(
                         fontSize: 14,
-                        color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                        color:
+                            theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                       ),
                     ),
                   ],

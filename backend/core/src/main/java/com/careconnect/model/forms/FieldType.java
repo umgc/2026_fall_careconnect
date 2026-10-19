@@ -25,6 +25,8 @@ public enum FieldType {
     SELECT,
     MULTISELECT,
     SIGNATURE,
-    /** Reference to an uploaded {@code UserFile} (e.g., voided check, lab result). */
+    /**
+     * Reference to an uploaded {@code UserFile} (e.g., voided check, lab result).
+     */
     FILE_REF
 }

@@ -36,8 +36,7 @@ class ResponsiveContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final deviceType = ResponsiveUtils.getDeviceType(context);
-    final isLargeScreen =
-        deviceType == DeviceType.desktop ||
+    final isLargeScreen = deviceType == DeviceType.desktop ||
         deviceType == DeviceType.largeDesktop;
 
     // Calculate the appropriate width constraint based on screen size
@@ -60,8 +59,7 @@ class ResponsiveContainer extends StatelessWidget {
       width: deviceType == DeviceType.mobile ? screenWidth : null,
       constraints: BoxConstraints(maxWidth: calculatedMaxWidth),
       padding: padding,
-      decoration:
-          decoration ??
+      decoration: decoration ??
           (backgroundColor != null
               ? BoxDecoration(color: backgroundColor)
               : null),

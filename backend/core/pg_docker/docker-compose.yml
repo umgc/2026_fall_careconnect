@@ -1,4 +1,4 @@
-version: '3.5'
+#version: '3.5'
 
 services:
   postgres:
@@ -19,11 +19,11 @@ services:
       - postgres
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-careconnect}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-careconnect}" ]
       interval: 10s
       timeout: 5s
       retries: 5
-  
+
   pgadmin:
     container_name: pgadmin_container
     image: dpage/pgadmin4

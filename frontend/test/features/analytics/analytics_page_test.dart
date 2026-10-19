@@ -8,6 +8,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -30,8 +31,16 @@ void _ignoreOverflowErrors(FlutterErrorDetails details) {
   }
 }
 
-Widget _wrap({int patientId = 0}) =>
-    MaterialApp(home: AnalyticsPage(patientId: patientId));
+Widget _wrap({
+  int patientId = 0,
+  Locale locale = const Locale('en'),
+}) =>
+    MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: AnalyticsPage(patientId: patientId),
+    );
 
 void _setupMocks() {
   SharedPreferences.setMockInitialValues({});
@@ -310,6 +319,18 @@ void main() {
     testWidgets('shows Patient Analytics title during loading', (tester) async {
       await tester.pumpWidget(_wrap(patientId: 1));
       expect(find.text('Patient Analytics'), findsOneWidget);
+    });
+
+    testWidgets('shows the localized Spanish title during loading',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          patientId: 1,
+          locale: const Locale('es'),
+        ),
+      );
+
+      expect(find.text('Análisis del paciente'), findsOneWidget);
     });
 
     testWidgets('renders with different patientId', (tester) async {

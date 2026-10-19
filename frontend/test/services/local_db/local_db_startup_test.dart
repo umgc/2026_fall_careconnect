@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -15,12 +17,17 @@ void main() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
+  // Per-run temp dir instead of a hardcoded '/tmp' (which resolves to a
+  // nonexistent C:	mp on Windows and fails with SQLite code 14).
+  late Directory tempDir;
+
   setUpAll(() {
+    tempDir = Directory.systemTemp.createTempSync('local_db_startup_test_');
     messenger.setMockMethodCallHandler(
       pathProviderChannel,
       (MethodCall methodCall) async {
         if (methodCall.method == 'getApplicationDocumentsDirectory') {
-          return '/tmp';
+          return tempDir.path;
         }
         return null;
       },
@@ -52,6 +59,13 @@ void main() {
   tearDownAll(() {
     messenger.setMockMethodCallHandler(pathProviderChannel, null);
     messenger.setMockMethodCallHandler(secureStorageChannel, null);
+    // The startup DB stays open for the process, so Windows may refuse to
+    // delete the file; cleanup is best-effort.
+    try {
+      tempDir.deleteSync(recursive: true);
+    } on FileSystemException {
+      // ignore
+    }
   });
 
   test('initializeLocalDbOnStartup completes without throwing', () async {

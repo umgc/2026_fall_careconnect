@@ -20,46 +20,58 @@ class EdiService {
     String? checkinLocationType,
     String? checkoutLocationType,
   }) {
-    final maNumber = patient.maNumber ?? 'SUBSCR${patient.id.toString().padLeft(5, '0')}';
-    
+    final maNumber =
+        patient.maNumber ?? 'SUBSCR${patient.id.toString().padLeft(5, '0')}';
+
     final now = DateTime.now();
-    final isaDate = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final isaTime = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    final gsDate = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final gsTime = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    
-    final serviceDate = '${checkinTime.year}${checkinTime.month.toString().padLeft(2, '0')}${checkinTime.day.toString().padLeft(2, '0')}';
-    
+    final isaDate =
+        '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final isaTime =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final gsDate =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final gsTime =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+
+    final serviceDate =
+        '${checkinTime.year}${checkinTime.month.toString().padLeft(2, '0')}${checkinTime.day.toString().padLeft(2, '0')}';
+
     String patientDob = '19700101';
     if (patient.dob.isNotEmpty) {
       try {
         final dobDate = DateTime.parse(patient.dob);
-        patientDob = '${dobDate.year}${dobDate.month.toString().padLeft(2, '0')}${dobDate.day.toString().padLeft(2, '0')}';
+        patientDob =
+            '${dobDate.year}${dobDate.month.toString().padLeft(2, '0')}${dobDate.day.toString().padLeft(2, '0')}';
       } catch (e) {
         patientDob = '19700101';
       }
     }
-    
-    final gender = (patient.gender?.toUpperCase() == 'MALE' || patient.gender?.toUpperCase() == 'M') ? 'M' : 'F';
-    
-    final claimId = '${patient.id}${checkinTime.millisecondsSinceEpoch.toString().substring(0, 10)}';
+
+    final gender = (patient.gender?.toUpperCase() == 'MALE' ||
+            patient.gender?.toUpperCase() == 'M')
+        ? 'M'
+        : 'F';
+
+    final claimId =
+        '${patient.id}${checkinTime.millisecondsSinceEpoch.toString().substring(0, 10)}';
     final evvId = 'EVV-$claimId';
-    final lineEvvId = 'EVV-LINE-$claimId';
-    
+
     final units = ((duration / 15).ceil()).toString();
     final totalCharge = (30.0 * (duration / 15).ceil()).toStringAsFixed(2);
-    
+
     final addressLine1 = patient.address?.line1 ?? '123 Main St';
     final city = patient.address?.city ?? 'Richmond';
     final state = patient.address?.state ?? 'VA';
     final zip = patient.address?.zip ?? '23220';
-    
-    final controlNumber = now.millisecondsSinceEpoch.toString().substring(3, 12);
-    
+
+    final controlNumber =
+        now.millisecondsSinceEpoch.toString().substring(3, 12);
+
     // Calculate segment count (base 30 segments + 1 if notes exist)
     final segmentCount = notes.isNotEmpty ? 31 : 30;
 
-    final ediContent = '''ISA*00*          *00*          *ZZ*SUBMIT123      *ZZ*987654321      *$isaDate*$isaTime*^*00501*$controlNumber*0*P*:~
+    final ediContent =
+        '''ISA*00*          *00*          *ZZ*SUBMIT123      *ZZ*987654321      *$isaDate*$isaTime*^*00501*$controlNumber*0*P*:~
 GS*HC*SUBMIT123*987654321*$gsDate*$gsTime*$controlNumber*X*005010X222A1~
 ST*837*0001*005010X222A1~
 BHT*0019*00*$claimId*$gsDate*$gsTime*CH~
@@ -129,22 +141,23 @@ IEA*1*$controlNumber~
         checkinLocationType: checkinLocationType,
         checkoutLocationType: checkoutLocationType,
       );
-      
+
       // Convert to bytes
       final bytes = utf8.encode(ediContent);
-      
+
       // Generate filename
-      final filename = 'visit_${patient.id}_${checkinTime.millisecondsSinceEpoch}.edi';
-      
+      final filename =
+          'visit_${patient.id}_${checkinTime.millisecondsSinceEpoch}.edi';
+
       // Create blob and download (web-compatible approach)
       final blob = html.Blob([bytes], 'text/plain');
       final url = html.Url.createObjectUrlFromBlob(blob);
-      
+
       final anchor = html.document.createElement('a') as html.AnchorElement
         ..href = url
         ..style.display = 'none'
         ..download = filename;
-      
+
       html.document.body?.children.add(anchor);
       anchor.click();
       html.document.body?.children.remove(anchor);
@@ -160,7 +173,7 @@ IEA*1*$controlNumber~
   /// Validate EDI content format
   static bool validateEDIContent(String content) {
     if (content.isEmpty) return false;
-    
+
     // Check for required segments
     final requiredSegments = ['ISA', 'GS', 'ST', 'BHT', 'SE', 'GE', 'IEA'];
     for (final segment in requiredSegments) {
@@ -168,7 +181,7 @@ IEA*1*$controlNumber~
         return false;
       }
     }
-    
+
     return true;
   }
 
@@ -186,7 +199,7 @@ IEA*1*$controlNumber~
       'Medical Social Work': 'G0155',
       'Home Health Aide': 'G0156',
     };
-    
+
     return serviceTypeMap[serviceType] ?? 'T1019'; // Default to Personal Care
   }
 
@@ -198,7 +211,8 @@ IEA*1*$controlNumber~
 
   /// Calculate total charge based on billable units
   /// Default rate is $30 per unit (15 minutes)
-  static double calculateTotalCharge(int durationSeconds, {double ratePerUnit = 30.0}) {
+  static double calculateTotalCharge(int durationSeconds,
+      {double ratePerUnit = 30.0}) {
     final units = calculateBillableUnits(durationSeconds);
     return units * ratePerUnit;
   }
@@ -267,8 +281,9 @@ IEA*1*$controlNumber~
     final gsTime = formatEDITime(now);
     final serviceDateFormatted = formatEDIDate(svcDate);
     final controlNumber = generateControlNumber();
-    final claimId = 'MOCK${now.millisecondsSinceEpoch.toString().substring(0, 10)}';
-    
+    final claimId =
+        'MOCK${now.millisecondsSinceEpoch.toString().substring(0, 10)}';
+
     // Service type code
     final serviceCode = parseServiceTypeToCode(svcType);
 
@@ -335,4 +350,3 @@ IEA*1*$controlNumber~
     );
   }
 }
-

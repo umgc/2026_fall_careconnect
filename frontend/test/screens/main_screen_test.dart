@@ -757,7 +757,6 @@ void main() {
     testWidgets('offline banner settings button taps to last nav item',
         (tester) async {
       // Skip: Banner config uses real nav items but test has only 2 items.
-      return;
       tester.view.physicalSize = const Size(1440, 1920);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
@@ -784,7 +783,7 @@ void main() {
         find.byType(BottomNavigationBar),
       );
       expect(navBar.currentIndex, 1);
-    });
+    }, skip: true);
 
     testWidgets('no-internet banner takes priority over offline mode banner',
         (tester) async {

@@ -7,8 +7,18 @@ import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Task 1.5 / 1.6 — Flyway migration contract tests (no live PostgreSQL required). */
+/**
+ * Task 1.5 / 1.6 — Flyway migration contract tests (no live PostgreSQL required).
+ */
 class RetrievalIndexChunkMigrationSqlTest {
+
+    private static String readMigration(String filename) throws Exception {
+        try (var stream = RetrievalIndexChunkMigrationSqlTest.class.getClassLoader()
+                .getResourceAsStream("db/migration/" + filename)) {
+            assertThat(stream).as("migration file on classpath: %s", filename).isNotNull();
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
 
     @Test
     @DisplayName("pgvector extension migration enables vector type")
@@ -112,11 +122,20 @@ class RetrievalIndexChunkMigrationSqlTest {
                 "SET source_kind = 'CALL_SUMMARY',\n    migration_status = 'ACTIVE'");
     }
 
-    private static String readMigration(String filename) throws Exception {
-        try (var stream = RetrievalIndexChunkMigrationSqlTest.class.getClassLoader()
-                .getResourceAsStream("db/migration/" + filename)) {
-            assertThat(stream).as("migration file on classpath: %s", filename).isNotNull();
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
+    @Test
+    @DisplayName("Epic source_kind migration widens ck_retrieval_source_kind to admit EPIC/epic")
+    void epicSourceKindMigrationWidensAllowList() throws Exception {
+        String sql = readMigration(
+                "V2609160100__allow_epic_source_kind_on_retrieval_chunk.sql");
+
+        assertThat(sql).contains("DROP CONSTRAINT IF EXISTS ck_retrieval_source_kind");
+        assertThat(sql).contains("ADD CONSTRAINT ck_retrieval_source_kind");
+        // Both casings are permitted: the chunk writer stores lowercase 'epic' while
+        // EpicProperties.SOURCE_EPIC is 'EPIC' (the casing reconciliation is tracked separately).
+        assertThat(sql).contains("'EPIC'");
+        assertThat(sql).contains("'epic'");
+        // The pre-existing summary discriminators must remain valid (superset, not replacement).
+        assertThat(sql).contains("'CALL_SUMMARY'");
+        assertThat(sql).contains("'VISIT_SUMMARY'");
     }
 }

@@ -48,14 +48,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Theme.of(context).primaryColor,
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Title
                     Text(
                       'CareConnect',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -176,7 +177,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildDemoAccountTile(String role, String username, String description) {
+  Widget _buildDemoAccountTile(
+      String role, String username, String description) {
     return ListTile(
       dense: true,
       title: Text('$role: $username'),
@@ -203,11 +205,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       context.read<AuthService>();
-      final user = await AuthService.login(
-        _usernameController.text.trim(),
-        _passwordController.text,
-        AppLocalizations.of(context)!
-      );
+      final user = await AuthService.login(_usernameController.text.trim(),
+          _passwordController.text, AppLocalizations.of(context)!);
 
       // Login successful - route based on role
       if (mounted) {

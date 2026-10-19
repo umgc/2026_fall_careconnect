@@ -1,7 +1,5 @@
-import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/auth_token_manager.dart';
@@ -25,8 +23,6 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _error;
-  File? _imageFile;
-  final ImagePicker _picker = ImagePicker();
   dynamic _userProfile;
   bool _isPatient = false;
   bool _isCaregiver = false;
@@ -104,8 +100,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
 
       setState(() {
         _isPatient = userRole.toUpperCase() == 'PATIENT';
-        _isCaregiver =
-            userRole.toUpperCase() == 'CAREGIVER' ||
+        _isCaregiver = userRole.toUpperCase() == 'CAREGIVER' ||
             userRole.toUpperCase() == 'FAMILY_LINK' ||
             userRole.toUpperCase() == 'ADMIN';
       });
@@ -182,8 +177,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             'zipCode': rawData['address']?['zip'] ?? '',
             'country': '', // Default to empty as it's not in the response
             // Professional info fields
-            'specialization':
-                professional['specialization'] ??
+            'specialization': professional['specialization'] ??
                 professional['specialty'] ??
                 professional['yearsExperience']?.toString() ??
                 '',
@@ -295,8 +289,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
             'licenseNumber': _licenseController.text,
             'issuingState':
                 _stateController.text, // Using state as issuing state
-            'yearsExperience':
-                int.tryParse(_specializationController.text) ??
+            'yearsExperience': int.tryParse(_specializationController.text) ??
                 1, // Using specialization field for years of experience
           },
           // Address info
@@ -491,8 +484,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? _buildErrorWidget()
-          : _buildProfileForm(),
+              ? _buildErrorWidget()
+              : _buildProfileForm(),
     );
   }
 
@@ -699,7 +692,9 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                               const SizedBox(width: 8),
                               Text(
                                 'Manage Your Subscription',
-                                style: Theme.of(context).textTheme.titleMedium
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                             ],

@@ -37,6 +37,10 @@ public class TierClassifier {
             "(?i)\\b(medication|medicine|pill|tablet|mg|dose|prescription|metformin|"
                     + "insulin|antibiotic|aspirin)\\b");
 
+    private static String nullToEmpty(final String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
     public SafetyOutcome classify(
             final SafetyInput input,
             final List<ValidationFinding> findings) {
@@ -79,9 +83,5 @@ public class TierClassifier {
             escalation = "confirm-with-provider";
         }
         return SafetyOutcome.deliverTier1(triggers, findings, escalation);
-    }
-
-    private static String nullToEmpty(final String value) {
-        return value == null ? "" : value.toLowerCase(Locale.ROOT);
     }
 }

@@ -41,7 +41,9 @@ class TaskServiceTest {
     @InjectMocks
     private TaskService taskService;
 
-    /** Shared fixtures reused across tests. */
+    /**
+     * Shared fixtures reused across tests.
+     */
     private Patient patient;
     private Task task;
 
@@ -98,7 +100,7 @@ class TaskServiceTest {
         final List<Task> result = taskService.getTasksByPatient(1L);
 
         assertEquals(2, result.size());
-        assertEquals("Check Vitals",    result.get(0).getName());
+        assertEquals("Check Vitals", result.get(0).getName());
         assertEquals("Take Medication", result.get(1).getName());
         verify(taskRepository).findByPatientId(1L);
     }
@@ -159,17 +161,17 @@ class TaskServiceTest {
         final Task result = taskService.createTask(1L, dto);
 
         assertNotNull(result);
-        assertEquals(10L,              result.getId());
-        assertEquals("Daily Walk",     result.getName());
-        assertEquals("2025-07-01",     result.getDate());
-        assertEquals("08:00",          result.getTimeOfDay());
+        assertEquals(10L, result.getId());
+        assertEquals("Daily Walk", result.getName());
+        assertEquals("2025-07-01", result.getDate());
+        assertEquals("08:00", result.getTimeOfDay());
         assertFalse(result.isCompleted());
-        assertEquals("daily",          result.getFrequency());
-        assertEquals(1,                result.getTaskInterval());
-        assertEquals(5,                result.getDoCount());
-        assertEquals("MON,WED,FRI",    result.getDaysOfWeek());
-        assertEquals("Exercise",       result.getTaskType());
-        assertEquals(patient,          result.getPatient());
+        assertEquals("daily", result.getFrequency());
+        assertEquals(1, result.getTaskInterval());
+        assertEquals(5, result.getDoCount());
+        assertEquals("MON,WED,FRI", result.getDaysOfWeek());
+        assertEquals("Exercise", result.getTaskType());
+        assertEquals(patient, result.getPatient());
         verify(patientRepository).findById(1L);
         verify(taskRepository).save(any(Task.class));
     }
@@ -233,16 +235,16 @@ class TaskServiceTest {
 
         final Task result = taskService.updateTask(1L, dto);
 
-        assertEquals("Updated Name",        result.getName());
+        assertEquals("Updated Name", result.getName());
         assertEquals("Updated description", result.getDescription());
-        assertEquals("2025-09-01",          result.getDate());
-        assertEquals("10:00",               result.getTimeOfDay());
+        assertEquals("2025-09-01", result.getDate());
+        assertEquals("10:00", result.getTimeOfDay());
         assertTrue(result.isCompleted());
-        assertEquals("weekly",              result.getFrequency());
-        assertEquals(2,                     result.getTaskInterval());
-        assertEquals(4,                     result.getDoCount());
-        assertEquals("TUE,THU",             result.getDaysOfWeek());
-        assertEquals("Appointment",         result.getTaskType());
+        assertEquals("weekly", result.getFrequency());
+        assertEquals(2, result.getTaskInterval());
+        assertEquals(4, result.getDoCount());
+        assertEquals("TUE,THU", result.getDaysOfWeek());
+        assertEquals("Appointment", result.getTaskType());
         verify(taskRepository).save(task);
     }
 
@@ -357,7 +359,7 @@ class TaskServiceTest {
         final List<Task> result = taskService.getAllTasks();
 
         assertEquals(2, result.size());
-        assertEquals("Check Vitals",    result.get(0).getName());
+        assertEquals("Check Vitals", result.get(0).getName());
         assertEquals("Take Medication", result.get(1).getName());
         verify(taskRepository).findAll();
     }

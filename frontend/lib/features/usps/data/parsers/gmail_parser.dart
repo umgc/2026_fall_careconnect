@@ -18,8 +18,10 @@ class GmailRaw {
 class GmailParser {
   static final _trackingRegex = RegExp(r'(\d{10,})');
   static final _fromRegex = RegExp(r'from[:\s]+(.+)', caseSensitive: false);
-  static final _expectedRegex = RegExp(r'Expected Delivery(?: Day)?:\s*(.+)', caseSensitive: false);
-  static final _digestHeadingRegex = RegExp(r'Daily Digest(?: for)?\s*(.*)', caseSensitive: false);
+  static final _expectedRegex =
+      RegExp(r'Expected Delivery(?: Day)?:\s*(.+)', caseSensitive: false);
+  static final _digestHeadingRegex =
+      RegExp(r'Daily Digest(?: for)?\s*(.*)', caseSensitive: false);
   static final _friendlyFormats = <DateFormat>[
     DateFormat("EEEE, MMMM d, yyyy", 'en_US'),
     DateFormat("MMMM d, yyyy", 'en_US'),
@@ -60,11 +62,12 @@ class GmailParser {
   String _normalizeCid(String raw) =>
       raw.replaceAll('<', '').replaceAll('>', '').trim().toLowerCase();
 
-  DateTime? _resolveDigestDate(Document doc,  DateTime?  fallback) {
+  DateTime? _resolveDigestDate(Document doc, DateTime? fallback) {
     String? candidate;
     final timeNode = doc.querySelector('time[datetime]');
     if (timeNode != null) {
-      candidate = _firstNonEmpty([timeNode.attributes['datetime'], timeNode.text]);
+      candidate =
+          _firstNonEmpty([timeNode.attributes['datetime'], timeNode.text]);
     }
     candidate ??= doc.querySelector('meta[name="date"]')?.attributes['content'];
     candidate ??= _extractDigestHeading(doc);
@@ -94,23 +97,28 @@ class GmailParser {
       if (tracking == null || !seen.add(tracking)) return;
 
       final expected = _parseDate(_extractExpectedText(element)) ?? digestDate;
-      final trackUrl = element.querySelector('a[href*="TrackConfirmAction"]')?.attributes['href'];
+      final trackUrl = element
+          .querySelector('a[href*="TrackConfirmAction"]')
+          ?.attributes['href'];
       final sender = _extractSenderFromElement(element);
 
       items.add(PackageItem(
         trackingNumber: tracking,
         sender: sender,
         expectedDateIso: expected?.toIso8601String(),
-        actions: ActionLinks(track: trackUrl, redelivery: null, dashboard: null),
+        actions:
+            ActionLinks(track: trackUrl, redelivery: null, dashboard: null),
       ));
     }
 
-    for (final el in doc.querySelectorAll('.package, [data-package], article:has(.tracking-number)')) {
+    for (final el in doc.querySelectorAll(
+        '.package, [data-package], article:has(.tracking-number)')) {
       addFromElement(el);
     }
 
     if (items.isEmpty) {
-      for (final el in doc.querySelectorAll('*:matchesOwn("Tracking Number")')) {
+      for (final el
+          in doc.querySelectorAll('*:matchesOwn("Tracking Number")')) {
         addFromElement(el);
       }
     }
@@ -126,18 +134,21 @@ class GmailParser {
     return match?.group(1)?.trim();
   }
 
-  List<MailPiece> _extractMailPieces(Document doc, GmailRaw raw, DateTime? digestDate) {
+  List<MailPiece> _extractMailPieces(
+      Document doc, GmailRaw raw, DateTime? digestDate) {
     final pieces = <MailPiece>[];
     var counter = 1;
 
-    for (final block in doc.querySelectorAll('#mailpieces .mailpiece, [data-mailpiece-id], .mailpiece')) {
+    for (final block in doc.querySelectorAll(
+        '#mailpieces .mailpiece, [data-mailpiece-id], .mailpiece')) {
       final piece = _mailPieceFromBlock(block, raw, digestDate, counter++);
       if (piece != null) pieces.add(piece);
     }
 
     if (pieces.isEmpty) {
       var idx = 1;
-      for (final img in doc.querySelectorAll('#mailpieces img, img[alt*="mailpiece"]')) {
+      for (final img
+          in doc.querySelectorAll('#mailpieces img, img[alt*="mailpiece"]')) {
         final piece = _mailPieceFromImage(img, raw, digestDate, idx++);
         if (piece != null) pieces.add(piece);
       }
@@ -146,7 +157,8 @@ class GmailParser {
     return pieces;
   }
 
-  MailPiece? _mailPieceFromBlock(Element block, GmailRaw raw, DateTime? digestDate, int counter) {
+  MailPiece? _mailPieceFromBlock(
+      Element block, GmailRaw raw, DateTime? digestDate, int counter) {
     final img = block.querySelector('img');
     if (img == null) return null;
 
@@ -172,11 +184,13 @@ class GmailParser {
       summary: summary,
       imageDataUrl: src,
       dateIso: received?.toIso8601String(),
-      actions: const ActionLinks(track: null, redelivery: null, dashboard: null),
+      actions:
+          const ActionLinks(track: null, redelivery: null, dashboard: null),
     );
   }
 
-  MailPiece? _mailPieceFromImage(Element img, GmailRaw raw, DateTime? digestDate, int counter) {
+  MailPiece? _mailPieceFromImage(
+      Element img, GmailRaw raw, DateTime? digestDate, int counter) {
     final src = img.attributes['src'];
     if (src == null || src.trim().isEmpty) return null;
 
@@ -188,7 +202,8 @@ class GmailParser {
       summary: _deriveSummaryFromAlt(img.attributes['alt']),
       imageDataUrl: src,
       dateIso: received?.toIso8601String(),
-      actions: const ActionLinks(track: null, redelivery: null, dashboard: null),
+      actions:
+          const ActionLinks(track: null, redelivery: null, dashboard: null),
     );
   }
 
@@ -228,7 +243,9 @@ class GmailParser {
         }
       }
       try {
-        return DateFormat("EEE, dd MMM yyyy HH:mm:ss xx", 'en_US').parse(trimmed, true).toUtc();
+        return DateFormat("EEE, dd MMM yyyy HH:mm:ss xx", 'en_US')
+            .parse(trimmed, true)
+            .toUtc();
       } catch (_) {
         return null;
       }

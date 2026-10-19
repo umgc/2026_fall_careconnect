@@ -21,11 +21,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class HhaExchangeBatchSubmissionServiceTest {
 
-    @Mock private VirginiaHhaExchangeClient hhaClient;
-    @Mock private EvvRecordRepository evvRecordRepository;
-    @Mock private AuditLogger audit;
+    @Mock
+    private VirginiaHhaExchangeClient hhaClient;
+    @Mock
+    private EvvRecordRepository evvRecordRepository;
+    @Mock
+    private AuditLogger audit;
 
-    @InjectMocks private HhaExchangeBatchSubmissionService service;
+    @InjectMocks
+    private HhaExchangeBatchSubmissionService service;
 
     // ─── buildPayload() ───────────────────────────────────────────────────────
 

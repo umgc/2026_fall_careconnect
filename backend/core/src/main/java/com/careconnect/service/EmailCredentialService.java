@@ -29,6 +29,10 @@ public class EmailCredentialService {
     private final OAuthRedirectValidator oauthRedirectValidator;
     private final UspsPatientResolver patientResolver;
 
+    private static boolean hasStoredAccessToken(EmailCredential credential) {
+        return credential.getAccessTokenEnc() != null && !credential.getAccessTokenEnc().isBlank();
+    }
+
     public EmailConnectionStatus getGmailConnectionStatus(String patientIdentifier)
             throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
@@ -99,9 +103,5 @@ public class EmailCredentialService {
     private User resolvePatientUser(String patientIdentifier, User currentUser)
             throws UnauthorizedException {
         return patientResolver.resolvePatient(patientIdentifier, null, currentUser);
-    }
-
-    private static boolean hasStoredAccessToken(EmailCredential credential) {
-        return credential.getAccessTokenEnc() != null && !credential.getAccessTokenEnc().isBlank();
     }
 }

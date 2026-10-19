@@ -24,20 +24,6 @@ public class DefaultAIChatService implements AIService {
         log.info("DefaultAIChatService initialized (DeepSeek path disabled)");
     }
 
-    /**
-     * DeepSeek path DISABLED
-     * Bedrock is used instead via AIServiceFactory
-     */
-    @Override
-    public ChatResponse processChat(ChatRequest request) {
-
-        log.warn("DefaultAIChatService should NOT be used. Provider is not deepseek.");
-
-        throw new UnsupportedOperationException(
-                "DeepSeek AI is disabled. Application is configured to use Bedrock."
-        );
-    }
-
     //Dummy constructor to satisfy existing tests
     public DefaultAIChatService(
             Object chatModel,
@@ -58,6 +44,20 @@ public class DefaultAIChatService implements AIService {
             Object documentProcessingService
     ) {
         log.warn("Test constructor used - DefaultAIChatService is disabled");
+    }
+
+    /**
+     * DeepSeek path DISABLED
+     * Bedrock is used instead via AIServiceFactory
+     */
+    @Override
+    public ChatResponse processChat(ChatRequest request) {
+
+        log.warn("DefaultAIChatService should NOT be used. Provider is not deepseek.");
+
+        throw new UnsupportedOperationException(
+                "DeepSeek AI is disabled. Application is configured to use Bedrock."
+        );
     }
 
     // =============================

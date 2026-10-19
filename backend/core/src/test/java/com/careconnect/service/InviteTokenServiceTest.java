@@ -24,18 +24,24 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for {@link InviteTokenService}.
- *
+ * <p>
  * Mirrors the existing test style in this module: Mockito mocks, explicit
  * constructor injection in setUp, JUnit 5, AssertJ-free assertions.
  */
 class InviteTokenServiceTest {
 
-    @Mock private InviteTokenRepository tokenRepository;
-    @Mock private InviteAuditService auditService;
-    @Mock private FamilyMemberLinkRepository linkRepository;
-    @Mock private UserRepository userRepository;
-    @Mock private PatientRepository patientRepository;
-    @Mock private TokenHashService tokenHashService;
+    @Mock
+    private InviteTokenRepository tokenRepository;
+    @Mock
+    private InviteAuditService auditService;
+    @Mock
+    private FamilyMemberLinkRepository linkRepository;
+    @Mock
+    private UserRepository userRepository;
+    @Mock
+    private PatientRepository patientRepository;
+    @Mock
+    private TokenHashService tokenHashService;
 
     private InviteTokenService service;
 
@@ -169,7 +175,10 @@ class InviteTokenServiceTest {
         when(tokenHashService.hashToken(anyString())).thenReturn("hashed");
         ArgumentCaptor<InviteToken> captor = ArgumentCaptor.forClass(InviteToken.class);
         when(tokenRepository.saveAndFlush(captor.capture())).thenAnswer(inv -> {
-            InviteToken t = inv.getArgument(0); t.setId(1L); t.setCreatedAt(LocalDateTime.now()); return t;
+            InviteToken t = inv.getArgument(0);
+            t.setId(1L);
+            t.setCreatedAt(LocalDateTime.now());
+            return t;
         });
 
         service.createInvite(5L, new CreateInviteRequest(null, null, 9999), creator, "1.2.3.4");

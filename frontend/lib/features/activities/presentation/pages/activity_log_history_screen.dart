@@ -16,7 +16,8 @@ class ActivityLogHistoryScreen extends StatefulWidget {
   });
 
   @override
-  State<ActivityLogHistoryScreen> createState() => _ActivityLogHistoryScreenState();
+  State<ActivityLogHistoryScreen> createState() =>
+      _ActivityLogHistoryScreenState();
 }
 
 class _ActivityLogHistoryScreenState extends State<ActivityLogHistoryScreen> {
@@ -40,7 +41,8 @@ class _ActivityLogHistoryScreenState extends State<ActivityLogHistoryScreen> {
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
         final logs = (list ?? [])
-            .map((e) => ActivityLogEntry.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) =>
+                ActivityLogEntry.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList();
         if (mounted) {
           setState(() {
@@ -132,8 +134,10 @@ class _ActivityLogHistoryScreenState extends State<ActivityLogHistoryScreen> {
                         itemCount: _logs.length,
                         itemBuilder: (context, index) {
                           final log = _logs[index];
-                          final dateStr = DateFormat.yMMMd().add_jm().format(log.createdAt);
-                          final satisfaction = _satisfactionEmoji(log.satisfactionRating);
+                          final dateStr =
+                              DateFormat.yMMMd().add_jm().format(log.createdAt);
+                          final satisfaction =
+                              _satisfactionEmoji(log.satisfactionRating);
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
@@ -141,7 +145,8 @@ class _ActivityLogHistoryScreenState extends State<ActivityLogHistoryScreen> {
                                 log.activityName?.isNotEmpty == true
                                     ? log.activityName!
                                     : 'Activity #${log.activityId}',
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,7 +156,8 @@ class _ActivityLogHistoryScreenState extends State<ActivityLogHistoryScreen> {
                                   Text('Competency: ${log.competencyScore}'),
                                   if (satisfaction.isNotEmpty)
                                     Text('Satisfaction: $satisfaction'),
-                                  if (log.notes != null && log.notes!.isNotEmpty)
+                                  if (log.notes != null &&
+                                      log.notes!.isNotEmpty)
                                     Text('Notes: ${log.notes}'),
                                   const SizedBox(height: 4),
                                   Text(

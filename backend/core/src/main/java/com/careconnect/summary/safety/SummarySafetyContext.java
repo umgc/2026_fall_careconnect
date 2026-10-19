@@ -49,5 +49,6 @@ public record SummarySafetyContext(
             String type,
             String headline,
             String detail
-    ) {}
+    ) {
+    }
 }

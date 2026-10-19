@@ -1,0 +1,28 @@
+# .github/actions/setup-backend/action.yml
+#
+# Shared backend toolchain setup, used by any workflow that builds or
+# tests the Java backend (team-merge-ci.yml, develop-merge-ci.yml, ...).
+# Does NOT check out the repository — callers already do that as their
+# own first step, since some jobs need both this and setup-frontend in
+# the same job and checkout must only happen once.
+
+name: 'Setup Backend Toolchain'
+description: 'Sets up JDK (Temurin) for CareConnect backend builds.'
+
+inputs:
+  java-version:
+    description: 'JDK version to install'
+    required: false
+    default: '17'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up JDK ${{ inputs.java-version }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: temurin
+        # Caches ~/.m2/repository keyed on pom.xml, so dependency
+        # resolution doesn't re-download on every run.
+        cache: maven

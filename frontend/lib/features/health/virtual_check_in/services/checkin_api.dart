@@ -14,11 +14,11 @@ class CheckInApi {
   final String? _jwt; // optional bearer token
 
   CheckInApi(
-      String baseUrl, {
-        http.Client? client,
-        Duration timeout = const Duration(seconds: 15),
-        String? jwt,
-      })  : _base = _normalizeBase(baseUrl),
+    String baseUrl, {
+    http.Client? client,
+    Duration timeout = const Duration(seconds: 15),
+    String? jwt,
+  })  : _base = _normalizeBase(baseUrl),
         _client = client ?? http.Client(),
         _timeout = timeout,
         _jwt = jwt;
@@ -50,7 +50,8 @@ class CheckInApi {
     final res = await _client.get(uri, headers: headers).timeout(_timeout);
 
     if (res.statusCode != 200) {
-      throw Exception('Failed to load questions: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to load questions: ${res.statusCode} ${res.body}');
     }
     final raw = jsonDecode(res.body) as List;
     return raw
@@ -67,7 +68,8 @@ class CheckInApi {
         .timeout(_timeout);
 
     if (res.statusCode != 200 && res.statusCode != 201) {
-      throw Exception('Failed to submit answers: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to submit answers: ${res.statusCode} ${res.body}');
     }
   }
 
@@ -80,13 +82,16 @@ class CheckInApi {
         .timeout(_timeout);
 
     if (res.statusCode != 200) {
-      throw Exception('Failed to create question: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to create question: ${res.statusCode} ${res.body}');
     }
-    return BackendQuestionDto.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    return BackendQuestionDto.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// PUT /api/questions/{id} - Update existing question
-  Future<BackendQuestionDto> updateQuestion(int id, BackendQuestionDto question) async {
+  Future<BackendQuestionDto> updateQuestion(
+      int id, BackendQuestionDto question) async {
     final uri = Uri.parse('$_base/api/questions/$id');
     final headers = await _headers();
     final res = await _client
@@ -94,9 +99,11 @@ class CheckInApi {
         .timeout(_timeout);
 
     if (res.statusCode != 200) {
-      throw Exception('Failed to update question: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to update question: ${res.statusCode} ${res.body}');
     }
-    return BackendQuestionDto.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    return BackendQuestionDto.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>);
   }
 
   /// PATCH /api/questions/{id}/active - Deactivate a question
@@ -106,7 +113,8 @@ class CheckInApi {
     final res = await _client.patch(uri, headers: headers).timeout(_timeout);
 
     if (res.statusCode != 200) {
-      throw Exception('Failed to deactivate question: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to deactivate question: ${res.statusCode} ${res.body}');
     }
   }
 
