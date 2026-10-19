@@ -37,6 +37,8 @@ void main() {
       expect(conflict.status, ConflictStatus.pending);
       expect(conflict.canonicalValueBefore, isNot(conflict.incomingValue));
       expect(conflict.incomingSourceLabel, isNotEmpty);
+      expect(conflict.identityCheck?.type, IdentityCheckType.phone);
+      expect(conflict.identityCheck?.value, '4821');
     });
 
     test('TC-EHR-REC-069: resolving succeeds either way', () async {

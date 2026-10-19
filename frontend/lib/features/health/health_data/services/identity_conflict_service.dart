@@ -17,6 +17,10 @@ class IdentityConflictService {
     // TODO wire to backend when ready, e.g.:
     // final env = await ApiClient.instance.getJson<Map<String, dynamic>>(
     //   '/v1/api/ehr/identity-conflicts?status=PENDING');
+    // Each conflict should carry identityCheck: {"type": "PHONE", "value":
+    // "4821"} from the incoming source's ehr_source_identity row: the phone's
+    // last 4 digits, else the email (name part hidden), else the 5-digit
+    // postal_code; omitted if the record has none of them.
     // return ((env['resources'] as List?) ?? [])
     //     .map((j) => IdentityConflict.fromJson(j as Map<String, dynamic>))
     //     .toList();
@@ -49,6 +53,7 @@ class IdentityConflictService {
       incomingSourceLabel: 'Cerner',
       status: ConflictStatus.pending,
       detectedAt: DateTime(2026, 9, 26),
+      identityCheck: IdentityCheck.of(IdentityCheckType.phone, '4821'),
     ),
   ];
 }
