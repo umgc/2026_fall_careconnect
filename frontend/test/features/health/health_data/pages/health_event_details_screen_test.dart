@@ -1,5 +1,6 @@
 // HealthEventDetailsScreen: one record in full, including where it came from
 // (the source moved here from the cards, per the M2 feedback).
+// Test IDs TC-HDATA-034..036 are permanent. Never renumber, never reuse.
 
 import 'package:care_connect_app/features/health/health_data/models/health_record.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_event_details_screen.dart';
@@ -10,7 +11,7 @@ Future<void> _show(WidgetTester t, HealthRecord record) =>
     t.pumpWidget(MaterialApp(home: HealthEventDetailsScreen(record: record)));
 
 void main() {
-  testWidgets('shows the type, title, status, date, source and every detail', (t) async {
+  testWidgets('TC-HDATA-034: shows the type, title, status, date, source and every detail', (t) async {
     await _show(t, HealthRecord.single(
       id: 'claim-1',
       source: RecordSource.medicare,
@@ -35,7 +36,7 @@ void main() {
     expect(find.text('\$120.00'), findsOneWidget);
   });
 
-  testWidgets('a record without a date or status leaves those rows out instead of showing blanks', (t) async {
+  testWidgets('TC-HDATA-035: a record without a date or status leaves those rows out instead of showing blanks', (t) async {
     await _show(t, HealthRecord.single(
       id: 'r-2',
       source: RecordSource.epic,
@@ -48,7 +49,7 @@ void main() {
     expect(find.text('Epic'), findsOneWidget);
   });
 
-  testWidgets('every month is spelled out in the date', (t) async {
+  testWidgets('TC-HDATA-036: every month is spelled out in the date', (t) async {
     await _show(t, HealthRecord.single(
       id: 'r-3',
       source: RecordSource.cerner,

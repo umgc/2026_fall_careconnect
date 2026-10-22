@@ -1,0 +1,19 @@
+requirements: [M3-REQ-01, M3-REQ-02, M3-REQ-16]
+scenarios: [M3-SC-PAT-001]
+origin: derived
+capturedAtUtc: 2026-10-21T18:20:00Z
+sandboxPersona: open
+requestPattern: GET {openBase}/Patient/{syntheticPatientId}
+httpStatus: 200
+bundleEntryCount: null
+nextLinkPresent: false
+derivedFrom: open-sandbox Patient read for approved synthetic alias open-patient-a
+changes:
+  - replaced patient, version, identifier, name, telecom, address, and contact values
+  - removed narrative and environment-specific extensions
+  - retained representative Patient field shapes for mapping tests
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.patientFixturesHaveSyntheticIdentity, TBD Patient mapper test]
+expectedBehavior: every approved Patient field maps while source identity and provenance are retained
+contractDependency: canonical mapping approval required for paired expected output

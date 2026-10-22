@@ -1,6 +1,8 @@
 import 'package:care_connect_app/features/fall_alert/pages/skeleton_playback_widget.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/fall_alert.dart';
 
@@ -273,9 +275,20 @@ class AlertDetailsPage extends StatelessWidget {
       return;
     }
 
+    // A caregiver gets the caregiver page, Medicare tab included, as from the
+    // patient list (DEF-MCR-33). No signed-in user: the patient view.
+    var isCaregiver = false;
+    try {
+      isCaregiver =
+          Provider.of<UserProvider>(context, listen: false).isCaregiver;
+    } on ProviderNotFoundException {
+      isCaregiver = false;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PatientDetailsPage(patientId: id),
+        builder: (_) =>
+            PatientDetailsPage(patientId: id, isCaregiver: isCaregiver),
         settings: const RouteSettings(name: '/patient-details'),
       ),
     );

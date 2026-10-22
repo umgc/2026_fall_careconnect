@@ -35,8 +35,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             "/v1/api/auth",
             "/api/v1/auth",
             "/v1/api/test",
-            "/v1/api/email-test",
-            "/v1/api/emergency"
+            "/v1/api/email-test"
+            // Not /v1/api/emergency: those endpoints decide access by the caller, so a signed-in
+            // user's token must be read there like anywhere else (DEF-EMG-02).
     );
     private final JwtTokenProvider jwt;
     private final UserDetailsService uds;

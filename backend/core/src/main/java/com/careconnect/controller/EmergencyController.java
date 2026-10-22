@@ -1,6 +1,13 @@
 package com.careconnect.controller;
 
+import com.careconnect.exception.AppException;
+import com.careconnect.model.Patient;
+import com.careconnect.model.User;
+import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.UnauthorizedException;
+import com.careconnect.service.PatientService;
 import com.careconnect.service.VialOfLifePdfService;
+import com.careconnect.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,6 +31,39 @@ public class EmergencyController {
 
     @Autowired
     private VialOfLifePdfService vialOfLifePdfService;
+
+    @Autowired
+    private SecurityUtil securityUtil;
+
+    @Autowired
+    private AuthorizationService authorizationService;
+
+    @Autowired
+    private PatientService patientService;
+
+    /**
+     * Interim fix for DEF-EMG-01 until CR-1 Increment 2 replaces these endpoints: only a caller who
+     * may see this patient (the patient, a linked caregiver or family member, or an admin, as
+     * {@link AuthorizationService#requirePatientAccess} decides) gets the PDF. Everyone else gets the
+     * same 404 as an unknown emergency ID, so a refusal does not reveal that the patient exists.
+     */
+    private boolean mayReadEmergencyData(String emergencyId) {
+        if (emergencyId == null || !emergencyId.startsWith("VIAL")) {
+            return false;
+        }
+        try {
+            Long patientId = Long.parseLong(emergencyId.substring(4));
+            Patient patient = patientService.getPatientById(patientId);
+            if (patient == null || patient.getUser() == null) {
+                return false;
+            }
+            // requirePatientAccess compares user ids, so pass the patient's user id, not patient.id.
+            authorizationService.requirePatientAccess(securityUtil.resolveCurrentUser(), patient.getUser().getId());
+            return true;
+        } catch (NumberFormatException | UnauthorizedException | AppException e) {
+            return false;
+        }
+    }
 
     /**
      * Generate and serve a pre-filled Vial of Life PDF for emergency use
@@ -50,6 +90,10 @@ public class EmergencyController {
             @Parameter(description = "Emergency ID (e.g., VIAL123456)", required = true)
             @PathVariable String emergencyId) {
 
+        if (!mayReadEmergencyData(emergencyId)) {
+            LOGGER.warn("Emergency PDF refused or not found for ID: {}", emergencyId);
+            return ResponseEntity.notFound().build();
+        }
         try {
             LOGGER.info("Emergency PDF requested for ID: {}", emergencyId);
 
@@ -89,6 +133,10 @@ public class EmergencyController {
             @Parameter(description = "Emergency ID (e.g., VIAL123456)", required = true)
             @PathVariable String emergencyId) {
 
+        if (!mayReadEmergencyData(emergencyId)) {
+            LOGGER.warn("Emergency PDF refused or not found for ID: {}", emergencyId);
+            return ResponseEntity.notFound().build();
+        }
         try {
             LOGGER.info("Emergency PDF download requested for ID: {}", emergencyId);
 
@@ -136,6 +184,11 @@ public class EmergencyController {
     public ResponseEntity<String> debugPatientData(
             @Parameter(description = "Emergency ID (e.g., VIAL123456)", required = true)
             @PathVariable String emergencyId) {
+        // DEF-EMG-03 interim fix: the debug endpoint answers administrators only; everyone else gets 404.
+        User caller = securityUtil.resolveCurrentUser();
+        if (caller == null || !caller.isAdmin()) {
+            return ResponseEntity.notFound().build();
+        }
         try {
             LOGGER.info("Debug: Testing patient data retrieval for emergency ID: {}", emergencyId);
 

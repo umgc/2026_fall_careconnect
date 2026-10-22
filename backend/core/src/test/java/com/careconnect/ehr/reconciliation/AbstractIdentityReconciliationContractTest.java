@@ -455,7 +455,7 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
-    @DisplayName("TC-EHR-REC-032 A date_of_birth the patient declined is not asked again on the next sync")
+    @DisplayName("TC-EHR-REC-047 A date_of_birth the patient declined is not asked again on the next sync")
     void declinedDateOfBirthIsNotRePromptedOnTheNextSync() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
@@ -480,25 +480,26 @@ public abstract class AbstractIdentityReconciliationContractTest {
     }
 
     @Test
-    @DisplayName("TC-EHR-REC-033 A value declined from one source still prompts when another source sends it")
+    @DisplayName("TC-EHR-REC-048 A value declined from one source still prompts when another source sends it")
     void valueDeclinedFromOneSourceStillPromptsFromAnother() {
         Long patientId = freshPatientId();
         Instant t1 = Instant.parse("2026-01-01T00:00:00Z");
         Instant t2 = t1.plus(1, ChronoUnit.DAYS);
         Long epic = sourceId("EPIC");
-        Long cerner = sourceId("CERNER");
+        Long oracleHealth = sourceId("ORACLE_HEALTH");
 
         reconciler().reconcile(snapshot(patientId, sourceId("ATHENAHEALTH"), t1, DATE_OF_BIRTH, "1950-05-04"));
         reconciler().reconcile(snapshot(patientId, epic, t2, DATE_OF_BIRTH, "1950-05-06"));
         reconciler().finalizePendingDateOfBirth(patientId, false);
 
         // A second, independent source sends the same date: corroboration, so the patient is asked.
-        var fromCerner = reconciler().reconcile(
-                snapshot(patientId, cerner, t2.plus(1, ChronoUnit.DAYS), DATE_OF_BIRTH, "1950-05-06"));
-        assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION, fromCerner.get(0).decision());
+        var fromOracleHealth = reconciler().reconcile(
+                snapshot(patientId, oracleHealth, t2.plus(1, ChronoUnit.DAYS), DATE_OF_BIRTH, "1950-05-06"));
+        assertEquals(ReconciliationOutcome.Decision.PENDING_PATIENT_CONFIRMATION,
+                fromOracleHealth.get(0).decision());
         assertEquals("1950-05-06",
                 auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).orElseThrow().incomingValue());
-        assertEquals(cerner,
+        assertEquals(oracleHealth,
                 auditWriter().currentPendingConflict(patientId, DATE_OF_BIRTH).orElseThrow().sourceId());
     }
 

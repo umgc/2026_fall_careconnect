@@ -8,7 +8,7 @@ import com.careconnect.model.ehr.EhrPatientCrosswalk;
 import com.careconnect.repository.ConsentGrantRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
-import com.careconnect.service.ConsentService;
+import com.careconnect.service.consent.ConsentService;
 import com.careconnect.service.ehr.EhrAuditService;
 import com.careconnect.service.ehr.EhrSourceDataPurger;
 import com.careconnect.service.ehr.EhrSourceResolver;
@@ -92,7 +92,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("status is NOT_CONSENTED without an active EHR-import grant, even when a link exists")
+    @DisplayName("TC-EHR-ATH-001 status is NOT_CONSENTED without an active EHR-import grant, even when a link exists")
     void statusWithoutConsent() {
         // Arrange: Romilda's link is seeded, but seeding is not consent.
         consented(false);
@@ -109,7 +109,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("status is NOT_LINKED when consent exists but no chart is linked")
+    @DisplayName("TC-EHR-ATH-002 status is NOT_LINKED when consent exists but no chart is linked")
     void statusWithoutLink() {
         consented(true);
         linked(false);
@@ -118,7 +118,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("consent plus a link is CONNECTED")
+    @DisplayName("TC-EHR-ATH-003 consent plus a link is CONNECTED")
     void statusConnected() {
         consented(true);
         linked(true);
@@ -130,7 +130,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("connect records consent before searching for the chart, then runs the first sync")
+    @DisplayName("TC-EHR-ATH-004 connect records consent before searching for the chart, then runs the first sync")
     void connectRecordsConsentFirst() {
         // Arrange
         when(linker.link(USER_ID)).thenReturn(AthenaLinkResult.linked(ROMILDA_ID));
@@ -150,7 +150,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("a failed link reports why, keeps the consent, and does not sync")
+    @DisplayName("TC-EHR-ATH-005 a failed link reports why, keeps the consent, and does not sync")
     void connectWithFailedLink() {
         // Arrange
         when(linker.link(USER_ID)).thenReturn(AthenaLinkResult.of(AthenaLinkResult.State.AMBIGUOUS_MATCH));
@@ -166,7 +166,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("disconnect purges athena data and revokes consent when athena was the last linked source")
+    @DisplayName("TC-EHR-ATH-006 disconnect purges athena data and revokes consent when athena was the last linked source")
     void disconnectRevokesWhenLastLink() {
         // Arrange
         final EhrSourceDataPurger.Purged purged = new EhrSourceDataPurger.Purged(3, 3, 0, 0, 1);
@@ -185,7 +185,7 @@ class AthenaConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("disconnect keeps the shared EHR-import grant while another source is still linked")
+    @DisplayName("TC-EHR-ATH-007 disconnect keeps the shared EHR-import grant while another source is still linked")
     void disconnectKeepsConsentForOtherSources() {
         // Arrange: an Epic link remains after athena's crosswalk row is deleted.
         when(purger.purge(anyLong(), any(), any(), any())).thenReturn(new EhrSourceDataPurger.Purged(0, 0, 0, 0, 1));

@@ -1,4 +1,4 @@
-package com.careconnect.service;
+package com.careconnect.service.consent;
 
 import com.careconnect.exception.AppException;
 import com.careconnect.model.ConsentGrant;
@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.careconnect.service.CaregiverPatientLinkService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -22,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ConsentService {
+
+    /** The only role that can hold a Medicare View grant: the grantee must be a linked caregiver. */
+    static final String MEDICARE_VIEW_GRANTEE_ROLE = "CAREGIVER";
 
     private final ConsentGrantRepository consentGrantRepository;
     private final CaregiverPatientLinkService caregiverPatientLinkService;
@@ -177,16 +181,6 @@ public class ConsentService {
     }
 
     /**
-     * Revokes any active AI-retrieval consent grants from a patient to a grantee.
-     *
-     * <p>When no ACTIVE grant exists and no grant history exists, inserts a {@code REVOKED}
-     * sentinel so care-circle grandfather access ends (toggle OFF matches Ask AI).
-     *
-     * @param patientUserId user identifier of the patient
-     * @param granteeUserId user identifier of the grantee
-     * @return number of grants revoked or sentinel rows written
-     */
-    /**
      * Records a patient's self-consent to import their own external EHR records
      * ({@link ConsentGrant#SCOPE_EHR_IMPORT}, Epic Phase 0). Unlike
      * {@link #grantAiRetrievalConsent} this is a self-grant (patient == grantee) and does not
@@ -245,6 +239,16 @@ public class ConsentService {
         return active.size();
     }
 
+    /**
+     * Revokes any active AI-retrieval consent grants from a patient to a grantee.
+     *
+     * <p>When no ACTIVE grant exists and no grant history exists, inserts a {@code REVOKED}
+     * sentinel so care-circle grandfather access ends (toggle OFF matches Ask AI).
+     *
+     * @param patientUserId user identifier of the patient
+     * @param granteeUserId user identifier of the grantee
+     * @return number of grants revoked or sentinel rows written
+     */
     @Transactional
     public int revokeAiRetrievalConsent(final Long patientUserId, final Long granteeUserId) {
         if (patientUserId == null || granteeUserId == null) {
@@ -287,5 +291,172 @@ public class ConsentService {
             return 1;
         }
         return 0;
+    }
+
+    /**
+     * Returns whether the caregiver currently holds an active Medicare View
+     * ({@link ConsentGrant#SCOPE_MEDICARE_VIEW}) consent grant from the given patient.
+     *
+     * @param caregiverUserId user identifier of the grantee
+     * @param patientUserId   user identifier of the patient granting consent
+     * @return true when an active, non-expired grant exists
+     */
+    @Transactional(readOnly = true)
+    public boolean isMedicareViewConsentGranted(
+            final Long caregiverUserId, final Long patientUserId) {
+        if (caregiverUserId == null || patientUserId == null) {
+            return false;
+        }
+        return consentGrantRepository.existsActiveGrant(
+                patientUserId, caregiverUserId, ConsentGrant.SCOPE_MEDICARE_VIEW, Instant.now());
+    }
+
+    /**
+     * Returns whether Medicare View consent is in effect for the pair. Unlike AI retrieval there
+     * is no care-circle fallback: SRS BR-02 and FR-MCR-16 require an explicit, active
+     * {@code MEDICARE_VIEW} grant, and that is exactly what
+     * {@link com.careconnect.security.MedicareAccessPolicy} checks on every Medicare read. Reporting
+     * a linked caregiver without a grant as consented would tell the patient their data is shared
+     * when the caregiver is in fact refused.
+     *
+     * @param caregiverUserId grantee user id
+     * @param patientUserId   patient user id
+     * @return true only when an active, non-expired explicit grant exists
+     */
+    @Transactional(readOnly = true)
+    public boolean isEffectiveMedicareViewConsent(
+            final Long caregiverUserId, final Long patientUserId) {
+        return isMedicareViewConsentGranted(caregiverUserId, patientUserId);
+    }
+
+    /**
+     * Grants Medicare View ({@link ConsentGrant#SCOPE_MEDICARE_VIEW}) consent from a patient to a
+     * caregiver linked to them.
+     *
+     * <p>If an ACTIVE grant already exists for the tuple, it is refreshed in place (and any
+     * duplicate ACTIVE rows are revoked) so callers cannot accumulate multiple live grants.
+     *
+     * @param patientUserId user identifier of the patient granting consent
+     * @param granteeUserId user identifier of the caregiver
+     * @param granteeRole   optional; when present it must be {@code CAREGIVER}
+     * @param expiresAt     optional expiry instant, which must be in the future; null means no expiry
+     * @return the persisted grant
+     * @throws AppException with status 400 when the role or expiry is invalid or the grantee has no
+     *                      active caregiver link to the patient
+     */
+    @Transactional
+    public ConsentGrant grantMedicareViewConsent(
+            final Long patientUserId,
+            final Long granteeUserId,
+            final String granteeRole,
+            final Instant expiresAt) {
+        if (patientUserId == null || granteeUserId == null) {
+            throw new IllegalArgumentException("patientUserId and granteeUserId are required");
+        }
+        if (granteeRole != null && !MEDICARE_VIEW_GRANTEE_ROLE.equals(granteeRole)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "granteeRole must be CAREGIVER");
+        }
+        final Instant now = Instant.now();
+        if (expiresAt != null && !expiresAt.isAfter(now)) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "expiresAt must be in the future");
+        }
+        // Only a linked caregiver can receive the grant. MedicareAccessPolicy checks the link
+        // again on every read, so a grant alone never opens Medicare data.
+        if (!caregiverPatientLinkService.hasAccessToPatient(granteeUserId, patientUserId)) {
+            throw new AppException(
+                    HttpStatus.BAD_REQUEST,
+                    "No active caregiver relationship with this patient");
+        }
+        // Soft-expired ACTIVE rows still occupy the unique ACTIVE index — revoke them first.
+        final List<ConsentGrant> statusActive = consentGrantRepository.findStatusActiveGrants(
+                patientUserId, granteeUserId, ConsentGrant.SCOPE_MEDICARE_VIEW);
+        if (!statusActive.isEmpty()) {
+            final List<ConsentGrant> expired = new ArrayList<>();
+            for (final ConsentGrant row : statusActive) {
+                if (row.getExpiresAt() != null && !row.getExpiresAt().isAfter(now)) {
+                    row.setStatus(ConsentGrant.STATUS_REVOKED);
+                    row.setRevokedAt(now);
+                    expired.add(row);
+                }
+            }
+            if (!expired.isEmpty()) {
+                consentGrantRepository.saveAll(expired);
+            }
+        }
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, granteeUserId, ConsentGrant.SCOPE_MEDICARE_VIEW, now);
+        if (!active.isEmpty()) {
+            final ConsentGrant primary = active.get(0);
+            primary.setGranteeRole(MEDICARE_VIEW_GRANTEE_ROLE);
+            primary.setGrantedAt(now);
+            primary.setExpiresAt(expiresAt);
+            primary.setRevokedAt(null);
+            primary.setStatus(ConsentGrant.STATUS_ACTIVE);
+            if (active.size() > 1) {
+                final List<ConsentGrant> extras = new ArrayList<>(active.subList(1, active.size()));
+                for (final ConsentGrant extra : extras) {
+                    extra.setStatus(ConsentGrant.STATUS_REVOKED);
+                    extra.setRevokedAt(now);
+                }
+                consentGrantRepository.saveAll(extras);
+            }
+            final ConsentGrant saved = consentGrantRepository.save(primary);
+            if (log.isInfoEnabled()) {
+                log.info(
+                        "Refreshed Medicare View consent: patient={} grantee={} grantId={}",
+                        patientUserId, granteeUserId, saved.getId());
+            }
+            return saved;
+        }
+
+        final ConsentGrant grant = ConsentGrant.builder()
+                .patientUserId(patientUserId)
+                .granteeUserId(granteeUserId)
+                .granteeRole(MEDICARE_VIEW_GRANTEE_ROLE)
+                .scope(ConsentGrant.SCOPE_MEDICARE_VIEW)
+                .status(ConsentGrant.STATUS_ACTIVE)
+                .grantedAt(now)
+                .expiresAt(expiresAt)
+                .build();
+        final ConsentGrant saved = consentGrantRepository.save(grant);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Granted Medicare View consent: patient={} grantee={} expiresAt={}",
+                    patientUserId, granteeUserId, expiresAt);
+        }
+        return saved;
+    }
+
+    /**
+     * Revokes any active Medicare View consent grants from a patient to a grantee. The caregiver's
+     * next Medicare read is refused, because {@link com.careconnect.security.MedicareAccessPolicy}
+     * looks the grant up on every request.
+     *
+     * @param patientUserId user identifier of the patient
+     * @param granteeUserId user identifier of the grantee
+     * @return number of grants revoked; 0 when none was active
+     */
+    @Transactional
+    public int revokeMedicareViewConsent(final Long patientUserId, final Long granteeUserId) {
+        if (patientUserId == null || granteeUserId == null) {
+            return 0;
+        }
+        final Instant now = Instant.now();
+        final List<ConsentGrant> active = consentGrantRepository.findActiveGrants(
+                patientUserId, granteeUserId, ConsentGrant.SCOPE_MEDICARE_VIEW, now);
+        if (active.isEmpty()) {
+            return 0;
+        }
+        for (final ConsentGrant grant : active) {
+            grant.setStatus(ConsentGrant.STATUS_REVOKED);
+            grant.setRevokedAt(now);
+        }
+        consentGrantRepository.saveAll(active);
+        if (log.isInfoEnabled()) {
+            log.info(
+                    "Revoked {} Medicare View consent grant(s): patient={} grantee={}",
+                    active.size(), patientUserId, granteeUserId);
+        }
+        return active.size();
     }
 }

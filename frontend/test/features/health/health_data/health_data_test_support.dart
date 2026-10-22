@@ -51,10 +51,14 @@ class RouteAdapter implements HttpClientAdapter {
   final Completer<void>? gate;
   final List<String> paths = [];
 
+  /// Every request's full URI, query included.
+  final List<Uri> uris = [];
+
   @override
   Future<ResponseBody> fetch(RequestOptions options,
       Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
     paths.add(options.path);
+    uris.add(options.uri);
     if (gate != null) await gate!.future;
     for (final e in status.entries) {
       if (options.path.endsWith(e.key)) {

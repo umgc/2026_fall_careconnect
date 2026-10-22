@@ -3,6 +3,7 @@ package com.careconnect.service.ehr;
 import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.parser.IParser;
 import ca.uhn.fhir.rest.client.apache.ApacheRestfulClientFactory;
+import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrCoverageRecord;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
 import com.careconnect.model.ehr.EhrVisitRecord;
@@ -11,6 +12,7 @@ import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.ehr.EhrCoverageRecordRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
 import com.careconnect.repository.ehr.EhrVisitRecordRepository;
+import com.careconnect.security.MedicareAccessPolicy;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +46,9 @@ public class EhrService {
 
     @Autowired
     private PatientRepository patientRepository;
+
+    @Autowired
+    private MedicareAccessPolicy medicareAccessPolicy;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -121,6 +126,32 @@ public class EhrService {
         return userRepository.findByEmail(currentUserAuth.getName())
                 .flatMap(user -> patientRepository.findByUserId(user.getId()))
                 .flatMap(patient -> ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(patient.getId(), id))
+                .filter(EhrPatientCrosswalk::isLinked);
+    }
+
+    /**
+     * Refuses a signed-in user who may not read this patient's Medicare data. {@link MedicareAccessPolicy}
+     * decides (FR-MCR-16, FR-MCR-17, BR-02): the patient themself, or an assigned caregiver holding the
+     * patient's {@code MEDICARE_VIEW} consent. Everyone else, family members and administrators included,
+     * gets the policy's one 404, whatever the reason.
+     *
+     * @param patientId the {@code patient.id} asked for, not a user id
+     * @throws com.careconnect.exception.AppException with status 404 for every refusal
+     */
+    public void requireMedicareAccess(Long patientId) {
+        Authentication currentUserAuth = SecurityContextHolder.getContext().getAuthentication();
+        User caller = currentUserAuth == null
+                ? null
+                : userRepository.findByEmail(currentUserAuth.getName()).orElse(null);
+        medicareAccessPolicy.requireMedicareAccess(caller, patientId);
+    }
+
+    /**
+     * That patient's <em>linked</em> crosswalk row for this source, for a caller {@link #requireMedicareAccess}
+     * has already allowed. Empty when the patient has not connected the source or the link is still pending.
+     */
+    public Optional<EhrPatientCrosswalk> getCrosswalkForPatient(Long patientId, Long sourceId) {
+        return ehrPatientCrosswalkRepository.findByPatientIdAndSourceId(patientId, sourceId)
                 .filter(EhrPatientCrosswalk::isLinked);
     }
 

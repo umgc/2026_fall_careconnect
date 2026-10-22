@@ -1,5 +1,6 @@
 package com.careconnect.integration.cerner;
 
+import com.careconnect.config.CernerProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.time.Instant;
@@ -17,7 +18,8 @@ import java.util.List;
  */
 public final class CernerAllergyMapper {
 
-    public static final String SOURCE = "CERNER";
+    /** Canonical {@code ehr_source.code} for Oracle Health/Cerner records. */
+    public static final String SOURCE = CernerProperties.SOURCE_ORACLE_HEALTH;
 
     public record Allergy(String source, String sourceRecordId, String substanceText, String substanceCode,
                           String clinicalStatus, String verificationStatus, String severity,

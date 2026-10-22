@@ -26,18 +26,27 @@ enum MedicareReadProblem {
   /// 409 ERR-MCR-05: Medicare rejected the stored link (FR-MCR-09).
   linkExpired,
 
-  /// 404: the patient has no Medicare link (AC-MCR-11-2).
+  /// 404: the patient has no Medicare link (AC-MCR-11-2). On a caregiver
+  /// read it is also every access refusal (FR-MCR-17).
   notLinked,
+
+  /// 403: the caller may not read this data at all.
+  forbidden,
 
   /// Anything else: ERR-MCR-03 (FR-MCR-24).
   unreachable,
 }
 
 class MedicareDataService {
-  Future<MedicareFetchResult> fetchRecords() async {
+  /// The caller's own records, or, with [patientId] (a `patient.id`), that
+  /// patient's records as their caregiver (FR-MCR-16).
+  Future<MedicareFetchResult> fetchRecords({int? patientId}) async {
     final failures = <int?>[];
-    final visits = await _getEnvelope('/v1/api/medicare/visits', failures);
-    final coverage = await _getEnvelope('/v1/api/medicare/coverage', failures);
+    final query = patientId == null ? null : {'patientId': patientId};
+    final visits =
+        await _getEnvelope('/v1/api/medicare/visits', failures, query);
+    final coverage =
+        await _getEnvelope('/v1/api/medicare/coverage', failures, query);
     final synthetic =
         (visits?['synthetic'] == true) || (coverage?['synthetic'] == true);
     final records = <HealthRecord>[
@@ -54,16 +63,19 @@ class MedicareDataService {
               ? MedicareReadProblem.linkExpired
               : failures.contains(404)
                   ? MedicareReadProblem.notLinked
-                  : MedicareReadProblem.unreachable,
+                  : failures.contains(403)
+                      ? MedicareReadProblem.forbidden
+                      : MedicareReadProblem.unreachable,
     );
   }
 
   /// The envelope, or null with the HTTP status (null when none) in [failures].
-  Future<Map<String, dynamic>?> _getEnvelope(
-      String path, List<int?> failures) async {
+  Future<Map<String, dynamic>?> _getEnvelope(String path, List<int?> failures,
+      [Map<String, dynamic>? query]) async {
     try {
       return await ApiClient.instance.getJson<Map<String, dynamic>>(
         path,
+        query: query,
         parser: (json) =>
             json is Map<String, dynamic> ? json : <String, dynamic>{},
       );
@@ -112,8 +124,9 @@ class MedicareDataService {
     final paid = _money(eob['payment']?['amount']);
     if (paid != null) details.add(RecordDetail('Medicare paid', paid));
     final svc = eob['billablePeriod']?['start'];
-    if (svc is String)
+    if (svc is String) {
       details.add(RecordDetail('Service date', _friendlyDate(svc)));
+    }
     return HealthRecord.single(
       id: id,
       source: RecordSource.medicare,
@@ -140,14 +153,16 @@ class MedicareDataService {
           : 'Medicare';
       if (payor is String) details.add(RecordDetail('Payer', payor));
       final start = r['period']?['start'];
-      if (start is String)
+      if (start is String) {
         details.add(RecordDetail('Effective', _friendlyDate(start)));
+      }
       final klass = (r['class'] as List?)
           ?.map((c) => c is Map ? _conceptText(c['type']) : null)
           .whereType<String>()
           .join(', ');
-      if (klass != null && klass.isNotEmpty)
+      if (klass != null && klass.isNotEmpty) {
         details.add(RecordDetail('Plan', klass));
+      }
       out.add(HealthRecord.single(
         id: id,
         source: RecordSource.medicare,

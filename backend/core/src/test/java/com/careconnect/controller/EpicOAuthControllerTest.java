@@ -4,7 +4,7 @@ import com.careconnect.config.EpicProperties;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrCredential;
 import com.careconnect.repository.ehr.EhrResourceRepository;
-import com.careconnect.service.ConsentService;
+import com.careconnect.service.consent.ConsentService;
 import com.careconnect.service.ehr.EpicAuthStateStore;
 import com.careconnect.service.ehr.EpicOAuthService;
 import com.careconnect.service.ehr.EpicSyncService;

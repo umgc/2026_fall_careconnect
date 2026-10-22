@@ -195,6 +195,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/v1/api/invite/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/invite/*/accept").authenticated()
 
+                        // CC-12: whoever scans an emergency passport QR at a scene has no account.
+                        // GET only, one path segment; the rest of /v1/api/passport stays authenticated.
+                        // Defended by a 256-bit token, a per-client rate limit and patient opt-in per field.
+                        .requestMatchers(HttpMethod.GET, "/v1/api/passport/scan/*").permitAll()
+
                         // Kept from before the matcher list was collapsed: public on team-e-develop.
                         .requestMatchers("/v1/api/invoices/extract-llm").permitAll()
 

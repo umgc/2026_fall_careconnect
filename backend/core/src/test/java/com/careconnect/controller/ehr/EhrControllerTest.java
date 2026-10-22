@@ -1,5 +1,6 @@
 package com.careconnect.controller.ehr;
 
+import com.careconnect.exception.AppException;
 import com.careconnect.model.ehr.EhrPatientCrosswalk;
 import com.careconnect.model.ehr.MedicareEnvelope;
 import com.careconnect.model.ehr.MedicareProperties;
@@ -27,6 +28,12 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -34,7 +41,10 @@ import static org.mockito.Mockito.when;
  * The Medicare reads in live mode, the default: a linked patient gets FHIR from the cache in an
  * envelope, with the status gate applied, and anything else is a 404. Mock mode is
  * {@code EhrControllerMockModeTest}; the real cache and JPA layer underneath are
- * {@code MedicareReadIntegrationTest}.
+ * {@code MedicareReadIntegrationTest}. A {@code patientId} read asks {@code EhrService.requireMedicareAccess}
+ * first, which refuses with the access policy's 404 (FR-MCR-16, FR-MCR-17).
+ * <p>
+ * Test IDs TC-MCR-CACHE-035..042 and TC-MCR-AUTHZ-031..036 are permanent. Never renumber, never reuse.
  */
 @ExtendWith(MockitoExtension.class)
 class EhrControllerTest {
@@ -94,13 +104,13 @@ class EhrControllerTest {
     }
 
     @Test
-    @DisplayName("a linked patient gets their Patient resource from the cache, labelled live and synthetic (sandbox), with the cache's fetchedAt")
+    @DisplayName("TC-MCR-CACHE-035: a linked patient gets their Patient resource from the cache, labelled live and synthetic (sandbox), with the cache's fetchedAt")
     void linkedPatientRead() throws Exception {
         linked();
         final JsonNode patient = resource("{\"resourceType\":\"Patient\",\"id\":\"bene-1\"}");
         when(cache.patient(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(patient), FETCHED));
 
-        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare", null));
 
         assertThat(body.mode()).isEqualTo(MedicareProperties.MODE_LIVE);
         assertThat(body.synthetic()).isTrue();
@@ -110,26 +120,26 @@ class EhrControllerTest {
     }
 
     @Test
-    @DisplayName("a linked patient with nothing cached or returned gets an empty single-resource envelope, not an error")
+    @DisplayName("TC-MCR-CACHE-036: a linked patient with nothing cached or returned gets an empty single-resource envelope, not an error")
     void linkedPatientWithNoResource() {
         linked();
         when(cache.patient(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(), FETCHED));
 
-        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchIdentity("medicare", null));
 
         assertThat(body.total()).isZero();
         assertThat(body.resources()).isEmpty();
     }
 
     @Test
-    @DisplayName("coverage goes through the status gate: a cancelled coverage is not served")
+    @DisplayName("TC-MCR-CACHE-037: coverage goes through the status gate: a cancelled coverage is not served")
     void coverageIsGated() throws Exception {
         linked();
         final JsonNode active = resource("{\"resourceType\":\"Coverage\",\"id\":\"part-a\",\"status\":\"active\"}");
         final JsonNode cancelled = resource("{\"resourceType\":\"Coverage\",\"id\":\"part-d\",\"status\":\"cancelled\"}");
         when(cache.coverage(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(active, cancelled), FETCHED));
 
-        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare"));
+        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare", null));
 
         assertThat(body.resources()).containsExactly(active);
         assertThat(body.total()).isEqualTo(1);
@@ -137,52 +147,140 @@ class EhrControllerTest {
     }
 
     @Test
-    @DisplayName("visits go through the status gate: an entered-in-error claim is not served")
+    @DisplayName("TC-MCR-CACHE-038: visits go through the status gate: an entered-in-error claim is not served")
     void visitsAreGated() throws Exception {
         linked();
         final JsonNode claim = resource("{\"resourceType\":\"ExplanationOfBenefit\",\"id\":\"c1\",\"status\":\"active\"}");
         final JsonNode voided = resource("{\"resourceType\":\"ExplanationOfBenefit\",\"id\":\"c2\",\"status\":\"entered-in-error\"}");
         when(cache.visits(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(claim, voided), FETCHED));
 
-        assertThat(envelope(controller.fetchVisits("medicare")).resources()).containsExactly(claim);
+        assertThat(envelope(controller.fetchVisits("medicare", null)).resources()).containsExactly(claim);
     }
 
     @Test
-    @DisplayName("no completed link is a 404 on every read, and the cache is never asked")
+    @DisplayName("TC-MCR-CACHE-039: no completed link is a 404 on every read, and the cache is never asked")
     void notLinkedIs404() {
         notLinked();
 
-        assertThat(controller.fetchIdentity("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchVisits("medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchIdentity("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchVisits("medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         verifyNoInteractions(cache);
     }
 
     @Test
-    @DisplayName("a source other than medicare is a 404, without looking anything up")
+    @DisplayName("TC-MCR-CACHE-040: a source other than medicare is a 404, without looking anything up")
     void unknownSourceIs404() {
-        assertThat(controller.fetchIdentity("athena").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("epic").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchVisits("cerner").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchIdentity("athena", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("epic", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchVisits("cerner", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         verifyNoInteractions(medicareService, ehrService, cache);
     }
 
     @Test
-    @DisplayName("the source name is case-insensitive")
+    @DisplayName("TC-MCR-CACHE-041: the source name is case-insensitive")
     void sourceIsCaseInsensitive() {
         notLinked();
 
-        assertThat(controller.fetchCoverage("MEDICARE").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-        assertThat(controller.fetchCoverage("Medicare").getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("MEDICARE", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(controller.fetchCoverage("Medicare", null).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     @Test
-    @DisplayName("production (sandbox off) data is not labelled synthetic")
+    @DisplayName("TC-MCR-CACHE-042: production (sandbox off) data is not labelled synthetic")
     void productionIsNotSynthetic() {
         ReflectionTestUtils.setField(properties, "sandbox", false);
         linked();
         when(cache.coverage(crosswalk, ACTOR)).thenReturn(new CachedRead(List.of(), FETCHED));
 
-        assertThat(envelope(controller.fetchCoverage("medicare")).synthetic()).isFalse();
+        assertThat(envelope(controller.fetchCoverage("medicare", null)).synthetic()).isFalse();
+    }
+
+    private static final long PATIENT = 2L;
+    private static final long CAREGIVER = 12L;
+
+    /** The access policy's refusal, as {@code EhrService.requireMedicareAccess} throws it. */
+    private void refused() {
+        doThrow(new AppException(HttpStatus.NOT_FOUND, "Medicare data not found")).when(ehrService).requireMedicareAccess(PATIENT);
+    }
+
+    private static void assertRefused(final org.assertj.core.api.ThrowableAssert.ThrowingCallable read) {
+        assertThatThrownBy(read).isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getStatus()).isEqualTo(HttpStatus.NOT_FOUND));
+    }
+
+    private void caregiverAllowed() {
+        when(medicareService.getId()).thenReturn(MEDICARE);
+        when(ehrService.getCrosswalkForPatient(PATIENT, MEDICARE)).thenReturn(Optional.of(crosswalk));
+        when(ehrService.currentUserId()).thenReturn(Optional.of(CAREGIVER));
+    }
+
+    @Test
+    @DisplayName("TC-MCR-AUTHZ-031: a linked caregiver reads the patient's coverage, and the cache records the caregiver as the acting user")
+    void linkedCaregiverReadsCoverage() throws Exception {
+        caregiverAllowed();
+        final JsonNode active = resource("{\"resourceType\":\"Coverage\",\"id\":\"part-a\",\"status\":\"active\"}");
+        when(cache.coverage(crosswalk, CAREGIVER)).thenReturn(new CachedRead(List.of(active), FETCHED));
+
+        final MedicareEnvelope body = envelope(controller.fetchCoverage("medicare", PATIENT));
+
+        assertThat(body.resources()).containsExactly(active);
+        verify(ehrService).requireMedicareAccess(PATIENT);
+        verify(ehrService, never()).getCrosswalk(anyLong());
+    }
+
+    @Test
+    @DisplayName("TC-MCR-AUTHZ-032: a linked caregiver reads the patient's identity and visits through the same patient lookup")
+    void linkedCaregiverReadsIdentityAndVisits() throws Exception {
+        caregiverAllowed();
+        final JsonNode patient = resource("{\"resourceType\":\"Patient\",\"id\":\"bene-1\"}");
+        final JsonNode claim = resource("{\"resourceType\":\"ExplanationOfBenefit\",\"id\":\"c1\",\"status\":\"active\"}");
+        when(cache.patient(crosswalk, CAREGIVER)).thenReturn(new CachedRead(List.of(patient), FETCHED));
+        when(cache.visits(crosswalk, CAREGIVER)).thenReturn(new CachedRead(List.of(claim), FETCHED));
+
+        assertThat(envelope(controller.fetchIdentity("medicare", PATIENT)).resources()).containsExactly(patient);
+        assertThat(envelope(controller.fetchVisits("medicare", PATIENT)).resources()).containsExactly(claim);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-AUTHZ-033: a caller the access policy refuses gets its 404 on every read, and nothing is looked up or retrieved (DEF-MCR-27)")
+    void noAccessIs404() {
+        refused();
+
+        assertRefused(() -> controller.fetchIdentity("medicare", PATIENT));
+        assertRefused(() -> controller.fetchCoverage("medicare", PATIENT));
+        assertRefused(() -> controller.fetchVisits("medicare", PATIENT));
+        verify(ehrService, never()).getCrosswalkForPatient(anyLong(), anyLong());
+        verifyNoInteractions(cache, medicareService);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-AUTHZ-034: an allowed caregiver whose patient never connected Medicare gets a 404, as the patient would")
+    void allowedButPatientNotConnectedIs404() {
+        when(medicareService.getId()).thenReturn(MEDICARE);
+        when(ehrService.getCrosswalkForPatient(PATIENT, MEDICARE)).thenReturn(Optional.empty());
+
+        assertThat(controller.fetchCoverage("medicare", PATIENT).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        verifyNoInteractions(cache);
+    }
+
+    @Test
+    @DisplayName("TC-MCR-AUTHZ-035: without a patientId the read is the caller's own and the access check is not consulted")
+    void ownReadSkipsAccessCheck() {
+        notLinked();
+
+        controller.fetchVisits("medicare", null);
+
+        verify(ehrService, never()).requireMedicareAccess(any());
+    }
+
+    @Test
+    @DisplayName("TC-MCR-AUTHZ-036: mock mode still refuses a caller the access policy refuses, with its 404, before serving any fixture")
+    void mockModeStillChecksAccess() {
+        ReflectionTestUtils.setField(properties, "mode", MedicareProperties.MODE_MOCK);
+        refused();
+
+        assertRefused(() -> controller.fetchCoverage("medicare", PATIENT));
+        verifyNoInteractions(sources);
     }
 }

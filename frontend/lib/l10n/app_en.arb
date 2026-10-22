@@ -674,6 +674,7 @@
 
   "appheaderwidget_invalidDOB": "Invalid date of birth. Cannot generate emergency QR.",
   "appheaderwidget_missingPtData": "Patient data not available for emergency QR",
+  "appheaderwidget_medicalPassport": "Medical passport",
   "appheaderwidget_welcomeBack": "Welcome back",
   "appheaderwidget_greetingPt": "How are you feeling today?",
   "appheaderwidget_greetingNonPt": "Your patients' health summary",
@@ -1355,34 +1356,6 @@
   "medicarehelp_errMcr04": "You need an internet connection to connect your Medicare account.",
   "@medicarehelp_errMcr04": {"description": "ERR-MCR-04. Exact SRS text (section 8.6); do not reword."},
   "medicarehelp_errMcr05": "Your Medicare connection has expired. Connect again to see current records.",
-  "@medicarehelp_errMcr05": {"description": "ERR-MCR-05. Exact SRS text (section 8.6); do not reword."},
-"analyticsPatientAnalytics": "Patient Analytics",
-  "analyticsRetry": "Retry",
-  "analyticsAskAiTooltip": "Ask AI about analytics",
-  "analyticsDownloadCsv": "Download CSV",
-  "analyticsDownloadPdf": "Download PDF",
-  "analyticsOverview": "Analytics Overview",
-  "analyticsMetricsAndTrends": "Patient health metrics and trends",
-  "analyticsTimeRange": "Time Range:",
-  "analyticsHealthSummary": "Health Summary",
-  "analyticsLastDaysShort": "Last {days}d",
-  "@analyticsLastDaysShort": {
-    "description": "Compact Analytics summary period shown on narrow screens.",
-    "placeholders": {
-      "days": {
-        "type": "int"
-      }
-    }
-  },
-  "analyticsLastDaysOverview": "Last {days} days overview",
-  "@analyticsLastDaysOverview": {
-    "description": "Analytics summary period shown on regular-width screens.",
-    "placeholders": {
-      "days": {
-        "type": "int"
-      }
-    }
-  },
-  "analyticsDetailedCharts": "Detailed Charts",
-  "analyticsLoadingData": "Loading analytics data..."
+  "@medicarehelp_errMcr05": {"description": "ERR-MCR-05. Exact SRS text (section 8.6); do not reword."}
+
 }

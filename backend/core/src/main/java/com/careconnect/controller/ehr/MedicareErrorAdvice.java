@@ -4,6 +4,7 @@ import ca.uhn.fhir.rest.server.exceptions.AuthenticationException;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.service.ehr.MedicareConnectionService;
 import com.careconnect.service.ehr.MedicareConnectionService.MedicareNotConnectedException;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.Ordered;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Turns a lapsed or rejected Medicare link into ERR-MCR-05 for the Medicare read endpoints, instead
@@ -55,19 +57,43 @@ public class MedicareErrorAdvice {
     /**
      * Blue Button answered 401 to a data request: the token is no good. Mark the link Unlinked so no
      * further call is made with it (AC-MCR-09-2), then answer ERR-MCR-05.
+     * <p>
+     * The token belongs to the patient whose data was read. A read with {@code patientId} (a caregiver
+     * reading their patient's data) names that patient, and Blue Button was only called after the access
+     * check on that id passed; a read without it is the signed-in patient's own (DEF-MCR-28).
      */
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<Map<String, Object>> tokenRejected(final AuthenticationException e) {
-        final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    public ResponseEntity<Map<String, Object>> tokenRejected(final AuthenticationException e,
+                                                             final HttpServletRequest request) {
         final MedicareConnectionService service = connections.getIfAvailable();
-        final UserRepository userRepository = users.getIfAvailable();
-        if (authentication != null && service != null && userRepository != null) {
-            userRepository.findByEmail(authentication.getName())
-                    .flatMap(service::patientIdFor)
+        if (service != null) {
+            requestedPatientId(request)
+                    .or(() -> signedInPatientId(service))
                     .ifPresent(service::markTokenRejected);
         }
         log.info("Blue Button rejected a stored Medicare token; link set to Unlinked (FR-MCR-09)");
         return errMcr05();
+    }
+
+    private static Optional<Long> requestedPatientId(final HttpServletRequest request) {
+        final String patientId = request == null ? null : request.getParameter("patientId");
+        if (patientId == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(Long.valueOf(patientId));
+        } catch (NumberFormatException notANumber) {
+            return Optional.empty();
+        }
+    }
+
+    private Optional<Long> signedInPatientId(final MedicareConnectionService service) {
+        final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        final UserRepository userRepository = users.getIfAvailable();
+        if (authentication == null || userRepository == null) {
+            return Optional.empty();
+        }
+        return userRepository.findByEmail(authentication.getName()).flatMap(service::patientIdFor);
     }
 
     private static ResponseEntity<Map<String, Object>> errMcr05() {

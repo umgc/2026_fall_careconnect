@@ -1,0 +1,19 @@
+requirements: [M3-REQ-01, M3-REQ-02, M3-REQ-19]
+scenarios: [M3-SC-APPOINTMENT-001, M3-SC-APPOINTMENT-003]
+origin: derived
+capturedAtUtc: 2026-10-21T18:22:00Z
+sandboxPersona: open
+requestPattern: GET {openBase}/Appointment?patient={syntheticPatientId}&-date-or-req-period=ge2010-01-01T00:00:00Z&-date-or-req-period=lt2027-01-01T00:00:00Z
+httpStatus: 200
+bundleEntryCount: 1
+nextLinkPresent: false
+derivedFrom: open-sandbox Appointment Bundle page 1 for approved synthetic alias open-patient-a
+changes:
+  - reduced the response to one representative booked resource
+  - replaced all patient, appointment, practitioner, service, version, narrative, and URL values
+  - retained bounded-search, requested-period, participant, and scheduled-time shapes
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, TBD Appointment mapper complete-resource test]
+expectedBehavior: every approved Appointment field maps without enabling or implying write-back
+contractDependency: Appointment scope and canonical mapping approval required for paired expected output

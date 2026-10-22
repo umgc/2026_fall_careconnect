@@ -5,6 +5,7 @@ import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.JwtTokenProvider;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -29,7 +30,10 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -57,6 +61,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CORS, session management, HTTP Basic entry-point, exception handling, and the full
  * {@code authorizeHttpRequests} block). The HTTP-request tests then cover the two
  * {@code AuthenticationEntryPoint} lambdas that only fire on actual rejected requests.
+ *
+ * <p>Test Plan: TC-SEC-001…005 (inherited, §3.24.3) and TC-EMG-102…104, 124 (CC-12 passport
+ * scan, §3.24.3). Test IDs are permanent. Never renumber, never reuse.
  */
 @WebMvcTest(
         controllers = {SecurityConfigFilterChainTest.PingController.class},
@@ -85,6 +92,7 @@ class SecurityConfigFilterChainTest {
     }
 
     @Test
+    @DisplayName("TC-SEC-001: /v1/api/auth/** is public: an unauthenticated request reaches the handler")
     void publicAuthEndpoint_IsAccessible() throws Exception {
         // Verifies that /v1/api/auth/** is permit-all: the JWT filter skips these
         // paths (shouldNotFilter returns true) and security allows the request through.
@@ -93,6 +101,7 @@ class SecurityConfigFilterChainTest {
     }
 
     @Test
+    @DisplayName("TC-SEC-002: a protected path without credentials is 401")
     void protectedEndpoint_RequiresAuthentication() throws Exception {
         // Verifies that /v1/api/patients/** requires a valid JWT; without one the
         // exceptionHandling authenticationEntryPoint sends SC_UNAUTHORIZED (401).
@@ -123,6 +132,7 @@ class SecurityConfigFilterChainTest {
     // -------------------------------------------------
 
     @Test
+    @DisplayName("TC-SEC-003: a path no matcher covers is denied (401 for an unauthenticated caller)")
     void unmatchedEndpoint_IsDeniedWithUnauthorized() throws Exception {
         // Verifies the anyRequest().denyAll() catch-all: unauthenticated requests
         // to paths not covered by any matcher also hit the exceptionHandling
@@ -136,6 +146,7 @@ class SecurityConfigFilterChainTest {
     // -------------------------------------------------
 
     @Test
+    @DisplayName("TC-SEC-004: wrong HTTP Basic credentials on a protected path are 401 from the Basic entry point")
     void invalidBasicAuth_TriggersHttpBasicEntryPoint() throws Exception {
         // Sends an Authorization: Basic header with wrong credentials against a
         // protected path. Spring Security's BasicAuthenticationFilter processes it,
@@ -153,12 +164,52 @@ class SecurityConfigFilterChainTest {
     // -------------------------------------------------
 
     @Test
+    @DisplayName("TC-SEC-005: /v3/api-docs is public: security lets it through (404, no handler in the slice)")
     void swaggerDocsPath_IsPermittedBySecurityNotBlocked() throws Exception {
         // Verifies that /v3/api-docs is on the permit-all list: security passes
         // the request through and MockMvc returns 404 (no registered handler)
         // rather than 401 (security rejection).
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isNotFound());
+    }
+
+    // -------------------------------------------------
+    // 6. CC-12 passport scan: only GET on one segment is public
+    // -------------------------------------------------
+
+    @Test
+    @DisplayName("TC-EMG-102: GET /v1/api/passport/scan/{token} is public: security lets it through (404, no handler in the slice)")
+    void passportScan_IsPermittedBySecurityNotBlocked() throws Exception {
+        // No handler is registered in this slice, so a permitted request is 404, not 401.
+        mockMvc.perform(get("/v1/api/passport/scan/someCode"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("TC-EMG-103: the patient's own passport endpoints are 401 without sign-in")
+    void passportOwnerEndpoints_RequireAuthentication() throws Exception {
+        mockMvc.perform(get("/v1/api/passport"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/v1/api/passport/token"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("TC-EMG-104: POST on the scan path and a deeper scan path are not public (401)")
+    void passportScan_OtherMethodsAndDeeperPaths_RequireAuthentication() throws Exception {
+        mockMvc.perform(post("/v1/api/passport/scan/someCode"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/v1/api/passport/scan/someCode/extra"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("TC-EMG-124: PUT and DELETE on the scan path are not public (401)")
+    void passportScan_PutAndDelete_RequireAuthentication() throws Exception {
+        mockMvc.perform(put("/v1/api/passport/scan/someCode"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(delete("/v1/api/passport/scan/someCode"))
+                .andExpect(status().isUnauthorized());
     }
 
     // -------------------------------------------------

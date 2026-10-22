@@ -44,6 +44,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * README checkable. Nothing compiled them, so nothing noticed when the {@code Object}-to-{@code Long}
  * id change broke all three — which is exactly the drift the PR #209 review predicted, already
  * realised by the time it was raised.
+ *
+ * <p>Test IDs TC-EHR-REC-049..050 are permanent. Never renumber, never reuse.
  */
 class AdversarialLockProofTest {
 
@@ -59,7 +61,7 @@ class AdversarialLockProofTest {
      * only one could ever win, the scenario would pass against a broken store too and prove nothing.
      */
     @Test
-    @DisplayName("the locking store converges on the newest value in every trial")
+    @DisplayName("TC-EHR-REC-049: the locking store converges on the newest value in every trial")
     void lockingStoreNeverLosesTheRace() throws Exception {
         int wrong = runTrials(true);
         assertThat(wrong)
@@ -82,7 +84,7 @@ class AdversarialLockProofTest {
      */
     @Test
     @EnabledIfEnvironmentVariable(named = "EHR_ADVERSARIAL", matches = ".+")
-    @DisplayName("control: the non-locking store does lose the race, so the scenario is sensitive to the lock")
+    @DisplayName("TC-EHR-REC-050: control: the non-locking store does lose the race, so the scenario is sensitive to the lock")
     void unsafeStoreLosesTheRaceAtLeastSometimes() throws Exception {
         int wrong = runTrials(false);
         assertThat(wrong)

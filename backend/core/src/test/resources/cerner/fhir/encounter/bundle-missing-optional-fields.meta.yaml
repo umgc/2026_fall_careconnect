@@ -1,0 +1,18 @@
+requirements: [M3-REQ-02, M3-REQ-06, M3-REQ-18]
+scenarios: [M3-SC-ENCOUNTER-002]
+origin: derived
+capturedAtUtc: 2026-10-21T18:20:00Z
+sandboxPersona: open
+requestPattern: GET {openBase}/Encounter?patient={syntheticPatientId}
+httpStatus: 200
+bundleEntryCount: 1
+nextLinkPresent: false
+derivedFrom: bundle-one-encounter.json
+changes:
+  - removed metadata, type, participant, period, and service provider
+  - retained status, class, and authorized patient linkage
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, TBD Encounter missing-optional-fields test]
+expectedBehavior: missing optional Encounter fields follow approved rules without invented values
+contractDependency: canonical missing-field rules required for paired expected output

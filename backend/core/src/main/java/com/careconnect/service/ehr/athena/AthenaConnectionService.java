@@ -7,7 +7,7 @@ import com.careconnect.model.Patient;
 import com.careconnect.repository.ConsentGrantRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
-import com.careconnect.service.ConsentService;
+import com.careconnect.service.consent.ConsentService;
 import com.careconnect.service.ehr.EhrAuditService;
 import com.careconnect.service.ehr.EhrSourceDataPurger;
 import com.careconnect.service.ehr.EhrSourceResolver;

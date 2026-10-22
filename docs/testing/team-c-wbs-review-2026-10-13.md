@@ -38,7 +38,7 @@ Earlier baseline/design work is under [PR #157](https://github.com/umgc/2026_fal
 
 | Input or rule | Current code | Evidence limit or action |
 | --- | --- | --- |
-| Source record ID | `Allergy.sourceRecordId` retains the FHIR ID; source is `CERNER` | Approve source/tenant keys and payload-history storage. |
+| Source record ID | `Allergy.sourceRecordId` retains the FHIR ID; source is `ORACLE_HEALTH` | Source identifier aligned with the shared persistence registry; approve tenant keys and payload-history storage. |
 | Patient binding | `map` requires `Patient/` plus the server-supplied patient ID | Real service must resolve trusted patient/source identity. A name and date of birth are not sufficient. |
 | Substance | Text and the first coding code are kept | Coding system/version and multiple coding rules need approval. |
 | Status and severity | Entered-in-error records are excluded; unknown severity becomes null | Vendor profiles and approved canonical rules remain needed. |

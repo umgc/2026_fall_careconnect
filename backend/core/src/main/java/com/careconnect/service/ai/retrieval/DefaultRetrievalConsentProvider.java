@@ -1,6 +1,6 @@
 package com.careconnect.service.ai.retrieval;
 
-import com.careconnect.service.ConsentService;
+import com.careconnect.service.consent.ConsentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

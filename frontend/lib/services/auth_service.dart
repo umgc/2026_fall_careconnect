@@ -12,6 +12,7 @@ import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../config/env_constant.dart';
+import '../features/emergency_passport/services/qr_code_store.dart';
 import 'api_service.dart';
 import 'oauth_service.dart';
 import '../providers/user_provider.dart';
@@ -485,6 +486,7 @@ class AuthService {
       } finally {
         await AuthTokenManager.clearAuthData();
         await UserRoleStorageService.instance.clearUserData();
+        await QrCodeStore.clearAll(); // DEF-EMG-11
       }
     }
 
@@ -569,6 +571,7 @@ class AuthService {
         // If refresh fails, clear auth data to force re-login
         await AuthTokenManager.clearAuthData();
         await UserRoleStorageService.instance.clearUserData();
+        await QrCodeStore.clearAll(); // DEF-EMG-29
         return null;
       }
     } catch (e) {
@@ -576,6 +579,7 @@ class AuthService {
       // Clear auth data on error to force re-login
       await AuthTokenManager.clearAuthData();
       await UserRoleStorageService.instance.clearUserData();
+      await QrCodeStore.clearAll(); // DEF-EMG-29
       return null;
     }
   }

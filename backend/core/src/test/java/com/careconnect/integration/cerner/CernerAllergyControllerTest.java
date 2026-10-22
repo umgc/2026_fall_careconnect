@@ -49,12 +49,12 @@ class CernerAllergyControllerTest {
     void ok() throws Exception {
         when(policy.canView("clinician", 42)).thenReturn(true);
         when(service.getAllergies(42)).thenReturn(List.of(new CernerAllergyMapper.Allergy(
-                "CERNER", "a1", "Penicillin", "7980", "active", "confirmed", "severe",
+                "ORACLE_HEALTH", "a1", "Penicillin", "7980", "active", "confirmed", "severe",
                 "2024-03-01T15:00:00Z", List.of("Hives"))));
 
         mvc.perform(get(URL).principal(USER))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.source").value("CERNER"))
+                .andExpect(jsonPath("$.source").value("ORACLE_HEALTH"))
                 .andExpect(jsonPath("$.allergies[0].sourceRecordId").value("a1"))
                 .andExpect(jsonPath("$.allergies[0].substanceText").value("Penicillin"))
                 .andExpect(jsonPath("$.allergies[0].recordedDate").value("2024-03-01T15:00:00Z"))
@@ -117,7 +117,7 @@ class CernerAllergyControllerTest {
         mvc.perform(get(URL).principal(USER))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CERNER_AUTH_EXPIRED"))
-                .andExpect(jsonPath("$.source").value("CERNER"))
+                .andExpect(jsonPath("$.source").value("ORACLE_HEALTH"))
                 .andExpect(jsonPath("$.retryable").value(false));
     }
 

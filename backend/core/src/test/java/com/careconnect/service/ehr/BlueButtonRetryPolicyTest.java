@@ -22,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The retry rule for Blue Button calls (FR-MCR-23, NFR-DEG-02), on its own: what is retried, how long
  * it waits, and when it gives up. {@code MedicareServiceTest} covers it through real HTTP.
+ * <p>
+ * Test IDs TC-MCR-FHIR-040..049 are permanent. Never renumber, never reuse.
  */
 class BlueButtonRetryPolicyTest {
 
@@ -52,21 +54,21 @@ class BlueButtonRetryPolicyTest {
     private static final Supplier<String> NO_HEADER = () -> null;
 
     @Test
-    @DisplayName("a call that succeeds first time is not retried")
+    @DisplayName("TC-MCR-FHIR-040: a call that succeeds first time is not retried")
     void successIsNotRetried() {
         assertThat(policy.execute("read", () -> "ok", NO_HEADER)).isEqualTo("ok");
         assertThat(waits).isEmpty();
     }
 
     @Test
-    @DisplayName("5xx and 429 are retried, waiting 2 s then 4 s")
+    @DisplayName("TC-MCR-FHIR-041: 5xx and 429 are retried, waiting 2 s then 4 s")
     void serverErrorsAndRateLimitsAreRetried() {
         assertThat(policy.execute("read", failThen(503, 429), NO_HEADER)).isEqualTo("ok");
         assertThat(waits).containsExactly(Duration.ofSeconds(2), Duration.ofSeconds(4));
     }
 
     @Test
-    @DisplayName("after 3 attempts in all the last error is thrown")
+    @DisplayName("TC-MCR-FHIR-042: after 3 attempts in all the last error is thrown")
     void givesUpAfterThreeAttempts() {
         assertThatThrownBy(() -> policy.execute("read", failThen(500, 502, 504), NO_HEADER))
                 .isInstanceOf(BaseServerResponseException.class)
@@ -76,7 +78,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("401 is thrown at once: a rejected token will not start working (FR-MCR-09)")
+    @DisplayName("TC-MCR-FHIR-043: 401 is thrown at once: a rejected token will not start working (FR-MCR-09)")
     void unauthorizedIsNotRetried() {
         final AtomicInteger calls = new AtomicInteger();
         assertThatThrownBy(() -> policy.execute("read", () -> {
@@ -88,7 +90,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("other 4xx are not retried")
+    @DisplayName("TC-MCR-FHIR-044: other 4xx are not retried")
     void clientErrorsAreNotRetried() {
         assertThatThrownBy(() -> policy.execute("read", failThen(404), NO_HEADER))
                 .isInstanceOf(BaseServerResponseException.class);
@@ -96,7 +98,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("Retry-After from the response is used instead of the backoff, capped at 30 s")
+    @DisplayName("TC-MCR-FHIR-045: Retry-After from the response is used instead of the backoff, capped at 30 s")
     void retryAfterHeaderIsUsedAndCapped() {
         final AtomicInteger header = new AtomicInteger();
         final Supplier<String> retryAfter = () -> header.getAndIncrement() == 0 ? "7" : "600";
@@ -106,7 +108,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("Retry-After on the exception's own headers is honoured when the response one is absent")
+    @DisplayName("TC-MCR-FHIR-046: Retry-After on the exception's own headers is honoured when the response one is absent")
     void retryAfterOnExceptionHeaders() {
         final BaseServerResponseException e = status(429);
         e.addResponseHeader("Retry-After", "5");
@@ -116,7 +118,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("Retry-After is read as seconds or an HTTP date; unreadable, blank or past values give no or zero wait")
+    @DisplayName("TC-MCR-FHIR-047: Retry-After is read as seconds or an HTTP date; unreadable, blank or past values give no or zero wait")
     void parseRetryAfterForms() {
         assertThat(BlueButtonRetryPolicy.parseRetryAfter("12")).contains(Duration.ofSeconds(12));
         assertThat(BlueButtonRetryPolicy.parseRetryAfter(" 3 ")).contains(Duration.ofSeconds(3));
@@ -133,7 +135,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("isRetryable is exactly 429 and 500..599")
+    @DisplayName("TC-MCR-FHIR-048: isRetryable is exactly 429 and 500..599")
     void retryableStatuses() {
         assertThat(BlueButtonRetryPolicy.isRetryable(429)).isTrue();
         assertThat(BlueButtonRetryPolicy.isRetryable(500)).isTrue();
@@ -144,7 +146,7 @@ class BlueButtonRetryPolicyTest {
     }
 
     @Test
-    @DisplayName("an interrupted wait gives up with the original error and keeps the thread's interrupt flag")
+    @DisplayName("TC-MCR-FHIR-049: an interrupted wait gives up with the original error and keeps the thread's interrupt flag")
     void interruptedWaitGivesUp() {
         final BlueButtonRetryPolicy interrupting = new BlueButtonRetryPolicy(d -> {
             throw new InterruptedException("shutting down");

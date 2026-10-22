@@ -9,7 +9,6 @@ import 'package:care_connect_app/config/theme/color_utils.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
-import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/widgets/responsive_container.dart';
 import 'models/vital_model.dart';
 import 'models/dashboard_analytics_model.dart';
@@ -1579,15 +1578,10 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
-
     if (loading) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBarHelper.createAppBar(
-          context,
-          title: t.analyticsPatientAnalytics,
-        ),
+        appBar: AppBarHelper.createAppBar(context, title: 'Patient Analytics'),
         drawer: const CommonDrawer(currentRoute: '/analytics'),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -1596,10 +1590,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     if (error != null) {
       return Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBarHelper.createAppBar(
-          context,
-          title: t.analyticsPatientAnalytics,
-        ),
+        appBar: AppBarHelper.createAppBar(context, title: 'Patient Analytics'),
         drawer: const CommonDrawer(currentRoute: '/analytics'),
         body: Center(
           child: Column(
@@ -1616,7 +1607,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ElevatedButton.icon(
                 onPressed: fetchAnalytics,
                 icon: const Icon(Icons.refresh),
-                label: Text(t.analyticsRetry),
+                label: const Text('Retry'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -1660,7 +1651,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
               ),
             );
           },
-          tooltip: t.analyticsAskAiTooltip,
+          tooltip: 'Ask AI about analytics',
           child: const Icon(Icons.chat_bubble_outline),
         ),
       );
@@ -1725,7 +1716,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           color: Theme.of(context).colorScheme.onPrimary,
         ),
         title: Text(
-          t.analyticsPatientAnalytics,
+          'Patient Analytics',
           style: TextStyle(
             color: Theme.of(context).colorScheme.onPrimary,
             fontWeight: FontWeight.bold,
@@ -1736,7 +1727,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           Container(
             margin: const EdgeInsets.only(right: 4),
             child: Tooltip(
-              message: t.analyticsDownloadCsv,
+              message: 'Download CSV',
               child: ElevatedButton.icon(
                 onPressed: () => exportFile('csv'),
                 icon: const Icon(Icons.download, size: 18),
@@ -1765,7 +1756,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
           Container(
             margin: const EdgeInsets.only(right: 8),
             child: Tooltip(
-              message: t.analyticsDownloadPdf,
+              message: 'Download PDF',
               child: ElevatedButton.icon(
                 onPressed: () => exportFile('pdf'),
                 icon: const Icon(Icons.picture_as_pdf, size: 18),
@@ -1808,7 +1799,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                       children: [
                         // Welcome header
                         Text(
-                          t.analyticsOverview,
+                          'Analytics Overview',
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -1817,7 +1808,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          t.analyticsMetricsAndTrends,
+                          'Patient health metrics and trends',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey.shade600,
@@ -1838,7 +1829,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    t.analyticsTimeRange,
+                                    'Time Range:',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -1854,7 +1845,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                               return Row(
                                 children: [
                                   Text(
-                                    t.analyticsTimeRange,
+                                    'Time Range:',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -1923,7 +1914,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              t.analyticsHealthSummary,
+                                              'Health Summary',
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontSize: MediaQuery.of(
@@ -1941,9 +1932,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                                 if (constraints.maxWidth <
                                                     200) {
                                                   return Text(
-                                                    t.analyticsLastDaysShort(
-                                                      selectedDays,
-                                                    ),
+                                                    'Last ${selectedDays}d',
                                                     style: const TextStyle(
                                                       color: Colors.white70,
                                                       fontSize: 12,
@@ -1954,9 +1943,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                                                   );
                                                 } else {
                                                   return Text(
-                                                    t.analyticsLastDaysOverview(
-                                                      selectedDays,
-                                                    ),
+                                                    'Last $selectedDays days overview',
                                                     style: TextStyle(
                                                       color: Colors.white70,
                                                       fontSize: MediaQuery.of(
@@ -2006,7 +1993,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
 
                         // Charts Section
                         Text(
-                          t.analyticsDetailedCharts,
+                          'Detailed Charts',
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -2081,7 +2068,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                 if (loading)
                   Container(
                     color: Colors.black.withOpacity(0.3),
-                    child: Center(
+                    child: const Center(
                       child: Card(
                         child: Padding(
                           padding: EdgeInsets.all(20),
@@ -2091,8 +2078,8 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
                               CircularProgressIndicator(),
                               SizedBox(height: 16),
                               Text(
-                                t.analyticsLoadingData,
-                                style: const TextStyle(fontSize: 16),
+                                'Loading analytics data...',
+                                style: TextStyle(fontSize: 16),
                               ),
                             ],
                           ),
@@ -2135,7 +2122,7 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
             ),
           );
         },
-        tooltip: t.analyticsAskAiTooltip,
+        tooltip: 'Ask AI about analytics',
       ),
       */
     );

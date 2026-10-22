@@ -1,0 +1,38 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-appointment-page-1",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/Appointment?patient=synthetic-patient-1&-date-or-req-period=ge2010-01-01T00:00:00Z&-date-or-req-period=lt2027-01-01T00:00:00Z"
+    },
+    {
+      "relation": "next",
+      "url": "https://example.test/fhir/Appointment?pageToken=synthetic-appointment-page-2"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://example.test/fhir/Appointment/synthetic-appointment-page-1-record",
+      "resource": {
+        "resourceType": "Appointment",
+        "id": "synthetic-appointment-page-1-record",
+        "status": "cancelled",
+        "start": "2024-05-01T14:00:00Z",
+        "end": "2024-05-01T14:30:00Z",
+        "participant": [
+          {
+            "actor": {
+              "reference": "Patient/synthetic-patient-1"
+            },
+            "status": "accepted"
+          }
+        ]
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

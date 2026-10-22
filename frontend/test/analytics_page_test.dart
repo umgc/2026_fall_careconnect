@@ -1,21 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/features/analytics/analytics_page.dart';
-import 'package:care_connect_app/l10n/app_localizations.dart';
-
-Widget _wrap({int patientId = 1, Locale locale = const Locale('en')}) {
-  return MaterialApp(
-    locale: locale,
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    home: AnalyticsPage(patientId: patientId),
-  );
-}
 
 void main() {
   testWidgets('Analytics page renders correctly', (WidgetTester tester) async {
     // Build our app and trigger a frame.
-    await tester.pumpWidget(_wrap());
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 1)));
 
     // Verify that the analytics page shows loading initially
     expect(find.text('Patient Analytics'), findsOneWidget);
@@ -25,7 +15,7 @@ void main() {
   testWidgets('Analytics page shows export buttons in error state as retry', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(_wrap());
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 1)));
 
     // Pump multiple times to allow async operations to complete
     for (int i = 0; i < 10; i++) {
@@ -44,40 +34,28 @@ void main() {
   });
 
   testWidgets('Analytics page shows Scaffold', (WidgetTester tester) async {
-    await tester.pumpWidget(_wrap());
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 1)));
     expect(find.byType(Scaffold), findsOneWidget);
   });
 
   testWidgets('Analytics page shows AppBar', (WidgetTester tester) async {
-    await tester.pumpWidget(_wrap());
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 1)));
     expect(find.byType(AppBar), findsOneWidget);
   });
 
-  testWidgets('Analytics page renders with different patientId', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(_wrap(patientId: 999));
+  testWidgets('Analytics page renders with different patientId', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 999)));
     expect(find.byType(AnalyticsPage), findsOneWidget);
     expect(find.text('Patient Analytics'), findsOneWidget);
   });
 
-  testWidgets('Analytics page shows no error text while loading', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(_wrap());
+  testWidgets('Analytics page shows no error text while loading', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 1)));
     expect(find.textContaining('Error'), findsNothing);
   });
 
-  testWidgets('Analytics page shows Center while loading', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(_wrap());
+  testWidgets('Analytics page shows Center while loading', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AnalyticsPage(patientId: 1)));
     expect(find.byType(Center), findsWidgets);
-  });
-
-  testWidgets('Analytics page renders its title in Spanish', (tester) async {
-    await tester.pumpWidget(_wrap(locale: const Locale('es')));
-
-    expect(find.text('Análisis del paciente'), findsOneWidget);
   });
 }

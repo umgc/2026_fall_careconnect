@@ -67,6 +67,20 @@ class MedicareConnectPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 MedicareConnectTile(result: result),
+                const SizedBox(height: 16),
+                // WBS 6.2.59: who can see this Medicare information.
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/medicare-sharing'),
+                  icon: const Icon(Icons.group_outlined),
+                  label: const Text('Share with caregivers'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF00788F),
+                    side: const BorderSide(color: Color(0xFF00788F)),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               ],
             ),
           ),

@@ -1,0 +1,12 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-appointment-bundle-empty",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/Appointment?patient=synthetic-patient-empty&-date-or-req-period=ge2010-01-01T00:00:00Z&-date-or-req-period=lt2027-01-01T00:00:00Z"
+    }
+  ],
+  "entry": []
+}

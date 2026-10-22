@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.careconnect.dto.MedicationDTO;
 import com.careconnect.dto.MedicationPhotoExtractedField;
 import com.careconnect.dto.MedicationPhotoExtractionResponse;
+import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Permission;
@@ -36,6 +39,7 @@ import com.careconnect.security.RequirePermission;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.MedicationPhotoExtractionService;
 import com.careconnect.service.MedicationService;
+import com.careconnect.service.PatientService;
 import com.careconnect.testsupport.fixtures.MedicationPhotoFixtures;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +60,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 class MedicationPhotoControllerTest {
 
     private static final Long PATIENT_ID = 1L;
+    private static final Long PATIENT_USER_ID = 100L;
 
     @Mock
     private MedicationService medicationService;
@@ -65,10 +70,23 @@ class MedicationPhotoControllerTest {
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
+    @Mock
+    private PatientService patientService;
     @InjectMocks
     private MedicationController controller;
 
     private final User user = mock(User.class);
+
+    /** The path carries the patient record id; the access check gets that patient's user id. */
+    @BeforeEach
+    void patientRecord() {
+        final User patientUser = new User();
+        patientUser.setId(PATIENT_USER_ID);
+        final Patient patient = new Patient();
+        patient.setId(PATIENT_ID);
+        patient.setUser(patientUser);
+        lenient().when(patientService.getPatientById(PATIENT_ID)).thenReturn(patient);
+    }
 
     private MockMultipartFile image(String contentType, byte[] bytes) {
         return new MockMultipartFile("image", "label.jpg", contentType, bytes);
@@ -98,7 +116,7 @@ class MedicationPhotoControllerTest {
 
         assertThat(resp.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(resp.getBody()).isSameAs(expected);
-        verify(authorizationService).requirePatientAccess(user, PATIENT_ID);
+        verify(authorizationService).requirePatientAccess(user, PATIENT_USER_ID);
     }
 
     @Test
@@ -117,7 +135,7 @@ class MedicationPhotoControllerTest {
     void accessDenied_noExtraction() throws Exception {
         authorised();
         doThrow(new UnauthorizedException("no access"))
-                .when(authorizationService).requirePatientAccess(user, PATIENT_ID);
+                .when(authorizationService).requirePatientAccess(user, PATIENT_USER_ID);
 
         assertThatThrownBy(() -> controller.extractMedicationPhoto(
                 PATIENT_ID, image("image/jpeg", MedicationPhotoFixtures.imageBytes())))
@@ -268,7 +286,7 @@ class MedicationPhotoControllerTest {
     void accessDenied_beforeUploadValidation() throws Exception {
         authorised();
         doThrow(new UnauthorizedException("no access"))
-                .when(authorizationService).requirePatientAccess(user, PATIENT_ID);
+                .when(authorizationService).requirePatientAccess(user, PATIENT_USER_ID);
 
         assertThatThrownBy(() -> controller.extractMedicationPhoto(PATIENT_ID, image("image/jpeg", new byte[0])))
                 .isInstanceOf(UnauthorizedException.class);

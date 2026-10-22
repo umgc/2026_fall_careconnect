@@ -1,0 +1,16 @@
+requirements: [M3-REQ-17]
+scenarios: [M3-SC-CONDITION-003]
+origin: synthetic
+capturedAtUtc: null
+sandboxPersona: null
+requestPattern: GET {openBase}/Condition?patient={syntheticPatientId}
+httpStatus: 200
+bundleEntryCount: 0
+nextLinkPresent: false
+derivedFrom: bundle-one-condition.json
+changes: [removed all Bundle entries]
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.emptyBundlesAreValidSearchsets, TBD Condition empty-Bundle test]
+expectedBehavior: returns a successful empty result without fabricating a Condition
+contractDependency: final CareConnect empty-response shape pending OpenAPI approval

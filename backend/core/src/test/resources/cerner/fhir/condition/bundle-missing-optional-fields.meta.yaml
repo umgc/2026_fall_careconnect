@@ -1,0 +1,18 @@
+requirements: [M3-REQ-02, M3-REQ-06, M3-REQ-17]
+scenarios: [M3-SC-CONDITION-002]
+origin: derived
+capturedAtUtc: 2026-10-21T18:24:00Z
+sandboxPersona: open
+requestPattern: GET {openBase}/Condition?patient={syntheticPatientId}&category=problem-list-item
+httpStatus: 200
+bundleEntryCount: 1
+nextLinkPresent: false
+derivedFrom: bundle-one-condition.json
+changes:
+  - removed clinical status, onset, abatement, encounter, recorder, metadata, and coded condition value
+  - retained text-only condition and patient linkage
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, TBD Condition missing-optional-fields test]
+expectedBehavior: missing optional values follow approved rules and text is retained without inventing a code
+contractDependency: canonical missing-field rules required for paired expected output

@@ -1,7 +1,7 @@
 # Milestone 3 Cerner Scenario Catalog
 
 **Status:** Working QA baseline; contract-dependent assertions remain provisional
-**Example workflow:** AllergyIntolerance
+**Scope:** Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment; AllergyIntolerance is the detailed reference workflow
 **Rule:** Test at the lowest useful level; repeat higher only to prove a new boundary.
 
 ## Conventions
@@ -18,11 +18,25 @@ The M3 AllergyIntolerance reference workflow illustrates frontend/backend `GET /
 
 The dependency and temporary-assumption register in Section 12 of [m3-test-plan.md](m3-test-plan.md) governs provisional scenarios. Semantic tests may proceed now where practical; exact contract and normalization assertions remain pending their authoritative approvals.
 
+## Verified Oracle Health boundary patterns
+
+The Oracle Health boundary patterns below are confirmed for test design. They do not finalize CareConnect application routes or response DTOs.
+
+| Resource | Secure FHIR request pattern | Important QA boundary |
+|---|---|---|
+| Patient | `GET {base}/Patient/{id}` or approved `_id` search | Use the server-controlled Cerner identity; do not match by name or demographics. |
+| AllergyIntolerance | `GET {base}/AllergyIntolerance?patient={id}` | Validate active/verification behavior, missing reactions, and empty Bundles. |
+| Condition | `GET {base}/Condition?patient={id}` | Validate status/category/code/date behavior and supported category combinations. |
+| Encounter | `GET {base}/Encounter?patient={id}` | Validate status/class/type/period and multi-page results. |
+| Appointment | `GET {base}/Appointment?patient={id}&date=gt{start}&date=le{end}` or approved bounded `-date-or-req-period` search | Date range is required by the test design; Appointment remains provisional and read-only. |
+
+All requests must keep the SMART persona, authorization endpoint, token host, `aud`, and FHIR base consistent. Follow the complete same-source `Bundle.link[relation=next].url`; never construct a next-page URL by copying only selected query parameters.
+
 ## A. Mapping and normalization
 
 | ID | Requirement | Level | Pri. | Scenario and expected result | Automation |
 |---|---|---:|---:|---|---|
-| M3-SC-MAP-001 | M3-REQ-01, 02, 04, 12 | Unit | P0 | A complete AllergyIntolerance maps every approved field: substance text/code, clinical status, verification status, reaction manifestations, severity, recorded date, `source: CERNER`, and `sourceRecordId`. A recursive comparison asserts every field in the paired expected output. | After canonical approval |
+| M3-SC-MAP-001 | M3-REQ-01, 02, 04, 12 | Unit | P0 | A complete AllergyIntolerance maps every approved field: substance text/code, clinical status, verification status, reaction manifestations, severity, recorded date, `source: ORACLE_HEALTH`, and `sourceRecordId`. A recursive comparison asserts every field in the paired expected output. | After canonical approval |
 | M3-SC-MAP-002 | M3-REQ-01, 02 | Unit | P0 | Multiple codings and reaction manifestations preserve approved cardinality and do not collapse distinct source facts. | After canonical approval |
 | M3-SC-MAP-003 | M3-REQ-02 | Unit | P0 | Offset date-times normalize to the contract-required UTC representation without changing the instant. Partial FHIR dates retain approved precision and are not fabricated. | Now; finalize expected JSON after contract |
 | M3-SC-MAP-004 | M3-REQ-04, 06 | Unit | P0 | An AllergyIntolerance with no reaction maps to an empty reaction list, not an error. Other missing optional fields follow the approved absent/null/empty rule; no clinical values are invented. | Now; finalize output after canonical approval |
@@ -39,6 +53,28 @@ The dependency and temporary-assumption register in Section 12 of [m3-test-plan.
 | M3-SC-MAP-015 | M3-REQ-04 | Unit | P0 | An empty AllergyIntolerance searchset Bundle produces a successful empty list. | Now |
 
 The first mapper pairing should implement MAP-001, MAP-004, MAP-005, MAP-006, and MAP-011–015, agree on fixture loading and recursive expected-output comparison, then apply that pattern to the remaining approved resources. Existing Patient/Appointment mapper tests on the Team C feature branch are useful evidence for the pattern but do not satisfy the planned AllergyIntolerance cases. The 15 mapping scenarios fall within the recommended range of 10–20 unit tests per workflow.
+
+## A2. Remaining resource-specific mapping and retrieval
+
+| ID | Requirement | Level | Pri. | Scenario and expected result | Automation |
+|---|---|---:|---:|---|---|
+| M3-SC-PAT-001 | M3-REQ-01, 03, 16 | Unit/integration | P0 | A complete authorized Patient read maps every approved identity/demographic field and retains source identity without using name, birth date, or other demographics to establish the local/Cerner link. | Now; finalize output after canonical approval |
+| M3-SC-PAT-002 | M3-REQ-02, 06, 16 | Unit | P0 | Missing optional Patient fields follow the approved absent/null/empty rules; malformed identifiers or wrong resource type are rejected or isolated without invented values. | Now; finalize output after canonical approval |
+| M3-SC-PAT-003 | M3-REQ-03, 16 | Unit/integration | P0 | A Patient response that does not match the server-controlled authorized Cerner patient reference is rejected and produces no persisted cross-patient data. | Now |
+| M3-SC-CONDITION-001 | M3-REQ-01, 02, 17 | Unit | P0 | A complete Condition maps approved code/text, clinical and verification status, category, onset/abatement, encounter reference, and provenance with a recursive expected-output comparison. | Executable paired candidate output implemented and marked unapproved; promote or revise after canonical/OpenAPI approval |
+| M3-SC-CONDITION-002 | M3-REQ-06, 17 | Unit | P0 | Missing optional Condition dates/encounter/coding follow approved rules; unknown status/category and malformed core data do not fabricate clinical meaning. | Null-scalar/empty-collection and text-only-code baseline implemented; finalize after canonical approval |
+| M3-SC-CONDITION-003 | M3-REQ-03, 08, 17 | Integration | P0 | Patient-filtered Condition search handles an empty Bundle, multiple categories, pagination, duplicates, and wrong-patient entries according to approved policies. | Empty, wrong-patient, mixed-entry, bounded paging, raw retention, and upsert baselines implemented; duplicate/partial-result policy remains open |
+| M3-SC-CONDITION-004 | M3-REQ-06, 17 | Unit | P0 | A Condition with verification status `entered-in-error` follows the approved exclusion or isolation rule and is never presented as an active confirmed condition. | Provisional isolation baseline retains the row for audit and hides it from active results; final policy approval remains open |
+| M3-SC-ENCOUNTER-001 | M3-REQ-01, 02, 18 | Unit | P0 | A complete Encounter maps approved status, class/type, period, participants, service provider, subject, and provenance; partial date/time values retain approved precision. | Executable paired candidate output implemented and marked unapproved; promote or revise after canonical/OpenAPI approval |
+| M3-SC-ENCOUNTER-002 | M3-REQ-06, 18 | Unit | P0 | Missing optional Encounter participants/service provider/end time follow approved rules; malformed period or patient linkage is rejected or isolated deterministically. | Null-scalar/empty-collection, structured-participant, UTC, and patient-link baselines implemented; finalize after canonical approval |
+| M3-SC-ENCOUNTER-003 | M3-REQ-03, 08, 18 | Integration | P0 | Patient-filtered Encounter search handles `_count`, complete next links, pagination loops, duplicate encounters, and an empty Bundle. | Empty, trusted complete-next-link paging, unsafe-host rejection, raw retention, and upsert baselines implemented; `_count`, duplicate/loop, and partial-result policy remain open |
+| M3-SC-APPOINTMENT-001 | M3-REQ-01, 02, 19 | Unit | P0 | A complete Appointment maps approved status, service/type, participants, requested/actual period, and provenance without implying that a proposed appointment is booked. | After canonical approval |
+| M3-SC-APPOINTMENT-002 | M3-REQ-06, 19 | Unit | P0 | Proposed Appointment with absent times and other optional omissions follows the approved provisional rule; malformed patient linkage is rejected. | Now; finalize output after canonical approval |
+| M3-SC-APPOINTMENT-003 | M3-REQ-03, 19 | Integration | P0 | Appointment search includes the server-controlled patient and an approved closed date or request-period range; an unbounded search is never issued. | After client implementation |
+| M3-SC-APPOINTMENT-004 | M3-REQ-08, 19 | Integration | P1 | Bounded Appointment results support `_count`, complete next-link paging, duplicate protection, and successful empty results. | After client implementation |
+| M3-SC-AUTH-001 | M3-REQ-05, 09, 20 | Unit/integration | P0 | Provider authorization/token/audience/FHIR base remain on the provider host pair; patient authorization uses the patient host pair. A cross-host token is rejected and not retried indefinitely. | After auth implementation |
+| M3-SC-AUTH-002 | M3-REQ-05, 20 | Integration/smoke | P0 | Authorization code flow uses S256 PKCE, exact registered redirect URI, state validation, short-lived bearer handling, and only approved read scopes for the five resources. | Automated where possible; manual launch smoke |
+| M3-SC-AUTH-003 | M3-REQ-09, 20 | Integration | P0 | `invalid_token`, `insufficient_scope`, denied authorization, invalid/expired launch, and refresh failure remain distinguishable domain outcomes and never appear as an empty clinical result. | After auth implementation/contract |
 
 ## B. Service, OAuth, and retrieval behavior
 
@@ -72,7 +108,7 @@ The first mapper pairing should implement MAP-001, MAP-004, MAP-005, MAP-006, an
 | M3-SC-CON-001 | M3-REQ-10 | Contract | P0 | Every success example and actual endpoint response validates against `contracts/unified-health-data.openapi.yaml` 1.0. | After contract |
 | M3-SC-CON-002 | M3-REQ-09, 10 | Contract | P0 | Every error/authorization/partial-result response validates against the same contract. | After contract |
 | M3-SC-CON-003 | M3-REQ-10 | Contract | P0 | Frontend mock fixtures validate against the exact contract version/checksum used by backend tests. | After contract |
-| M3-SC-CON-004 | M3-REQ-10 | Contract | P0 | Contract enumerates only approved source values (`MEDICARE`, `EPIC`, `CERNER`, `ATHENA`) and requires `sourceRecordId`, UTC dates, and the common error fields. | After contract |
+| M3-SC-CON-004 | M3-REQ-10 | Contract | P0 | Contract enumerates only approved source values (Team C proposes `ORACLE_HEALTH`, alongside the other approved EHR source identifiers) and requires `sourceRecordId`, UTC dates, and the common error fields. | After contract |
 
 The eight slice scenarios fall within the recommended range of 6–10 tests per workflow. Contract validation remains a distinct level even when invoked by a slice test because it protects a different boundary.
 
@@ -97,13 +133,13 @@ These ten cases fall within the recommended range of 6–10 WireMock integration
 
 | ID | Requirement | Level | Pri. | Scenario and expected result | Automation |
 |---|---|---:|---:|---|---|
-| M3-SC-E2E-001 | M3-REQ-04, 11 | E2E | A clinician logs in, opens a patient, and sees the allergy list with a Cerner source label; no write action is offered or sent. | After UI/API integration |
-| M3-SC-E2E-002 | M3-REQ-09, 11 | E2E | With the Cerner connection expired, the screen shows the approved reconnect message instead of a misleading empty allergy list. | After contract/UI |
-| M3-SC-E2E-003 | M3-REQ-08, 11 | E2E | With Cerner unavailable, the screen continues to show available Medicare data and an accessible partial-results notice. | After contract/UI |
+| M3-SC-E2E-001 | M3-REQ-04, 11 | E2E | P0 | A clinician logs in, opens a patient, and sees the allergy list with a Cerner source label; no write action is offered or sent. | After UI/API integration |
+| M3-SC-E2E-002 | M3-REQ-09, 11 | E2E | P0 | With the Cerner connection expired, the screen shows the approved reconnect message instead of a misleading empty allergy list. | After contract/UI |
+| M3-SC-E2E-003 | M3-REQ-08, 11 | E2E | P0 | With Cerner unavailable, the screen continues to show available Medicare data and an accessible partial-results notice. | After contract/UI |
 | M3-SC-REG-001 | M3-REQ-13 | Unit/widget/API regression | P1 | Existing non-EHR health and allergy workflows continue to pass after unified data integration. | With implementation |
 | M3-SC-SMK-001 | M3-REQ-04, 14 | Live smoke | P0 | Using a known synthetic sandbox patient, valid SMART authorization retrieves the AllergyIntolerance workflow and the displayed records match the real sandbox response. Record date, tester, synthetic patient alias, result, and sanitized screenshot/log. | Manual weekly/pre-sign-off |
 | M3-SC-SMK-002 | M3-REQ-09, 14 | Live smoke | P0 | Expired token returns HTTP 401 `invalid_token`; no sensitive token is retained in evidence. Refresh is checked only if the approved sandbox workflow supports it. | Manual weekly/pre-sign-off |
-| M3-SC-SMK-003 | M3-REQ-03, 14 | Live smoke | P1 | Synthetic Patient, Condition, Encounter, Appointment, and other final-scope reads remain available as applicable; no write is attempted. | Manual after scope approval |
+| M3-SC-SMK-003 | M3-REQ-03, 14, 16–20 | Live smoke | P1 | Synthetic Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment reads remain available; no write is attempted. | Manual weekly/pre-sign-off |
 
 ## Live smoke record template
 

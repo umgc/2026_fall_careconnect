@@ -371,4 +371,20 @@ void main() {
     expect(find.text('May 14, 1980'), findsOneWidget);
     expect(find.text('Female'), findsOneWidget);
   });
+
+  // Testing Lead (PR #364 review): the new forbidden problem must not change
+  // what a patient sees on their own screen.
+  testWidgets(
+      'TC-HDATA-039: a 403 on the patient\'s own reads still shows ERR-MCR-03, '
+      'as before PR #364 added the forbidden case', (t) async {
+    await pump(
+        t,
+        RouteAdapter(const {}, status: {
+          '/v1/api/medicare/visits': 403,
+          '/v1/api/medicare/coverage': 403,
+        }));
+    await settle(t);
+    expect(find.text(_errMcr03), findsOneWidget);
+    expect(find.text('Medicare isn\'t connected yet.'), findsNothing);
+  });
 }

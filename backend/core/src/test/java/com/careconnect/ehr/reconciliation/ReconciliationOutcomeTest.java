@@ -10,11 +10,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The per-field result the reconciler returns. Callers map each {@link Decision} to UI (a notice, or
  * the DOB confirmation prompt), so the set of decisions is a contract: adding or removing one has to be
  * a deliberate change that updates this test.
+ * <p>
+ * Test IDs TC-EHR-REC-058..060 are permanent. Never renumber, never reuse.
  */
 class ReconciliationOutcomeTest {
 
     @Test
-    @DisplayName("an outcome carries the field, the decision and the value")
+    @DisplayName("TC-EHR-REC-058: an outcome carries the field, the decision and the value")
     void carriesFieldDecisionAndValue() {
         final ReconciliationOutcome o = new ReconciliationOutcome(
                 IdentityFieldNames.DATE_OF_BIRTH, Decision.PENDING_PATIENT_CONFIRMATION, "1950-03-10");
@@ -25,7 +27,7 @@ class ReconciliationOutcomeTest {
     }
 
     @Test
-    @DisplayName("outcomes compare by value, so callers and tests can match them directly")
+    @DisplayName("TC-EHR-REC-059: outcomes compare by value, so callers and tests can match them directly")
     void valueEquality() {
         assertThat(new ReconciliationOutcome("phone", Decision.ACCEPTED_NEWER, "555-0102"))
                 .isEqualTo(new ReconciliationOutcome("phone", Decision.ACCEPTED_NEWER, "555-0102"))
@@ -33,7 +35,7 @@ class ReconciliationOutcomeTest {
     }
 
     @Test
-    @DisplayName("the decisions are exactly the documented eight, in order")
+    @DisplayName("TC-EHR-REC-060: the decisions are exactly the documented eight, in order")
     void decisionSetIsTheContract() {
         assertThat(Decision.values()).containsExactly(
                 Decision.FILLED_EMPTY,

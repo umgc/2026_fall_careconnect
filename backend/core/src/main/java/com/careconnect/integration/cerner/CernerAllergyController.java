@@ -56,7 +56,7 @@ public class CernerAllergyController {
     ResponseEntity<?> source(CernerSourceException e) {
         final HttpStatus status = "CERNER_AUTH_EXPIRED".equals(e.code())
                 ? HttpStatus.CONFLICT : HttpStatus.BAD_GATEWAY;
-        return error(status, e.code(), "Cerner source error", "CERNER", e.retryable());
+        return error(status, e.code(), "Cerner source error", CernerAllergyMapper.SOURCE, e.retryable());
     }
 
     private static ResponseEntity<Map<String, Object>> error(HttpStatus status, String code, String message,

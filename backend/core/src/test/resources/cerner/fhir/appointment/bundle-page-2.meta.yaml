@@ -1,0 +1,19 @@
+requirements: [M3-REQ-08, M3-REQ-19]
+scenarios: [M3-SC-APPOINTMENT-004, M3-SC-SVC-008, M3-SC-INT-008]
+origin: derived
+capturedAtUtc: 2026-10-21T18:41:00Z
+sandboxPersona: open
+requestPattern: GET {completeNextUrlFromPage1}
+httpStatus: 200
+bundleEntryCount: 1
+nextLinkPresent: false
+derivedFrom: open-sandbox Appointment page 2 for approved synthetic alias open-patient-b
+changes:
+  - reduced the page to one synthetic Appointment
+  - replaced patient, appointment, Bundle, URL, and opaque continuation values
+  - removed further continuation so the deterministic fixture pair terminates
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.paginationFixturePairsUseNextOnlyOnFirstPage, TBD shared client pagination test]
+expectedBehavior: client combines this page with page 1 and terminates without duplicates or a loop
+contractDependency: duplicate ordering and partial-result rules remain pending

@@ -233,6 +233,7 @@
 
   "appheaderwidget_invalidDOB": "Fecha de nacimiento no válida. No se puede generar el código QR de emergencia.",
   "appheaderwidget_missingPtData": "No hay datos del paciente disponibles para el código QR de emergencia",
+  "appheaderwidget_medicalPassport": "Pasaporte médico",
   "appheaderwidget_welcomeBack": "Bienvenido de nuevo",
   "appheaderwidget_greetingPt": "¿Cómo te encuentras hoy?",
   "appheaderwidget_greetingNonPt": "Resumen de salud de tus pacientes",
@@ -1303,18 +1304,6 @@
     "placeholders": {
       "patient": {"type": "String"}
     }
-  },
-  "analyticsPatientAnalytics": "Análisis del paciente",
-  "analyticsRetry": "Reintentar",
-  "analyticsAskAiTooltip": "Preguntar a la IA sobre los análisis",
-  "analyticsDownloadCsv": "Descargar CSV",
-  "analyticsDownloadPdf": "Descargar PDF",
-  "analyticsOverview": "Resumen de análisis",
-  "analyticsMetricsAndTrends": "Métricas y tendencias de salud del paciente",
-  "analyticsTimeRange": "Intervalo de tiempo:",
-  "analyticsHealthSummary": "Resumen de salud",
-  "analyticsLastDaysShort": "Últimos {days} d",
-  "analyticsLastDaysOverview": "Resumen de los últimos {days} días",
-  "analyticsDetailedCharts": "Gráficos detallados",
-  "analyticsLoadingData": "Cargando datos de análisis..."
+  }
+
 }
