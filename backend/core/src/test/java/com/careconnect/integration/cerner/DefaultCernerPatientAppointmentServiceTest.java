@@ -1,7 +1,9 @@
 package com.careconnect.integration.cerner;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,6 +23,7 @@ import com.careconnect.repository.ehr.EhrRawPayloadRepository;
 import com.careconnect.repository.ehr.EhrSourceIdentityRepository;
 import com.careconnect.repository.ehr.EhrSourceRepository;
 import com.careconnect.service.ehr.CernerOAuthService;
+import com.careconnect.service.ehr.CernerOAuthService.CernerReauthorizationRequiredException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
@@ -137,6 +140,60 @@ class DefaultCernerPatientAppointmentServiceTest {
 
         verify(rawPayloads, never()).save(any());
         verify(appointments, never()).save(any());
+    }
+
+    @Test
+    @Tag("M3-REQ-09")
+    void patientReadRefreshesOnceAfterExpiredToken() throws Exception {
+        arrangeContext();
+        arrangeRawSave();
+        when(client.getPatient("synthetic-patient-1", "access"))
+                .thenThrow(new CernerAllergyService.CernerSourceException(
+                        "CERNER_AUTH_EXPIRED", false));
+        when(oauth.refreshAccessToken(77L)).thenReturn("refreshed");
+        when(client.getPatient("synthetic-patient-1", "refreshed"))
+                .thenReturn(patientFixture());
+        when(identities.findByPatientIdAndSourceId(42L, 5L)).thenReturn(Optional.empty());
+        when(identities.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(service.synchronizePatient(42L).getGivenName()).isEqualTo("Synthetic");
+        verify(oauth).refreshAccessToken(77L);
+    }
+
+    @Test
+    @Tag("M3-REQ-09")
+    void appointmentRefreshFailureBecomesSourceAuthExpired() {
+        arrangeContext();
+        when(client.getAppointments(
+                eq("synthetic-patient-1"), eq("access"), eq(WINDOW_START), eq(WINDOW_END)))
+                .thenThrow(new CernerAllergyService.CernerSourceException(
+                        "CERNER_AUTH_EXPIRED", false));
+        when(oauth.refreshAccessToken(77L))
+                .thenThrow(new CernerReauthorizationRequiredException("reauthorize"));
+
+        assertThatThrownBy(() -> service.synchronizeAppointments(
+                42L, WINDOW_START, WINDOW_END))
+                .isInstanceOf(CernerAllergyService.CernerSourceException.class)
+                .satisfies(error -> assertThat(
+                        ((CernerAllergyService.CernerSourceException) error).code())
+                        .isEqualTo("CERNER_AUTH_EXPIRED"));
+    }
+
+    @Test
+    @Tag("M3-REQ-06")
+    void malformedAppointmentBecomesInvalidResponse() throws Exception {
+        arrangeContext();
+        when(client.getAppointments(
+                "synthetic-patient-1", "access", WINDOW_START, WINDOW_END))
+                .thenReturn(new CernerFhirBundleHttpClient.Result(List.of(
+                        json.readTree("{\"resourceType\":\"Appointment\"}"))));
+
+        assertThatThrownBy(() -> service.synchronizeAppointments(
+                42L, WINDOW_START, WINDOW_END))
+                .isInstanceOf(CernerAllergyService.CernerSourceException.class)
+                .satisfies(error -> assertThat(
+                        ((CernerAllergyService.CernerSourceException) error).code())
+                        .isEqualTo("CERNER_INVALID_RESPONSE"));
     }
 
     private void arrangeContext() {

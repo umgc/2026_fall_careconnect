@@ -1,0 +1,19 @@
+{
+  "source": "ORACLE_HEALTH",
+  "sourceRecordId": "synthetic-patient-1",
+  "sourceUpdatedAt": "2026-10-01T12:00:00Z",
+  "givenName": "Synthetic",
+  "familyName": "Patient",
+  "dateOfBirth": "1980-02-29",
+  "phone": null,
+  "email": "synthetic.patient@example.test",
+  "addressLine1": "100 Test Way",
+  "addressLine2": null,
+  "city": "Example City",
+  "state": "MD",
+  "postalCode": "00000",
+  "gender": "unknown",
+  "memberId": "synthetic-mrn-1",
+  "managingOrg": null,
+  "language": "en"
+}

@@ -12,8 +12,8 @@ changes:
   - reduced the response to one representative booked resource
   - replaced all patient, appointment, practitioner, service, version, narrative, and URL values
   - retained bounded-search, requested-period, participant, and scheduled-time shapes
-reviewedBy: TBD
-reviewedAtUtc: null
-consumers: [CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, TBD Appointment mapper complete-resource test]
-expectedBehavior: every approved Appointment field maps without enabling or implying write-back
-contractDependency: Appointment scope and canonical mapping approval required for paired expected output
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+consumers: [CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, EhrAppointmentMapperTest, CernerPatientAppointmentExpectedOutputTest.completeAppointmentMatchesPairedExpectedOutput]
+expectedBehavior: every working-baseline Appointment field maps without enabling or implying write-back
+contractDependency: external response envelope and final field names remain pending unified OpenAPI approval

@@ -12,8 +12,8 @@ changes:
   - replaced patient, version, identifier, name, telecom, address, and contact values
   - removed narrative and environment-specific extensions
   - retained representative Patient field shapes for mapping tests
-reviewedBy: TBD
-reviewedAtUtc: null
-consumers: [CernerFiveResourceFixtureStructureTest.patientFixturesHaveSyntheticIdentity, TBD Patient mapper test]
-expectedBehavior: every approved Patient field maps while source identity and provenance are retained
-contractDependency: canonical mapping approval required for paired expected output
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+consumers: [CernerFiveResourceFixtureStructureTest.patientFixturesHaveSyntheticIdentity, EhrPatientIdentityMapperTest.completePatientMapsIntoSharedSourceIdentityWithoutInventingValues, CernerPatientAppointmentExpectedOutputTest.completePatientMatchesPairedExpectedOutput]
+expectedBehavior: every working-baseline Patient field maps while source identity and provenance are retained
+contractDependency: external response envelope and final field names remain pending unified OpenAPI approval

@@ -12,8 +12,8 @@ changes:
   - changed status to proposed
   - removed confirmed start and end values
   - retained only a requested period and needs-action participant
-reviewedBy: TBD
-reviewedAtUtc: null
-consumers: [CernerFiveResourceFixtureStructureTest.proposedAppointmentHasRequestedPeriodWithoutConfirmedTimes, CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, TBD Appointment proposed-without-times mapper test]
-expectedBehavior: proposed Appointment is not represented as a confirmed booking and absent start/end do not cause an error
-contractDependency: approved provisional Appointment mapping rule required for paired expected output
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+consumers: [CernerFiveResourceFixtureStructureTest.proposedAppointmentHasRequestedPeriodWithoutConfirmedTimes, CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, EhrAppointmentMapperTest.retainsProposedAppointmentWithMissingOptionalTimes, CernerPatientAppointmentExpectedOutputTest.proposedAppointmentMatchesPairedExpectedOutput]
+expectedBehavior: proposed Appointment remains proposed, confirmed start/end remain null, and the requested window remains available in the retained raw payload
+contractDependency: external response envelope and final field names remain pending unified OpenAPI approval

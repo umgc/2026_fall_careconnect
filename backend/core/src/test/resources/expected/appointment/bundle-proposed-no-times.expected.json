@@ -1,0 +1,13 @@
+{
+  "source": "ORACLE_HEALTH",
+  "sourceRecordId": "synthetic-appointment-proposed",
+  "status": "proposed",
+  "startTime": null,
+  "endTime": null,
+  "providerName": null,
+  "location": null,
+  "serviceType": null,
+  "reason": null,
+  "sourceCreatedAt": null,
+  "sourceUpdatedAt": null
+}

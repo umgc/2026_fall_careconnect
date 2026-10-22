@@ -80,4 +80,80 @@ class CernerOAuthControllerTest {
                 "https://careconnect.example/settings?status=ok");
         verify(links).link(7L, "12724066");
     }
+
+    @Test
+    void authorizeRejectsUnauthenticatedAndUnlinkedUsers() {
+        assertThat(controller.authorize(null, null).getStatusCode())
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        final User user = User.builder().id(7L).build();
+        when(security.resolveCurrentUser()).thenReturn(user);
+        when(patients.findByUserId(7L)).thenReturn(Optional.empty());
+
+        assertThat(controller.authorize(null, null).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void invalidCallbackUsesAppErrorRedirect() {
+        when(states.consume("unknown")).thenReturn(null);
+        when(config.getAppReturnDeepLink()).thenReturn("careconnect://oracle-health/linked");
+
+        final ResponseEntity<Void> response = controller.callback(null, "unknown", "denied");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.getHeaders().getLocation()).hasToString(
+                "careconnect://oracle-health/linked?status=error");
+    }
+
+    @Test
+    void callbackFailureDisconnectsAndUsesWebErrorRedirect() {
+        final CernerAuthStateStore.Entry state = new CernerAuthStateStore.Entry(
+                7L, "verifier-1", "web", Instant.now().plusSeconds(60));
+        when(states.consume("state-1")).thenReturn(state);
+        when(config.getWebReturnUrl()).thenReturn("https://careconnect.example/settings");
+        when(oauth.exchangeAndStore(7L, "code-1", "verifier-1"))
+                .thenThrow(new IllegalStateException("synthetic failure"));
+
+        final ResponseEntity<Void> response = controller.callback("code-1", "state-1", null);
+
+        assertThat(response.getHeaders().getLocation()).hasToString(
+                "https://careconnect.example/settings?status=error");
+        verify(oauth).disconnect(7L);
+    }
+
+    @Test
+    void statusReportsDisconnectedActiveAndNeedsReauthorizationStates() {
+        assertThat(controller.status().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        final User user = User.builder().id(7L).build();
+        when(security.resolveCurrentUser()).thenReturn(user);
+        when(oauth.findCredential(7L)).thenReturn(Optional.empty());
+        assertThat(controller.status().getBody())
+                .containsEntry("source", CernerProperties.SOURCE_ORACLE_HEALTH)
+                .containsEntry("connected", false)
+                .doesNotContainKey("status");
+
+        final EhrCredential credential = EhrCredential.builder()
+                .status(EhrCredential.Status.ACTIVE)
+                .build();
+        when(oauth.findCredential(7L)).thenReturn(Optional.of(credential));
+        assertThat(controller.status().getBody())
+                .containsEntry("connected", true)
+                .containsEntry("status", "ACTIVE");
+    }
+
+    @Test
+    void disconnectRequiresAuthenticationAndRemovesCredential() {
+        assertThat(controller.disconnect().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+
+        final User user = User.builder().id(7L).build();
+        when(security.resolveCurrentUser()).thenReturn(user);
+
+        final ResponseEntity<Map<String, Object>> response = controller.disconnect();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).containsEntry("connected", false);
+        verify(oauth).disconnect(7L);
+    }
 }

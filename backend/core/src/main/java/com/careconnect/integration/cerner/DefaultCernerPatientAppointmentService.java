@@ -53,6 +53,12 @@ public class DefaultCernerPatientAppointmentService
     @Override
     @Transactional
     public EhrSourceIdentity synchronizePatient(final long patientId) {
+        return synchronizePatientWithSourceRecord(patientId).identity();
+    }
+
+    @Override
+    @Transactional
+    public PatientSynchronization synchronizePatientWithSourceRecord(final long patientId) {
         final Context context = context(patientId);
         final JsonNode resource = fetchPatientWithRefresh(context);
         final EhrSourceIdentity incoming;
@@ -66,13 +72,14 @@ public class DefaultCernerPatientAppointmentService
                 patientId, context.source().getId());
         if (existing.isPresent()
                 && !incoming.getSourceUpdatedAt().isAfter(existing.get().getSourceUpdatedAt())) {
-            return existing.get();
+            return new PatientSynchronization(context.externalPatientId(), existing.get());
         }
         storeRaw(patientId, context.source().getId(), "Patient", resource);
         existing.ifPresent(identity -> incoming.setId(identity.getId()));
         // Patient identity rows do not directly reference raw payloads; provenance remains in
         // ehr_raw_payload under the same patient/source/external-resource tuple.
-        return identities.save(incoming);
+        return new PatientSynchronization(
+                context.externalPatientId(), identities.save(incoming));
     }
 
     @Override

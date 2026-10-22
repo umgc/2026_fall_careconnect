@@ -1,0 +1,10 @@
+requirements: [M3-REQ-06, M3-REQ-19]
+scenario: M3-SC-APPOINTMENT-002
+input: cerner/fhir/appointment/bundle-proposed-no-times.json
+status: team-c-working-baseline
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+notes:
+  - proposed status is retained and no confirmed start or end is fabricated
+  - requestedPeriod remains available in the retained raw payload because the shared canonical appointment table has no requested-period columns
+  - final field names and response envelope remain pending unified OpenAPI approval

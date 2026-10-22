@@ -10,6 +10,12 @@ public interface CernerPatientAppointmentService {
 
     EhrSourceIdentity synchronizePatient(long patientId);
 
+    /** Returns the normalized identity together with the authorized source record identifier. */
+    PatientSynchronization synchronizePatientWithSourceRecord(long patientId);
+
     List<EhrAppointmentRecord> synchronizeAppointments(
             long patientId, Instant startInclusive, Instant endExclusive);
+
+    record PatientSynchronization(
+            String sourceRecordId, EhrSourceIdentity identity) { }
 }
