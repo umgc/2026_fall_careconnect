@@ -46,7 +46,7 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    
+
     final firstDay = DateTime(_currentMonth.year, _currentMonth.month, 1);
     final lastDay = DateTime(_currentMonth.year, _currentMonth.month + 1, 0);
     final daysInMonth = lastDay.day;
@@ -126,7 +126,8 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
                       return Container();
                     }
 
-                    final date = DateTime(_currentMonth.year, _currentMonth.month, dayOffset);
+                    final date = DateTime(
+                        _currentMonth.year, _currentMonth.month, dayOffset);
                     final visits = _getVisitsForDate(date);
                     final isSelected = date.year == widget.selectedDate.year &&
                         date.month == widget.selectedDate.month &&
@@ -152,9 +153,7 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
                           border: Border.all(
                             color: isSelected
                                 ? cs.primary
-                                : (isToday
-                                    ? cs.tertiary
-                                    : cs.outlineVariant),
+                                : (isToday ? cs.tertiary : cs.outlineVariant),
                             width: isSelected ? 2 : 1,
                           ),
                           borderRadius: BorderRadius.circular(8),
@@ -179,28 +178,38 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
                                     children: visits
                                         .take(2)
                                         .map((visit) => Padding(
-                                              padding: const EdgeInsets.only(top: 2),
+                                              padding:
+                                                  const EdgeInsets.only(top: 2),
                                               child: GestureDetector(
-                                                onTap: () => widget.onVisitTap?.call(visit),
+                                                onTap: () => widget.onVisitTap
+                                                    ?.call(visit),
                                                 child: Container(
                                                   width: double.infinity,
-                                                  padding: const EdgeInsets.symmetric(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
                                                     horizontal: 2,
                                                     vertical: 1,
                                                   ),
                                                   decoration: BoxDecoration(
-                                                    color: _getPriorityColor(visit.priority)
+                                                    color: _getPriorityColor(
+                                                            visit.priority)
                                                         .withOpacity(0.7),
-                                                    borderRadius: BorderRadius.circular(2),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            2),
                                                   ),
                                                   child: Text(
-                                                    visit.patientName.split(' ').first,
+                                                    visit.patientName
+                                                        .split(' ')
+                                                        .first,
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                     style: TextStyle(
                                                       fontSize: 8,
                                                       color: Colors.white,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                     ),
                                                   ),
                                                 ),

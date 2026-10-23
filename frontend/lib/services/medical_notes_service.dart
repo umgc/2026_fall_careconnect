@@ -38,7 +38,7 @@ class PatientNote {
       uploadedBy: json['uploadedBy'] ?? 'Unknown',
       uploadDate:
           DateTime.tryParse(json['uploadDate'] ?? json['createdAt'] ?? '') ??
-          DateTime.now(),
+              DateTime.now(),
       category: category,
       noteType: _getCategoryDisplayName(category),
       patientId: json['patientId'] ?? 0,

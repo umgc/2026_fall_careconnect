@@ -458,6 +458,7 @@ try {
     Write-Step "Reading final API endpoint"
     $script:CurrentOperation = "Reading final API endpoint"
     $ApiEndpoint = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "ApiEndpoint").Trim()
+    $WebSocketUrl = (Get-CloudFormationOutput -StackName $ServiceStackName -OutputKey "WebSocketUrl").Trim()
     $script:CurrentStackName = $null
     $script:CurrentOperation = $null
 
@@ -468,6 +469,7 @@ try {
     Write-Host "Image URI:     $ImageUri"
     Write-Host "API Endpoint:  $ApiEndpoint"
     Write-Host "Health check:  $ApiEndpoint/v1/api/test/health"
+    Write-Host "WebSocket URL: $WebSocketUrl   (frontend WEBSOCKET_GATEWAY_URL)"
     Write-Host "Elapsed time:  $(Get-ElapsedTimeText)"
 }
 catch {

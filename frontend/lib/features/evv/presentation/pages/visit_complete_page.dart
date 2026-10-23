@@ -274,7 +274,7 @@ class _VisitCompletePageState extends State<VisitCompletePage> {
       );
 
       // Submit the EVV record
-      final evvRecord = await evvService.createRecord(request);
+      await evvService.createRecord(request);
 
       // Show success message and navigate to success page
       ScaffoldMessenger.of(context).showSnackBar(
@@ -505,7 +505,6 @@ class _VisitCompletePageState extends State<VisitCompletePage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 _buildSummaryRow('Patient:', fullName),
                 _buildSummaryRow('MA Number:', maNumber),
                 _buildSummaryRow('Service Type:', widget.serviceType),
@@ -535,26 +534,24 @@ class _VisitCompletePageState extends State<VisitCompletePage> {
           Container(
             width: double.infinity,
             margin: const EdgeInsets.symmetric(horizontal: 20),
-
- 
-child: FilledButton.icon(
-  onPressed: _isSubmitting ? null : _completeVisit,
-  style: FilledButton.styleFrom(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    shape: shape,
-    backgroundColor: cs.primary,
-    foregroundColor: cs.onPrimary,
-  ),
-  icon: _isSubmitting
-      ? const SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        )
-      : const Icon(Icons.check, size: 18),
-  label: Text(_isSubmitting ? 'Completing Visit...' : 'Complete Visit'),
-),
-
+            child: FilledButton.icon(
+              onPressed: _isSubmitting ? null : _completeVisit,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: shape,
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+              ),
+              icon: _isSubmitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.check, size: 18),
+              label: Text(
+                  _isSubmitting ? 'Completing Visit...' : 'Complete Visit'),
+            ),
           ),
 
           const SizedBox(height: 24),

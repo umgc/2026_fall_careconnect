@@ -61,12 +61,12 @@ class RecentPatientActivity extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           ...activities.map((activity) => _ActivityItem(
-            patient: activity['patient']!,
-            action: activity['action']!,
-            time: activity['time']!,
-            detail: activity['detail']!,
-            emoji: activity['emoji']!,
-          )),
+                patient: activity['patient']!,
+                action: activity['action']!,
+                time: activity['time']!,
+                detail: activity['detail']!,
+                emoji: activity['emoji']!,
+              )),
         ],
       ),
     );

@@ -71,7 +71,8 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
 
   Future<void> _fetchBillingQuote() async {
     try {
-      final service = BillingQuoteService(backendBase: AppConfig.getBackendBaseUrl());
+      final service =
+          BillingQuoteService(backendBase: AppConfig.getBackendBaseUrl());
       final quote = await service.getQuote(
         tierId: widget.tierId,
         userId: widget.userId,
@@ -155,7 +156,9 @@ class _NativeBillingPageState extends State<NativeBillingPage> {
               const SizedBox(height: 16),
               Text('Error: $_quoteError', textAlign: TextAlign.center),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _fetchBillingQuote, child: Text(t.nativebilling_retry)),
+              ElevatedButton(
+                  onPressed: _fetchBillingQuote,
+                  child: Text(t.nativebilling_retry)),
             ],
           ),
         ),

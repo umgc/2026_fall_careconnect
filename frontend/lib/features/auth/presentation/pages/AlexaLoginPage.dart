@@ -8,7 +8,6 @@ import '../../../../services/enhanced_auth_service.dart';
 import '../../../../services/auth_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
 class AlexaLoginPage extends StatefulWidget {
   const AlexaLoginPage({super.key});
 
@@ -19,11 +18,11 @@ class AlexaLoginPage extends StatefulWidget {
 class _AlexaLoginPageState extends State<AlexaLoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
+
   bool _busy = false;
   String? _error;
   bool _showPassword = false;
-  
+
   // Alexa OAuth parameters
   String? _redirectUri;
   String? _state;
@@ -52,7 +51,7 @@ class _AlexaLoginPageState extends State<AlexaLoginPage> {
     final timestamp = DateTime.now().toString().split('.')[0];
     final logEntry = "[$timestamp] $message";
     print(logEntry);
-    
+
     setState(() {
       _debugLog = "$logEntry\n$_debugLog";
       if (_debugLog.split('\n').length > 50) {
@@ -60,38 +59,40 @@ class _AlexaLoginPageState extends State<AlexaLoginPage> {
       }
     });
   }
-Map<String, String> _mergedQueryParamsFromUriBase() {
-  final base = Uri.base; 
-  final preHash = base.queryParameters;
 
+  Map<String, String> _mergedQueryParamsFromUriBase() {
+    final base = Uri.base;
+    final preHash = base.queryParameters;
 
-  final frag = base.fragment.trim();
-  Map<String, String> postHash = const {};
+    final frag = base.fragment.trim();
+    Map<String, String> postHash = const {};
 
-  if (frag.isNotEmpty) {
-    final normalized = frag.startsWith('/') ? frag : '/$frag';
-    final fragUri = Uri.tryParse(normalized);
-    if (fragUri != null) {
-      postHash = fragUri.queryParameters;
+    if (frag.isNotEmpty) {
+      final normalized = frag.startsWith('/') ? frag : '/$frag';
+      final fragUri = Uri.tryParse(normalized);
+      if (fragUri != null) {
+        postHash = fragUri.queryParameters;
+      }
     }
+
+    return {...preHash, ...postHash};
   }
 
-  return {...preHash, ...postHash};
-}
   /// Check if this is an Alexa OAuth flow by looking at URL parameters
   void _checkForAlexaOAuthParams() {
     final t = AppLocalizations.of(context)!;
     _log("🔍 ${t.alexalogin_checkForAlexaOAuthParams}...");
-    
+
     try {
       // Try to get URL query parameters from GoRouter
-      final routeState = GoRouter.of(context).routerDelegate.currentConfiguration;
+      final routeState =
+          GoRouter.of(context).routerDelegate.currentConfiguration;
       final uri = routeState.uri;
       final qp = _mergedQueryParamsFromUriBase();
 
       _log("${t.alexalogin_currentURI}: $uri");
       _log("${t.alexalogin_queryParams}: ${uri.queryParameters}");
-      
+
       _redirectUri = qp['redirect_uri'];
       _state = qp['state'];
 
@@ -101,19 +102,21 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
         if (extra is Map<String, dynamic>) {
           _redirectUri = extra['redirect_uri'] as String?;
           _state = extra['state'] as String?;
-          _log("✓ ${t.alexalogin_receivedParamsFromRoute}: $_redirectUri, ${t.alexalogin_state}: $_state");
+          _log(
+              "✓ ${t.alexalogin_receivedParamsFromRoute}: $_redirectUri, ${t.alexalogin_state}: $_state");
         }
       }
-      
+
       // TESTING ONLY: Hardcoded fallback for debugging (remove in production)
       if (_redirectUri == null) {
         _log("⚠️ ${t.alexalogin_noAlexaParams}");
-        _redirectUri = "https://pitangui.amazon.com/api/skill/link/M1VZ06KRKERWBD";
+        _redirectUri =
+            "https://pitangui.amazon.com/api/skill/link/M1VZ06KRKERWBD";
         _state = "test-state-123";
       }
-      
+
       _isAlexaFlow = _redirectUri != null && _redirectUri!.isNotEmpty;
-      
+
       if (_isAlexaFlow) {
         _log("✅ ${t.alexalogin_alexaOAuthFlowDetected}");
         _log("${t.alexalogin_redirectURI}: $_redirectUri");
@@ -158,7 +161,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
     try {
       // Step 1: Call the auth service to login
       _log("\n📍 ${t.alexalogin_stepAuthBackend}...");
-      
+
       final authResult = await EnhancedAuthService.loginWithRoleValidation(
         email: email,
         password: password,
@@ -167,16 +170,17 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 
       if (authResult.isSuccess) {
         _log("✅ ${t.alexalogin_loginSuccessful}");
-        
+
         // Login successful - get the JWT token
         final user = authResult.userSession!;
         final jwtToken = authResult.userSession?.token;
-        
-        _log("${t.alexalogin_jwtToken}: ${jwtToken?.substring(0, 20)}...${jwtToken?.substring(jwtToken.length - 20)}");
-        
+
+        _log(
+            "${t.alexalogin_jwtToken}: ${jwtToken?.substring(0, 20)}...${jwtToken?.substring(jwtToken.length - 20)}");
+
         if (mounted) {
           Provider.of<UserProvider>(context, listen: false).setUser(user);
-          
+
           // If this is an Alexa OAuth flow, proceed to get authorization code
           if (_isAlexaFlow && jwtToken != null) {
             _log("\n📍 ${t.alexalogin_handlingAlexaOAuth}...");
@@ -212,7 +216,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 
       // Step 2: Request Alexa temporary code from backend
       _log("POST /v1/api/auth/sso/alexa/code");
-      
+
       final codeResult = await AuthService.getAlexaAuthorizationCode(
         token: jwtToken,
         t: t,
@@ -226,7 +230,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
 
         // Step 3: Build redirect URI with code and state
         _log("\n📍 ${t.alexalogin_redirectingToAlexa}...");
-        
+
         String redirectUrl = '$_redirectUri?code=${Uri.encodeComponent(code)}';
         if (_state != null && _state!.isNotEmpty) {
           redirectUrl += '&state=${Uri.encodeComponent(_state!)}';
@@ -240,7 +244,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
           await launchUrl(Uri.parse(redirectUrl));
         }
       } else {
-        _log("❌ ${t.alexalogin_failedToGenerateCode}: ${codeResult['message']}");
+        _log(
+            "❌ ${t.alexalogin_failedToGenerateCode}: ${codeResult['message']}");
         setState(() {
           _error = codeResult['message'] ?? t.authservice_authFailedToGenCode;
         });
@@ -266,8 +271,7 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: isMobile ? double.infinity : 500,
-                minHeight:
-                    MediaQuery.of(context).size.height -
+                minHeight: MediaQuery.of(context).size.height -
                     MediaQuery.of(context).padding.top -
                     MediaQuery.of(context).padding.bottom,
               ),
@@ -668,7 +672,8 @@ Map<String, String> _mergedQueryParamsFromUriBase() {
                       const SizedBox(width: 24),
                       _buildSecurityBadge(t.login_badgeHipaa, Icons.verified),
                       const SizedBox(width: 24),
-                      _buildSecurityBadge(t.login_badgeAccessible, Icons.accessibility),
+                      _buildSecurityBadge(
+                          t.login_badgeAccessible, Icons.accessibility),
                     ],
                   ),
 

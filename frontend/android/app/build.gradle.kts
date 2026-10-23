@@ -94,6 +94,7 @@ dependencies {
     implementation("com.google.firebase:firebase-common") 
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.1")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
+    implementation("com.google.mediapipe:tasks-genai:0.10.14")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
 }

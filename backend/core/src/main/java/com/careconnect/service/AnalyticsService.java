@@ -56,7 +56,7 @@ public class AnalyticsService {
         SummaryMetric agg = summaryRepo.findTopByPatientUserIdAndPeriodStartAndPeriodEndOrderByCreatedAtDesc(patientUserId, from, to);
         double adherence;
         double avgHr;
-        if (agg != null && agg.getGeneratedAt().isAfter(Instant.now().minus(Period.ofDays(1)))) {
+        if (agg != null && agg.getGeneratedAt() != null && agg.getGeneratedAt().isAfter(Instant.now().minus(Period.ofDays(1)))) {
             adherence = agg.getAdherenceRate();
             avgHr = agg.getAvgHeartRate();
         } else {

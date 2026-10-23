@@ -1,5 +1,6 @@
 package com.careconnect.service;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -42,7 +43,7 @@ public class KvsAudioTranscodeService {
                         output.toString())
                         .redirectErrorStream(true)
                         .start();
-        final String outputText = new String(process.getInputStream().readAllBytes());
+        final String outputText = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         final int exitCode = process.waitFor();
         if (exitCode != 0) {
             Files.deleteIfExists(output);

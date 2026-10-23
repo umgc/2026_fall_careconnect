@@ -43,8 +43,7 @@ class ResponsivePageWrapper extends StatelessWidget {
 
   Widget _buildResponsiveBody(BuildContext context) {
     final deviceType = ResponsiveUtils.getDeviceType(context);
-    final isLargeScreen =
-        deviceType == DeviceType.desktop ||
+    final isLargeScreen = deviceType == DeviceType.desktop ||
         deviceType == DeviceType.largeDesktop;
 
     Widget contentWidget = child;
@@ -96,14 +95,12 @@ class ResponsiveScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Create the app bar with title and actions
-    final appBar =
-        customAppBar ??
+    final appBar = customAppBar ??
         AppBar(title: Text(title), actions: appBarActions ?? actions);
 
     // Create the drawer with the current route
-    final drawer = currentRoute != null
-        ? CommonDrawer(currentRoute: currentRoute!)
-        : null;
+    final drawer =
+        currentRoute != null ? CommonDrawer(currentRoute: currentRoute!) : null;
 
     return ResponsivePageWrapper(
       title: title,

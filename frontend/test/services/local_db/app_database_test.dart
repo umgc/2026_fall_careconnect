@@ -122,6 +122,50 @@ void main() {
       await db.closeDb();
     });
 
+    test('repeated failures mark the row terminal (dead) at the retry cap and '
+        'exclude it from the pending queue', () async {
+      final db = AppDatabase();
+      await db.ensureOfflineSyncTable();
+
+      await db.upsertOfflineSyncOperation(
+        id: 'doomed-item',
+        method: 'POST',
+        url: 'https://unreachable.example.org/v1/api/mood',
+        headersJson: '{}',
+        bodyJson: '{"moodValue":5}',
+        createdAtIso: '2026-03-12T12:00:00.000Z',
+        fingerprint: 'fp-doomed-mood',
+      );
+
+      // Fail one short of the cap: still retryable and still surfaced.
+      for (var attempt = 1; attempt < AppDatabase.maxReplayAttempts; attempt++) {
+        await db.markOfflineSyncAsFailed(
+          id: 'doomed-item',
+          errorMessage: 'connection refused',
+        );
+      }
+      var row = await db.getOfflineSyncById('doomed-item');
+      expect(row!.status, equals('failed'));
+      expect(row.retryCount, equals(AppDatabase.maxReplayAttempts - 1));
+      expect(await db.getPendingOfflineSyncCount(), equals(1));
+
+      // The final failure reaches the cap and retires the row.
+      await db.markOfflineSyncAsFailed(
+        id: 'doomed-item',
+        errorMessage: 'connection refused',
+      );
+      row = await db.getOfflineSyncById('doomed-item');
+      expect(row!.status, equals('dead'));
+      expect(row.retryCount, equals(AppDatabase.maxReplayAttempts));
+
+      // Terminal rows no longer count as pending, so the sync banner can clear.
+      expect(await db.getPendingOfflineSyncCount(), equals(0));
+      expect(await db.getPendingOfflineSyncQueue(), isEmpty);
+
+      await db.deleteOfflineSyncById('doomed-item');
+      await db.closeDb();
+    });
+
     test('getOfflineSyncById returns null for unknown id', () async {
       final db = AppDatabase();
       await db.ensureOfflineSyncTable();

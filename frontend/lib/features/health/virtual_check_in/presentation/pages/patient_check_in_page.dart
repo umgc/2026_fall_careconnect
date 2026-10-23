@@ -1,4 +1,3 @@
-
 import 'package:care_connect_app/widgets/default_app_header.dart';
 import 'package:care_connect_app/widgets/video_widget.dart';
 import 'package:care_connect_app/config/env_constant.dart';
@@ -8,6 +7,7 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/checkin_service.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
@@ -199,15 +199,13 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
     }
   }
 
-  Future<CameraDescription> setUpCamera() async
-  {
+  Future<CameraDescription> setUpCamera() async {
     WidgetsFlutterBinding.ensureInitialized();
     final cameras = await availableCameras();
     return cameras.first;
   }
 
-  void cameraHandler() async
-  {
+  void cameraHandler() async {
     final available = await _checkCameraAvailability();
     if (!available) {
       if (!mounted) return;
@@ -220,41 +218,36 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
       return;
     }
 
-    if(!videoCallActive)
-      {
-        targetCamera = setUpCamera();
-        videoCallActive = true;
-        controller = CameraController(await targetCamera, ResolutionPreset.medium);
+    if (!videoCallActive) {
+      targetCamera = setUpCamera();
+      videoCallActive = true;
+      controller =
+          CameraController(await targetCamera, ResolutionPreset.medium);
 
-        // Initialize the camera controller
-        await controller.initialize();
+      // Initialize the camera controller
+      await controller.initialize();
 
-        if (mounted) {
-          setState(() {
-            showVideoCall = true;
-          });
-        }
+      if (mounted) {
+        setState(() {
+          showVideoCall = true;
+        });
       }
+    }
   }
 
-  Future<void> startRecording() async
-  {
-    if(!recordingStarted)
-      {
-        controller.startVideoRecording();
-      }
-    else
-      {
-        controller.resumeVideoRecording();
-      }
+  Future<void> startRecording() async {
+    if (!recordingStarted) {
+      controller.startVideoRecording();
+    } else {
+      controller.resumeVideoRecording();
+    }
     recordingStarted = true;
     setState(() {
       currentlyRecording = true;
     });
   }
 
-  Future<void> pauseRecording() async
-  {
+  Future<void> pauseRecording() async {
     controller.pauseVideoRecording();
     setState(() {
       currentlyRecording = false;
@@ -264,19 +257,20 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
   void submitVideo() async {
     // TODO: Implement video submission logic
     // This is where you would upload/save the video recording
-    if(!recordingStarted)
-      {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Cannot submit, no video recorded."),
-            backgroundColor: Colors.grey,
-          ),
-        );
-        return;
-      }
+    if (!recordingStarted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cannot submit, no video recorded."),
+          backgroundColor: Colors.grey,
+        ),
+      );
+      return;
+    }
 
     await controller.stopVideoRecording();
-    await http.post(Uri.parse(apiURL)); ///TODO: Add a proper body that includes XFile Video
+    await http.post(Uri.parse(apiURL));
+
+    ///TODO: Add a proper body that includes XFile Video
 
     if (!mounted) return;
 
@@ -317,13 +311,14 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
   ///TODO: Submit video file
 
   @override
-  Widget build(BuildContext context)  {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: DefaultAppHeader(),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: (isCheckingCamera || (!isCameraAvailable && _cameraChecked))
-            ? Colors.grey
-            : Colors.green,
+        backgroundColor:
+            (isCheckingCamera || (!isCameraAvailable && _cameraChecked))
+                ? Colors.grey
+                : Colors.green,
         foregroundColor: Colors.white,
         onPressed: isCheckingCamera ? null : () => cameraHandler(),
         tooltip: isCheckingCamera
@@ -338,7 +333,7 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                 child: CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2,
-                  ),
+                ),
               )
             : Icon(
                 (!_cameraChecked || isCameraAvailable)
@@ -405,12 +400,56 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                 ],
               ),
 
+              // Unified Health Data entry point
+              Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: InkWell(
+                  onTap: () => context.push('/health-data'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.health_and_safety_outlined,
+                          size: 32,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Unified Health Data',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'View health records from connected sources',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.chevron_right),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
               // Video call widget
-              if(showVideoCall)
+              if (showVideoCall)
                 Card(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)
-                  ),
+                      borderRadius: BorderRadius.circular(12)),
                   elevation: 2,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -428,7 +467,8 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.grey[600],
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
                                 ),
                               ),
                             ),
@@ -441,24 +481,26 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.green,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
                                 ),
                               ),
                             ),
-                            if(!currentlyRecording)
+                            if (!currentlyRecording)
                               Expanded(
-                              child: ElevatedButton.icon(
-                              label: Text("Start"),
-                              onPressed: startRecording,
-                              icon: const Icon(Icons.square),
-                              style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blueAccent,
-                              foregroundColor: Colors.red,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: ElevatedButton.icon(
+                                  label: Text("Start"),
+                                  onPressed: startRecording,
+                                  icon: const Icon(Icons.square),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    foregroundColor: Colors.red,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                  ),
+                                ),
                               ),
-                              ),
-                              ),
-                            if(currentlyRecording)
+                            if (currentlyRecording)
                               Expanded(
                                 child: ElevatedButton.icon(
                                   label: const Text("Pause"),
@@ -467,17 +509,18 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blueAccent,
                                     foregroundColor: Colors.black,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
                                   ),
                                 ),
-                              ),],
+                              ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 ),
-              if(showVideoCall)
-                const SizedBox(height: 16),
+              if (showVideoCall) const SizedBox(height: 16),
 
               _buildAssignedQuestionnaireCard(),
               const SizedBox(height: 16),
@@ -506,6 +549,9 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                         physics: const NeverScrollableScrollPhysics(),
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
+                        // Cells taller than wide so the emoji + label fit without
+                        // a bottom overflow (emoji glyphs render taller than 28px).
+                        childAspectRatio: 0.8,
                         children: moodOptions.map((mood) {
                           final isSelected = selectedMood == mood["value"];
                           return GestureDetector(

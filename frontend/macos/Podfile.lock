@@ -74,11 +74,11 @@ SPEC CHECKSUMS:
   flutter_secure_storage_macos: 7f45e30f838cf2659862a4e4e3ee1c347c2b3b54
   flutter_tts: ae915565cc6948444b513acc8ee021993281e027
   flutter_web_auth_2: 62b08da29f15a20fa63f144234622a1488d45b65
-  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   pdfx: 1e79f57f7a6ce2f4a4c30f21fa54d3dc82441b51
   SQLCipher: eb79c64049cb002b4e9fcb30edb7979bf4706dfc
   sqlcipher_flutter_libs: 01ead34db27ae5e49987cae46c8a34199eb22cfe
 
 PODFILE CHECKSUM: 1e95c36afbfd1cb6423ceca4de7a8e1b256fb6ac
 
-COCOAPODS: 1.17.0
+COCOAPODS: 1.16.2

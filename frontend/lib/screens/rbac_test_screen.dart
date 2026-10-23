@@ -41,7 +41,7 @@ class RBACTestScreen extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 24),
-          
+
           // Admin Test
           ElevatedButton.icon(
             onPressed: () => _setMockUser(userProvider, 'ADMIN'),
@@ -53,7 +53,7 @@ class RBACTestScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           // Caregiver Test
           ElevatedButton.icon(
             onPressed: () => _setMockUser(userProvider, 'CAREGIVER'),
@@ -65,7 +65,7 @@ class RBACTestScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           // Patient Test
           ElevatedButton.icon(
             onPressed: () => _setMockUser(userProvider, 'PATIENT'),
@@ -77,7 +77,7 @@ class RBACTestScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          
+
           // Family Member Test
           ElevatedButton.icon(
             onPressed: () => _setMockUser(userProvider, 'FAMILY_MEMBER'),

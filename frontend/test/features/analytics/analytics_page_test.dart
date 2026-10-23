@@ -31,8 +31,12 @@ void _ignoreOverflowErrors(FlutterErrorDetails details) {
   }
 }
 
-Widget _wrap({int patientId = 0}) =>
-    MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: AnalyticsPage(patientId: patientId));
+Widget _wrap({int patientId = 0}) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: AnalyticsPage(patientId: patientId),
+    );
 
 void _setupMocks() {
   SharedPreferences.setMockInitialValues({});
@@ -194,6 +198,11 @@ void _setTabletViewport(WidgetTester tester) {
 
 void _setNarrowViewport(WidgetTester tester) {
   tester.view.physicalSize = const Size(350, 700);
+  tester.view.devicePixelRatio = 1.0;
+}
+
+void _setCompactViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(300, 700);
   tester.view.devicePixelRatio = 1.0;
 }
 
@@ -652,6 +661,24 @@ void main() {
   // GROUP 5: Success state - mobile layout
   // ==========================================================
   group('AnalyticsPage - success state (mobile)', () {
+    testWidgets('compact health summary uses shortened date range', (
+      tester,
+    ) async {
+      final oldHandler = FlutterError.onError;
+      FlutterError.onError = _ignoreOverflowErrors;
+      _setCompactViewport(tester);
+      addTearDown(() {
+        FlutterError.onError = oldHandler;
+        tester.view.reset();
+      });
+      final mockClient = _createSuccessMockClient();
+      await http.runWithClient(() async {
+        await tester.pumpWidget(_wrap(patientId: 1));
+        await _pumpN(tester);
+        expect(find.text('Last 7d'), findsOneWidget);
+      }, () => mockClient);
+    });
+
     testWidgets('mobile renders compact filter chip labels', (tester) async {
       final oldHandler = FlutterError.onError;
       FlutterError.onError = _ignoreOverflowErrors;

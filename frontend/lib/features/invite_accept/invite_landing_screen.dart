@@ -120,7 +120,8 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Care-Circle Invitation'), centerTitle: true),
+      appBar: AppBar(
+          title: const Text('Care-Circle Invitation'), centerTitle: true),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -179,9 +180,12 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
       // Non-valid preview (expired / revoked / accepted / invalid) — show a
       // clear, non-enumerating message with the suggested next action.
       final body = switch (preview.status) {
-        'EXPIRED' => 'This invitation has expired. Ask the caregiver for a new one.',
-        'REVOKED' => 'This invitation has been revoked. Ask the caregiver for a new one.',
-        'ACCEPTED' => 'This invitation has already been accepted. Try signing in.',
+        'EXPIRED' =>
+          'This invitation has expired. Ask the caregiver for a new one.',
+        'REVOKED' =>
+          'This invitation has been revoked. Ask the caregiver for a new one.',
+        'ACCEPTED' =>
+          'This invitation has already been accepted. Try signing in.',
         _ => 'This invitation link is not valid.',
       };
       final isSignIn = preview.nextAction == 'SIGN_IN';
@@ -192,7 +196,8 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
         title: 'Invitation unavailable',
         body: body,
         actionLabel: isSignIn ? 'Sign in' : 'Close',
-        onAction: isSignIn ? () => context.push('/login') : () => context.go('/'),
+        onAction:
+            isSignIn ? () => context.push('/login') : () => context.go('/'),
       );
     }
 
@@ -201,9 +206,11 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
       children: [
         Icon(Icons.group_add, size: 56, color: theme.colorScheme.primary),
         const SizedBox(height: 20),
-        Text('You\'re invited', style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
+        Text('You\'re invited',
+            style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
         const SizedBox(height: 12),
-        Text(preview.contextSummary, style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
+        Text(preview.contextSummary,
+            style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
         if (preview.expiresAt != null) ...[
           const SizedBox(height: 16),
           Chip(
@@ -218,7 +225,8 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
             onPressed: _continue,
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: const Text('Accept invitation'),
           ),
@@ -246,9 +254,11 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
       children: [
         Icon(icon, size: 56, color: color),
         const SizedBox(height: 20),
-        Text(title, style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
+        Text(title,
+            style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
         const SizedBox(height: 12),
-        Text(body, style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
+        Text(body,
+            style: theme.textTheme.bodyLarge, textAlign: TextAlign.center),
         const SizedBox(height: 28),
         SizedBox(
           width: double.infinity,
@@ -256,7 +266,8 @@ class _InviteLandingScreenState extends State<InviteLandingScreen> {
             onPressed: onAction,
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(actionLabel),
           ),

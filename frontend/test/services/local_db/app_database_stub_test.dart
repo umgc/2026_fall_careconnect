@@ -1,6 +1,3 @@
-@Skip('app_database_stub.dart is a web-only no-op stub — all methods return '
-    'dummy values by design. These tests expect real queue behavior '
-    'which the stub intentionally does not provide.')
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/services/local_db/app_database_stub.dart';
 
@@ -10,6 +7,10 @@ void main() {
 
     setUp(() {
       db = AppDatabase();
+    });
+
+    tearDown(() {
+      db.resetQueue();
     });
 
     test('isEncrypted returns false', () async {
@@ -231,6 +232,25 @@ void main() {
       );
       final count = await db.getPendingOfflineSyncCount();
       expect(count, 0);
+    });
+
+    test('resetQueue clears session-scoped rows', () async {
+      // Arrange
+      await db.upsertOfflineSyncOperation(
+        id: '1',
+        method: 'POST',
+        url: '/sync/mood',
+        headersJson: '{}',
+        bodyJson: null,
+        createdAtIso: '2026-03-15T10:00:00Z',
+        fingerprint: 'fp-1',
+      );
+
+      // Act
+      db.resetQueue();
+
+      // Assert
+      expect(await db.getPendingOfflineSyncCount(), 0);
     });
   });
 }

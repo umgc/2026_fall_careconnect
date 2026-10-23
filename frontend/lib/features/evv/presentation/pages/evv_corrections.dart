@@ -8,7 +8,8 @@ class EvvCorrectionsPage extends StatefulWidget {
   State<EvvCorrectionsPage> createState() => _EvvCorrectionsPageState();
 }
 
-class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProviderStateMixin {
+class _EvvCorrectionsPageState extends State<EvvCorrectionsPage>
+    with TickerProviderStateMixin {
   final EvvService _evvService = EvvService();
   bool _isLoading = true;
   List<EvvCorrection> _pendingCorrections = [];
@@ -25,7 +26,7 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
     try {
       final corrections = await _evvService.getPendingCorrections();
       final approvals = await _evvService.getPendingEorApprovals();
-      
+
       setState(() {
         _pendingCorrections = corrections;
         _pendingEorApprovals = approvals;
@@ -43,7 +44,8 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
     }
   }
 
-  Future<void> _approveCorrection(EvvCorrection correction, String? comment) async {
+  Future<void> _approveCorrection(
+      EvvCorrection correction, String? comment) async {
     try {
       await _evvService.approveCorrection(
         correctionId: correction.id,
@@ -107,7 +109,7 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
 
   void _showCorrectionApprovalDialog(EvvCorrection correction) {
     final commentController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -120,8 +122,8 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
               Text(
                 'Correction Details',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 8),
               _buildCorrectionDetails(correction),
@@ -157,7 +159,7 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
 
   void _showEorApprovalDialog(EvvRecord record) {
     final commentController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -170,8 +172,8 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
               Text(
                 'Record Details',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 8),
               _buildRecordDetails(record),
@@ -215,7 +217,8 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
             _buildDetailRow('Reason Code', correction.reasonCode),
             _buildDetailRow('Explanation', correction.explanation),
             _buildDetailRow('Corrected By', correction.correctedBy.toString()),
-            _buildDetailRow('Corrected At', _formatDateTime(correction.correctedAt)),
+            _buildDetailRow(
+                'Corrected At', _formatDateTime(correction.correctedAt)),
             const SizedBox(height: 8),
             const Text(
               'Changes:',
@@ -224,8 +227,9 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
             const SizedBox(height: 4),
             ...correction.originalValues.entries.map((entry) {
               final originalValue = entry.value?.toString() ?? 'N/A';
-              final correctedValue = correction.correctedValues[entry.key]?.toString() ?? 'N/A';
-              
+              final correctedValue =
+                  correction.correctedValues[entry.key]?.toString() ?? 'N/A';
+
               if (originalValue != correctedValue) {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
@@ -322,7 +326,8 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
           ),
         ],
         bottom: TabBar(
-          controller: TabController(length: 2, vsync: this, initialIndex: _selectedTabIndex),
+          controller: TabController(
+              length: 2, vsync: this, initialIndex: _selectedTabIndex),
           onTap: (index) {
             setState(() {
               _selectedTabIndex = index;
@@ -355,7 +360,8 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : TabBarView(
-              controller: TabController(length: 2, vsync: this, initialIndex: _selectedTabIndex),
+              controller: TabController(
+                  length: 2, vsync: this, initialIndex: _selectedTabIndex),
               children: [
                 // Corrections Tab
                 _pendingCorrections.isEmpty
@@ -397,28 +403,34 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: Colors.red,
-                                child: const Icon(Icons.edit, color: Colors.white),
+                                child:
+                                    const Icon(Icons.edit, color: Colors.white),
                               ),
                               title: Text(
                                 'Correction for ${correction.originalRecord.individualName}',
-                                style: const TextStyle(fontWeight: FontWeight.w500),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('Reason: ${correction.reasonCode}'),
-                                  Text('Service: ${correction.originalRecord.serviceType}'),
-                                  Text('Date: ${_formatDate(correction.originalRecord.dateOfService)}'),
-                                  Text('Corrected: ${_formatDateTime(correction.correctedAt)}'),
+                                  Text(
+                                      'Service: ${correction.originalRecord.serviceType}'),
+                                  Text(
+                                      'Date: ${_formatDate(correction.originalRecord.dateOfService)}'),
+                                  Text(
+                                      'Corrected: ${_formatDateTime(correction.correctedAt)}'),
                                 ],
                               ),
                               trailing: const Icon(Icons.arrow_forward_ios),
-                              onTap: () => _showCorrectionApprovalDialog(correction),
+                              onTap: () =>
+                                  _showCorrectionApprovalDialog(correction),
                             ),
                           );
                         },
                       ),
-                
+
                 // EOR Approvals Tab
                 _pendingEorApprovals.isEmpty
                     ? const Center(
@@ -459,19 +471,24 @@ class _EvvCorrectionsPageState extends State<EvvCorrectionsPage> with TickerProv
                             child: ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: Colors.blue,
-                                child: const Icon(Icons.approval, color: Colors.white),
+                                child: const Icon(Icons.approval,
+                                    color: Colors.white),
                               ),
                               title: Text(
                                 record.individualName,
-                                style: const TextStyle(fontWeight: FontWeight.w500),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('${record.serviceType} - ${_formatDate(record.dateOfService)}'),
-                                  Text('${_formatTime(record.timeIn)} - ${_formatTime(record.timeOut)}'),
+                                  Text(
+                                      '${record.serviceType} - ${_formatDate(record.dateOfService)}'),
+                                  Text(
+                                      '${_formatTime(record.timeIn)} - ${_formatTime(record.timeOut)}'),
                                   Text('State: ${record.stateCode}'),
-                                  Text('Created: ${_formatDateTime(record.createdAt)}'),
+                                  Text(
+                                      'Created: ${_formatDateTime(record.createdAt)}'),
                                 ],
                               ),
                               trailing: const Icon(Icons.arrow_forward_ios),

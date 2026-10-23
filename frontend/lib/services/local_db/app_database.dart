@@ -17,6 +17,12 @@ class AppDatabase {
   final DbEncryptionService _encryptionService;
   sqlite.Database? _db;
 
+  /// Maximum replay attempts before a queued request is marked terminal
+  /// ('dead') and excluded from the pending queue. Without this cap a
+  /// permanently-unreachable backend would keep failing requests in rotation
+  /// forever, leaving the sync banner spinning indefinitely.
+  static const int maxReplayAttempts = 5;
+
   /// Indicates whether an encryption key exists in secure storage.
   Future<bool> isEncrypted() async {
     return _encryptionService.hasEncryptionKey();
@@ -177,12 +183,15 @@ class AppDatabase {
       '''
       UPDATE offline_sync
       SET
-        status = 'failed',
         retry_count = retry_count + 1,
-        last_error = ?
+        last_error = ?,
+        status = CASE
+          WHEN retry_count + 1 >= ? THEN 'dead'
+          ELSE 'failed'
+        END
       WHERE id = ?
       ''',
-      <Object?>[errorMessage, id],
+      <Object?>[errorMessage, maxReplayAttempts, id],
     );
   }
 

@@ -18,7 +18,8 @@ class PaymentCancelPage extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBarHelper.createAppBar(context, title: t.cancelpay_paymentCancel),
+      appBar:
+          AppBarHelper.createAppBar(context, title: t.cancelpay_paymentCancel),
       drawer: const CommonDrawer(currentRoute: '/payment-cancel'),
       body: SafeArea(
         child: Center(

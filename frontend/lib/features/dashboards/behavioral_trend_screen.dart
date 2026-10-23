@@ -79,7 +79,8 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    final start = _startDate ?? DateTime.now().subtract(const Duration(days: 56));
+    final start =
+        _startDate ?? DateTime.now().subtract(const Duration(days: 56));
     final end = _endDate ?? DateTime.now();
     final picked = await showDialog<({DateTime start, DateTime end})>(
       context: context,
@@ -251,7 +252,8 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
       );
     }
 
-    final maxY = counts.map((c) => c.incidentCount).fold(0, (a, b) => a > b ? a : b);
+    final maxY =
+        counts.map((c) => c.incidentCount).fold(0, (a, b) => a > b ? a : b);
     final maxYVal = (maxY < 4) ? 4.0 : (maxY + 1).toDouble();
 
     return Column(
@@ -259,7 +261,8 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
       children: [
         Text(
           'Incident count by week',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -271,8 +274,10 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
               barTouchData: BarTouchData(enabled: true),
               titlesData: FlTitlesData(
                 show: true,
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
@@ -300,7 +305,8 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
                       final i = value.toInt();
                       if (i >= 0 && i < counts.length) {
                         final label = counts[i].weekStartDate;
-                        final short = label.length >= 10 ? label.substring(5, 10) : label;
+                        final short =
+                            label.length >= 10 ? label.substring(5, 10) : label;
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -324,7 +330,8 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
               ),
               borderData: FlBorderData(
                 show: true,
-                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.3)),
               ),
               barGroups: List.generate(
                 counts.length,
@@ -335,7 +342,8 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
                       toY: counts[i].incidentCount.toDouble(),
                       color: theme.colorScheme.primary,
                       width: 20,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(4)),
                     ),
                   ],
                   showingTooltipIndicators: [0],
@@ -355,14 +363,16 @@ class _BehavioralTrendScreenState extends State<BehavioralTrendScreen> {
       children: [
         Text(
           'Most frequently observed behavior keywords',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         ...keywords.map((kw) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(
                 children: [
-                  Icon(Icons.label_outline, size: 18, color: theme.colorScheme.primary),
+                  Icon(Icons.label_outline,
+                      size: 18, color: theme.colorScheme.primary),
                   const SizedBox(width: 8),
                   Text(
                     kw.isNotEmpty ? _capitalize(kw) : kw,
@@ -423,7 +433,8 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                 firstDate: DateTime(2020),
                 lastDate: DateTime.now(),
               );
-              if (picked != null && picked.isBefore(_end)) setState(() => _start = picked);
+              if (picked != null && picked.isBefore(_end))
+                setState(() => _start = picked);
             },
           ),
           ListTile(
@@ -448,7 +459,8 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop((start: _start, end: _end)),
+          onPressed: () =>
+              Navigator.of(context).pop((start: _start, end: _end)),
           child: const Text('Apply'),
         ),
       ],

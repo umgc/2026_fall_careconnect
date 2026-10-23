@@ -6,9 +6,12 @@ import 'package:care_connect_app/services/auth_token_manager.dart';
 
 class QuestionsApi {
   QuestionsApi(String baseUrl)
-      : _base = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+      : _base = baseUrl.endsWith('/')
+            ? baseUrl.substring(0, baseUrl.length - 1)
+            : baseUrl;
 
-  final String _base; // e.g. http://10.0.2.2:8080 or http://localhost:8080 (web)
+  final String
+      _base; // e.g. http://10.0.2.2:8080 or http://localhost:8080 (web)
 
   Future<Map<String, String>> _headers() async {
     final headers = await AuthTokenManager.getAuthHeaders();
@@ -23,7 +26,8 @@ class QuestionsApi {
     });
     final res = await http.get(uri, headers: await _headers());
     if (res.statusCode != 200) {
-      throw Exception('Failed to fetch questions: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to fetch questions: ${res.statusCode} ${res.body}');
     }
     final List<dynamic> arr = json.decode(res.body) as List<dynamic>;
     return arr
@@ -32,11 +36,13 @@ class QuestionsApi {
   }
 
   /// GET /api/checkins/{checkInId}/questions
-  Future<List<BackendQuestionDto>> listQuestionsForCheckIn(String checkInId) async {
+  Future<List<BackendQuestionDto>> listQuestionsForCheckIn(
+      String checkInId) async {
     final uri = Uri.parse('$_base/api/checkins/$checkInId/questions');
     final res = await http.get(uri, headers: await _headers());
     if (res.statusCode != 200) {
-      throw Exception('Failed to fetch check-in questions: ${res.statusCode} ${res.body}');
+      throw Exception(
+          'Failed to fetch check-in questions: ${res.statusCode} ${res.body}');
     }
     final List<dynamic> arr = json.decode(res.body) as List<dynamic>;
     return arr

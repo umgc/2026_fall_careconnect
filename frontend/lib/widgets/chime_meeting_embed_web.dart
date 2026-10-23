@@ -157,7 +157,7 @@ Widget buildChimeMeetingEmbed({
   void Function(Map<String, dynamic> transcriptSample)? onTranscriptSample,
   void Function(String status, String? detail)? onTranscriptStatus,
   void Function(double averageLevel, double speechRatio, double variability)?
-  onVoiceMetricsSample,
+      onVoiceMetricsSample,
   void Function(String imageBase64)? onVideoSample,
   void Function(String channel, bool muted)? onSentimentChannelState,
 }) {
@@ -193,10 +193,12 @@ class _ChimeMeetingEmbedWeb extends StatefulWidget {
   final bool enableAutoSentimentCapture;
   final int sentimentCaptureIntervalMs;
   final VoidCallback? onEndCallRequested;
-  final void Function(Map<String, dynamic> transcriptSample)? onTranscriptSample;
+  final void Function(Map<String, dynamic> transcriptSample)?
+      onTranscriptSample;
   final void Function(String status, String? detail)? onTranscriptStatus;
-  final void Function(double averageLevel, double speechRatio, double variability)?
-  onVoiceMetricsSample;
+  final void Function(
+          double averageLevel, double speechRatio, double variability)?
+      onVoiceMetricsSample;
   final void Function(String imageBase64)? onVideoSample;
   final void Function(String channel, bool muted)? onSentimentChannelState;
 
@@ -254,8 +256,7 @@ class _ChimeMeetingEmbedWebState extends State<_ChimeMeetingEmbedWeb> {
       'joinToken': widget.joinToken,
       'mediaPlacement': widget.mediaPlacement,
       'mediaRegion': widget.mediaRegion ?? 'us-east-1',
-      'externalUserId':
-          widget.externalUserId ??
+      'externalUserId': widget.externalUserId ??
           'careconnect-${widget.attendeeId.substring(0, 8)}',
       'videoEnabled': widget.videoEnabled,
       'audioEnabled': widget.audioEnabled,
@@ -338,9 +339,8 @@ class _ChimeMeetingEmbedWebState extends State<_ChimeMeetingEmbedWeb> {
         if (data['action'] == 'sentiment-video-sample') {
           final payload = data['payload'];
           if (payload is Map) {
-            final imageBase64 = (payload['imageBase64'] ?? '')
-                .toString()
-                .trim();
+            final imageBase64 =
+                (payload['imageBase64'] ?? '').toString().trim();
             if (imageBase64.isNotEmpty) {
               widget.onVideoSample?.call(imageBase64);
             }
@@ -351,10 +351,8 @@ class _ChimeMeetingEmbedWebState extends State<_ChimeMeetingEmbedWeb> {
         if (data['action'] == 'sentiment-channel-state') {
           final payload = data['payload'];
           if (payload is Map) {
-            final channel = (payload['channel'] ?? '')
-                .toString()
-                .trim()
-                .toLowerCase();
+            final channel =
+                (payload['channel'] ?? '').toString().trim().toLowerCase();
             final muted = payload['muted'] == true;
             if (channel == 'text' || channel == 'voice' || channel == 'video') {
               widget.onSentimentChannelState?.call(channel, muted);
@@ -511,7 +509,8 @@ class _ChimeMeetingEmbedWebState extends State<_ChimeMeetingEmbedWeb> {
     }
     final lower = message.toLowerCase();
     if (lower.contains('chime transcript capture subscribed')) {
-      widget.onTranscriptStatus!.call('AWAITING', 'Subscribed, waiting for transcript');
+      widget.onTranscriptStatus!
+          .call('AWAITING', 'Subscribed, waiting for transcript');
       return;
     }
     if (lower.contains('speech transcription capture started')) {
@@ -521,7 +520,8 @@ class _ChimeMeetingEmbedWebState extends State<_ChimeMeetingEmbedWeb> {
     if (lower.contains('speechrecognition api unavailable') ||
         lower.contains('speech recognition error: not-allowed') ||
         lower.contains('speech recognition error: service-not-allowed')) {
-      widget.onTranscriptStatus!.call('BLOCKED', 'Microphone or browser blocked');
+      widget.onTranscriptStatus!
+          .call('BLOCKED', 'Microphone or browser blocked');
       return;
     }
     if (level.toLowerCase() == 'warn' &&
@@ -2608,7 +2608,3 @@ class _ChimeMeetingEmbedWebState extends State<_ChimeMeetingEmbedWeb> {
 ''';
   }
 }
-
-
-
-

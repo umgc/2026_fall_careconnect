@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * outcome column, and the {@code @PrePersist} timestamp default through a real
  * persistence cycle rather than a direct method call.
  * <p>
- * Test IDs TC-EHR-AUD-003..007 are permanent. Never renumber, never reuse.
+ * Test IDs TC-EHR-AUD-003..007 and 011 (the Testing Lead's, 2026-10-06) are permanent. Never renumber, never reuse.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -113,5 +113,21 @@ class EhrAuditEventRepositoryIntegrationTest {
         assertThatThrownBy(() -> repository.saveAndFlush(event))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasRootCauseInstanceOf(java.sql.SQLException.class);
+    }
+
+    @Test
+    @DisplayName("TC-EHR-AUD-011: an attempt logged with its start time keeps that time; @PrePersist stamps only an attempt logged without one")
+    void attemptStartTimeIsKept() {
+        // Testing Lead, 2026-10-06 (DEF-MCR-16): the Medicare cache reads "changes since" this time.
+        final OffsetDateTime started = OffsetDateTime.now().minusMinutes(5).withNano(0);
+        final com.careconnect.service.ehr.EhrAuditLogger logger = new com.careconnect.service.ehr.EhrAuditLogger(repository);
+
+        logger.log(7L, "MEDICARE", "Coverage", EhrRetrievalOutcome.SUCCESS, null, 1, null, started);
+        logger.log(8L, "MEDICARE", "Coverage", EhrRetrievalOutcome.SUCCESS, null, 1, null);
+
+        final EhrAuditEvent timed = repository.findAll().stream().filter(e -> e.getPatientId() == 7L).findFirst().orElseThrow();
+        final EhrAuditEvent untimed = repository.findAll().stream().filter(e -> e.getPatientId() == 8L).findFirst().orElseThrow();
+        assertThat(timed.getEventTime().toInstant()).isEqualTo(started.toInstant());
+        assertThat(untimed.getEventTime()).isAfter(started.plusMinutes(4));
     }
 }

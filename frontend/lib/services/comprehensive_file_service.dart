@@ -31,7 +31,8 @@ enum FileCategory {
   insuranceDoc('INSURANCE_DOCUMENT', 'Insurance Document', '🛡️'),
 
   // Employment & Onboarding (Home Care Document Digitization)
-  employmentApplication('EMPLOYMENT_APPLICATION', 'Employment Application', '📝'),
+  employmentApplication(
+      'EMPLOYMENT_APPLICATION', 'Employment Application', '📝'),
   onboardingForm('ONBOARDING_FORM', 'Onboarding Form', '🗂️'),
   backgroundCheck('BACKGROUND_CHECK', 'Background Check', '🔎'),
   certification('CERTIFICATION', 'Certification / License', '📜'),
@@ -86,10 +87,10 @@ class _FileCategoryDropdownState extends State<FileCategoryDropdown> {
   @override
   void initState() {
     super.initState();
-    _availableCategories = widget.allowedCategories != null &&
-        widget.allowedCategories!.isNotEmpty
-        ? widget.allowedCategories!
-        : FileCategory.values;
+    _availableCategories =
+        widget.allowedCategories != null && widget.allowedCategories!.isNotEmpty
+            ? widget.allowedCategories!
+            : FileCategory.values;
 
     // Initialize selectedCategory
     if (_availableCategories.isNotEmpty) {
@@ -120,7 +121,6 @@ class _FileCategoryDropdownState extends State<FileCategoryDropdown> {
     );
   }
 }
-
 
 /// Document-type selector for the employment / home-care intake workflow.
 ///
@@ -177,7 +177,6 @@ class _EmploymentDocumentTypeDropdownState
     );
   }
 }
-
 
 /// File query parameters for advanced filtering
 class FileQueryParams {
@@ -576,17 +575,17 @@ class ComprehensiveFileService {
 
   /// Get All Files for a User
   static Future<UserFileDTO?> getAllUserFiles1(
-      int userId, {
-        FileQueryParams? params,
-      }) async {
+    int userId, {
+    FileQueryParams? params,
+  }) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
 
       final response = await http
           .get(
-        Uri.parse('${ApiConstants.files}/users/$userId/list'),
-        headers: headers,
-      )
+            Uri.parse('${ApiConstants.files}/users/$userId/list'),
+            headers: headers,
+          )
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -789,8 +788,8 @@ class ComprehensiveFileService {
 
       // Send the request
       var streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-      );
+            const Duration(seconds: 30),
+          );
       var response = await http.Response.fromStream(streamedResponse);
 
       debugPrint('📥 Response status: ${response.statusCode}');
@@ -837,7 +836,15 @@ class ComprehensiveFileService {
         case FileCategory.insuranceDoc:
           final result = await FilePicker.platform.pickFiles(
             type: FileType.custom,
-            allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'],
+            allowedExtensions: [
+              'pdf',
+              'doc',
+              'docx',
+              'jpg',
+              'jpeg',
+              'png',
+              'txt'
+            ],
             allowMultiple: false,
           );
 
@@ -874,14 +881,16 @@ class ComprehensiveFileService {
           }
       }
     } catch (e) {
-      debugPrint('❌ Error picking file for category ${category.displayName}: $e');
+      debugPrint(
+          '❌ Error picking file for category ${category.displayName}: $e');
       return null;
     }
     return null;
   }
 
   /// Get file picker for specific category
-  static Future<(Uint8List, String)?> pickFileForCategoryWeb(FileCategory category) async {
+  static Future<(Uint8List, String)?> pickFileForCategoryWeb(
+      FileCategory category) async {
     try {
       switch (category) {
         case FileCategory.profilePicture:
@@ -892,7 +901,15 @@ class ComprehensiveFileService {
         case FileCategory.insuranceDoc:
           final result = await FilePicker.platform.pickFiles(
             type: FileType.custom,
-            allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'],
+            allowedExtensions: [
+              'pdf',
+              'doc',
+              'docx',
+              'jpg',
+              'jpeg',
+              'png',
+              'txt'
+            ],
             allowMultiple: false,
           );
 
@@ -931,7 +948,8 @@ class ComprehensiveFileService {
           }
       }
     } catch (e) {
-      debugPrint('❌ Error picking file for category ${category.displayName}: $e');
+      debugPrint(
+          '❌ Error picking file for category ${category.displayName}: $e');
       return null;
     }
     return null;

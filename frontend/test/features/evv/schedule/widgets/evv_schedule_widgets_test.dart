@@ -241,10 +241,9 @@ void main() {
     });
 
     testWidgets('left arrow goes to previous month', (tester) async {
-      DateTime? selected;
       await tester.pumpWidget(_wrapMonth(
         selectedDate: DateTime(2026, 3, 17),
-        onDateSelected: (d) => selected = d,
+        onDateSelected: (_) {},
       ));
       final leftBtn = find.ancestor(
         of: find.byIcon(Icons.chevron_left),
@@ -256,10 +255,9 @@ void main() {
     });
 
     testWidgets('right arrow goes to next month', (tester) async {
-      DateTime? selected;
       await tester.pumpWidget(_wrapMonth(
         selectedDate: DateTime(2026, 3, 17),
-        onDateSelected: (d) => selected = d,
+        onDateSelected: (_) {},
       ));
       final rightBtn = find.ancestor(
         of: find.byIcon(Icons.chevron_right),
@@ -300,9 +298,8 @@ void main() {
 
     testWidgets('shows schedule new button when callback provided',
         (tester) async {
-      bool called = false;
       await tester.pumpWidget(_wrapMonth(
-        onScheduleNew: () => called = true,
+        onScheduleNew: () {},
       ));
       await tester.pump();
       // The onScheduleNew callback is wired to a FAB or button — verify widget renders.

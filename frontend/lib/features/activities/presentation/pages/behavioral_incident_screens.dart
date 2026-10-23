@@ -15,10 +15,12 @@ class BehavioralIncidentFormScreen extends StatefulWidget {
   });
 
   @override
-  State<BehavioralIncidentFormScreen> createState() => _BehavioralIncidentFormScreenState();
+  State<BehavioralIncidentFormScreen> createState() =>
+      _BehavioralIncidentFormScreenState();
 }
 
-class _BehavioralIncidentFormScreenState extends State<BehavioralIncidentFormScreen> {
+class _BehavioralIncidentFormScreenState
+    extends State<BehavioralIncidentFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _behaviorController = TextEditingController();
   final _triggerController = TextEditingController();
@@ -45,9 +47,11 @@ class _BehavioralIncidentFormScreenState extends State<BehavioralIncidentFormScr
       initialTime: TimeOfDay.fromDateTime(_occurredAt),
     );
     if (time == null) {
-      setState(() => _occurredAt = DateTime(date.year, date.month, date.day, _occurredAt.hour, _occurredAt.minute));
+      setState(() => _occurredAt = DateTime(date.year, date.month, date.day,
+          _occurredAt.hour, _occurredAt.minute));
     } else {
-      setState(() => _occurredAt = DateTime(date.year, date.month, date.day, time.hour, time.minute));
+      setState(() => _occurredAt =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute));
     }
   }
 
@@ -59,7 +63,9 @@ class _BehavioralIncidentFormScreenState extends State<BehavioralIncidentFormScr
         clientId: widget.clientId,
         observedBehavior: _behaviorController.text.trim(),
         occurredAt: _occurredAt,
-        triggerNotes: _triggerController.text.trim().isEmpty ? null : _triggerController.text.trim(),
+        triggerNotes: _triggerController.text.trim().isEmpty
+            ? null
+            : _triggerController.text.trim(),
       );
       if (res.statusCode >= 200 && res.statusCode < 300) {
         if (!mounted) return;
@@ -79,7 +85,8 @@ class _BehavioralIncidentFormScreenState extends State<BehavioralIncidentFormScr
         final body = res.body;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to log incident: ${res.statusCode}${body.isNotEmpty ? " — $body" : ""}'),
+            content: Text(
+                'Failed to log incident: ${res.statusCode}${body.isNotEmpty ? " — $body" : ""}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -142,7 +149,8 @@ class _BehavioralIncidentFormScreenState extends State<BehavioralIncidentFormScr
               const SizedBox(height: 16),
               Text(
                 'When did this occur?',
-                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -190,10 +198,12 @@ class BehavioralIncidentHistoryScreen extends StatefulWidget {
   });
 
   @override
-  State<BehavioralIncidentHistoryScreen> createState() => _BehavioralIncidentHistoryScreenState();
+  State<BehavioralIncidentHistoryScreen> createState() =>
+      _BehavioralIncidentHistoryScreenState();
 }
 
-class _BehavioralIncidentHistoryScreenState extends State<BehavioralIncidentHistoryScreen> {
+class _BehavioralIncidentHistoryScreenState
+    extends State<BehavioralIncidentHistoryScreen> {
   List<BehavioralIncidentEntry> _incidents = [];
   bool _loading = true;
   String? _error;
@@ -214,7 +224,8 @@ class _BehavioralIncidentHistoryScreenState extends State<BehavioralIncidentHist
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
         final incidents = (list ?? [])
-            .map((e) => BehavioralIncidentEntry.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) => BehavioralIncidentEntry.fromJson(
+                Map<String, dynamic>.from(e as Map)))
             .toList();
         if (mounted) {
           setState(() {
@@ -296,7 +307,9 @@ class _BehavioralIncidentHistoryScreenState extends State<BehavioralIncidentHist
                         itemCount: _incidents.length,
                         itemBuilder: (context, index) {
                           final inc = _incidents[index];
-                          final dateStr = DateFormat.yMMMd().add_jm().format(inc.occurredAt);
+                          final dateStr = DateFormat.yMMMd()
+                              .add_jm()
+                              .format(inc.occurredAt);
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
@@ -304,7 +317,8 @@ class _BehavioralIncidentHistoryScreenState extends State<BehavioralIncidentHist
                                 inc.observedBehavior,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,7 +331,8 @@ class _BehavioralIncidentHistoryScreenState extends State<BehavioralIncidentHist
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
                                   ),
-                                  if (inc.triggerNotes != null && inc.triggerNotes!.isNotEmpty) ...[
+                                  if (inc.triggerNotes != null &&
+                                      inc.triggerNotes!.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Text(
                                       inc.triggerNotes!,
@@ -336,4 +351,3 @@ class _BehavioralIncidentHistoryScreenState extends State<BehavioralIncidentHist
     );
   }
 }
-

@@ -26,10 +26,12 @@ class AiSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Recommended Actions', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Recommended Actions',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   ...value.recommendedActions!.map(
-                    (a) => ListTile(leading: const Icon(Icons.check), title: Text(a)),
+                    (a) => ListTile(
+                        leading: const Icon(Icons.check), title: Text(a)),
                   ),
                 ],
               ),

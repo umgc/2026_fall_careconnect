@@ -48,7 +48,8 @@ class _ClientActivitiesScreenState extends State<ClientActivitiesScreen>
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
         final activities = (list ?? [])
-            .map((e) => ClientActivity.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) =>
+                ClientActivity.fromJson(Map<String, dynamic>.from(e as Map)))
             .where((a) => a.enabled)
             .toList();
         setState(() {
@@ -308,7 +309,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
         if (mounted) {
           setState(() {
             _scale = scale.isNotEmpty ? scale : _defaultScale();
-            _scaleError = scale.isNotEmpty ? null : 'Using default competency scale';
+            _scaleError =
+                scale.isNotEmpty ? null : 'Using default competency scale';
             _loadingScale = false;
           });
         }
@@ -316,7 +318,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
         if (mounted) {
           setState(() {
             _scale = _defaultScale();
-            _scaleError = 'Using default competency scale (GET failed: ${res.statusCode})';
+            _scaleError =
+                'Using default competency scale (GET failed: ${res.statusCode})';
             _loadingScale = false;
           });
         }
@@ -351,14 +354,17 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
         activityId: widget.activity.id,
         competencyScore: _selectedScore!,
         satisfactionRating: _satisfaction,
-        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
         activityName: widget.activity.name,
       );
       if (res.statusCode >= 200 && res.statusCode < 300) {
         widget.onLogged();
       } else {
         final body = res.body;
-        widget.onError('Failed to log: ${res.statusCode}${body.isNotEmpty ? " — $body" : ""}');
+        widget.onError(
+            'Failed to log: ${res.statusCode}${body.isNotEmpty ? " — $body" : ""}');
       }
     } catch (e) {
       widget.onError('Error: $e');
@@ -386,8 +392,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
               Text(
                 widget.activity.name,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -401,8 +407,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
               Text(
                 'How independently did the client perform this activity?',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade700,
-                ),
+                      color: Colors.grey.shade700,
+                    ),
               ),
               const SizedBox(height: 12),
               if (_loadingScale)
@@ -417,7 +423,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
                       color: selected ? teal : null,
                       borderRadius: BorderRadius.circular(8),
                       child: InkWell(
-                        onTap: () => setState(() => _selectedScore = item.value),
+                        onTap: () =>
+                            setState(() => _selectedScore = item.value),
                         borderRadius: BorderRadius.circular(8),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
@@ -504,8 +511,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
               Text(
                 'Notes (optional)',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -519,7 +526,8 @@ class _LogActivitySheetState extends State<LogActivitySheet> {
               ),
               const SizedBox(height: 24),
               FilledButton(
-                onPressed: (_selectedScore != null && !_submitting) ? _submit : null,
+                onPressed:
+                    (_selectedScore != null && !_submitting) ? _submit : null,
                 child: _submitting
                     ? const SizedBox(
                         height: 24,

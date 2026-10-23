@@ -6,8 +6,7 @@ Map<String, dynamic> buildMockUspsDigestMap({DateTime? now}) {
   final DateTime t = now ?? DateTime.now();
 
   String svgBanner(String fill, String label) {
-    final raw =
-        """
+    final raw = """
 <svg xmlns='http://www.w3.org/2000/svg' width='240' height='160'>
   <rect width='240' height='160' fill='$fill'/>
   <text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle'

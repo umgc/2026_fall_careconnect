@@ -193,8 +193,8 @@ class EnhancedFileService {
 
       // Send the request
       var streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-      );
+            const Duration(seconds: 30),
+          );
       var response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
@@ -204,7 +204,6 @@ class EnhancedFileService {
         final errorData = json.decode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to upload file');
       }
-
     } catch (e) {
       print('Error uploading file: $e');
       return null;
@@ -249,8 +248,8 @@ class EnhancedFileService {
 
       // Send the request
       var streamedResponse = await request.send().timeout(
-        const Duration(seconds: 30),
-      );
+            const Duration(seconds: 30),
+          );
       print('Trying to upload file now.');
       var response = await http.Response.fromStream(streamedResponse);
 
@@ -291,20 +290,22 @@ class EnhancedFileService {
   }
 
   /// Download file with legacy endpoint with user ID and file path
-  static Future<Uint8List?> downloadFileLegacy(int userId, String filePath) async {
+  static Future<Uint8List?> downloadFileLegacy(
+      int userId, String filePath) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
 
       // Build URL with userId path and filePath query param
-      final uri = Uri.parse('${ApiConstants.files}/users/$userId/download').replace(
+      final uri =
+          Uri.parse('${ApiConstants.files}/users/$userId/download').replace(
         queryParameters: {'filePath': filePath},
       );
 
       final response = await http
           .get(
-        uri,
-        headers: headers,
-      )
+            uri,
+            headers: headers,
+          )
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {

@@ -140,7 +140,6 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
   }
   // --- END OF MODIFIED FUNCTION ---
 
-
   Future<void> _onTakePhoto() async {
     final first = await ImagePicker().pickImage(
       source: ImageSource.camera,
@@ -152,7 +151,8 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
 
     if (!mounted) return;
 
-    final reviewed = await Navigator.of(context, rootNavigator: true).push<List<XFile>>(
+    final reviewed =
+        await Navigator.of(context, rootNavigator: true).push<List<XFile>>(
       MaterialPageRoute(
         builder: (_) => ReviewPhotosScreen(initialPhotos: [first]),
         fullscreenDialog: true,
@@ -178,9 +178,9 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
   }
 
   Future<void> _handleExtractResult(
-      InvoiceResponseDto? res, {
-        required String failMessage,
-      }) async {
+    InvoiceResponseDto? res, {
+    required String failMessage,
+  }) async {
     if (res == null) {
       _snack(failMessage);
       return;
@@ -222,7 +222,6 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
         ),
       ),
     );
-
   }
 
   void _snack(String msg) {

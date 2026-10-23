@@ -5,7 +5,6 @@ import 'dart:async';
 import '../../../health/medication-tracker/models/medication-model.dart';
 import '../../../../services/api_service.dart';
 
-
 /// Patient Details → Health tab
 class CurrentMedicationsSection extends StatefulWidget {
   final List<Medication> entries;
@@ -34,12 +33,14 @@ class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection> {
     // Emitted once per mount, never from build(): build runs again on every
     // layout change, which multiplies the view count.
     unawaited(
-      Telemetry.event('feature.medications.view_active', {'feature': 'CurrentMedicationsSection'}),
+      Telemetry.event('feature.medications.view_active',
+          {'feature': 'CurrentMedicationsSection'}),
     );
 
     if (widget.entries.any((m) => !m.isActive)) {
       unawaited(
-        Telemetry.event('feature.medications.view_pending', {'feature': 'CurrentMedicationsSection'}),
+        Telemetry.event('feature.medications.view_pending',
+            {'feature': 'CurrentMedicationsSection'}),
       );
     }
   }
@@ -55,9 +56,10 @@ class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection> {
     final meds = List<Medication>.from(widget.entries)
       ..sort((a, b) {
         if (a.isActive != b.isActive) return a.isActive ? -1 : 1;
-        return a.medicationName.toLowerCase().compareTo(b.medicationName.toLowerCase());
+        return a.medicationName
+            .toLowerCase()
+            .compareTo(b.medicationName.toLowerCase());
       });
-
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -140,7 +142,8 @@ class _MedicationBlockState extends State<_MedicationBlock> {
     }
 
     if (widget.caregiverId == null) {
-      _showSnackBar('Unable to delete medication: Missing caregiver ID', isError: true);
+      _showSnackBar('Unable to delete medication: Missing caregiver ID',
+          isError: true);
       return;
     }
 
@@ -149,7 +152,8 @@ class _MedicationBlockState extends State<_MedicationBlock> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Medication'),
-        content: Text('Are you sure you want to delete ${widget.med.medicationName}?'),
+        content: Text(
+            'Are you sure you want to delete ${widget.med.medicationName}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -176,9 +180,8 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.caregiverId!,
       );
 
-      unawaited(
-        Telemetry.event('feature.medications.delete_hard', {'statusCode': response.statusCode})
-      );
+      unawaited(Telemetry.event('feature.medications.delete_hard',
+          {'statusCode': response.statusCode}));
 
       if (response.statusCode == 200) {
         _showSnackBar('Medication deleted successfully');
@@ -217,10 +220,8 @@ class _MedicationBlockState extends State<_MedicationBlock> {
         widget.med.patientId!,
         widget.med.id!,
       );
-      unawaited(
-          Telemetry.event('feature.medications.approve', {'statusCode': response.statusCode})
-        );
-
+      unawaited(Telemetry.event(
+          'feature.medications.approve', {'statusCode': response.statusCode}));
 
       if (response.statusCode == 200) {
         _showSnackBar('Medication approved successfully');
@@ -419,7 +420,20 @@ class _MedicationBlockState extends State<_MedicationBlock> {
   String _formatDateString(String dateStr) {
     try {
       final date = DateTime.parse(dateStr);
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       return '${months[date.month - 1]} ${date.day}, ${date.year}';
     } catch (e) {
       return dateStr;
@@ -436,7 +450,9 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final bg = isActive ? Colors.blue.shade900 : cs.surfaceContainerHighest.withValues(alpha: 0.6);
+    final bg = isActive
+        ? Colors.blue.shade900
+        : cs.surfaceContainerHighest.withValues(alpha: 0.6);
     final fg = isActive ? Colors.white : cs.onSurface;
     final text = isActive ? 'active' : 'inactive';
 
@@ -470,7 +486,8 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(

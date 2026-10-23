@@ -2,21 +2,23 @@
 # Enforces source-branch restrictions on protected target branches.
 #
 # Rules:
-#   PRs → main     must originate from: develop
 #   PRs → develop  must originate from: team-a-develop, team-b-develop,
 #                                        team-c-develop, team-d-develop,
 #                                        team-e-develop (or any team-*-develop)
+#   PRs → staging  must originate from: develop
+#   PRs → main     must originate from: staging
 #
 # To enforce these rules, add this workflow as a required status check
-# in GitHub branch protection settings for both `main` and `develop`.
+# in GitHub branch protection settings for `develop`, `staging`, and `main`.
 
 name: Branch Source Gate
 
 on:
   pull_request:
     branches:
-      - main
       - develop
+      - staging
+      - main
 
 jobs:
   check-source-branch:
@@ -24,16 +26,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check source branch for PRs → main
-        if: github.base_ref == 'main'
-        run: |
-          if [ "${{ github.head_ref }}" != "develop" ]; then
-            echo "::error::PRs to 'main' must come from 'develop'."
-            echo "         Source branch was: ${{ github.head_ref }}"
-            exit 1
-          fi
-          echo "Source branch check passed: ${{ github.head_ref }} → main"
-
       - name: Check source branch for PRs → develop
         if: github.base_ref == 'develop'
         run: |
@@ -46,3 +38,23 @@ jobs:
           echo "::error::PRs to 'develop' must come from a team develop branch (e.g. team-b-develop)."
           echo "         Source branch was: ${SOURCE}"
           exit 1
+
+      - name: Check source branch for PRs → staging
+        if: github.base_ref == 'staging'
+        run: |
+          if [ "${{ github.head_ref }}" != "develop" ]; then
+            echo "::error::PRs to 'staging' must come from 'develop'."
+            echo "         Source branch was: ${{ github.head_ref }}"
+            exit 1
+          fi
+          echo "Source branch check passed: ${{ github.head_ref }} → staging"
+
+      - name: Check source branch for PRs → main
+        if: github.base_ref == 'main'
+        run: |
+          if [ "${{ github.head_ref }}" != "staging" ]; then
+            echo "::error::PRs to 'main' must come from 'staging'."
+            echo "         Source branch was: ${{ github.head_ref }}"
+            exit 1
+          fi
+          echo "Source branch check passed: ${{ github.head_ref }} → main"

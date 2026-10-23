@@ -5,7 +5,7 @@ import 'package:care_connect_app/widgets/search/route_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
- 
+
 import '../../../providers/user_provider.dart';
 
 class RouteSearchPage extends StatefulWidget {
@@ -57,7 +57,9 @@ class _RouteSearchPageState extends State<RouteSearchPage> {
   Future<void> _navigate(BuildContext context, RouteMeta m) async {
     if (!m.launchable) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This page needs context and cannot be opened directly from search')),
+        const SnackBar(
+            content: Text(
+                'This page needs context and cannot be opened directly from search')),
       );
       return;
     }
@@ -84,7 +86,8 @@ class _RouteSearchPageState extends State<RouteSearchPage> {
 
     switch (m.kind) {
       case NavKind.routeName:
-        context.goNamed(m.routeName!, queryParameters: query, pathParameters: pathVars);
+        context.goNamed(m.routeName!,
+            queryParameters: query, pathParameters: pathVars);
         break;
 
       case NavKind.routePath:
@@ -219,7 +222,8 @@ class _ParamDialogState extends State<_ParamDialog> {
                 keyboardType: TextInputType.text,
                 decoration: InputDecoration(
                   labelText: p.label,
-                  helperText: p.isPathParam ? 'Path parameter' : 'Query parameter',
+                  helperText:
+                      p.isPathParam ? 'Path parameter' : 'Query parameter',
                   border: const OutlineInputBorder(),
                 ),
               ),

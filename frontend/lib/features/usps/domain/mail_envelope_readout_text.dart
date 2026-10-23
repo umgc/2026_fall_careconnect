@@ -11,9 +11,8 @@ String buildMailEnvelopeReadoutText({
   final cleanedSummary = _cleanField(summary, stripPrefixes: _summaryPrefixes);
 
   final fromPart = cleanedSender.isEmpty ? 'Unknown sender' : cleanedSender;
-  final summaryPart = cleanedSummary.isEmpty
-      ? 'No envelope summary available'
-      : cleanedSummary;
+  final summaryPart =
+      cleanedSummary.isEmpty ? 'No envelope summary available' : cleanedSummary;
 
   final buffer = StringBuffer('From: $fromPart. $summaryPart.');
   if (includeMissingImageNote) {

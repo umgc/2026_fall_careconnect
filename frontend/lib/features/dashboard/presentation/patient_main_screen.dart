@@ -56,7 +56,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     final userName = userProvider.user?.name ?? 'Patient';
                     return Text(
                       'Good Morning !!!  $userName',
-                      style: Theme.of(context).textTheme.headlineSmall
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w600),
                     );
                   },
@@ -65,8 +67,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 Text(
                   'How are you feeling today?',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 10),
                 const SingleChildScrollView(
@@ -86,8 +88,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 Text(
                   'How is your pain today?',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 10),
                 LayoutBuilder(
@@ -143,8 +145,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color:
-                            Theme.of(context).dividerTheme.color ??
+                        color: Theme.of(context).dividerTheme.color ??
                             Colors.grey.shade300,
                       ),
                       borderRadius: BorderRadius.circular(8),
@@ -162,12 +163,16 @@ class _PatientDashboardState extends State<PatientDashboard> {
                             children: [
                               Text(
                                 'Medication Tracker',
-                                style: Theme.of(context).textTheme.titleSmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               Text(
                                 '3 medications scheduled today',
-                                style: Theme.of(context).textTheme.bodyMedium
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
                                     ?.copyWith(
                                       color: Theme.of(context).hintColor,
                                     ),
@@ -191,8 +196,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       border: Border.all(
-                        color:
-                            Theme.of(context).dividerTheme.color ??
+                        color: Theme.of(context).dividerTheme.color ??
                             Colors.grey.shade300,
                       ),
                       borderRadius: BorderRadius.circular(8),
@@ -210,12 +214,16 @@ class _PatientDashboardState extends State<PatientDashboard> {
                             children: [
                               Text(
                                 'Diet Tracking',
-                                style: Theme.of(context).textTheme.titleSmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleSmall
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               Text(
                                 'Add today\'s meals',
-                                style: Theme.of(context).textTheme.bodyMedium
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
                                     ?.copyWith(
                                       color: Theme.of(context).hintColor,
                                     ),
@@ -256,13 +264,11 @@ class EmojiLabel extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color:
-                  Theme.of(context).cardTheme.color ??
+              color: Theme.of(context).cardTheme.color ??
                   Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color:
-                    Theme.of(context).dividerTheme.color ??
+                color: Theme.of(context).dividerTheme.color ??
                     Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
               ),
             ),
@@ -300,9 +306,9 @@ class PainEmojiLabel extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: isMobile ? 9 : 11,
-              height: 1.1,
-            ),
+                  fontSize: isMobile ? 9 : 11,
+                  height: 1.1,
+                ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -331,8 +337,7 @@ class CaregiverCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
         side: BorderSide(
-          color:
-              Theme.of(context).dividerTheme.color ??
+          color: Theme.of(context).dividerTheme.color ??
               Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
         ),
       ),
@@ -360,8 +365,8 @@ class CaregiverCard extends StatelessWidget {
                   Text(
                     name,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   Row(
                     children: [
@@ -390,10 +395,11 @@ class CaregiverCard extends StatelessWidget {
               children: [
                 ElevatedButton.icon(
                   style: Theme.of(context).elevatedButtonTheme.style?.copyWith(
-                    padding: WidgetStateProperty.all(
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                  ),
+                        padding: WidgetStateProperty.all(
+                          const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                        ),
+                      ),
                   onPressed: () {},
                   icon: const Icon(Icons.videocam, size: 16),
                   label: const Text('Call'),

@@ -8,6 +8,7 @@ import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
+import 'package:care_connect_app/services/user_role_storage_service.dart';
 import 'package:care_connect_app/services/consent_api_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../widgets/ai_chat_improved.dart';
@@ -99,8 +100,19 @@ class _PatientDashboardState extends State<PatientDashboard> {
     });
     try {
       final user = Provider.of<UserProvider>(context, listen: false).user;
-      final int? patientId = user?.patientId;
+      int? patientId = user?.patientId;
+      // Fallback: on a fresh (re)load the in-memory UserProvider is populated
+      // asynchronously and may not be ready yet, even though a session is
+      // persisted. Resolve patientId from the same authoritative store the router
+      // and header already use before declaring the user logged out.
       if (patientId == null) {
+        final stored = await UserRoleStorageService.instance.getUserData();
+        if (stored != null && stored.isLoggedIn) {
+          patientId = stored.patientId;
+        }
+      }
+      if (patientId == null) {
+        if (!mounted) return;
         setState(() {
           error = 'User not logged in.';
           loading = false;
@@ -264,9 +276,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
         final email =
             (link['caregiverEmail'] ?? '').toString().trim().toLowerCase();
         final rawUserId = link['caregiverUserId'];
-        final userId = rawUserId is int
-            ? rawUserId
-            : int.tryParse('$rawUserId');
+        final userId =
+            rawUserId is int ? rawUserId : int.tryParse('$rawUserId');
         if (email.isNotEmpty && userId != null) {
           byEmail[email] = userId;
         }
@@ -275,13 +286,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
       final granted = <int, bool>{};
       for (final caregiver in caregivers) {
         final caregiverUserId = _resolveCaregiverUserId(caregiver, byEmail);
-        if (caregiverUserId == null ||
-            granted.containsKey(caregiverUserId)) {
+        if (caregiverUserId == null || granted.containsKey(caregiverUserId)) {
           continue;
         }
         try {
-          granted[caregiverUserId] = await ConsentApiService
-              .isAiRetrievalGranted(
+          granted[caregiverUserId] =
+              await ConsentApiService.isAiRetrievalGranted(
             patientUserId: patientUserId,
             granteeUserId: caregiverUserId,
           );
@@ -1275,13 +1285,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 'Lets this caregiver ask AI about your care records',
               ),
               value: consentGranted,
-              onChanged:
-                  consentUpdating
-                      ? null
-                      : (value) => _onToggleAiRetrievalConsent(
-                            caregiverUserId,
-                            value,
-                          ),
+              onChanged: consentUpdating
+                  ? null
+                  : (value) => _onToggleAiRetrievalConsent(
+                        caregiverUserId,
+                        value,
+                      ),
             ),
         ],
       ),

@@ -174,17 +174,16 @@ class _ProfilePictureWidgetState extends State<ProfilePictureWidget> {
             // Create a dummy UserFileDTO to indicate deletion
             widget.onImageUpdated!(
               UserFileDTO(
-                id: -1,
-                originalFilename: '',
-                contentType: '',
-                fileSize: 0,
-                fileCategory: 'PROFILE_PICTURE',
-                ownerId: 0,
-                ownerType: '',
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-                fileName: ''
-              ),
+                  id: -1,
+                  originalFilename: '',
+                  contentType: '',
+                  fileSize: 0,
+                  fileCategory: 'PROFILE_PICTURE',
+                  ownerId: 0,
+                  ownerType: '',
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                  fileName: ''),
             );
           }
         } else {
@@ -312,27 +311,27 @@ class _ProfilePictureWidgetState extends State<ProfilePictureWidget> {
             child: _isLoading
                 ? const CircularProgressIndicator()
                 : _imageBytes != null
-                ? ClipOval(
-                    child: Image.memory(
-                      _imageBytes!,
-                      width: widget.size,
-                      height: widget.size,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : widget.existingImageUrl != null
-                ? ClipOval(
-                    child: Image.network(
-                      widget.existingImageUrl!,
-                      width: widget.size,
-                      height: widget.size,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return _buildPlaceholder();
-                      },
-                    ),
-                  )
-                : _buildPlaceholder(),
+                    ? ClipOval(
+                        child: Image.memory(
+                          _imageBytes!,
+                          width: widget.size,
+                          height: widget.size,
+                          fit: BoxFit.cover,
+                        ),
+                      )
+                    : widget.existingImageUrl != null
+                        ? ClipOval(
+                            child: Image.network(
+                              widget.existingImageUrl!,
+                              width: widget.size,
+                              height: widget.size,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return _buildPlaceholder();
+                              },
+                            ),
+                          )
+                        : _buildPlaceholder(),
           ),
 
           // Upload indicator
@@ -440,18 +439,18 @@ class CompactProfilePicture extends StatelessWidget {
               },
             )
           : imageUrl != null
-          ? ClipOval(
-              child: Image.network(
-                imageUrl!,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return _buildInitialsPlaceholder(context);
-                },
-              ),
-            )
-          : _buildInitialsPlaceholder(context),
+              ? ClipOval(
+                  child: Image.network(
+                    imageUrl!,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return _buildInitialsPlaceholder(context);
+                    },
+                  ),
+                )
+              : _buildInitialsPlaceholder(context),
     );
   }
 

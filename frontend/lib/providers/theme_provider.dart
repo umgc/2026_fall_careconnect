@@ -67,7 +67,6 @@ class ThemeProvider extends ChangeNotifier {
         themeValue = _themeModeDark;
         break;
       case ThemeMode.system:
-      default:
         themeValue = _themeModeSystem;
         break;
     }

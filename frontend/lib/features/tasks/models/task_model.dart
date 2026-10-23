@@ -59,9 +59,8 @@ class Task {
   /// - Supporting timeOfDay as `"HH:mm"` string or map `{hour, minute}`
   /// - Mapping backend variations (`interval` vs `taskInterval`, `count` vs `doCount`)
   factory Task.fromJson(Map<String, dynamic> json) {
-    final parsedDays = json['daysOfWeek'] != null
-        ? List<bool>.from(json['daysOfWeek'])
-        : null;
+    final parsedDays =
+        json['daysOfWeek'] != null ? List<bool>.from(json['daysOfWeek']) : null;
 
     return Task(
       id: json['id'],
@@ -83,8 +82,8 @@ class Task {
       isComplete: json['isComplete'] ?? false,
       notifications: json['notifications'] != null
           ? (json['notifications'] as List)
-                .map((n) => ScheduledNotification.fromJson(n))
-                .toList()
+              .map((n) => ScheduledNotification.fromJson(n))
+              .toList()
           : null,
       frequency: json['frequency'],
       interval: json['interval'] ?? json['taskInterval'],

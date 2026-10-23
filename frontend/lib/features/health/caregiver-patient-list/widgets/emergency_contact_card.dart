@@ -187,8 +187,7 @@ class EmergencyContactCard extends StatelessWidget {
                     _ActionIconButton.outlined(
                       icon: Icons.chat_bubble_outline,
                       tooltip: 'Message',
-                      onTap:
-                          onMessage ??
+                      onTap: onMessage ??
                           () async {
                             // quick compose dialog -> sms:
                             final msg = await _composeMessage(context);
@@ -261,23 +260,25 @@ class _ActionIconButton extends StatelessWidget {
     required IconData icon,
     required String tooltip,
     required VoidCallback? onTap,
-  }) => _ActionIconButton._(
-    icon: icon,
-    tooltip: tooltip,
-    onTap: onTap,
-    filled: true,
-  );
+  }) =>
+      _ActionIconButton._(
+        icon: icon,
+        tooltip: tooltip,
+        onTap: onTap,
+        filled: true,
+      );
 
   factory _ActionIconButton.outlined({
     required IconData icon,
     required String tooltip,
     required VoidCallback? onTap,
-  }) => _ActionIconButton._(
-    icon: icon,
-    tooltip: tooltip,
-    onTap: onTap,
-    filled: false,
-  );
+  }) =>
+      _ActionIconButton._(
+        icon: icon,
+        tooltip: tooltip,
+        onTap: onTap,
+        filled: false,
+      );
 
   @override
   Widget build(BuildContext context) {

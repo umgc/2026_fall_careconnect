@@ -81,7 +81,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     );
     if (range != null) {
       setState(() {
-        _startDate = DateTime(range.start.year, range.start.month, range.start.day);
+        _startDate =
+            DateTime(range.start.year, range.start.month, range.start.day);
         _endDate = DateTime(range.end.year, range.end.month, range.end.day);
       });
       await _loadAuditLog();
@@ -153,7 +154,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                     children: [
                       _buildTypeChip('All', null),
                       _buildTypeChip('Activity logs', 'ACTIVITY_LOG'),
-                      _buildTypeChip('Behavioral incidents', 'BEHAVIORAL_INCIDENT'),
+                      _buildTypeChip(
+                          'Behavioral incidents', 'BEHAVIORAL_INCIDENT'),
                       _buildTypeChip('Incident reports', 'INCIDENT_REPORT'),
                       _buildTypeChip('Client events', 'CLIENT_EVENT'),
                     ],
@@ -172,7 +174,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
   }
 
   Widget _buildTypeChip(String label, String? value) {
-    final selected = _typeFilter == value || (_typeFilter == null && value == null);
+    final selected =
+        _typeFilter == value || (_typeFilter == null && value == null);
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: ChoiceChip(
@@ -201,7 +204,8 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
         return ListTile(
           leading: _buildTypeIcon(item.type, Theme.of(context)),
           title: Text(item.summary),
-          subtitle: Text('${item.caregiverName} • ${_formatTimestamp(item.createdAt)}'),
+          subtitle: Text(
+              '${item.caregiverName} • ${_formatTimestamp(item.createdAt)}'),
           // No trailing actions: read-only view
         );
       },
@@ -242,4 +246,3 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     return '${dt.month}/${dt.day}/${dt.year} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 }
-

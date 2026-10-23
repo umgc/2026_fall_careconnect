@@ -16,8 +16,8 @@ import '../../../../widgets/call_notification_status_indicator.dart';
 import '../../../../widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/features/dashboard/patient_dashboard/widgets/notifications_panel_widget.dart';
 
-
 import 'patient_medical_notes_page.dart';
+
 class CaregiverDashboard extends StatefulWidget {
   final String userRole;
   final int? patientId;
@@ -46,7 +46,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
   // ===== Notifications (collapsible) state =====
   List<NotificationItem> _notifications = [];
 
-
   // Main content builder method
   Widget _buildMainContent() {
     return _buildContentBasedOnState();
@@ -63,22 +62,18 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     _loadNotifications();
   }
 
+  Future<void> _loadNotifications() async {
+    try {
+      // TODO: wire to your real service, e.g.:
+      // final items = await NotificationService.fetchForCaregiver(userId);
+      // setState(() => _notifications = items);
 
-
-    Future<void> _loadNotifications() async {
-      try {
-        // TODO: wire to your real service, e.g.:
-        // final items = await NotificationService.fetchForCaregiver(userId);
-        // setState(() => _notifications = items);
-
-        // No hardcoded items; keep empty until service is wired
-        setState(() => _notifications = []);
-      } catch (_) {
-        // keep UI stable on error
-      }
+      // No hardcoded items; keep empty until service is wired
+      setState(() => _notifications = []);
+    } catch (_) {
+      // keep UI stable on error
     }
-
-
+  }
 
   Future<void> _initializeServices() async {
     try {
@@ -88,7 +83,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
       print('Error initializing services: $e');
     }
   }
-
 
   Future<void> _loadCaregiverName() async {
     try {
@@ -161,8 +155,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                   patientJson['linkId'] = link['id'];
                   patientJson['linkStatus'] = link['status'] ?? 'ACTIVE';
                   // Always set relationship from link if present
-                  patientJson['relationship'] =
-                      patientJson['relationship'] ??
+                  patientJson['relationship'] = patientJson['relationship'] ??
                       (link['relationship'] ?? 'Patient');
                 }
               }
@@ -543,9 +536,9 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
       // Check subscription access for caregivers before initiating call
       final canUseVideoCalls =
           await SubscriptionService.checkPremiumAccessWithDialog(
-            context,
-            isVideoCall ? 'Video Calls' : 'Voice Calls',
-          );
+        context,
+        isVideoCall ? 'Video Calls' : 'Voice Calls',
+      );
 
       if (!canUseVideoCalls) {
         return; // User doesn't have premium access, dialog was shown
@@ -750,7 +743,8 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     if (linkId == null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Missing caregiver link ID.')));
+      ).showSnackBar(
+          const SnackBar(content: Text('Missing caregiver link ID.')));
       return;
     }
 
@@ -898,7 +892,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-
             // ===== Notifications (collapsible) at top =====
             NotificationsPanel(
               notifications: _notifications, // List<NotificationItem>
@@ -906,7 +899,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
               initiallyExpanded: true,
             ),
             const SizedBox(height: 16),
-            
+
             Icon(
               Icons.person_search,
               size: isMobile ? 80.0 : 96.0,
@@ -970,14 +963,13 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     final horizontalMargin = screenWidth >= 1200
         ? 32.0
         : screenWidth >= 768
-        ? 24.0
-        : 16.0;
+            ? 24.0
+            : 16.0;
 
     return RefreshIndicator(
       onRefresh: fetchPatients,
       child: CustomScrollView(
         slivers: [
-          
           // ===== Notifications (collapsible) at top =====
           SliverToBoxAdapter(
             child: Padding(
@@ -1001,7 +993,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
             ),
           ),
 
-          
           // Show patient count
           SliverPadding(
             padding: EdgeInsets.fromLTRB(
@@ -1081,31 +1072,6 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 
-  Widget _buildStartNewVisitAppBarButton() {
-    return ElevatedButton.icon(
-      onPressed: () {
-        context.go('/evv/select-patient');
-      },
-      icon: const Icon(Icons.add, color: Colors.white),
-      label: const Text(
-        'Start New Visit',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blue[600],
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        elevation: 2,
-      ),
-    );
-  }
-
   Widget _buildActionButton({
     required IconData icon,
     required String label,
@@ -1118,60 +1084,58 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
         final isSmallMobile = screenWidth < 350;
 
         return Container(
-          margin: EdgeInsets.only(right: isMobile ? 6 : 8),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onPressed,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: EdgeInsets.symmetric(
-                  vertical: isSmallMobile ? 8 : (isMobile ? 10 : 12),
-                  horizontal: isSmallMobile ? 6 : (isMobile ? 8 : 12),
-                ),
-                constraints: BoxConstraints(
-                  minWidth: isSmallMobile ? 60 : (isMobile ? 65 : 75),
-                  maxWidth: isSmallMobile ? 80 : (isMobile ? 90 : 110),
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.primaryContainer.withOpacity(0.08),
+            margin: EdgeInsets.only(right: isMobile ? 6 : 8),
+            child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: onPressed,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.2),
-                    width: 0.5,
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      icon,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: isSmallMobile ? 18 : (isMobile ? 20 : 22),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      vertical: isSmallMobile ? 8 : (isMobile ? 10 : 12),
+                      horizontal: isSmallMobile ? 6 : (isMobile ? 8 : 12),
                     ),
-                    SizedBox(height: isSmallMobile ? 3 : 4),
-                    Text(
-                      label,
-                      style: AppTheme.bodyMedium.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: isSmallMobile ? 9 : (isMobile ? 10 : 12),
-                        height: 1.2,
+                    constraints: BoxConstraints(
+                      minWidth: isSmallMobile ? 60 : (isMobile ? 65 : 75),
+                      maxWidth: isSmallMobile ? 80 : (isMobile ? 90 : 110),
+                    ),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primaryContainer.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.primary.withOpacity(0.2),
+                        width: 0.5,
                       ),
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
-              ),
-            )
-          )
-        );
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          icon,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: isSmallMobile ? 18 : (isMobile ? 20 : 22),
+                        ),
+                        SizedBox(height: isSmallMobile ? 3 : 4),
+                        Text(
+                          label,
+                          style: AppTheme.bodyMedium.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: isSmallMobile ? 9 : (isMobile ? 10 : 12),
+                            height: 1.2,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                )));
       },
     );
   }
@@ -1226,8 +1190,8 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                   patient.firstName.isNotEmpty
                       ? patient.firstName.substring(0, 1).toUpperCase()
                       : patient.lastName.isNotEmpty
-                      ? patient.lastName.substring(0, 1).toUpperCase()
-                      : '?',
+                          ? patient.lastName.substring(0, 1).toUpperCase()
+                          : '?',
                   style: AppTheme.headingSmall.copyWith(
                     color: Theme.of(context).colorScheme.primary,
                     fontSize: isGridView ? 28 : 24,
@@ -1260,8 +1224,8 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                               final result = await Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (context) => MessagingWidget(
-                                    currentUserId: widget.caregiverId
-                                        .toString(),
+                                    currentUserId:
+                                        widget.caregiverId.toString(),
                                     currentUserName:
                                         caregiverName ?? 'Caregiver',
                                     recipientId: patient.id.toString(),
@@ -1619,4 +1583,3 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
     );
   }
 }
-

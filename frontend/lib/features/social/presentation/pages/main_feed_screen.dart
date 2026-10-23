@@ -7,6 +7,7 @@ import 'package:care_connect_app/shared/widgets/user_avatar.dart';
 import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/widgets/common_drawer.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -38,7 +39,9 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
     if (widget.userId == 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid user ID. Please re-login.')),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.socialFeedInvalidUser),
+          ),
         );
       });
       setState(() => isLoading = false);
@@ -89,7 +92,11 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
       if (!silent) {
         setState(() => isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.socialFeedLoadError(e.toString()),
+            ),
+          ),
         );
       }
     }
@@ -164,7 +171,10 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                     );
                 },
                 icon: const Icon(Icons.comment, size: 18),
-                label: Text('${post.commentCount} comments'),
+                label: Text(
+                  AppLocalizations.of(context)!
+                      .socialFeedComments(post.commentCount),
+                ),
               ),
             ],
           ),
@@ -175,11 +185,12 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       drawer: CommonDrawer(currentRoute: '/social-feed'),
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'My Feed',
+        title: l10n.socialFeedTitle,
         centerTitle: true,
       ),
       body: isLoading
@@ -187,7 +198,7 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
           : RefreshIndicator(
             onRefresh: fetchFeed,
             child: posts.isEmpty
-                ? const Center(child: Text('No posts yet. Pull to refresh.'))
+                ? Center(child: Text(l10n.socialFeedEmpty))
                 : ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               itemCount: posts.length,
@@ -215,7 +226,7 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                           Icons.person_search,
                           color: Colors.white
                       ),
-                      tooltip: 'Add Friend',
+                      tooltip: l10n.socialFeedAddFriend,
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -228,7 +239,7 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.person_add, color: Colors.white),
-                      tooltip: 'Friend Requests',
+                      tooltip: l10n.socialFeedFriendRequests,
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -241,7 +252,7 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.chat, color: Colors.white),
-                      tooltip: 'Messages',
+                      tooltip: l10n.socialFeedMessages,
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -255,7 +266,7 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                         color: Colors.white,
                         size: 28,
                       ),
-                      tooltip: 'Create Post',
+                      tooltip: l10n.socialFeedCreatePost,
                       onPressed: () async {
                         final result = await Navigator.push(
                           context,

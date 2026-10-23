@@ -406,30 +406,6 @@ class _AnalyticsPageState extends State<AnalyticsPage> {
     );
   }
 
-  String _getShortTitle(String title) {
-    // Create shortened titles for mobile view to save space
-    switch (title) {
-      case 'Adherence Rate':
-        return 'Adherence';
-      case 'Avg Heart Rate':
-        return 'HR';
-      case 'Avg SpO₂':
-        return 'SpO₂';
-      case 'Avg Systolic':
-        return 'Systolic';
-      case 'Avg Diastolic':
-        return 'Diastolic';
-      case 'Avg Weight':
-        return 'Weight';
-      case 'Avg Mood':
-        return 'Mood';
-      case 'Avg Pain Level':
-        return 'Pain';
-      default:
-        return title.length > 8 ? title.substring(0, 8) : title;
-    }
-  }
-
   String _getHealthDataContext() {
     if (vitals.isEmpty && dashboard == null) {
       return "No health data available for this patient in the selected period.";

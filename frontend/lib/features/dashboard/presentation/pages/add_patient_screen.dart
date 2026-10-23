@@ -30,7 +30,6 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
   // Email check results
   bool? _emailExists;
   String? _userRole;
-  int? _userId;
 
   @override
   void initState() {
@@ -63,7 +62,6 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
       _errorMessage = null;
       _emailExists = null;
       _userRole = null;
-      _userId = null;
     });
 
     try {
@@ -73,7 +71,6 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
         _isCheckingEmail = false;
         _emailExists = result['exists'] as bool;
         _userRole = result['role'] as String?;
-        _userId = result['userId'] as int?;
 
         if (_emailExists == true && _userRole != 'PATIENT') {
           _errorMessage =
@@ -209,41 +206,38 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                           const SizedBox(height: 12.0),
                           TextFormField(
                             controller: emailController,
-                            decoration:
-                                AppTheme.inputDecoration(
-                                  'Patient Email',
-                                  hint: 'Enter patient email address',
-                                ).copyWith(
-                                  errorText:
-                                      emailController.text.isNotEmpty &&
-                                          !RegExp(
-                                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
-                                          ).hasMatch(emailController.text)
-                                      ? 'Please enter a valid email'
-                                      : null,
-                                  suffixIcon: IconButton(
-                                    icon: _isCheckingEmail
-                                        ? SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Theme.of(
-                                                context,
-                                              ).primaryColor,
-                                            ),
-                                          )
-                                        : Icon(
-                                            Icons.search,
-                                            color: Theme.of(
-                                              context,
-                                            ).primaryColor,
-                                          ),
-                                    onPressed: _isCheckingEmail
-                                        ? null
-                                        : _checkEmail,
-                                  ),
-                                ),
+                            decoration: AppTheme.inputDecoration(
+                              'Patient Email',
+                              hint: 'Enter patient email address',
+                            ).copyWith(
+                              errorText: emailController.text.isNotEmpty &&
+                                      !RegExp(
+                                        r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                                      ).hasMatch(emailController.text)
+                                  ? 'Please enter a valid email'
+                                  : null,
+                              suffixIcon: IconButton(
+                                icon: _isCheckingEmail
+                                    ? SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(
+                                            context,
+                                          ).primaryColor,
+                                        ),
+                                      )
+                                    : Icon(
+                                        Icons.search,
+                                        color: Theme.of(
+                                          context,
+                                        ).primaryColor,
+                                      ),
+                                onPressed:
+                                    _isCheckingEmail ? null : _checkEmail,
+                              ),
+                            ),
                             keyboardType: TextInputType.emailAddress,
                             onChanged: (_) => setState(() {}),
                             validator: (value) {
@@ -259,7 +253,6 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                             },
                           ),
                           const SizedBox(height: 16.0),
-
                           if (_errorMessage != null)
                             Container(
                               padding: const EdgeInsets.all(12.0),
@@ -286,7 +279,6 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                                 ],
                               ),
                             ),
-
                           if (_emailExists == false && _errorMessage == null)
                             Container(
                               padding: const EdgeInsets.all(12.0),
@@ -338,7 +330,6 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                                 ],
                               ),
                             ),
-
                           if (_emailExists == true)
                             Container(
                               padding: const EdgeInsets.all(12.0),
@@ -398,23 +389,20 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                               const SizedBox(height: 16.0),
                               TextFormField(
                                 controller: relationshipController,
-                                decoration:
-                                    AppTheme.inputDecoration(
-                                      'Relationship to Patient',
-                                      hint:
-                                          'E.g., Caregiver, Family Member, Parent',
-                                    ).copyWith(
-                                      errorText:
-                                          relationshipController
-                                                  .text
-                                                  .isNotEmpty &&
+                                decoration: AppTheme.inputDecoration(
+                                  'Relationship to Patient',
+                                  hint:
+                                      'E.g., Caregiver, Family Member, Parent',
+                                ).copyWith(
+                                  errorText:
+                                      relationshipController.text.isNotEmpty &&
                                               relationshipController.text
                                                       .trim()
                                                       .length <
                                                   3
                                           ? 'Please enter a valid relationship'
                                           : null,
-                                    ),
+                                ),
                                 onChanged: (_) => setState(() {}),
                                 validator: (value) {
                                   if (value == null || value.trim().isEmpty) {
@@ -429,18 +417,16 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                               const SizedBox(height: 16.0),
                               TextFormField(
                                 controller: messageController,
-                                decoration:
-                                    AppTheme.inputDecoration(
-                                      'Message (Optional)',
-                                      hint: 'Add a personal message',
-                                    ).copyWith(
-                                      errorText:
-                                          messageController.text.isNotEmpty &&
-                                              messageController.text.length >
-                                                  500
-                                          ? 'Message too long (max 500 characters)'
-                                          : null,
-                                    ),
+                                decoration: AppTheme.inputDecoration(
+                                  'Message (Optional)',
+                                  hint: 'Add a personal message',
+                                ).copyWith(
+                                  errorText: messageController
+                                              .text.isNotEmpty &&
+                                          messageController.text.length > 500
+                                      ? 'Message too long (max 500 characters)'
+                                      : null,
+                                ),
                                 maxLines: 3,
                                 onChanged: (_) => setState(() {}),
                                 validator: (value) {
@@ -452,19 +438,17 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                               ),
                               const SizedBox(height: 24.0),
                               ElevatedButton(
-                                onPressed: _isLoading
-                                    ? null
-                                    : _sendConnectionRequest,
+                                onPressed:
+                                    _isLoading ? null : _sendConnectionRequest,
                                 style: AppTheme.primaryButtonStyle.copyWith(
                                   backgroundColor:
                                       WidgetStateProperty.resolveWith<Color>(
-                                        (states) =>
-                                            states.contains(
-                                              WidgetState.disabled,
-                                            )
-                                            ? Colors.grey.shade400
-                                            : Colors.blue.shade900,
-                                      ),
+                                    (states) => states.contains(
+                                      WidgetState.disabled,
+                                    )
+                                        ? Colors.grey.shade400
+                                        : Colors.blue.shade900,
+                                  ),
                                   minimumSize: WidgetStateProperty.all(
                                     const Size(double.infinity, 50),
                                   ),
@@ -473,8 +457,8 @@ class _AddPatientScreenState extends State<AddPatientScreen> {
                                     ? const CircularProgressIndicator(
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                              Colors.white,
-                                            ),
+                                          Colors.white,
+                                        ),
                                       )
                                     : const Text(
                                         'Send Connection Request',

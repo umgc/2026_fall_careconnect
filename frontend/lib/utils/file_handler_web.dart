@@ -6,7 +6,8 @@ import '../abstracts/file_handler.dart';
 
 class WebFileHandler implements FileHandler {
   @override
-  Future<void> downloadFile(String fileName, Uint8List bytes, String contentType) async {
+  Future<void> downloadFile(
+      String fileName, Uint8List bytes, String contentType) async {
     try {
       final jsArray = bytes.toJS;
       final blob = web.Blob(
@@ -28,7 +29,8 @@ class WebFileHandler implements FileHandler {
   }
 
   @override
-  Future<FileUploadResult> processPickedFile(String? path, String? fileName, Uint8List? bytes) async {
+  Future<FileUploadResult> processPickedFile(
+      String? path, String? fileName, Uint8List? bytes) async {
     // Web has no local filesystem, so there is no real file path to return.
     // Callers on web must upload the picked bytes directly (e.g.
     // EnhancedFileService.uploadFileWeb). Touching dart:io here would break

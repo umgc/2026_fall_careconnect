@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.any;
 
 /**
  * Unit tests for {@link SsmPropertySourceInitializer}.
- * <p>
+ *
  * SsmPropertySourceInitializer is a Spring {@code ApplicationContextInitializer} that
  * runs very early in startup (before beans are created) to load secrets from AWS SSM
  * Parameter Store into a custom {@code PropertySource}. It only activates when:
@@ -26,7 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
  *   <li>The active Spring profile is {@code prod}.</li>
  *   <li>The property {@code careconnect.aws.enabled} is not {@code false}.</li>
  * </ol>
- * <p>
+ *
  * Profile-gating tests use {@link MockEnvironment} to control active profiles without
  * starting a full Spring context. The private {@code loadParametersFromSsm} method is
  * accessed via Java Reflection ({@link Method#setAccessible}) to test the SSM-fetching
@@ -116,7 +116,8 @@ class SsmPropertySourceInitializerTest {
 
         method.setAccessible(true);
 
-        @SuppressWarnings("unchecked") final Map<String, Object> result =
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> result =
                 (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
         assertFalse(result.isEmpty());
@@ -144,7 +145,8 @@ class SsmPropertySourceInitializerTest {
 
         method.setAccessible(true);
 
-        @SuppressWarnings("unchecked") final Map<String, Object> result =
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> result =
                 (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
         assertTrue(result.isEmpty());
@@ -219,8 +221,7 @@ class SsmPropertySourceInitializerTest {
         // Verifies that loadParametersFromSsm() iterates every entry in SSM_PARAMETERS
         // and populates the map with the matching Spring property key from
         // PARAMETER_MAPPING. JWT and DB credentials are excluded (ECS Secrets Manager).
-        // With 13 parameters defined and all calls succeeding, the result must contain
-        // exactly 13 entries.
+        // With 13 parameters defined, including the KVS stream pool, all should load.
 
         final SsmClient ssmClient = Mockito.mock(SsmClient.class);
 
@@ -238,10 +239,11 @@ class SsmPropertySourceInitializerTest {
                 .getDeclaredMethod("loadParametersFromSsm", SsmClient.class, String.class);
         method.setAccessible(true);
 
-        @SuppressWarnings("unchecked") final Map<String, Object> result =
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> result =
                 (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
-        // All 13 SSM_PARAMETERS entries are in PARAMETER_MAPPING, so all should load.
+        // Keep the expected count explicit so a new unmapped parameter cannot pass silently.
         assertEquals(13, result.size());
 
         // Spot-check a representative sample of the PARAMETER_MAPPING entries.
@@ -310,7 +312,8 @@ class SsmPropertySourceInitializerTest {
                 .getDeclaredMethod("loadParametersFromSsm", SsmClient.class, String.class);
         method.setAccessible(true);
 
-        @SuppressWarnings("unchecked") final Map<String, Object> result =
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> result =
                 (Map<String, Object>) method.invoke(initializer, ssmClient, "/careconnect/prod/");
 
         assertEquals(1, result.size());

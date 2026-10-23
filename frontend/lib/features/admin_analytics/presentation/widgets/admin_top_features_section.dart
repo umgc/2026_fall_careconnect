@@ -39,15 +39,15 @@ class AdminTopFeaturesSection extends StatelessWidget {
                 Icon(Icons.star_outline, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Top Features', style: theme.textTheme.titleMedium),
+                  child:
+                      Text('Top Features', style: theme.textTheme.titleMedium),
                 ),
                 IconButton(
                   icon: Icon(
                     sortDescending ? Icons.arrow_downward : Icons.arrow_upward,
                   ),
-                  tooltip: sortDescending
-                      ? 'Show least used'
-                      : 'Show most used',
+                  tooltip:
+                      sortDescending ? 'Show least used' : 'Show most used',
                   onPressed: onSortToggle,
                 ),
               ],

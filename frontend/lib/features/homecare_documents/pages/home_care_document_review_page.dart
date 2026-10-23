@@ -66,7 +66,9 @@ class _HomeCareDocumentReviewPageState
     final t = AppLocalizations.of(context)!;
     final result = widget.result;
     return Scaffold(
-      appBar: AppBar(title: Text('${t.homecarereview_review}: ${result.documentTypeDisplayName}')),
+      appBar: AppBar(
+          title: Text(
+              '${t.homecarereview_review}: ${result.documentTypeDisplayName}')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -86,7 +88,9 @@ class _HomeCareDocumentReviewPageState
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save),
-              label: Text(_saving ? '${t.homecarereview_saving}...' : t.homecarereview_confirmSave),
+              label: Text(_saving
+                  ? '${t.homecarereview_saving}...'
+                  : t.homecarereview_confirmSave),
             ),
             const SizedBox(height: 8),
             TextButton(
@@ -209,7 +213,8 @@ class _HomeCareDocumentReviewPageState
       final response = await EnhancedFileService.uploadFileWeb(
         fileBytes: bytes,
         fileName: fileName,
-        category: homeCareDocumentTypeToFileCategory(widget.result.documentType),
+        category:
+            homeCareDocumentTypeToFileCategory(widget.result.documentType),
         description:
             '${t.homecarereview_digitized} ${widget.result.documentTypeDisplayName} ${t.homecarereview_reviewed}',
         patientId: userId,
@@ -220,7 +225,8 @@ class _HomeCareDocumentReviewPageState
       if (response != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${t.homecarereview_savedForm}: ${response.fileName}'),
+            content:
+                Text('${t.homecarereview_savedForm}: ${response.fileName}'),
             backgroundColor: AppTheme.success,
           ),
         );

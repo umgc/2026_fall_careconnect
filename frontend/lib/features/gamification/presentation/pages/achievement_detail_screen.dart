@@ -7,7 +7,6 @@ class AchievementDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(title: const Text("Achievements")),
       body: ListView.builder(
@@ -17,7 +16,8 @@ class AchievementDetailScreen extends StatelessWidget {
 
           // ✅ Handle different types of unlocked field
           final rawUnlocked = achievement['unlocked'];
-          final unlocked = rawUnlocked == true || rawUnlocked == 'true' || rawUnlocked == 1;
+          final unlocked =
+              rawUnlocked == true || rawUnlocked == 'true' || rawUnlocked == 1;
 
           return ListTile(
             leading: Text(

@@ -39,7 +39,7 @@ class _EvvRecordReviewPageState extends State<EvvRecordReviewPage> {
     try {
       final userProvider = Provider.of<UserProvider>(context, listen: false);
       final user = userProvider.user;
-      
+
       if (user == null) return;
 
       // Search all records without status filter
@@ -49,9 +49,9 @@ class _EvvRecordReviewPageState extends State<EvvRecordReviewPage> {
         sortBy: 'createdAt',
         sortDirection: 'DESC',
       );
-      
+
       final result = await _evvService.searchRecords(request);
-      
+
       setState(() {
         _allRecords = result.content;
         _filteredRecords = result.content;
@@ -75,18 +75,21 @@ class _EvvRecordReviewPageState extends State<EvvRecordReviewPage> {
       if (status == 'ALL') {
         _filteredRecords = _allRecords;
       } else {
-        _filteredRecords = _allRecords.where((record) => record.status == status).toList();
+        _filteredRecords =
+            _allRecords.where((record) => record.status == status).toList();
       }
     });
   }
 
   String _uniqueFileName(String base) {
     final ts = DateTime.now().toUtc().microsecondsSinceEpoch;
-    final rand = math.Random().nextInt(0xFFFF).toRadixString(16).padLeft(4, '0');
+    final rand =
+        math.Random().nextInt(0xFFFF).toRadixString(16).padLeft(4, '0');
     return '${base}_${ts}_$rand.edi';
   }
 
-  Future<void> _reviewRecord(EvvRecord record, bool approve, String? comment) async {
+  Future<void> _reviewRecord(
+      EvvRecord record, bool approve, String? comment) async {
     try {
       await _evvService.reviewRecord(
         recordId: record.id,
@@ -163,7 +166,8 @@ class _EvvRecordReviewPageState extends State<EvvRecordReviewPage> {
           // Fallback: write to temp and share
           final tempDir = await getTemporaryDirectory();
           final tempPath = '${tempDir.path}/$fileName';
-          await File(tempPath).writeAsBytes(Uint8List.fromList(bytes), flush: true);
+          await File(tempPath)
+              .writeAsBytes(Uint8List.fromList(bytes), flush: true);
           final xfile = XFile(tempPath, mimeType: 'text/plain', name: fileName);
           await Share.shareXFiles([xfile], text: 'EVV EDI export');
         }
@@ -189,48 +193,61 @@ class _EvvRecordReviewPageState extends State<EvvRecordReviewPage> {
 
   String _generateEDIContent(EvvRecord record) {
     final patientId = record.patient?.id ?? record.id;
-    final maNumber = record.patient?.maNumber ?? 'SUBSCR${patientId.toString().padLeft(5, '0')}';
-    
+    final maNumber = record.patient?.maNumber ??
+        'SUBSCR${patientId.toString().padLeft(5, '0')}';
+
     final now = DateTime.now();
-    final isaDate = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final isaTime = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    final gsDate = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final gsTime = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    
-    final serviceDate = '${record.dateOfService.year}${record.dateOfService.month.toString().padLeft(2, '0')}${record.dateOfService.day.toString().padLeft(2, '0')}';
-    
+    final isaDate =
+        '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final isaTime =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final gsDate =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final gsTime =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+
+    final serviceDate =
+        '${record.dateOfService.year}${record.dateOfService.month.toString().padLeft(2, '0')}${record.dateOfService.day.toString().padLeft(2, '0')}';
+
     String patientDob = '19700101';
     if (record.patient?.dob != null && record.patient!.dob.isNotEmpty) {
       try {
         final dobDate = DateTime.parse(record.patient!.dob);
-        patientDob = '${dobDate.year}${dobDate.month.toString().padLeft(2, '0')}${dobDate.day.toString().padLeft(2, '0')}';
+        patientDob =
+            '${dobDate.year}${dobDate.month.toString().padLeft(2, '0')}${dobDate.day.toString().padLeft(2, '0')}';
       } catch (e) {
         patientDob = '19700101';
       }
     }
-    
-    final gender = (record.patient?.gender?.toUpperCase() == 'MALE' || record.patient?.gender?.toUpperCase() == 'M') ? 'M' : 'F';
-    
-    final claimId = '$patientId${record.dateOfService.millisecondsSinceEpoch.toString().substring(0, 10)}';
+
+    final gender = (record.patient?.gender?.toUpperCase() == 'MALE' ||
+            record.patient?.gender?.toUpperCase() == 'M')
+        ? 'M'
+        : 'F';
+
+    final claimId =
+        '$patientId${record.dateOfService.millisecondsSinceEpoch.toString().substring(0, 10)}';
     final evvId = 'EVV-$claimId';
-    final lineEvvId = 'EVV-LINE-$claimId';
-    
+
     final duration = record.timeOut.difference(record.timeIn).inMinutes;
     final units = ((duration / 15).ceil()).toString();
     final totalCharge = (30.0 * (duration / 15).ceil()).toStringAsFixed(2);
-    
+
     final patientName = record.individualName.split(' ');
-    final lastName = patientName.length > 1 ? patientName.last : record.individualName;
+    final lastName =
+        patientName.length > 1 ? patientName.last : record.individualName;
     final firstName = patientName.length > 1 ? patientName.first : '';
-    
+
     final addressLine1 = record.patient?.address?.line1 ?? '123 Main St';
     final city = record.patient?.address?.city ?? 'Richmond';
     final state = record.patient?.address?.state ?? record.stateCode;
     final zip = record.patient?.address?.zip ?? '23220';
-    
-    final controlNumber = now.millisecondsSinceEpoch.toString().substring(3, 12);
 
-    final ediContent = '''ISA*00*          *00*          *ZZ*SUBMIT123      *ZZ*987654321      *$isaDate*$isaTime*^*00501*$controlNumber*0*P*:~
+    final controlNumber =
+        now.millisecondsSinceEpoch.toString().substring(3, 12);
+
+    final ediContent =
+        '''ISA*00*          *00*          *ZZ*SUBMIT123      *ZZ*987654321      *$isaDate*$isaTime*^*00501*$controlNumber*0*P*:~
 GS*HC*SUBMIT123*987654321*$gsDate*$gsTime*$controlNumber*X*005010X222A1~
 ST*837*0001*005010X222A1~
 BHT*0019*00*$claimId*$gsDate*$gsTime*CH~
@@ -270,7 +287,7 @@ IEA*1*$controlNumber~
 
   void _showReviewDialog(EvvRecord record) {
     final commentController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -338,8 +355,8 @@ IEA*1*$controlNumber~
             Text(
               'Record Details',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             _buildDetailRow('Service Type', record.serviceType),
@@ -422,14 +439,15 @@ IEA*1*$controlNumber~
     String locationDisplay;
     Color iconColor;
     IconData iconData;
-    
+
     if (locationSource == null || locationSource.isEmpty) {
       locationDisplay = 'Not recorded';
       iconColor = Colors.grey;
       iconData = Icons.help_outline;
     } else if (locationSource == 'GPS') {
       if (latitude != null && longitude != null) {
-        locationDisplay = 'GPS: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+        locationDisplay =
+            'GPS: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
         iconColor = Colors.blue;
         iconData = Icons.gps_fixed;
       } else {
@@ -446,7 +464,8 @@ IEA*1*$controlNumber~
         if (addr.city?.isNotEmpty == true) parts.add(addr.city!);
         if (addr.state?.isNotEmpty == true) parts.add(addr.state!);
         if (addr.zip?.isNotEmpty == true) parts.add(addr.zip!);
-        locationDisplay = parts.isNotEmpty ? parts.join(', ') : 'Address not available';
+        locationDisplay =
+            parts.isNotEmpty ? parts.join(', ') : 'Address not available';
         iconColor = Colors.green;
         iconData = Icons.home;
       } else {
@@ -459,7 +478,7 @@ IEA*1*$controlNumber~
       iconColor = Colors.grey;
       iconData = Icons.location_on;
     }
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -470,7 +489,8 @@ IEA*1*$controlNumber~
             Expanded(
               child: Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 softWrap: false,
@@ -527,20 +547,26 @@ IEA*1*$controlNumber~
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const Text('Filter by Status:', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Filter by Status:',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<String>(
                     initialValue: _selectedStatusFilter,
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'ALL', child: Text('All Statuses')),
-                      DropdownMenuItem(value: 'UNDER_REVIEW', child: Text('Under Review')),
-                      DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                      DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                      DropdownMenuItem(
+                          value: 'ALL', child: Text('All Statuses')),
+                      DropdownMenuItem(
+                          value: 'UNDER_REVIEW', child: Text('Under Review')),
+                      DropdownMenuItem(
+                          value: 'APPROVED', child: Text('Approved')),
+                      DropdownMenuItem(
+                          value: 'REJECTED', child: Text('Rejected')),
                     ],
                     onChanged: (value) {
                       if (value != null) {
@@ -552,7 +578,7 @@ IEA*1*$controlNumber~
               ],
             ),
           ),
-          
+
           // Records List
           Expanded(
             child: _isLoading
@@ -569,7 +595,9 @@ IEA*1*$controlNumber~
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              _allRecords.isEmpty ? 'No records found' : 'No records match this filter',
+                              _allRecords.isEmpty
+                                  ? 'No records found'
+                                  : 'No records match this filter',
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Colors.grey,
@@ -577,7 +605,7 @@ IEA*1*$controlNumber~
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _allRecords.isEmpty 
+                              _allRecords.isEmpty
                                   ? 'Start creating EVV records to see them here'
                                   : 'Try selecting a different status filter',
                               style: const TextStyle(
@@ -593,84 +621,96 @@ IEA*1*$controlNumber~
                         itemCount: _filteredRecords.length,
                         itemBuilder: (context, index) {
                           final record = _filteredRecords[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: _getStatusColor(record.status),
-                          child: Icon(
-                            _getStatusIcon(record.status),
-                            color: Colors.white,
-                          ),
-                        ),
-                        title: Text(
-                          record.individualName,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('${record.serviceType} - ${_formatDate(record.dateOfService)}'),
-                            Text('${_formatTime(record.timeIn)} - ${_formatTime(record.timeOut)}'),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: _getStatusColor(record.status).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    record.status,
-                                    style: TextStyle(
-                                      color: _getStatusColor(record.status),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: _getStatusColor(record.status),
+                                child: Icon(
+                                  _getStatusIcon(record.status),
+                                  color: Colors.white,
                                 ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    record.stateCode,
-                                    style: const TextStyle(
-                                      color: Colors.blue,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                if (record.isOffline) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      'OFFLINE',
-                                      style: TextStyle(
-                                        color: Colors.orange,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
+                              ),
+                              title: Text(
+                                record.individualName,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w500),
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                      '${record.serviceType} - ${_formatDate(record.dateOfService)}'),
+                                  Text(
+                                      '${_formatTime(record.timeIn)} - ${_formatTime(record.timeOut)}'),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: _getStatusColor(record.status)
+                                              .withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          record.status,
+                                          style: TextStyle(
+                                            color:
+                                                _getStatusColor(record.status),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          record.stateCode,
+                                          style: const TextStyle(
+                                            color: Colors.blue,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      if (record.isOffline) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                Colors.orange.withOpacity(0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            'OFFLINE',
+                                            style: TextStyle(
+                                              color: Colors.orange,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
-                              ],
+                              ),
+                              trailing: const Icon(Icons.arrow_forward_ios),
+                              onTap: () => _showReviewDialog(record),
                             ),
-                          ],
-                        ),
-                        trailing: const Icon(Icons.arrow_forward_ios),
-                        onTap: () => _showReviewDialog(record),
-                      ),
                           );
                         },
                       ),

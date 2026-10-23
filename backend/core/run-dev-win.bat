@@ -4,6 +4,9 @@ REM ================================
 REM CareConnect Backend Development Startup Script - Windows
 REM ================================
 
+set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot
+set PATH=%JAVA_HOME%\bin;%PATH%
+
 echo CareConnect Backend - Windows Development Setup
 echo Loading environment variables...
 

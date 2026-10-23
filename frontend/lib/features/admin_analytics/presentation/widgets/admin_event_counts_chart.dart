@@ -143,7 +143,8 @@ class AdminEventCountsChart extends StatelessWidget {
           ),
         ),
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
       ),
       barTouchData: BarTouchData(
         enabled: true,

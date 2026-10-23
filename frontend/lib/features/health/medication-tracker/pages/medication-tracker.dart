@@ -13,15 +13,12 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
-
-
 /// Medication tracker page
 class MedicationsTrackerPage extends StatefulWidget {
   const MedicationsTrackerPage({super.key});
 
   @override
   State<MedicationsTrackerPage> createState() => _MedicationsPageState();
-
 }
 
 class _MedicationsPageState extends State<MedicationsTrackerPage> {
@@ -61,7 +58,8 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
         return;
       }
 
-      final http.Response resp = await ApiService.getPatientMedicationsForPatient(
+      final http.Response resp =
+          await ApiService.getPatientMedicationsForPatient(
         userProvider.user!.patientId!,
       );
 
@@ -102,7 +100,10 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
             Text(
               'Loading medications...',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
                   ),
             ),
           ],
@@ -157,14 +158,20 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
             Text(
               'No medications found',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
                   ),
             ),
             const SizedBox(height: 8),
             Text(
               'Add your first medication to get started',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.4),
                   ),
               textAlign: TextAlign.center,
             ),
@@ -182,7 +189,8 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
           medication: medications[index],
           onStatusChanged: (newStatus) {
             setState(() {
-              medications[index] = medications[index].copyWith(status: newStatus);
+              medications[index] =
+                  medications[index].copyWith(status: newStatus);
             });
           },
           onMedicationRemoved: () {
@@ -208,8 +216,6 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
         },
       ),
     );
-
-
   }
 
   @override
@@ -248,7 +254,9 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
                           const SizedBox(height: 8),
                           Text(
                             'Medications',
-                            style: Theme.of(context).textTheme.headlineMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
                                 ?.copyWith(
                                   color: Theme.of(context).colorScheme.primary,
                                 ),
@@ -256,7 +264,9 @@ class _MedicationsPageState extends State<MedicationsTrackerPage> {
                           const SizedBox(height: 8),
                           Text(
                             'Manage your medication schedule and reminders',
-                            style: Theme.of(context).textTheme.bodyMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
                                 ?.copyWith(
                                   color: Theme.of(
                                     context,

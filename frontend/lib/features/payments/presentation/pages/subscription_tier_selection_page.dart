@@ -57,7 +57,6 @@ class _SubscriptionTierSelectionPageState
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-
             if (isWide)
               IntrinsicHeight(
                 child: Row(
@@ -173,9 +172,7 @@ class _SubscriptionTierSelectionPageState
                   ),
                 ],
               ),
-
             const SizedBox(height: 32),
-
             ElevatedButton(
               onPressed: _selectedTier != null ? _continueToPayment : null,
               style: ElevatedButton.styleFrom(
@@ -202,7 +199,9 @@ class _SubscriptionTierSelectionPageState
   }
 
   void _selectTier(String tierId) {
-    setState(() { _selectedTier = tierId; });
+    setState(() {
+      _selectedTier = tierId;
+    });
   }
 
   void _continueToPayment() async {
@@ -217,8 +216,12 @@ class _SubscriptionTierSelectionPageState
           title: Text(t.subselection_confirmFree),
           content: Text(t.subselection_selectedFree),
           actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(t.cancel)),
-            ElevatedButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text(t.voicecommand_confirmButton)),
+            TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: Text(t.cancel)),
+            ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: Text(t.voicecommand_confirmButton)),
           ],
         ),
       );
@@ -227,8 +230,10 @@ class _SubscriptionTierSelectionPageState
         final userId = session?['id']?.toString() ?? '';
         if (userId.isNotEmpty) {
           try {
-            final response = await ApiService.createSubscriptionByUser(userId, 'plan_free');
-            print('Free plan response: ${response.statusCode} ${response.body}');
+            final response =
+                await ApiService.createSubscriptionByUser(userId, 'plan_free');
+            print(
+                'Free plan response: ${response.statusCode} ${response.body}');
           } catch (e) {
             print('Free plan error: $e');
           }
@@ -236,11 +241,9 @@ class _SubscriptionTierSelectionPageState
           print('Free plan: userId is empty, session: $session');
         }
         if (mounted) context.go('/subscription');
-
       }
       return;
     }
-
 
     final tierIdMap = {
       'standard_monthly': 2,
@@ -278,9 +281,14 @@ class _SubscriptionTierSelectionPageState
             width: isSelected ? 2.5 : 1,
           ),
           borderRadius: BorderRadius.circular(12),
-          color: isSelected ? color.withValues(alpha:0.05) : Colors.white,
+          color: isSelected ? color.withValues(alpha: 0.05) : Colors.white,
           boxShadow: isSelected
-              ? [BoxShadow(color: color.withValues(alpha:0.2), blurRadius: 8, offset: const Offset(0, 2))]
+              ? [
+                  BoxShadow(
+                      color: color.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2))
+                ]
               : null,
         ),
         padding: const EdgeInsets.all(20),
@@ -289,18 +297,21 @@ class _SubscriptionTierSelectionPageState
           children: [
             if (isPopular)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   color: color,
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   t.subselection_mostPopular,
-                  style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold),
                 ),
               ),
             if (isPopular) const SizedBox(height: 12),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -308,17 +319,23 @@ class _SubscriptionTierSelectionPageState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      Text(title,
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
                       RichText(
                         text: TextSpan(children: [
                           TextSpan(
                             text: price,
-                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color),
+                            style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: color),
                           ),
                           TextSpan(
                             text: period,
-                            style: const TextStyle(fontSize: 16, color: Colors.grey),
+                            style: const TextStyle(
+                                fontSize: 16, color: Colors.grey),
                           ),
                         ]),
                       ),
@@ -343,7 +360,6 @@ class _SubscriptionTierSelectionPageState
               ],
             ),
             const SizedBox(height: 16),
-
             ...features.map((feature) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -352,7 +368,9 @@ class _SubscriptionTierSelectionPageState
                     Icon(Icons.check_circle_outline, size: 20, color: color),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: Text(feature, style: const TextStyle(fontSize: 16, color: Colors.black87)),
+                      child: Text(feature,
+                          style: const TextStyle(
+                              fontSize: 16, color: Colors.black87)),
                     ),
                   ],
                 ),

@@ -15,7 +15,12 @@ class ManualTextEntryCard extends StatefulWidget {
   final Function(FileUploadResponse)? onUploadSuccess;
   final Function(String)? onUploadError;
 
-  const ManualTextEntryCard({super.key, this.allowedCategories, this.patientId, this.onUploadSuccess, this.onUploadError});
+  const ManualTextEntryCard(
+      {super.key,
+      this.allowedCategories,
+      this.patientId,
+      this.onUploadSuccess,
+      this.onUploadError});
 
   @override
   State<ManualTextEntryCard> createState() => _ManualTextEntryCardState();
@@ -27,7 +32,8 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
   FileCategory? _selectedCategory;
 
   List<FileCategory> get _availableCategories {
-    if (widget.allowedCategories != null && widget.allowedCategories!.isNotEmpty) {
+    if (widget.allowedCategories != null &&
+        widget.allowedCategories!.isNotEmpty) {
       return widget.allowedCategories!;
     } else {
       return FileCategory.values;
@@ -50,46 +56,46 @@ class _ManualTextEntryCardState extends State<ManualTextEntryCard> {
     );
   }
 
-String _translateCategory(String name){
+  String _translateCategory(String name) {
     final t = AppLocalizations.of(context)!;
-    switch(name){
-      case('Medical Report'):
+    switch (name) {
+      case ('Medical Report'):
         return t.filemanage_medReport;
-      case('Lab Result'):
+      case ('Lab Result'):
         return t.filemanage_labResult;
-      case('Prescription'):
+      case ('Prescription'):
         return t.filemanage_prescription;
-      case('Clinical Notes'): 
+      case ('Clinical Notes'):
         return t.filemanage_clinicNotes;
-      case('Profile Picture'): 
+      case ('Profile Picture'):
         return t.filemanage_profilePic;
-      case('Emergency Contact'):
+      case ('Emergency Contact'):
         return t.filemanage_emgContact;
-      case('Insurance Document'):
+      case ('Insurance Document'):
         return t.filemanage_insurDocument;
-      case('AI Chat File'):
+      case ('AI Chat File'):
         return t.filemanage_aiChatFile;
-      case('General Document'):
+      case ('General Document'):
         return t.filemanage_genDocument;
-      case('Health Data Import'):
+      case ('Health Data Import'):
         return t.filemanage_hlthDataImport;
-      case('Backup File'):
+      case ('Backup File'):
         return t.filemanage_backupFile;
-      case('Employment Application'):
+      case ('Employment Application'):
         return t.filemanage_empApplication;
-      case('Onboarding Form'):
+      case ('Onboarding Form'):
         return t.filemanage_onboardForm;
-      case('Background Check'):
+      case ('Background Check'):
         return t.filemanage_backgroundCheck;
-      case('Certification / License'):
+      case ('Certification / License'):
         return t.filemanage_cert;
-      case('Reference'):
+      case ('Reference'):
         return t.filemanage_ref;
-      case('Employment Contract'):
+      case ('Employment Contract'):
         return t.filemanage_empContract;
-      case('Tax Form (W-4)'):
+      case ('Tax Form (W-4)'):
         return t.filemanage_taxForm;
-      case('Work Authorization (I-9)'):
+      case ('Work Authorization (I-9)'):
       default:
         return name;
     }
@@ -107,7 +113,8 @@ String _translateCategory(String name){
       items: categories.map((category) {
         return DropdownMenuItem<FileCategory>(
           value: category,
-          child: Text('${category.icon} ${_translateCategory(category.displayName)}'),
+          child: Text(
+              '${category.icon} ${_translateCategory(category.displayName)}'),
         );
       }).toList(),
       onChanged: (value) {
@@ -121,11 +128,13 @@ String _translateCategory(String name){
         }
         return null;
       },
-      initialValue: _selectedCategory,  // Starts as null!
-      hint: Text(t.manualentrywidget_selectCat),  // This shows when value is null
+      initialValue: _selectedCategory, // Starts as null!
+      hint:
+          Text(t.manualentrywidget_selectCat), // This shows when value is null
       decoration: InputDecoration(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
@@ -143,7 +152,8 @@ String _translateCategory(String name){
     }
   }
 
-  Future<void> _uploadManualTextFileToWeb(String fileName, List<int> fileBytes) async {
+  Future<void> _uploadManualTextFileToWeb(
+      String fileName, List<int> fileBytes) async {
     if (_selectedCategory == null || fileBytes.isEmpty || fileName.isEmpty) {
       print('Selected category was null..');
       return;
@@ -251,7 +261,6 @@ String _translateCategory(String name){
               },
             ),
             const SizedBox(height: 20),
-
             Align(
               alignment: Alignment.center,
               child: ElevatedButton(
@@ -267,7 +276,6 @@ String _translateCategory(String name){
                   // Call your upload function (adjust as needed)
                   await _uploadManualTextFileToWeb(fileName, fileBytes);
                 },
-
                 child: Text(t.manualentrywidget_saveToFile),
               ),
             ),

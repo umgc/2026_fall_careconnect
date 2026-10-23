@@ -62,7 +62,7 @@ class BillingQuoteService {
   }) async {
     try {
       final uri = Uri.parse('$backendBase/v1/api/billing/quote');
-      
+
       final requestBody = {
         'tierId': tierId,
         if (userId != null) 'userId': userId,
@@ -75,7 +75,7 @@ class BillingQuoteService {
       final headers = <String, String>{
         'Content-Type': 'application/json',
       };
-      
+
       try {
         final authHeaders = await AuthTokenManager.getAuthHeaders();
         headers.addAll(authHeaders);
@@ -84,22 +84,26 @@ class BillingQuoteService {
         // The billing quote endpoint should work for unauthenticated users
       }
 
-      final response = await http.post(
-        uri,
-        headers: headers,
-        body: jsonEncode(requestBody),
-      ).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(requestBody),
+          )
+          .timeout(
+            const Duration(seconds: 10),
+          );
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         return BillingQuote.fromJson(json);
       } else if (response.statusCode == 401) {
         // Unauthenticated - return a default quote with a message
-        throw Exception('Billing quote requires authentication. Please ensure you are logged in. Response: ${response.body}');
+        throw Exception(
+            'Billing quote requires authentication. Please ensure you are logged in. Response: ${response.body}');
       } else {
-        throw Exception('Failed to fetch billing quote: ${response.statusCode} - ${response.body}');
+        throw Exception(
+            'Failed to fetch billing quote: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       rethrow;

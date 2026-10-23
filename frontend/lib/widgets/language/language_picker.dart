@@ -4,19 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class LanguagePicker {
-  static const double _maxRowWidth = 640;
-  static const double _minHorizontalInset = 16;
-
   static Future<void> show(BuildContext context) async {
     final locales = AppLocalizations.supportedLocales;
     final current = context.read<LocaleProvider>().locale;
     final t = AppLocalizations.of(context)!;
-    final media = MediaQuery.of(context);
-    // Short landscape screens need a scroll-controlled sheet so shrink-wrapped
-    // content can grow and remain fully scrollable instead of capping ~56%.
-    final isShortLandscape =
-        media.size.height < 500 && media.size.width > media.size.height;
-
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,

@@ -29,32 +29,6 @@ class RecentSymptomsSection extends StatelessWidget {
   final List<SymptomEntry> entries;
   final Widget? extraTop;
 
-  Color _severityColor(ColorScheme cs, String s) {
-    final t = s.toLowerCase();
-    if (t.contains('severe')) return const Color(0xFFE65757); // red-ish
-    if (t.contains('moderate')) return const Color(0xFFF29B1D); // orange
-    if (t.contains('mild')) return const Color(0xFF4CAF50); // green
-    return cs.primary; // default
-  }
-
-  String _formatDate(DateTime d) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

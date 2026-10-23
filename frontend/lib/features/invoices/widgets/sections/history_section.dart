@@ -15,7 +15,8 @@ class HistorySection extends StatelessWidget {
             (h) => Card(
               child: ListTile(
                 leading: const Icon(Icons.history),
-                title: Text('Version ${h.version} • ${DateTime.parse(h.timestamp).toLocal()}'),
+                title: Text(
+                    'Version ${h.version} • ${DateTime.parse(h.timestamp).toLocal()}'),
                 subtitle: Text(h.changes),
               ),
             ),

@@ -113,12 +113,13 @@ class HomeCareExtractionResult {
     return HomeCareExtractionResult(
       documentType: json['documentType'] as String? ?? '',
       documentTypeDisplayName: json['documentTypeDisplayName'] as String? ?? '',
-      status:
-          json['status'] as String? ?? HomeCareExtractionStatus.manualEntryRequired,
+      status: json['status'] as String? ??
+          HomeCareExtractionStatus.manualEntryRequired,
       message: json['message'] as String?,
       documentLink: json['documentLink'] as String?,
       fields: fieldsList
-          .map((e) => HomeCareExtractedField.fromJson(e as Map<String, dynamic>))
+          .map(
+              (e) => HomeCareExtractedField.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }
@@ -159,7 +160,8 @@ const List<HomeCareDocumentTypeInfo> defaultHomeCareDocumentTypes = [
       HomeCareFieldSpec(key: 'phone', label: 'Phone Number'),
       HomeCareFieldSpec(key: 'email', label: 'Email Address'),
       HomeCareFieldSpec(key: 'address', label: 'Home Address'),
-      HomeCareFieldSpec(key: 'positionAppliedFor', label: 'Position Applied For'),
+      HomeCareFieldSpec(
+          key: 'positionAppliedFor', label: 'Position Applied For'),
       HomeCareFieldSpec(key: 'desiredStartDate', label: 'Desired Start Date'),
       HomeCareFieldSpec(key: 'previousEmployer', label: 'Most Recent Employer'),
       HomeCareFieldSpec(key: 'yearsOfExperience', label: 'Years of Experience'),

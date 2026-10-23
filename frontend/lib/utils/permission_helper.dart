@@ -28,7 +28,7 @@ class PermissionHelper {
   static Set<String> _getRolePermissions(String role) {
     switch (role.toUpperCase()) {
       case 'ADMIN':
-        // Admin has all 27 listed permissions (hasPermission short-circuits to true)
+        // Admin has all 29 listed permissions (hasPermission short-circuits to true)
         return {
           'VIEW_ALL_USERS',
           'MANAGE_USERS',
@@ -46,6 +46,8 @@ class PermissionHelper {
           'VIEW_HEALTH_DATA',
           'RECORD_HEALTH_DATA',
           'EXPORT_HEALTH_DATA',
+          'VIEW_MEDICATIONS',
+          'MANAGE_MEDICATIONS',
           'VIEW_BILLING',
           'MANAGE_SUBSCRIPTIONS',
           'SEND_MESSAGES',
@@ -61,7 +63,7 @@ class PermissionHelper {
 
       case 'CAREGIVER':
       case 'FAMILY_LINK':
-        // Caregiver has 20 permissions (matches backend RolePermissionService)
+        // Caregiver has 22 permissions (matches backend RolePermissionService)
         return {
           'VIEW_ASSIGNED_PATIENTS',
           'CREATE_PATIENTS',
@@ -74,6 +76,8 @@ class PermissionHelper {
           'VIEW_HEALTH_DATA',
           'RECORD_HEALTH_DATA',
           'EXPORT_HEALTH_DATA',
+          'VIEW_MEDICATIONS',
+          'MANAGE_MEDICATIONS',
           'VIEW_BILLING',
           'MANAGE_SUBSCRIPTIONS',
           'SEND_MESSAGES',

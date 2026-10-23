@@ -104,69 +104,69 @@ class _AssignTaskScreenState extends State<AssignTaskScreen> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
-          ? Center(child: Text(error!))
-          : Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                children: [
-                  const Text(
-                    'Choose a task to assign to your patient.',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 10),
-
-                  Expanded(
-                    //Add a card to the top of this list for a custom task
-                    child: ListView.builder(
-                      itemCount: templates.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 5),
-                            child: ListTile(
-                              leading: Icon(
-                                Icons.task,
-                                size: 40,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                              title: const Text('Custom Task'),
-                              subtitle: const Text(
-                                'Create a custom task for your patient.',
-                              ),
-                              trailing: const Icon(Icons.arrow_forward_ios),
-                              onTap: () {
-                                context.push(
-                                  '/custom-task-scheduling?patientId=${widget.patientId}',
-                                );
-                              },
-                            ),
-                          );
-                        }
-                        final template = templates[index - 1];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 5),
-                          child: ListTile(
-                            leading: Icon(
-                              _getIconFromCode(template.iconCode),
-                              size: 40,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            title: Text(template.name),
-                            subtitle: Text(template.description),
-                            trailing: const Icon(Icons.arrow_forward_ios),
-                            onTap: () {
-                              context.push(
-                                '/pre-defined-task?templateId=${template.id}&patientId=${widget.patientId}',
+              ? Center(child: Text(error!))
+              : Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Choose a task to assign to your patient.',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        //Add a card to the top of this list for a custom task
+                        child: ListView.builder(
+                          itemCount: templates.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return Card(
+                                margin: const EdgeInsets.symmetric(vertical: 5),
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.task,
+                                    size: 40,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                  title: const Text('Custom Task'),
+                                  subtitle: const Text(
+                                    'Create a custom task for your patient.',
+                                  ),
+                                  trailing: const Icon(Icons.arrow_forward_ios),
+                                  onTap: () {
+                                    context.push(
+                                      '/custom-task-scheduling?patientId=${widget.patientId}',
+                                    );
+                                  },
+                                ),
                               );
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                            }
+                            final template = templates[index - 1];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 5),
+                              child: ListTile(
+                                leading: Icon(
+                                  _getIconFromCode(template.iconCode),
+                                  size: 40,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                title: Text(template.name),
+                                subtitle: Text(template.description),
+                                trailing: const Icon(Icons.arrow_forward_ios),
+                                onTap: () {
+                                  context.push(
+                                    '/pre-defined-task?templateId=${template.id}&patientId=${widget.patientId}',
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
     );
   }
 }

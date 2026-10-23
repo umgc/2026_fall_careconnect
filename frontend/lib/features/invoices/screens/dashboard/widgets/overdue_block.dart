@@ -5,9 +5,9 @@ import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.d
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
- 
 class OverdueBlock extends StatelessWidget {
-  const OverdueBlock({super.key, required this.invoices, required this.loading});
+  const OverdueBlock(
+      {super.key, required this.invoices, required this.loading});
   final List<Invoice> invoices;
   final bool loading;
 
@@ -19,9 +19,12 @@ class OverdueBlock extends StatelessWidget {
     final now = DateTime.now();
 
     final overdue = invoices
-        .where((i) => i.paymentStatus != PaymentStatus.paid && i.dates.dueDate.isBefore(now))
+        .where((i) =>
+            i.paymentStatus != PaymentStatus.paid &&
+            i.dates.dueDate.isBefore(now))
         .toList()
-      ..sort((a, b) => a.dates.dueDate.compareTo(b.dates.dueDate)); // oldest first
+      ..sort(
+          (a, b) => a.dates.dueDate.compareTo(b.dates.dueDate)); // oldest first
 
     final visible = overdue.take(_maxShown).toList();
     final hasMore = overdue.length > _maxShown;
@@ -37,7 +40,6 @@ class OverdueBlock extends StatelessWidget {
         const SizedBox(height: 4),
         Text('Overdue and upcoming bills', style: theme.textTheme.bodySmall),
         const SizedBox(height: 12),
-
         if (loading)
           const BlockLoading(height: 160)
         else if (overdue.isEmpty)
@@ -53,16 +55,17 @@ class OverdueBlock extends StatelessWidget {
                       hasMore
                           ? 'Overdue Bills (${visible.length} of ${overdue.length})'
                           : 'Overdue Bills (${overdue.length})',
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
                   if (hasMore)
                     TextButton.icon(
                       onPressed: () {
-                       context.pushNamed(
-                        'invoiceListFiltered',
-                        pathParameters: {'filter': 'overdue'},
-                      );
+                        context.pushNamed(
+                          'invoiceListFiltered',
+                          pathParameters: {'filter': 'overdue'},
+                        );
                       },
                       icon: const Icon(Icons.open_in_new, size: 16),
                       label: const Text('View all'),
@@ -97,9 +100,10 @@ class OverdueTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: theme.colorScheme.error.withValues(alpha:.05),
+        color: theme.colorScheme.error.withValues(alpha: .05),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: theme.colorScheme.error..withValues(alpha: 0.15)),
+        border:
+            Border.all(color: theme.colorScheme.error..withValues(alpha: 0.15)),
       ),
       child: Wrap(
         spacing: 8,
@@ -127,11 +131,14 @@ class OverdueTile extends StatelessWidget {
               ],
             ),
           ),
-          AmountBadge(text: currency(invoice.amounts.amountDue ?? invoice.amounts.total ?? 0)),
+          AmountBadge(
+              text: currency(
+                  invoice.amounts.amountDue ?? invoice.amounts.total ?? 0)),
           FilledButton.tonalIcon(
             onPressed: () {
               Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(builder: (_) => InvoiceDetailPage(invoice: invoice)),
+                MaterialPageRoute(
+                    builder: (_) => InvoiceDetailPage(invoice: invoice)),
               );
             },
             icon: const Icon(Icons.remove_red_eye, size: 16),

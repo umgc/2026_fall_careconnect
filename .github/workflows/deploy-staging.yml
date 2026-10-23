@@ -36,11 +36,18 @@ jobs:
             exit 1
           fi
           echo "Building against backend: $BACKEND_URL"
+          # WebSocket API URL (04-service.yaml output WebSocketUrl). Optional so the
+          # build still works without it, but realtime calls/chat need it in AWS.
+          if [[ -z "${WEBSOCKET_GATEWAY_URL:-}" ]]; then
+            echo "::warning::STAGING_WEBSOCKET_GATEWAY_URL is not set; realtime calls, chat, and notifications will not connect."
+          fi
           flutter build web --release \
             --no-tree-shake-icons \
-            --dart-define=BACKEND_URL="$BACKEND_URL"
+            --dart-define=BACKEND_URL="$BACKEND_URL" \
+            --dart-define=WEBSOCKET_GATEWAY_URL="${WEBSOCKET_GATEWAY_URL:-}"
         env:
           BACKEND_URL: ${{ vars.STAGING_BACKEND_URL }}
+          WEBSOCKET_GATEWAY_URL: ${{ vars.STAGING_WEBSOCKET_GATEWAY_URL }}
 
       - name: Zip build output
         run: |

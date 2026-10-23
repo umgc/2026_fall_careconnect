@@ -136,8 +136,7 @@ class _StructuredEntryFormDialogState extends State<StructuredEntryFormDialog> {
       lastDate: lastDate,
     );
     if (picked != null) {
-      controller.text =
-          '${picked.year.toString().padLeft(4, '0')}-'
+      controller.text = '${picked.year.toString().padLeft(4, '0')}-'
           '${picked.month.toString().padLeft(2, '0')}-'
           '${picked.day.toString().padLeft(2, '0')}';
     }
@@ -217,7 +216,8 @@ class _StructuredEntryFormDialogState extends State<StructuredEntryFormDialog> {
     final specs = DocumentFieldTemplates.fieldsFor(_documentType);
 
     return AlertDialog(
-      title: Text(_isEditing ? 'Edit Structured Entry' : 'New Structured Entry'),
+      title:
+          Text(_isEditing ? 'Edit Structured Entry' : 'New Structured Entry'),
       content: SizedBox(
         width: 480,
         child: Form(

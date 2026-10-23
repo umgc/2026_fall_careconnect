@@ -197,6 +197,12 @@ class JpaContractPostgresTest extends AbstractIdentityReconciliationContractTest
             }
 
             @Override
+            public boolean patientHasDeclined(Long patientId, Long sourceId, String fieldName, String incomingValue) {
+                return Boolean.TRUE.equals(
+                        tx.execute(status -> auditWriter.patientHasDeclined(patientId, sourceId, fieldName, incomingValue)));
+            }
+
+            @Override
             public void resolvePendingConflict(Long patientId, String fieldName, Outcome outcome,
                                                ResolvedBy resolvedBy, Instant resolvedAt) {
                 tx.executeWithoutResult(status -> auditWriter.resolvePendingConflict(patientId,

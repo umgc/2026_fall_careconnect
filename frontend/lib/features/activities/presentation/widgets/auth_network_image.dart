@@ -56,7 +56,8 @@ IconData iconForActivityName(String name, String category) {
     if (n.contains('dressing')) return Icons.checkroom;
     if (n.contains('toileting')) return Icons.wc;
     if (n.contains('transferring')) return Icons.transfer_within_a_station;
-    if (n.contains('mobility') || n.contains('ambulation')) return Icons.directions_walk;
+    if (n.contains('mobility') || n.contains('ambulation'))
+      return Icons.directions_walk;
     if (n.contains('eating')) return Icons.restaurant;
     if (n.contains('hygiene') || n.contains('grooming')) return Icons.face;
   } else {
@@ -67,7 +68,8 @@ IconData iconForActivityName(String name, String category) {
     if (n.contains('money')) return Icons.attach_money;
     if (n.contains('transportation')) return Icons.directions_car;
     if (n.contains('communication')) return Icons.chat;
-    if (n.contains('community') || n.contains('participation')) return Icons.people;
+    if (n.contains('community') || n.contains('participation'))
+      return Icons.people;
     if (n.contains('shopping')) return Icons.shopping_cart;
     if (n.contains('safety')) return Icons.health_and_safety;
   }

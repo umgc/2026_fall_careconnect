@@ -1,5 +1,6 @@
 package com.careconnect.repository.ehr;
 
+import com.careconnect.model.ehr.EhrConflictResolver;
 import com.careconnect.model.ehr.EhrConflictStatus;
 import com.careconnect.model.ehr.EhrIdentityConflict;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +21,11 @@ public interface EhrIdentityConflictRepository extends JpaRepository<EhrIdentity
      */
     Optional<EhrIdentityConflict> findByPatientIdAndFieldNameAndStatus(
             Long patientId, String fieldName, EhrConflictStatus status);
+
+    /** Whether this exact candidate value from this source was already finalized with this status and resolver. */
+    boolean existsByPatientIdAndSourceIdAndFieldNameAndIncomingValueAndStatusAndResolvedBy(
+            Long patientId, Long sourceId, String fieldName, String incomingValue,
+            EhrConflictStatus status, EhrConflictResolver resolvedBy);
 
     /** Everything awaiting this patient. Drives the confirmation prompt. */
     List<EhrIdentityConflict> findByPatientIdAndStatus(Long patientId, EhrConflictStatus status);
@@ -54,4 +60,13 @@ public interface EhrIdentityConflictRepository extends JpaRepository<EhrIdentity
             + "and c.resolvedAt < :cutoff and c.patientId in :patientIds")
     int deleteResolvedBeforeForPatients(
             @Param("cutoff") Instant cutoff, @Param("patientIds") List<Long> patientIds);
+
+    /**
+     * Unlink (FR-MCR-11, Addendum A1-Q1): removes every row this source holds for this patient.
+     * Called by {@code MedicareConnectionService.disconnect} inside its transaction.
+     */
+    @Modifying
+    @Transactional
+    @Query("delete from EhrIdentityConflict e where e.patientId = :patientId and e.sourceId = :sourceId")
+    int deleteAllForPatientAndSource(@Param("patientId") Long patientId, @Param("sourceId") Long sourceId);
 }

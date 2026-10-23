@@ -18,7 +18,7 @@ class _UploadAvatarScreenState extends State<UploadAvatarScreen> {
   File? _selectedAvatar;
   bool isUploading = false;
   String?
-  uploadedAvatarUrl; // this stores the relative path like `/uploads/avatar.png`
+      uploadedAvatarUrl; // this stores the relative path like `/uploads/avatar.png`
 
   Future<void> pickAvatar() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.image);

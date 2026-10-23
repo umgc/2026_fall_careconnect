@@ -3,7 +3,13 @@
 /// name here is the backend's wire name, so `.name` can be sent and parsed as-is.
 /// OVER_THE_COUNTER was OTC until the KI-05 follow-up; [Medication.fromJson]
 /// still reads the old name defensively (the backend never stored it).
-enum MedicationType { PRESCRIPTION, OVER_THE_COUNTER, SUPPLEMENT, HERBAL, EMERGENCY }
+enum MedicationType {
+  PRESCRIPTION,
+  OVER_THE_COUNTER,
+  SUPPLEMENT,
+  HERBAL,
+  EMERGENCY
+}
 
 /// What the user sees for a [MedicationType]. Mirrors the backend display
 /// names in Medication.java. The wire value is still [MedicationType.name].
@@ -15,6 +21,16 @@ extension MedicationTypeLabel on MedicationType {
         MedicationType.HERBAL => 'Herbal/Natural',
         MedicationType.EMERGENCY => 'Emergency Medication',
       };
+}
+
+/// Parses a backend medication type, accepting both OVER_THE_COUNTER and the
+/// legacy OTC spelling. Returns null for unknown values.
+MedicationType? medicationTypeFromWire(String? value) {
+  if (value == 'OTC') return MedicationType.OVER_THE_COUNTER;
+  for (final type in MedicationType.values) {
+    if (type.name == value) return type;
+  }
+  return null;
 }
 
 /// Medication status enum (for UI display purposes)

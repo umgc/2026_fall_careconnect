@@ -6,4 +6,3 @@ class EnvironmentConfig {
     return getBackendBaseUrl();
   }
 }
-

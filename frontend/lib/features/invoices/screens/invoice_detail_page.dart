@@ -72,13 +72,17 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage>
       appBar: AppBar(
         title: Row(
           children: [
-            Text(isNew && !hasNumber ? 'New Invoice' : 'Invoice ${_edited.invoiceNumber}', overflow: TextOverflow.ellipsis,
-          maxLines: 1),
+            Text(
+                isNew && !hasNumber
+                    ? 'New Invoice'
+                    : 'Invoice ${_edited.invoiceNumber}',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1),
             const SizedBox(width: 8),
-            if (!isNew || hasNumber) _statusIcon(_edited.paymentStatus, context),
+            if (!isNew || hasNumber)
+              _statusIcon(_edited.paymentStatus, context),
           ],
         ),
-        
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(96),
           child: Column(
@@ -98,7 +102,9 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage>
                       InvoiceFileService.openInvoicePdf(link);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('PDF is not available for this invoice yet')),
+                        const SnackBar(
+                            content: Text(
+                                'PDF is not available for this invoice yet')),
                       );
                     }
                   },
@@ -117,10 +123,15 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage>
                 child: Theme(
                   data: Theme.of(context).copyWith(
                     tabBarTheme: Theme.of(context).tabBarTheme.copyWith(
-                      labelColor: cs.primary,
-                      unselectedLabelColor: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+                          labelColor: cs.primary,
+                          unselectedLabelColor: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.color
+                              ?.withOpacity(0.7),
+                          labelStyle:
+                              const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                   ),
                   child: TabBar(
                     controller: _tab,
@@ -140,7 +151,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage>
           ),
         ),
       ),
-     // drawer: const CommonDrawer(currentRoute: '/invoice-assistant/detail'),
+      // drawer: const CommonDrawer(currentRoute: '/invoice-assistant/detail'),
       body: AbsorbPointer(
         absorbing: _busy,
         child: TabBarView(
@@ -283,11 +294,13 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage>
   Widget _statusIcon(PaymentStatus s, BuildContext context) {
     switch (s) {
       case PaymentStatus.paid:
-        return const Icon(Icons.check_circle, color: Color(0xFF059669), size: 18);
+        return const Icon(Icons.check_circle,
+            color: Color(0xFF059669), size: 18);
       case PaymentStatus.partialPayment:
         return const Icon(Icons.info, color: Color(0xFFF59E0B), size: 18);
       case PaymentStatus.rejectedInsurance:
-        return Icon(Icons.error, color: Theme.of(context).colorScheme.error, size: 18);
+        return Icon(Icons.error,
+            color: Theme.of(context).colorScheme.error, size: 18);
       case PaymentStatus.overdue:
         return const Icon(Icons.warning, color: Color(0xFFF59E0B), size: 18);
       case PaymentStatus.pendingInsurance:
@@ -295,7 +308,8 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage>
       case PaymentStatus.pending:
         return const Icon(Icons.schedule, color: Color(0xFFF59E0B), size: 18);
       case PaymentStatus.sent:
-        return const Icon(Icons.outgoing_mail, color: Color(0xFF3B82F6), size: 18);
+        return const Icon(Icons.outgoing_mail,
+            color: Color(0xFF3B82F6), size: 18);
     }
   }
 }

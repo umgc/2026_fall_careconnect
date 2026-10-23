@@ -95,7 +95,6 @@ class AuthTokenManager {
     }
   }
 
-
   // Get user session data
   static Future<Map<String, dynamic>?> getUserSession() async {
     try {
@@ -126,7 +125,6 @@ class AuthTokenManager {
       return false;
     }
   }
-
 
   // Validate token with backend (for cases where we don't have expiry info)
   static Future<bool> _validateTokenWithBackend(String token) async {
@@ -159,7 +157,7 @@ class AuthTokenManager {
     }
 
     return headers;
-  }// Clear all auth data
+  } // Clear all auth data
 
   static Future<void> clearAuthData() async {
     try {

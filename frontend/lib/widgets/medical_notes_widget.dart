@@ -155,7 +155,8 @@ class _PatientNotesWidgetState extends State<PatientNotesWidget> {
                     labelText: 'Note Type',
                     border: OutlineInputBorder(),
                   ),
-                  items: PatientNotesService.getCategoryDisplayNames().entries
+                  items: PatientNotesService.getCategoryDisplayNames()
+                      .entries
                       .map(
                         (entry) => DropdownMenuItem(
                           value: entry.key,
@@ -434,10 +435,10 @@ class _PatientNotesWidgetState extends State<PatientNotesWidget> {
                   Text(
                     'No patient notes found',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.6),
+                        ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -445,10 +446,10 @@ class _PatientNotesWidgetState extends State<PatientNotesWidget> {
                         ? 'No patient notes have been uploaded for ${widget.patientName}'
                         : 'Upload your first patient note to get started',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
-                    ),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.6),
+                        ),
                     textAlign: TextAlign.center,
                   ),
                 ],

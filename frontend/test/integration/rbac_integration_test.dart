@@ -19,7 +19,7 @@ void main() {
       expect(PermissionHelper.hasPermission(role, 'VIEW_AUDIT_LOGS'), true);
 
       // Verify permission count
-      expect(PermissionHelper.getPermissionCount(role), 27);
+      expect(PermissionHelper.getPermissionCount(role), 29);
     });
 
     test('Complete role and permission flow for Caregiver', () {
@@ -44,7 +44,7 @@ void main() {
       expect(PermissionHelper.hasPermission(role, 'REVIEW_AI_HOLDS'), true);
 
       // Verify permission count
-      expect(PermissionHelper.getPermissionCount(role), 20);
+      expect(PermissionHelper.getPermissionCount(role), 22);
     });
 
     test('Complete role and permission flow for Patient', () {
@@ -90,13 +90,15 @@ void main() {
     });
 
     test('Permission counts match backend exactly', () {
-      expect(PermissionHelper.getPermissionCount('ADMIN'), 27);
-      expect(PermissionHelper.getPermissionCount('CAREGIVER'), 20);
-      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 20);
+      expect(PermissionHelper.getPermissionCount('ADMIN'), 29);
+      expect(PermissionHelper.getPermissionCount('CAREGIVER'), 22);
+      expect(PermissionHelper.getPermissionCount('FAMILY_LINK'), 22);
       expect(PermissionHelper.getPermissionCount('PATIENT'), 7);
       expect(PermissionHelper.getPermissionCount('FAMILY_MEMBER'), 3);
-      expect(PermissionHelper.hasPermission('PATIENT', 'REVIEW_AI_HOLDS'), false);
-      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'REVIEW_AI_HOLDS'), false);
+      expect(
+          PermissionHelper.hasPermission('PATIENT', 'REVIEW_AI_HOLDS'), false);
+      expect(PermissionHelper.hasPermission('FAMILY_MEMBER', 'REVIEW_AI_HOLDS'),
+          false);
     });
 
     test('All roles have correct login routes', () {

@@ -13,7 +13,7 @@ Future<String> copyAssetFile(String src, [String? dst]) async {
   final data = await rootBundle.load(src);
   if (!exists || File(target).lengthSync() != data.lengthInBytes) {
     final List<int> bytes =
-    data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
     await File(target).writeAsBytes(bytes);
   }
 

@@ -7,13 +7,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 
 class ShortcutDef {
-  final String key;               // unique id for persistence
+  final String key; // unique id for persistence
   final IconData icon;
-  final String label;             // fallback (English) if labelKey not provided
-  final String? labelKey;         // optional i18n key (maps to AppLocalizations)
-  final String routeTemplate;     // supports {userId}, etc.
-  final Set<String>? visibleFor;  // e.g. {'CAREGIVER','ADMIN','FAMILY_LINK'}
-  final bool defaultSelected;     // used on first run
+  final String label; // fallback (English) if labelKey not provided
+  final String? labelKey; // optional i18n key (maps to AppLocalizations)
+  final String routeTemplate; // supports {userId}, etc.
+  final Set<String>? visibleFor; // e.g. {'CAREGIVER','ADMIN','FAMILY_LINK'}
+  final bool defaultSelected; // used on first run
 
   const ShortcutDef({
     required this.key,
@@ -166,7 +166,7 @@ class ShortcutProvider extends ChangeNotifier {
         key: 'dash',
         icon: Icons.dashboard,
         label: 'Dashboard',
-        labelKey: 'dashboard',  
+        labelKey: 'dashboard',
         routeTemplate: '/dashboard',
         defaultSelected: true,
       ),

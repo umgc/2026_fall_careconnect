@@ -110,7 +110,8 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
         '${ApiConstants.baseUrl}scheduled-visits/caregiver/$caregiverId/upcoming',
       );
 
-      final response = await ApiServiceOffline.httpClient.get(url, headers: headers);
+      final response =
+          await ApiServiceOffline.httpClient.get(url, headers: headers);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body) as List<dynamic>;
@@ -122,7 +123,8 @@ class _UpcomingCheckinsState extends State<UpcomingCheckins> {
         });
       } else {
         setState(() {
-          _error = '${t.upcomingcheckinwidget_failedToLoadVisits} (${response.statusCode}).';
+          _error =
+              '${t.upcomingcheckinwidget_failedToLoadVisits} (${response.statusCode}).';
           _loading = false;
         });
       }
@@ -271,7 +273,8 @@ class _PatientCheckInItem extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(onPressed: () {}, child: Text(t.upcomingcheckinwidget_view)),
+          TextButton(
+              onPressed: () {}, child: Text(t.upcomingcheckinwidget_view)),
         ],
       ),
     );

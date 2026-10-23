@@ -20,8 +20,7 @@ class PatientMedicalNotesPage extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final userProvider = Provider.of<UserProvider>(context);
     final user = userProvider.user;
-    final isCaregiver =
-        user?.role.toUpperCase() == 'CAREGIVER' ||
+    final isCaregiver = user?.role.toUpperCase() == 'CAREGIVER' ||
         user?.role.toUpperCase() == 'FAMILY_LINK' ||
         user?.role.toUpperCase() == 'ADMIN';
 
@@ -64,12 +63,16 @@ class PatientMedicalNotesPage extends StatelessWidget {
                         children: [
                           Text(
                             patientName,
-                            style: Theme.of(context).textTheme.titleLarge
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
                             '${t.ptmednotes_ptID}: $patientId',
-                            style: Theme.of(context).textTheme.bodyMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
                                 ?.copyWith(color: Colors.grey.shade600),
                           ),
                         ],

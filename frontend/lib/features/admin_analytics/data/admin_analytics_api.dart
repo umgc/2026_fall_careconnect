@@ -32,12 +32,9 @@ class AdminAnalyticsApi {
     );
     final headers = await ApiService.getAuthHeaders();
 
-    final response = await http
-        .get(uri, headers: headers)
-        .timeout(
+    final response = await http.get(uri, headers: headers).timeout(
           const Duration(seconds: 60),
-          onTimeout: () =>
-              http.Response('{"error": "Request timeout"}', 408),
+          onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
         );
 
     if (response.statusCode == 200) {
@@ -55,9 +52,8 @@ class AdminAnalyticsApi {
       try {
         final body = json.decode(response.body);
         if (body is Map<String, dynamic>) {
-          message = body['message'] as String? ??
-              body['error'] as String? ??
-              message;
+          message =
+              body['message'] as String? ?? body['error'] as String? ?? message;
         }
       } catch (_) {
         // Keep default message when body is not JSON.
@@ -86,18 +82,16 @@ class AdminAnalyticsApi {
     );
     final headers = await ApiService.getAuthHeaders();
 
-    final response = await http
-        .get(uri, headers: headers)
-        .timeout(
+    final response = await http.get(uri, headers: headers).timeout(
           const Duration(seconds: 60),
-          onTimeout: () =>
-              http.Response('{"error": "Request timeout"}', 408),
+          onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
         );
 
     if (response.statusCode == 200) {
       final decoded = json.decode(response.body);
       if (decoded is! Map<String, dynamic>) {
-        throw AdminAnalyticsApiException('Invalid feature trend response format');
+        throw AdminAnalyticsApiException(
+            'Invalid feature trend response format');
       }
       return FeatureTrend.fromJson(decoded);
     }
@@ -109,9 +103,8 @@ class AdminAnalyticsApi {
       try {
         final body = json.decode(response.body);
         if (body is Map<String, dynamic>) {
-          message = body['message'] as String? ??
-              body['error'] as String? ??
-              message;
+          message =
+              body['message'] as String? ?? body['error'] as String? ?? message;
         }
       } catch (_) {
         // Keep default message when body is not JSON.

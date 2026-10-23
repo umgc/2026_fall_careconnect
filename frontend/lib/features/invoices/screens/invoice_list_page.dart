@@ -307,8 +307,7 @@ class _FilterBar extends StatelessWidget {
                 DropdownMenuItem(
                     value: 'due_date_asc', child: Text('Due Date (Earliest)')),
                 DropdownMenuItem(
-                    value: 'amount_desc',
-                    child: Text('Amount (High to Low)')),
+                    value: 'amount_desc', child: Text('Amount (High to Low)')),
                 DropdownMenuItem(
                     value: 'amount_asc', child: Text('Amount (Low to High)')),
               ],

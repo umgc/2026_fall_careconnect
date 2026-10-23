@@ -16,9 +16,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/tasks/presentation/widgets/legend.dart';
 import 'package:care_connect_app/features/tasks/presentation/widgets/legend_editor.dart';
 import 'package:care_connect_app/features/tasks/utils/task_type_manager.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 /// Wraps [child] with a MaterialApp and a ChangeNotifierProvider<TaskTypeManager>.
 Widget _wrap(Widget child, TaskTypeManager manager) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: ChangeNotifierProvider<TaskTypeManager>.value(
           value: manager,

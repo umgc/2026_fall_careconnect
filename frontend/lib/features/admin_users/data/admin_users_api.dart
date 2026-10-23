@@ -22,12 +22,9 @@ class AdminUsersApi {
     final uri = Uri.parse(ApiConstants.adminUsers);
     final headers = await ApiService.getAuthHeaders();
 
-    final response = await http
-        .get(uri, headers: headers)
-        .timeout(
+    final response = await http.get(uri, headers: headers).timeout(
           const Duration(seconds: 60),
-          onTimeout: () =>
-              http.Response('{"error": "Request timeout"}', 408),
+          onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
         );
 
     if (response.statusCode == 200) {
@@ -60,8 +57,7 @@ class AdminUsersApi {
         )
         .timeout(
           const Duration(seconds: 60),
-          onTimeout: () =>
-              http.Response('{"error": "Request timeout"}', 408),
+          onTimeout: () => http.Response('{"error": "Request timeout"}', 408),
         );
 
     if (response.statusCode == 200) {

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'patient_reports.dart'; // ✅ correct import path
 
-
 void main() {
   runApp(const MyApp());
 }

@@ -13,6 +13,7 @@ import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -207,7 +208,7 @@ public class DocumentProcessingService {
         if (isBase64Encoded(content)) {
             try {
                 byte[] decoded = Base64.getDecoder().decode(content);
-                content = new String(decoded);
+                content = new String(decoded, StandardCharsets.UTF_8);
             } catch (Exception e) {
                 log.warn("Failed to decode base64 text content: {}", e.getMessage());
             }
@@ -233,7 +234,7 @@ public class DocumentProcessingService {
         if (isBase64Encoded(content)) {
             try {
                 byte[] decoded = Base64.getDecoder().decode(content);
-                content = new String(decoded);
+                content = new String(decoded, StandardCharsets.UTF_8);
             } catch (Exception e) {
                 log.warn("Failed to decode base64 JSON content: {}", e.getMessage());
             }
@@ -269,7 +270,7 @@ public class DocumentProcessingService {
         if (isBase64Encoded(content)) {
             try {
                 byte[] decoded = Base64.getDecoder().decode(content);
-                content = new String(decoded);
+                content = new String(decoded, StandardCharsets.UTF_8);
             } catch (Exception e) {
                 log.warn("Failed to decode base64 CSV content: {}", e.getMessage());
             }
@@ -296,7 +297,7 @@ public class DocumentProcessingService {
             if (isBase64Encoded(content)) {
                 try {
                     byte[] decoded = Base64.getDecoder().decode(content);
-                    content = new String(decoded);
+                    content = new String(decoded, StandardCharsets.UTF_8);
                 } catch (Exception e) {
                     log.warn("Failed to decode base64 content for {}: {}", filename, e.getMessage());
                     return "[Binary file: " + filename + " - Content not readable as text]";
@@ -304,7 +305,7 @@ public class DocumentProcessingService {
             }
 
             // Try to extract text using Tika
-            try (InputStream inputStream = new ByteArrayInputStream(content.getBytes())) {
+            try (InputStream inputStream = new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))) {
                 String extractedText = tika.parseToString(inputStream);
 
                 if (extractedText == null || extractedText.trim().isEmpty()) {

@@ -50,7 +50,8 @@ class _StmlRecallPageState extends State<StmlRecallPage> {
     final patientId = context.read<UserProvider>().user?.patientId;
     if (patientId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No patient is selected for this account.')),
+        const SnackBar(
+            content: Text('No patient is selected for this account.')),
       );
       return;
     }
@@ -64,7 +65,8 @@ class _StmlRecallPageState extends State<StmlRecallPage> {
     _scrollToBottom();
 
     try {
-      final result = await StmlService.recall(patientId: patientId, question: question);
+      final result =
+          await StmlService.recall(patientId: patientId, question: question);
       setState(() => turn.result = result);
     } on StmlException catch (e) {
       setState(() => turn.error = e.message);
@@ -107,7 +109,8 @@ class _StmlRecallPageState extends State<StmlRecallPage> {
                     controller: _scrollController,
                     padding: const EdgeInsets.all(16),
                     itemCount: _turns.length,
-                    itemBuilder: (context, index) => _RecallTurnCard(turn: _turns[index]),
+                    itemBuilder: (context, index) =>
+                        _RecallTurnCard(turn: _turns[index]),
                   ),
           ),
           SafeArea(
@@ -129,7 +132,8 @@ class _StmlRecallPageState extends State<StmlRecallPage> {
                       decoration: const InputDecoration(
                         hintText: 'Ask what we discussed…',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       ),
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _submit(),
@@ -178,7 +182,8 @@ class _SuggestionList extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.psychology_outlined, size: 48, color: AppTheme.textSecondary),
+            Icon(Icons.psychology_outlined,
+                size: 48, color: AppTheme.textSecondary),
             const SizedBox(height: 16),
             Text(
               'Ask about a recent call or visit.',
@@ -255,12 +260,14 @@ class _RecallTurnCard extends StatelessWidget {
                       ? Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.error_outline, size: 18, color: AppTheme.error),
+                            Icon(Icons.error_outline,
+                                size: 18, color: AppTheme.error),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
                                 turn.error!,
-                                style: const TextStyle(color: AppTheme.error, fontSize: 16),
+                                style: const TextStyle(
+                                    color: AppTheme.error, fontSize: 16),
                               ),
                             ),
                           ],
@@ -271,7 +278,8 @@ class _RecallTurnCard extends StatelessWidget {
                           children: [
                             Text(
                               turn.result!.answer,
-                              style: const TextStyle(fontSize: 18, height: 1.35),
+                              style:
+                                  const TextStyle(fontSize: 18, height: 1.35),
                             ),
                             if (turn.result!.sources.isNotEmpty) ...[
                               const SizedBox(height: 10),

@@ -20,8 +20,10 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
   String? role;
 
   // Sample URLs for skill stores
-  final String alexaSkillUrl = 'https://skills-store.amazon.com/deeplink/tvt/1cc43d50136bee48a3039cf55775ec0a64a967d5685df997fae9a2fe719a20a7d8e108ed6f4d7bfedb9ce283ddbdf81ed9f6289f17e311266b534cbb311f0bf69ee09a1c8d5d376364359852b0ba8ba7edecc29327df49ac547b52edb016973e1c7b73c96251be9c74dc48e68ba321e6';
-  final String googleActionUrl = 'https://assistant.google.com/services/invoke/uid/000000d139bbc4d4';
+  final String alexaSkillUrl =
+      'https://skills-store.amazon.com/deeplink/tvt/1cc43d50136bee48a3039cf55775ec0a64a967d5685df997fae9a2fe719a20a7d8e108ed6f4d7bfedb9ce283ddbdf81ed9f6289f17e311266b534cbb311f0bf69ee09a1c8d5d376364359852b0ba8ba7edecc29327df49ac547b52edb016973e1c7b73c96251be9c74dc48e68ba321e6';
+  final String googleActionUrl =
+      'https://assistant.google.com/services/invoke/uid/000000d139bbc4d4';
 
   @override
   void initState() {
@@ -45,8 +47,12 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
 
       // Extract role from nested user object
       final userObj = profile['user'];
-      role = (userObj != null ? userObj['role'] : null)?.toString().trim().toUpperCase() ?? '';
-      
+      role = (userObj != null ? userObj['role'] : null)
+              ?.toString()
+              .trim()
+              .toUpperCase() ??
+          '';
+
       print("DEBUG: Extracted role: '$role'");
 
       // Extract Alexa status directly from profile (using alexaLinked field)
@@ -72,7 +78,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
   Future<void> _unlinkAlexaAccount() async {
     setState(() => isLoading = true);
     try {
-      final result = await AuthService.unlinkAlexaAccount(AppLocalizations.of(context)!);
+      final result =
+          await AuthService.unlinkAlexaAccount(AppLocalizations.of(context)!);
 
       if (result['isSuccess'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +91,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
         });
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'] ?? 'Failed to unlink Alexa.')),
+          SnackBar(
+              content: Text(result['message'] ?? 'Failed to unlink Alexa.')),
         );
         setState(() => isLoading = false);
       }
@@ -170,12 +178,14 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             // Privacy Policy footer
             GestureDetector(
               onTap: () async {
-                final uri = Uri.parse('https://www.freeprivacypolicy.com/live/9a586bf1-2869-40aa-993a-c8f80200209c');
+                final uri = Uri.parse(
+                    'https://www.freeprivacypolicy.com/live/9a586bf1-2869-40aa-993a-c8f80200209c');
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Could not open Privacy Policy')),
+                    const SnackBar(
+                        content: Text('Could not open Privacy Policy')),
                   );
                 }
               },
@@ -208,9 +218,11 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: _buildAlexaPlatformCard(context, isPatient)),
+                      Expanded(
+                          child: _buildAlexaPlatformCard(context, isPatient)),
                       const SizedBox(width: 16),
-                      Expanded(child: _buildGooglePlatformCard(context, isPatient)),
+                      Expanded(
+                          child: _buildGooglePlatformCard(context, isPatient)),
                     ],
                   );
                 }
@@ -225,8 +237,10 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
   Widget _buildAlexaPlatformCard(BuildContext context, bool isPatient) {
     final devices = [
       _DeviceInfo(icon: Icons.speaker, name: 'Echo Devices', available: true),
-      _DeviceInfo(icon: Icons.lightbulb, name: 'Smart Lights', available: false),
-      _DeviceInfo(icon: Icons.thermostat, name: 'Thermostats', available: false),
+      _DeviceInfo(
+          icon: Icons.lightbulb, name: 'Smart Lights', available: false),
+      _DeviceInfo(
+          icon: Icons.thermostat, name: 'Thermostats', available: false),
       _DeviceInfo(icon: Icons.lock, name: 'Smart Locks', available: false),
       _DeviceInfo(icon: Icons.outlet, name: 'Smart Plugs', available: false),
       _DeviceInfo(icon: Icons.sensor_door, name: 'Sensors', available: false),
@@ -311,11 +325,11 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-              onPressed: isPatient
-                  ? (isAlexaLinked == true
-                      ? _unlinkAlexaAccount
-                      : _linkAlexaAccount)
-                  : null,
+                onPressed: isPatient
+                    ? (isAlexaLinked == true
+                        ? _unlinkAlexaAccount
+                        : _linkAlexaAccount)
+                    : null,
                 icon: Icon(isPatient && isAlexaLinked == true
                     ? Icons.refresh
                     : Icons.add),
@@ -327,7 +341,9 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                       : 'Coming Soon for Caregivers',
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isPatient ? (isAlexaLinked == true ? Colors.red : Colors.blue) : Colors.grey,
+                  backgroundColor: isPatient
+                      ? (isAlexaLinked == true ? Colors.red : Colors.blue)
+                      : Colors.grey,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -346,10 +362,14 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
     final devices = [
       _DeviceInfo(icon: Icons.home, name: 'Nest Hubs', available: true),
       _DeviceInfo(icon: Icons.speaker, name: 'Google Home', available: true),
-      _DeviceInfo(icon: Icons.lightbulb, name: 'Smart Lights', available: false),
-      _DeviceInfo(icon: Icons.thermostat, name: 'Nest Thermostat', available: false),
-      _DeviceInfo(icon: Icons.doorbell, name: 'Nest Doorbell', available: false),
-      _DeviceInfo(icon: Icons.camera_alt, name: 'Nest Cameras', available: false),
+      _DeviceInfo(
+          icon: Icons.lightbulb, name: 'Smart Lights', available: false),
+      _DeviceInfo(
+          icon: Icons.thermostat, name: 'Nest Thermostat', available: false),
+      _DeviceInfo(
+          icon: Icons.doorbell, name: 'Nest Doorbell', available: false),
+      _DeviceInfo(
+          icon: Icons.camera_alt, name: 'Nest Cameras', available: false),
     ];
 
     return Card(
@@ -369,7 +389,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                 color: Colors.red.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.g_mobiledata_rounded, color: Colors.red, size: 32),
+              child: const Icon(Icons.g_mobiledata_rounded,
+                  color: Colors.red, size: 32),
             ),
             const SizedBox(height: 12),
             const Text(

@@ -17,7 +17,8 @@ class SummaryConfirmationList extends StatefulWidget {
   const SummaryConfirmationList({super.key});
 
   @override
-  State<SummaryConfirmationList> createState() => _SummaryConfirmationListState();
+  State<SummaryConfirmationList> createState() =>
+      _SummaryConfirmationListState();
 }
 
 class _SummaryConfirmationListState extends State<SummaryConfirmationList> {
@@ -32,8 +33,9 @@ class _SummaryConfirmationListState extends State<SummaryConfirmationList> {
     });
   }
 
-  Future<void> _refresh() =>
-      context.read<ConfirmationProvider>().fetchFromBackend(sourceType: 'SUMMARY');
+  Future<void> _refresh() => context
+      .read<ConfirmationProvider>()
+      .fetchFromBackend(sourceType: 'SUMMARY');
 
   @override
   Widget build(BuildContext context) {

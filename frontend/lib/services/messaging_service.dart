@@ -1,13 +1,14 @@
+import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'auth_token_manager.dart';
 import 'api_service.dart';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config/env_constant.dart';
+import '../utils/websocket_keep_alive.dart';
 
 class MessagingService {
   // Send a notification/message to another user
@@ -49,32 +50,47 @@ class MessagingService {
   static String? _currentUserId;
   static Map<String, List<Map<String, dynamic>>> _localMessages = {};
 
+  /// Reconnects after the socket drops (API Gateway closes idle and
+  /// 2-hour-old sockets, and all sockets on a redeploy) and sends heartbeats
+  /// while registered.
+  static final WebSocketKeepAlive _keepAlive = WebSocketKeepAlive();
+
+  /// Opens the socket. Replaceable in tests so no network is needed.
+  @visibleForTesting
+  static WebSocketChannel Function(Uri uri) connectChannel =
+      WebSocketChannel.connect;
+
   // Connect to WebSocket (no user registration yet)
   static Future<void> initialize() async {
     if (_channel != null) return; // Already connected
     try {
       final wsUrl = _getWebSocketUrl();
       print('Connecting to notification WebSocket: $wsUrl');
-      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      final channel = connectChannel(Uri.parse(wsUrl));
+      _channel = channel;
       _isRegistered = false;
 
       // Listen for incoming messages with robust error handling
-      _channel!.stream.listen(
+      channel.stream.listen(
         (message) {
           print('Received notification: $message');
-          // Optionally handle incoming messages here
+          if (_isAuthenticationFailure(message)) {
+            // The token was refused; reconnecting would only repeat that.
+            _currentUserId = null;
+            _isRegistered = false;
+          }
         },
         onError: (e, stackTrace) {
           print('WebSocket error: $e');
           if (stackTrace != null) {
             print('WebSocket error stack: $stackTrace');
           }
-          _isRegistered = false;
+          _onSocketClosed(channel);
           // Do not rethrow, app should continue running
         },
         onDone: () {
           print('WebSocket connection closed');
-          _isRegistered = false;
+          _onSocketClosed(channel);
         },
         cancelOnError: true,
       );
@@ -97,13 +113,61 @@ class MessagingService {
     }
   }
 
-  // Register user after login
+  // Register user after login. The backend identifies the user from the JWT;
+  // [userId] is kept for reconnects and local message storage.
   static Future<void> registerUser({required String userId}) async {
     if (_channel == null) await initialize();
     _currentUserId = userId;
-    final registerMsg = 'REGISTER_USER:$userId';
-    _channel!.sink.add(registerMsg);
+    await _authenticate();
+  }
+
+  static Future<void> _authenticate() async {
+    final channel = _channel;
+    if (channel == null) return;
+    final token = await AuthTokenManager.getJwtToken();
+    if (token == null || token.isEmpty) {
+      print('❌ Cannot register for notifications: missing JWT token');
+      return;
+    }
+    channel.sink.add(jsonEncode({'type': 'authenticate', 'token': token}));
     _isRegistered = true;
+    _keepAlive.onConnected((message) => _channel?.sink.add(message));
+  }
+
+  /// Once a user is registered, a dropped socket reconnects and
+  /// re-authenticates.
+  static void _onSocketClosed(WebSocketChannel channel) {
+    if (!identical(channel, _channel)) return;
+    _channel = null;
+    _isRegistered = false;
+    _keepAlive.onDisconnected();
+    if (_currentUserId != null) {
+      _keepAlive.scheduleReconnect(() => unawaited(_reconnect()));
+    }
+  }
+
+  static Future<void> _reconnect() async {
+    if (_currentUserId == null || _channel != null) return;
+    await initialize();
+    await _authenticate();
+  }
+
+  static bool _isAuthenticationFailure(dynamic message) {
+    if (message is! String) return false;
+    try {
+      final decoded = jsonDecode(message);
+      return decoded is Map && decoded['type'] == 'authentication-failed';
+    } catch (_) {
+      return false; // Plain-text notifications are not JSON.
+    }
+  }
+
+  @visibleForTesting
+  static void resetForTest() {
+    _keepAlive.stop();
+    _channel = null;
+    _isRegistered = false;
+    _currentUserId = null;
   }
 
   // Helper to get the WebSocket URL from backend base URL
@@ -138,24 +202,6 @@ class MessagingService {
     }
   }
 
-  // Generate unique message ID
-  static String _generateMessageId() {
-    return '${DateTime.now().millisecondsSinceEpoch}_${_generateRandomString(8)}';
-  }
-
-  // Generate random string
-  static String _generateRandomString(int length) {
-    const chars =
-        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = Random();
-    return String.fromCharCodes(
-      Iterable.generate(
-        length,
-        (_) => chars.codeUnitAt(random.nextInt(chars.length)),
-      ),
-    );
-  }
-
   // Store message locally
   static Future<void> _storeMessageLocally(
     String senderId,
@@ -183,30 +229,6 @@ class MessagingService {
       await _saveLocalMessages();
     } catch (e) {
       print('Error storing message locally: $e');
-    }
-  }
-
-  // Store message in backend database
-  static Future<void> _storeMessageInDatabase(
-    Map<String, dynamic> messageData,
-  ) async {
-    try {
-      final headers = await AuthTokenManager.getAuthHeaders();
-
-      final response = await http.post(
-        Uri.parse('${ApiConstants.baseUrl}messages'),
-        headers: {...headers, 'Content-Type': 'application/json'},
-        body: jsonEncode(messageData),
-      );
-
-      if (response.statusCode == 201) {
-        print('✅ Message stored in database');
-      } else {
-        print('❌ Failed to store message: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Error storing message: $e');
-      // Don't throw - message is already stored locally
     }
   }
 

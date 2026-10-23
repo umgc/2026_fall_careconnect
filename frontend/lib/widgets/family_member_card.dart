@@ -61,7 +61,8 @@ class FamilyMemberCard extends StatelessWidget {
               children: [
                 // Phone button
                 IconButton(
-                  icon: const Icon(Icons.phone, color: AppTheme.success, size: 20),
+                  icon: const Icon(Icons.phone,
+                      color: AppTheme.success, size: 20),
                   onPressed: () async {
                     final uri = Uri(scheme: 'tel', path: phone);
                     if (await canLaunchUrl(uri)) {
@@ -72,7 +73,8 @@ class FamilyMemberCard extends StatelessWidget {
                 ),
                 // SMS button
                 IconButton(
-                  icon: const Icon(Icons.message, color: AppTheme.info, size: 20),
+                  icon:
+                      const Icon(Icons.message, color: AppTheme.info, size: 20),
                   onPressed: () async {
                     final uri = Uri(scheme: 'sms', path: phone);
                     if (await canLaunchUrl(uri)) {
@@ -84,7 +86,8 @@ class FamilyMemberCard extends StatelessWidget {
                 // Email button (show only if email is provided)
                 if (email.isNotEmpty)
                   IconButton(
-                    icon: const Icon(Icons.email, color: AppTheme.warning, size: 20),
+                    icon: const Icon(Icons.email,
+                        color: AppTheme.warning, size: 20),
                     onPressed: () async {
                       final uri = Uri(
                         scheme: 'mailto',

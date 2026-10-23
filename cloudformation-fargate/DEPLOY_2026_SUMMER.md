@@ -49,8 +49,15 @@ Gateway). Tear down when finished — see [README — Teardown](./README.md#tear
 ## Architecture (short)
 
 ```text
-Browser → Amplify (Flutter web) → API Gateway → VPC Link → ECS → RDS
+Browser → Amplify (Flutter web) → API Gateway (HTTP API) → VPC Link → ECS → RDS
+Browser ⇄ API Gateway (WebSocket API) → VPC Link V1 → internal NLB → ECS :8082   (realtime)
 ```
+
+Realtime features (call ringing, chat, notifications) use a separate API Gateway
+**WebSocket API**: HTTP APIs cannot carry websockets. API Gateway holds each client
+socket and calls the backend's internal port 8082 per connect/message/disconnect.
+Websocket sessions live in the task's memory, so the service runs **one task**
+(`DesiredCount` is capped at 1).
 
 Stack templates: [01-networking](./templates/01-networking.yaml) →
 [02-data](./templates/02-data.yaml) →
@@ -439,6 +446,7 @@ Build locally:
 cd "$APP_ROOT\frontend"
 flutter build web --release --base-href "/" `
   --dart-define=BACKEND_URL=$BACKEND_URL `
+  --dart-define=WEBSOCKET_GATEWAY_URL=$WEBSOCKET_URL `
   --dart-define=APP_DOMAIN=$FRONTEND_HOST `
   --dart-define=APP_PORT=443
 ```
@@ -447,9 +455,13 @@ flutter build web --release --base-href "/" `
 cd "$APP_ROOT/frontend"
 flutter build web --release --base-href "/" \
   --dart-define=BACKEND_URL="$BACKEND_URL" \
+  --dart-define=WEBSOCKET_GATEWAY_URL="$WEBSOCKET_URL" \
   --dart-define=APP_DOMAIN="$FRONTEND_HOST" \
   --dart-define=APP_PORT=443
 ```
+
+`build-amplify-zip.ps1 -WebSocketGatewayUrl` / `build-amplify-zip.sh --websocket-url`
+pass the same value. `$WEBSOCKET_URL` is the stack's `WebSocketUrl` output ([§6](#6-amplify-environment-variables)).
 
 Zip the **contents** of `frontend/build/web` (not the `web` folder itself) and
 upload via Amplify **Deploy updates** → drag and drop.
@@ -473,6 +485,7 @@ Amplify console → your app → branch → **Environment variables**:
 | Variable | Value |
 | -------- | ----- |
 | `BACKEND_URL` | API Gateway URL from backend deploy |
+| `WEBSOCKET_GATEWAY_URL` | Stack output `WebSocketUrl` (`wss://…/<env>`) |
 | `APP_DOMAIN` | `FRONTEND_HOST` (hostname only, no `https://`) |
 | `APP_PORT` | `443` |
 
@@ -492,6 +505,19 @@ $BACKEND_URL = aws cloudformation describe-stacks `
 
 If `BACKEND_URL` is missing at Amplify build time, the Flutter web app falls back
 to `http://localhost:8080` and the welcome page reports the backend as unhealthy.
+
+The WebSocket URL comes from the same stack:
+
+```powershell
+$WEBSOCKET_URL = aws cloudformation describe-stacks `
+  --profile careconnect-sso --region us-east-1 `
+  --stack-name careconnect-service-cfdemo `
+  --query "Stacks[0].Outputs[?OutputKey=='WebSocketUrl'].OutputValue" `
+  --output text
+```
+
+If `WEBSOCKET_GATEWAY_URL` is missing, the app still loads but call ringing, chat,
+and notifications never connect (the HTTP API cannot carry websockets).
 
 [TOP](#top)
 
@@ -571,6 +597,16 @@ the welcome page should not warn that the backend is unhealthy.
 If plain `curl` works but the `Origin` test or welcome page fails, see
 [§11](#11-fix-amplify-backend-unhealthy-after-redeploy).
 
+Websocket check (needs `npx wscat`, and a JWT copied from a logged-in browser session):
+
+```bash
+npx wscat -c "$WEBSOCKET_URL?channel=calls"
+> {"type":"authenticate","token":"<jwt>"}
+```
+
+Expect `connection-established` then `authentication-success`. A bad token gets
+`authentication-failed` and the socket closes. A connect without `?channel=` is refused.
+
 [TOP](#top)
 
 ---
@@ -635,6 +671,7 @@ More: [README — Common Failure Modes](./README.md#common-failure-modes).
 | Value | Goes in |
 | ----- | ------- |
 | `BACKEND_URL` | Amplify env `BACKEND_URL`, Flutter `--dart-define=BACKEND_URL` |
+| `WEBSOCKET_URL` | Amplify env `WEBSOCKET_GATEWAY_URL`, Flutter `--dart-define=WEBSOCKET_GATEWAY_URL` |
 | `FRONTEND_HOST` | Amplify env `APP_DOMAIN`, Flutter `--dart-define=APP_DOMAIN` |
 | `FRONTEND_URL` | Stack `FrontendBaseUrl`, entry in `CorsAllowedList` |
 

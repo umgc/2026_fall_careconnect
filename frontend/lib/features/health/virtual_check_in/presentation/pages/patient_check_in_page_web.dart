@@ -99,7 +99,10 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isLoading && _error == null && _activeCheckInId != null && _assignedQuestions.isNotEmpty) {
+    if (!_isLoading &&
+        _error == null &&
+        _activeCheckInId != null &&
+        _assignedQuestions.isNotEmpty) {
       return PatientCheckInDetailPage(
         checkInId: _activeCheckInId!,
         questions: _assignedQuestions,
@@ -123,9 +126,10 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                     children: [
                       Text(
                         'Assigned Check-In Questionnaire',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
                       if (_activeCheckInId != null) ...[
                         const SizedBox(height: 4),
@@ -138,9 +142,8 @@ class _PatientVirtualCheckInState extends State<PatientVirtualCheckIn> {
                         Text(_error!, style: const TextStyle(color: Colors.red))
                       else
                         ..._assignedQuestions.map((q) {
-                          final requiredLabel = q.required
-                              ? 'Required'
-                              : 'Optional';
+                          final requiredLabel =
+                              q.required ? 'Required' : 'Optional';
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 10),
                             child: Row(

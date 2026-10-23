@@ -126,32 +126,34 @@ class _SkeletonPlaybackWidgetState extends State<SkeletonPlaybackWidget>
             confidence: prob.clamp(0, 255) / 255.0,
           );
         }
-        loaded.add(FrameData(points: framePoints, durationMs: math.max(16, msDelta)));
+        loaded.add(
+            FrameData(points: framePoints, durationMs: math.max(16, msDelta)));
       }
 
       ui.Image? bg;
-     try {
-  final http.Response resp = await http.get(Uri.parse(bgUrl));
+      try {
+        final http.Response resp = await http.get(Uri.parse(bgUrl));
 
-  // --- ADD THESE LINES ---
-  debugPrint("Response Status Code: ${resp.statusCode}");
-  debugPrint("Response Body: ${resp.body}");
-  // ---------------------
+        // --- ADD THESE LINES ---
+        debugPrint("Response Status Code: ${resp.statusCode}");
+        debugPrint("Response Body: ${resp.body}");
+        // ---------------------
 
-  // If the status code is not 200, the rest will fail.
-  if (resp.statusCode == 200) {
-    final ui.Codec codec = await ui.instantiateImageCodec(resp.bodyBytes);
-    final ui.FrameInfo fi = await codec.getNextFrame();
-    bg = fi.image;
-  } else {
-    debugPrint("Failed to load image. Status code: ${resp.statusCode}");
-  }
-} catch (e) {
-  debugPrint("Background load error: $e");
-}
+        // If the status code is not 200, the rest will fail.
+        if (resp.statusCode == 200) {
+          final ui.Codec codec = await ui.instantiateImageCodec(resp.bodyBytes);
+          final ui.FrameInfo fi = await codec.getNextFrame();
+          bg = fi.image;
+        } else {
+          debugPrint("Failed to load image. Status code: ${resp.statusCode}");
+        }
+      } catch (e) {
+        debugPrint("Background load error: $e");
+      }
       // Match JS setInterval behavior with a uniform frame time
       final totalMs = loaded.fold<int>(0, (s, f) => s + f.durationMs);
-      final uniform = (totalMs / math.max(1, loaded.length)).clamp(16, 200).round();
+      final uniform =
+          (totalMs / math.max(1, loaded.length)).clamp(16, 200).round();
       final normalized = loaded
           .map((f) => FrameData(points: f.points, durationMs: uniform))
           .toList();
@@ -213,39 +215,29 @@ class SkeletonPainter extends CustomPainter {
   static const Map<String, Color> _col = {
     'white': Colors.white,
     'torsoFill': Color(0xFF7DB3FF),
-
     'shoulder': Color(0xFFF7B267),
-
     'rArm1': Color(0xFFFFD166),
     'rArm2': Color(0xFFFFE08A),
-
     'lArm1': Color(0xFFFF7F66),
     'lArm2': Color(0xFFFFA08A),
-
     'rHipChain': Color(0xFF4ECDC4),
     'rKnee': Color(0xFF58E0D8),
     'rAnkle': Color(0xFFA7FFF5),
-
     'lHipChain': Color(0xFFEF476F),
     'lKnee': Color(0xFFF26A8A),
     'lAnkle': Color(0xFFFF9BB1),
-
     'purple': Color(0xFF800080),
     'violet': Color(0xFF8A2BE2),
-
     'pink': Color(0xFFFFC0CB),
     'yellow': Colors.yellow,
     'lightYellow': Color(0xFFFFFFE0),
-
     'orange': Colors.orange,
     'darkSalmon': Color(0xFFE9967A),
     'salmon': Color(0xFFFA8072),
     'lightSalmon': Color(0xFFFFA07A),
-
     'darkTurquoise': Color(0xFF00CED1),
     'turquoise': Color(0xFF40E0D0),
     'paleTurquoise': Color(0xFFAFEEEE),
-
     'darkRed': Color(0xFF8B0000),
     'red': Colors.red,
   };
@@ -419,8 +411,8 @@ class SkeletonPainter extends CustomPainter {
     canvas.drawLine(a.offset, b.offset, paint);
   }
 
-  void _dot(Canvas canvas, Paint paint, _ScaledPoint? p, double radius,
-      Color color) {
+  void _dot(
+      Canvas canvas, Paint paint, _ScaledPoint? p, double radius, Color color) {
     if (p == null) return;
     paint
       ..color = color.withOpacity(p.confidence.clamp(0.25, 1.0))

@@ -25,9 +25,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 @RestController
-
-@RequestMapping("/oauth")
-
 @RequiredArgsConstructor
 
 @Slf4j
@@ -66,7 +63,7 @@ public class EmailOAuthController {
      * from {@code GET /v1/api/email-credentials/gmail/connect-url} (JWT-authenticated).
      */
 
-    @GetMapping("/google/start")
+    @GetMapping("/oauth/google/start")
 
     public ResponseEntity<Void> start(@RequestParam String startToken) {
 
@@ -110,7 +107,7 @@ public class EmailOAuthController {
 
     }
 
-    @GetMapping("/google/callback")
+    @GetMapping("/oauth/google/callback")
 
     public ResponseEntity<Void> callback(@RequestParam String code, @RequestParam String state) {
 

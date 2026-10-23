@@ -1,0 +1,35 @@
+requirements:
+  - M3-REQ-01
+  - M3-REQ-02
+  - M3-REQ-04
+  - M3-REQ-12
+scenarios:
+  - M3-SC-MAP-001
+  - M3-SC-MAP-002
+origin: hand-edited-sanitized-capture
+sandbox: oracle-health-open-fhir-r4
+capturedAt: "2026-10-02"
+capturedBy: Tiffany Obi
+captureRequest: AllergyIntolerance?patient=<synthetic-patient-id>
+httpStatus: 200
+bundleEntryCount: 3
+derivedFrom: patient-allergy-search-2026-10-02
+purpose: >-
+  Provide the primary multi-record happy-path input with active, confirmed
+  medication, environment, and food allergies; coded substances; multiple
+  reactions; reaction severity; criticality; and onset precision.
+sanitizationChanges:
+  - Selected three representative active, confirmed records from the 85-entry sandbox response.
+  - Replaced all Bundle, allergy, version, patient, practitioner, and reaction identifiers.
+  - Replaced Oracle Health sandbox, code-set, extension, and resource URLs with example.test URLs.
+  - Removed generated XHTML narratives, encounter references, notes, and contained practitioner details not needed by this scenario.
+  - Replaced patient and practitioner display values with clearly synthetic labels.
+expectedBehaviorSummary: >-
+  Produce three normalized allergy records and preserve every approved field,
+  source identity, coding, category, criticality, reaction cardinality, severity,
+  and applicable dates without inventing absent values.
+expectedOutputStatus: pending-canonical-model-and-openapi-1.0
+reviewedBy: TBD
+consumers:
+  - TBD AllergyIntolerance mapper complete multi-record test
+  - TBD Cerner AllergyIntolerance integration happy-path test

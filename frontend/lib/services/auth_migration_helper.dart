@@ -21,7 +21,8 @@ class MigrationResult {
 
 /// Utility to migrate from old token storage to new unified system
 class AuthMigrationHelper {
-  static const FlutterSecureStorage _storage = FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
+  static const FlutterSecureStorage _storage =
+      FlutterSecureStorage(webOptions: WebOptions.defaultOptions);
 
   static Future<String?> _read(String key) async {
     if (kIsWeb) {

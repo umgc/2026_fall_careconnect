@@ -9,13 +9,16 @@ class WebUtils {
     if (!kIsWeb) return;
 
     // Set viewport meta tag for better responsive behavior
-    final meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement?;
+    final meta =
+        document.querySelector('meta[name="viewport"]') as HTMLMetaElement?;
     if (meta != null) {
-      meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      meta.content =
+          'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     } else {
       final viewportMeta = HTMLMetaElement()
         ..name = 'viewport'
-        ..content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        ..content =
+            'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
       document.head!.append(viewportMeta);
     }
   }
@@ -73,7 +76,8 @@ class WebUtils {
   static void setThemeColor(String color) {
     if (!kIsWeb) return;
 
-    var themeColor = document.querySelector('meta[name="theme-color"]') as HTMLMetaElement?;
+    var themeColor =
+        document.querySelector('meta[name="theme-color"]') as HTMLMetaElement?;
     if (themeColor == null) {
       themeColor = HTMLMetaElement()
         ..name = 'theme-color'

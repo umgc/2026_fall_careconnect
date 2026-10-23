@@ -19,6 +19,7 @@ Widget _wrap() {
     mockUser: MockUser(id: 1, role: 'PATIENT', patientId: null),
   );
   return MaterialApp(
+    locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(

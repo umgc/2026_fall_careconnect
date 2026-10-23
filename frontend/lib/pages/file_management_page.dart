@@ -161,7 +161,9 @@ class _FileManagementPageState extends State<FileManagementPage>
     final user = userProvider.user;
     final t = AppLocalizations.of(context)!;
     if (user == null) {
-      Future.microtask(() => Navigator.pushReplacementNamed(context, '/login'));
+      // This is a GoRouter app; use context.go (Navigator named routes are not
+      // registered, so pushReplacementNamed('/login') throws in production).
+      Future.microtask(() => context.go('/login'));
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final isAdmin = user.role.toUpperCase() == 'ADMIN';
@@ -856,6 +858,10 @@ class _FileManagementPageState extends State<FileManagementPage>
     }
   }
 
+  // TODO: the inline PopupMenuButton.onSelected replaced this
+  // handler, so download/delete show "coming soon" and preview does
+  // nothing although _downloadFile/_previewFile/_deleteFile exist.
+  // ignore: unused_element
   void _handleFileAction(String action, UserFileDTO file) async {
     switch (action) {
       case 'download':
@@ -1055,9 +1061,5 @@ class _FileManagementPageState extends State<FileManagementPage>
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
   }
 }

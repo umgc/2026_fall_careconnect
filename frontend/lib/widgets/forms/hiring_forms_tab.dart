@@ -176,7 +176,8 @@ class _FormDetailPageState extends State<_FormDetailPage> {
       if (response != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${t.hiringformtab_filed} "${d.title}" ${t.hiringformtab_under} ${d.fileCategory}'),
+            content: Text(
+                '${t.hiringformtab_filed} "${d.title}" ${t.hiringformtab_under} ${d.fileCategory}'),
             backgroundColor: AppTheme.success,
           ),
         );
@@ -187,7 +188,9 @@ class _FormDetailPageState extends State<_FormDetailPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${t.hiringformtab_uploadFailed}: $e'), backgroundColor: AppTheme.error),
+        SnackBar(
+            content: Text('${t.hiringformtab_uploadFailed}: $e'),
+            backgroundColor: AppTheme.error),
       );
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -259,8 +262,10 @@ class _FormDetailPageState extends State<_FormDetailPage> {
                   '${d.sourceFormNumber}'
                   '${d.sourceEdition != null ? ' (${d.sourceEdition})' : ''}'),
             _metaRow(t.hiringformtab_version, d.version),
-            if (d.effectiveDate != null) _metaRow(t.hiringformtab_effectiveDate, d.effectiveDate!),
-            if (d.expirationDate != null) _metaRow(t.hiringformtab_expires, d.expirationDate!),
+            if (d.effectiveDate != null)
+              _metaRow(t.hiringformtab_effectiveDate, d.effectiveDate!),
+            if (d.expirationDate != null)
+              _metaRow(t.hiringformtab_expires, d.expirationDate!),
             _metaRow(t.hiringformtab_filedAs, d.fileCategory),
             if (d.description != null) ...[
               const SizedBox(height: 8),
@@ -287,7 +292,8 @@ class _FormDetailPageState extends State<_FormDetailPage> {
           ),
           Expanded(
             child: Text(value,
-                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
           ),
         ],
       ),
@@ -306,7 +312,8 @@ class _FormDetailPageState extends State<_FormDetailPage> {
           padding: const EdgeInsets.only(top: 4),
           child: Wrap(spacing: 6, children: [
             if (section.completedBy != null)
-              _miniTag('${t.hiringformtab_by} ${section.completedBy!.toLowerCase()}'),
+              _miniTag(
+                  '${t.hiringformtab_by} ${section.completedBy!.toLowerCase()}'),
             if (!section.required) _miniTag('optional'),
             if (section.repeatable) _miniTag('repeatable'),
             _miniTag('${section.fields.length} fields'),
@@ -314,7 +321,9 @@ class _FormDetailPageState extends State<_FormDetailPage> {
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
         children: [
-          for (final field in [...section.fields]..sort((a, b) => a.order.compareTo(b.order)))
+          for (final field in [
+            ...section.fields
+          ]..sort((a, b) => a.order.compareTo(b.order)))
             _fieldRow(field),
         ],
       ),
@@ -339,20 +348,24 @@ class _FormDetailPageState extends State<_FormDetailPage> {
               Expanded(
                 child: RichText(
                   text: TextSpan(
-                    style: DefaultTextStyle.of(context).style.copyWith(fontSize: 14),
+                    style: DefaultTextStyle.of(context)
+                        .style
+                        .copyWith(fontSize: 14),
                     children: [
                       TextSpan(text: field.label),
                       if (field.required)
                         const TextSpan(
                             text: ' *',
                             style: TextStyle(
-                                color: AppTheme.error, fontWeight: FontWeight.bold)),
+                                color: AppTheme.error,
+                                fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
               ),
               if (field.sensitive)
-                const Icon(Icons.lock_outline, size: 14, color: AppTheme.textSecondary),
+                const Icon(Icons.lock_outline,
+                    size: 14, color: AppTheme.textSecondary),
               const SizedBox(width: 6),
               _miniTag(field.fieldType.display),
             ],
@@ -388,7 +401,8 @@ class _FormDetailPageState extends State<_FormDetailPage> {
                           fontSize: 11, color: AppTheme.textSecondary)),
                 if (field.sourceMapping != null &&
                     field.sourceMapping!.label.isNotEmpty)
-                  Text('${t.hiringformtab_source}: ${field.sourceMapping!.label}',
+                  Text(
+                      '${t.hiringformtab_source}: ${field.sourceMapping!.label}',
                       style: const TextStyle(
                           fontSize: 11,
                           color: AppTheme.textSecondary,

@@ -14,7 +14,7 @@ class EmailMessage {
   final String id;
   final DateTime expectedAt;
   final List<String>
-  imageUrls; // Inline/attachment image URLs or local file URIs
+      imageUrls; // Inline/attachment image URLs or local file URIs
   final String? sender;
   final String? summary;
 
@@ -108,8 +108,7 @@ Map<DateTime, List<String>> groupImagesByDate(List<EmailMessage> emails) {
   return result;
 }
 
-String _dayKey(DateTime dt) =>
-    '${dt.year.toString().padLeft(4, '0')}-'
+String _dayKey(DateTime dt) => '${dt.year.toString().padLeft(4, '0')}-'
     '${dt.month.toString().padLeft(2, '0')}-'
     '${dt.day.toString().padLeft(2, '0')}';
 
@@ -340,8 +339,8 @@ class _InformedDeliveryScreenState extends State<InformedDeliveryScreen> {
       final String s => _looseJsonDecode(s),
       final Map m => m.map((k, v) => MapEntry(k.toString(), v)),
       _ => throw ArgumentError(
-        'Unsupported response type: ${response.runtimeType}',
-      ),
+          'Unsupported response type: ${response.runtimeType}',
+        ),
     };
 
     DateTime parseDate(Object? v) {
@@ -412,9 +411,8 @@ class _InformedDeliveryScreenState extends State<InformedDeliveryScreen> {
   }
 
   Widget _buildInformedDeliveryView() {
-    final Map<DateTime, List<String>> activeByDate = _isSearching
-        ? _filteredImagesByDate
-        : _imagesByDate;
+    final Map<DateTime, List<String>> activeByDate =
+        _isSearching ? _filteredImagesByDate : _imagesByDate;
 
     final hasDays = activeByDate.isNotEmpty;
 
@@ -524,11 +522,11 @@ class _InformedDeliveryScreenState extends State<InformedDeliveryScreen> {
                   child: GridView.builder(
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 8,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 0.8,
-                        ),
+                      crossAxisCount: 8,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 0.8,
+                    ),
                     itemCount: selectedImages.length,
                     itemBuilder: (context, index) {
                       final url = selectedImages[index];
@@ -714,7 +712,8 @@ class _ImageTile extends StatelessWidget {
 
     return Semantics(
       label: [
-        if (sender != null && sender!.trim().isNotEmpty) 'From ${sender!.trim()}',
+        if (sender != null && sender!.trim().isNotEmpty)
+          'From ${sender!.trim()}',
         if (summary != null && summary!.trim().isNotEmpty) summary!.trim(),
       ].join('. '),
       child: Card(
@@ -803,8 +802,8 @@ class _EmptyState extends StatelessWidget {
           Text(
             'Pick another expected date from the dropdown above.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.outline,
-            ),
+                  color: Theme.of(context).colorScheme.outline,
+                ),
           ),
         ],
       ),
@@ -813,9 +812,8 @@ class _EmptyState extends StatelessWidget {
 }
 
 UspsDigest mergeDigests(UspsDigest a, UspsDigest b) {
-  final digestDate = (a.digestDate.isAfter(b.digestDate))
-      ? a.digestDate
-      : b.digestDate;
+  final digestDate =
+      (a.digestDate.isAfter(b.digestDate)) ? a.digestDate : b.digestDate;
 
   // --- Mailpieces: dedupe by id, keep the "real" one if collision ---
   final Map<String, UspsMailpiece> byId = {

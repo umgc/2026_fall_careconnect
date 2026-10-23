@@ -445,6 +445,20 @@ class AuthControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Verifies that GET /v1/api/auth/password/reset returns HTTP 400, not 500,
+     * when the token cannot be decoded at all.
+     */
+    @Test
+    void validateResetTokenShouldReturnBadRequestIfTokenCheckThrows() throws Exception {
+        when(reset.isTokenValid("garbage")).thenThrow(new IllegalArgumentException("bad base64"));
+
+        mockMvc.perform(get("/v1/api/auth/password/reset")
+                        .param("token", "garbage"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid or expired token"));
+    }
+
     // ==========================================
     // GOOGLE SSO
     // ==========================================

@@ -80,7 +80,8 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
   }
 
   Future<void> _pickDateRange() async {
-    final start = _startDate ?? DateTime.now().subtract(const Duration(days: 56));
+    final start =
+        _startDate ?? DateTime.now().subtract(const Duration(days: 56));
     final end = _endDate ?? DateTime.now();
     final picked = await showDialog<({DateTime start, DateTime end})>(
       context: context,
@@ -191,7 +192,9 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
         color = theme.colorScheme.outline;
         icon = Icons.trending_flat;
     }
-    final label = status == 'IMPROVING' ? 'Improving' : (status == 'DECLINING' ? 'Declining' : 'Stable');
+    final label = status == 'IMPROVING'
+        ? 'Improving'
+        : (status == 'DECLINING' ? 'Declining' : 'Stable');
     return Material(
       color: color.withOpacity(0.15),
       borderRadius: BorderRadius.circular(12),
@@ -257,7 +260,10 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
     final lineBars = <LineChartBarData>[];
     for (var i = 0; i < data.activityTrends.length; i++) {
       final trend = data.activityTrends[i];
-      final weekToScore = {for (var p in trend.dataPoints) p.weekStartDate: p.averageCompetencyScore};
+      final weekToScore = {
+        for (var p in trend.dataPoints)
+          p.weekStartDate: p.averageCompetencyScore
+      };
       final spots = <FlSpot>[];
       for (var wi = 0; wi < weekLabels.length; wi++) {
         final score = weekToScore[weekLabels[wi]];
@@ -292,7 +298,8 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
       children: [
         Text(
           'Average competency score by week',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         SizedBox(
@@ -308,8 +315,10 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
                 ),
               ),
               titlesData: FlTitlesData(
-                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 leftTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
@@ -337,7 +346,8 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
                       final i = value.toInt();
                       if (i >= 0 && i < weekLabels.length) {
                         final label = weekLabels[i];
-                        final short = label.length >= 10 ? label.substring(5, 10) : label;
+                        final short =
+                            label.length >= 10 ? label.substring(5, 10) : label;
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -353,7 +363,8 @@ class _CompetencyTrendScreenState extends State<CompetencyTrendScreen> {
               ),
               borderData: FlBorderData(
                 show: true,
-                border: Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
+                border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.3)),
               ),
               minX: 0,
               maxX: (weekLabels.length - 1).toDouble(),
@@ -437,7 +448,8 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
                 firstDate: DateTime(2020),
                 lastDate: DateTime.now(),
               );
-              if (picked != null && picked.isBefore(_end)) setState(() => _start = picked);
+              if (picked != null && picked.isBefore(_end))
+                setState(() => _start = picked);
             },
           ),
           ListTile(
@@ -462,7 +474,8 @@ class _DateRangePickerDialogState extends State<_DateRangePickerDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop((start: _start, end: _end)),
+          onPressed: () =>
+              Navigator.of(context).pop((start: _start, end: _end)),
           child: const Text('Apply'),
         ),
       ],

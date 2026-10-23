@@ -28,9 +28,8 @@ class Template {
   });
 
   factory Template.fromJson(Map<String, dynamic> json) {
-    String? timeOfDayStr = (json['timeOfDay'] != null
-        ? json['timeOfDay'] as String
-        : null);
+    String? timeOfDayStr =
+        (json['timeOfDay'] != null ? json['timeOfDay'] as String : null);
     final timeParts = timeOfDayStr?.split(':');
     TimeOfDay? recTime;
     if (timeParts != null && timeParts.length == 2) {
@@ -53,8 +52,8 @@ class Template {
       iconCode: json['icon'] ?? 0xe057, // <-- store codePoint
       notifications: (json['notifications'] != null
           ? (json['notifications'] as List)
-                .map((n) => ScheduledNotification.fromJson(n))
-                .toList()
+              .map((n) => ScheduledNotification.fromJson(n))
+              .toList()
           : null),
     );
   }
@@ -68,9 +67,8 @@ class Template {
       'taskInterval': interval,
       'doCount': count,
       'daysOfWeek': daysOfWeek,
-      'timeOfDay': timeOfDay != null
-          ? '${timeOfDay!.hour}:${timeOfDay!.minute}'
-          : null,
+      'timeOfDay':
+          timeOfDay != null ? '${timeOfDay!.hour}:${timeOfDay!.minute}' : null,
       'icon': iconCode, // <-- store codePoint
       'notifications': notifications?.map((n) => n.toJson()).toList(),
     };

@@ -2,11 +2,13 @@ package com.careconnect.controller;
 
 import com.careconnect.dto.AiRetrievalConsentRequest;
 import com.careconnect.dto.AiRetrievalConsentResponse;
+import com.careconnect.dto.MedicareViewConsentRequest;
+import com.careconnect.dto.MedicareViewConsentResponse;
 import com.careconnect.exception.AppException;
 import com.careconnect.model.ConsentGrant;
 import com.careconnect.model.User;
 import com.careconnect.security.Role;
-import com.careconnect.service.ConsentService;
+import com.careconnect.service.consent.ConsentService;
 import com.careconnect.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -39,6 +41,9 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class ConsentController {
 
+    private static final String AI_RETRIEVAL_CONSENT = "AI retrieval consent";
+    private static final String MEDICARE_VIEW_CONSENT = "Medicare View consent";
+
     private final ConsentService consentService;
     private final SecurityUtil securityUtil;
 
@@ -49,7 +54,7 @@ public class ConsentController {
     @Operation(summary = "Grant AI-retrieval consent to a caregiver")
     public ResponseEntity<AiRetrievalConsentResponse> grantAiRetrieval(
             @RequestBody final AiRetrievalConsentRequest request) {
-        final User patient = requirePatientCaller();
+        final User patient = requirePatientCaller(AI_RETRIEVAL_CONSENT);
         if (request == null || request.granteeUserId() == null) {
             throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
         }
@@ -69,7 +74,7 @@ public class ConsentController {
     @Operation(summary = "Revoke AI-retrieval consent previously granted to a caregiver")
     public ResponseEntity<Map<String, Object>> revokeAiRetrieval(
             @RequestBody final AiRetrievalConsentRequest request) {
-        final User patient = requirePatientCaller();
+        final User patient = requirePatientCaller(AI_RETRIEVAL_CONSENT);
         if (request == null || request.granteeUserId() == null) {
             throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
         }
@@ -108,11 +113,77 @@ public class ConsentController {
                 "effectiveConsent", effectiveConsent));
     }
 
-    private User requirePatientCaller() {
+    @PostMapping(
+            value = "/medicare-view",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Grant Medicare View consent to a caregiver")
+    public ResponseEntity<MedicareViewConsentResponse> grantMedicareView(
+            @RequestBody final MedicareViewConsentRequest request) {
+        final User patient = requirePatientCaller(MEDICARE_VIEW_CONSENT);
+        if (request == null || request.granteeUserId() == null) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
+        }
+        final ConsentGrant grant = consentService.grantMedicareViewConsent(
+                patient.getId(),
+                request.granteeUserId(),
+                request.granteeRole(),
+                request.expiresAt());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(MedicareViewConsentResponse.from(grant));
+    }
+
+    @DeleteMapping(
+            value = "/medicare-view",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Revoke Medicare View consent previously granted to a caregiver")
+    public ResponseEntity<Map<String, Object>> revokeMedicareView(
+            @RequestBody final MedicareViewConsentRequest request) {
+        final User patient = requirePatientCaller(MEDICARE_VIEW_CONSENT);
+        if (request == null || request.granteeUserId() == null) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "granteeUserId is required");
+        }
+        final Long granteeUserId = request.granteeUserId();
+        final int revoked =
+                consentService.revokeMedicareViewConsent(patient.getId(), granteeUserId);
+        return ResponseEntity.ok(Map.of(
+                "patientUserId", patient.getId(),
+                "granteeUserId", granteeUserId,
+                "revokedCount", revoked));
+    }
+
+    @GetMapping(value = "/medicare-view", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Check whether Medicare View consent is currently active")
+    public ResponseEntity<Map<String, Object>> checkMedicareView(
+            @RequestParam final Long patientUserId,
+            @RequestParam final Long granteeUserId) {
+        final User caller = requireAuthenticatedCaller();
+        // Patient may check their own grants; grantee may check grants issued to them.
+        final boolean selfPatient = caller.getId().equals(patientUserId);
+        final boolean selfGrantee = caller.getId().equals(granteeUserId);
+        if (!selfPatient && !selfGrantee && caller.getRole() != Role.ADMIN) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Not allowed to inspect this consent");
+        }
+        final boolean explicitGrant =
+                consentService.isMedicareViewConsentGranted(granteeUserId, patientUserId);
+        final boolean effectiveConsent =
+                consentService.isEffectiveMedicareViewConsent(granteeUserId, patientUserId);
+        return ResponseEntity.ok(Map.of(
+                "patientUserId", patientUserId,
+                "granteeUserId", granteeUserId,
+                // Medicare View has no care-circle fallback (BR-02): `granted` is the explicit
+                // grant MedicareAccessPolicy checks on each read, so all three flags agree.
+                "granted", effectiveConsent,
+                "explicitGrant", explicitGrant,
+                "effectiveConsent", effectiveConsent));
+    }
+
+    private User requirePatientCaller(final String consentName) {
         final User caller = requireAuthenticatedCaller();
         if (caller.getRole() != Role.PATIENT) {
             throw new AppException(
-                    HttpStatus.FORBIDDEN, "Only the patient may manage AI retrieval consent");
+                    HttpStatus.FORBIDDEN, "Only the patient may manage " + consentName);
         }
         return caller;
     }

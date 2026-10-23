@@ -45,14 +45,6 @@ class _MoodWellnessCheckInState extends State<MoodWellnessCheckIn> {
   // FIX: Make the method async and add proper error handling
   Future<void> _submitMoodLog() async {
     final now = DateTime.now();
-    final moodEntry = {
-      'timestamp': now.toIso8601String(),
-      'moodValue': _moodValue.toInt(),
-      'moodEmoji': moodEmojis[_moodValue.toInt()] ?? '',
-      'painValue': _painValue.toInt(),
-      'painEmoji': painEmojis[_painValue.toInt()] ?? '',
-      'note': _noteController.text.trim(),
-    };
 
     // Show loading state
     setState(() {

@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -48,9 +47,6 @@ class UspsDigestControllerTest {
     @Mock
     private UspsPatientResolver patientResolver;
 
-    @Mock
-    private Jwt jwt;
-
     @InjectMocks
     private UspsDigestController controller;
 
@@ -79,7 +75,7 @@ class UspsDigestControllerTest {
         when(uspsDigestService.digestForDate("1", date)).thenReturn(Optional.of(d));
 
         final ResponseEntity<USPSDigest> response =
-                controller.getLatestDigest(jwt, "user1@example.com", null, date);
+                controller.getLatestDigest("user1@example.com", null, date);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(d);
@@ -93,7 +89,7 @@ class UspsDigestControllerTest {
         when(uspsDigestService.latestForUser("1")).thenReturn(Optional.of(d));
 
         final ResponseEntity<USPSDigest> response =
-                controller.getLatestDigest(jwt, "patient@example.com", null, null);
+                controller.getLatestDigest("patient@example.com", null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(uspsDigestService).latestForUser("1");
@@ -105,7 +101,7 @@ class UspsDigestControllerTest {
         when(patientResolver.resolvePatient(null, "1", mockCaller)).thenReturn(mockPatient);
         when(uspsDigestService.latestForUser("1")).thenReturn(Optional.of(d));
 
-        final ResponseEntity<USPSDigest> response = controller.getLatestDigest(jwt, null, "1", null);
+        final ResponseEntity<USPSDigest> response = controller.getLatestDigest(null, "1", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(uspsDigestService).latestForUser("1");
@@ -117,7 +113,7 @@ class UspsDigestControllerTest {
         when(patientResolver.resolvePatient(null, null, mockCaller)).thenReturn(mockCaller);
         when(uspsDigestService.latestForUser("99")).thenReturn(Optional.of(d));
 
-        final ResponseEntity<USPSDigest> response = controller.getLatestDigest(jwt, null, null, null);
+        final ResponseEntity<USPSDigest> response = controller.getLatestDigest(null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         verify(authorizationService).requirePatientAccess(mockCaller, 99L);
@@ -129,7 +125,7 @@ class UspsDigestControllerTest {
         when(uspsDigestService.latestForUser("1")).thenReturn(Optional.empty());
 
         final ResponseEntity<USPSDigest> response =
-                controller.getLatestDigest(jwt, "patient@example.com", null, null);
+                controller.getLatestDigest("patient@example.com", null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
@@ -140,7 +136,7 @@ class UspsDigestControllerTest {
         when(uspsDigestService.search("1", "invoice")).thenReturn(results);
 
         final ResponseEntity<List<Map<String, Object>>> response =
-                controller.search(jwt, "user1@example.com", null, "invoice");
+                controller.search("user1@example.com", null, "invoice");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(results);
@@ -171,11 +167,22 @@ class UspsDigestControllerTest {
     void clearCache_returnsOkWithMessage() throws Exception {
         doNothing().when(uspsDigestService).clearCacheForUser("1");
 
-        final ResponseEntity<String> response = controller.clearCache(jwt, "user1@example.com", null);
+        final ResponseEntity<String> response = controller.clearCache("user1@example.com", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).contains("user1@example.com");
         verify(uspsDigestService).clearCacheForUser("1");
+    }
+
+    @Test
+    void getLatestDigest_noAuthenticatedUser_throwsUnauthorized() {
+        when(securityUtil.resolveCurrentUser()).thenReturn(null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> controller.getLatestDigest("patient@example.com", null, null))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasMessageContaining("Missing or invalid authentication token");
+        verifyNoInteractions(patientResolver, uspsDigestService);
     }
 
     @Test
@@ -184,7 +191,7 @@ class UspsDigestControllerTest {
                 .when(authorizationService).requirePatientAccess(mockCaller, 1L);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> controller.getLatestDigest(jwt, "patient@example.com", null, null))
+                        () -> controller.getLatestDigest("patient@example.com", null, null))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("not assigned");
     }

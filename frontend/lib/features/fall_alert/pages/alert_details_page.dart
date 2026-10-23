@@ -1,237 +1,242 @@
 import 'package:care_connect_app/features/fall_alert/pages/skeleton_playback_widget.dart';
-import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart'; 
+import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
+import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/fall_alert.dart';
-
- 
 
 class AlertDetailsPage extends StatelessWidget {
   static const routeName = '/alert-details';
   final FallAlert alert;
 
-  const AlertDetailsPage({super.key,  required this.alert});
+  const AlertDetailsPage({super.key, required this.alert});
 
- @override
-Widget build(BuildContext context) {
-  final theme = Theme.of(context);
-  final cs = theme.colorScheme;
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-  final now = DateTime.now().toUtc();
-  final timeAgo = _formatTimeAgo(now.difference(alert.detectedAtUtc));
-  final bool hasPlayback = alert.playbackData != null;
+    final now = DateTime.now().toUtc();
+    final timeAgo = _formatTimeAgo(now.difference(alert.detectedAtUtc));
+    final bool hasPlayback = alert.playbackData != null;
 
-  return Scaffold(
-    // was const Color(0xFF0F172A)
-    backgroundColor: cs.surface,
-    appBar: AppBar(
-      // was const Color(0xFF111827)
-      backgroundColor: theme.appBarTheme.backgroundColor ?? cs.surface,
-      foregroundColor: theme.appBarTheme.foregroundColor ?? cs.onSurface,
-      title: const Text('Fall Alert'),
-    ),
-    body: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.12)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Patient may need help.',
-                    style: theme.textTheme.bodyMedium!.copyWith(
-                      color: cs.error,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Patient card
-          Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.only(top: 16),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundColor: cs.secondaryContainer,
-                  child: Text(
-                    _initials(alert.patientName),
-                    style: theme.textTheme.titleMedium!.copyWith(
-                      color: cs.onSecondaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(alert.patientName,
-                          style: theme.textTheme.titleMedium!
-                              .copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(Icons.videocam_outlined,
-                              size: 16, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                    const Expanded(  
-                        child: Text( 
-                          'camera',
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.access_time,
-                              size: 16, color: cs.onSurfaceVariant),
-                          const SizedBox(width: 6),
-                        Expanded(  
-                                child: Text(
-                                  timeAgo,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-                              ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _openPatientDetails(context),
-                  icon: const Icon(Icons.person_outline, size: 18),
-                  label: const Text('View Details'),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          if (now.difference(alert.detectedAtUtc) > const Duration(minutes: 2))
+    return Scaffold(
+      // was const Color(0xFF0F172A)
+      backgroundColor: cs.surface,
+      appBar: AppBar(
+        // was const Color(0xFF111827)
+        backgroundColor: theme.appBarTheme.backgroundColor ?? cs.surface,
+        foregroundColor: theme.appBarTheme.foregroundColor ?? cs.onSurface,
+        title: const Text('Fall Alert'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Header
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: cs.error,
-                borderRadius: BorderRadius.circular(20),
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.12)),
               ),
-              child: Text('No response from patient',
-                  style: theme.textTheme.bodyMedium!
-                      .copyWith(color: cs.onError, fontWeight: FontWeight.w600)),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Patient may need help.',
+                      style: theme.textTheme.bodyMedium!.copyWith(
+                        color: cs.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          if (now.difference(alert.detectedAtUtc) > const Duration(minutes: 2))
-            const SizedBox(height: 16),
 
-          if (hasPlayback) ...[
-            const _SectionTitle('Fall Playback'),
-            const SizedBox(height: 8),
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: Colors.black,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
-                ),
-                child: SkeletonPlaybackWidget(sampleResponse: alert.playbackData!),
+            // Patient card
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: cs.secondaryContainer,
+                    child: Text(
+                      _initials(alert.patientName),
+                      style: theme.textTheme.titleMedium!.copyWith(
+                        color: cs.onSecondaryContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(alert.patientName,
+                            style: theme.textTheme.titleMedium!
+                                .copyWith(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.videocam_outlined,
+                                size: 16, color: cs.onSurfaceVariant),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'camera',
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(Icons.access_time,
+                                size: 16, color: cs.onSurfaceVariant),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                timeAgo,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _openPatientDetails(context),
+                    icon: const Icon(Icons.person_outline, size: 18),
+                    label: const Text('View Details'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 18),
-          ] else ...[
+
+            const SizedBox(height: 12),
+
+            if (now.difference(alert.detectedAtUtc) >
+                const Duration(minutes: 2))
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.error,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('No response from patient',
+                    style: theme.textTheme.bodyMedium!.copyWith(
+                        color: cs.onError, fontWeight: FontWeight.w600)),
+              ),
+            if (now.difference(alert.detectedAtUtc) >
+                const Duration(minutes: 2))
+              const SizedBox(height: 16),
+
+            if (hasPlayback) ...[
+              const _SectionTitle('Fall Playback'),
+              const SizedBox(height: 8),
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: theme.dividerColor.withOpacity(0.10)),
+                  ),
+                  child: SkeletonPlaybackWidget(
+                      sampleResponse: alert.playbackData!),
+                ),
+              ),
+              const SizedBox(height: 18),
+            ] else ...[
+              _ActionButton(
+                icon: Icons.videocam_off,
+                label: 'Playback Unavailable',
+                onPressed: null,
+                background: Colors.transparent,
+                border: cs.primary,
+                textColor: cs.primary,
+              ),
+              const SizedBox(height: 10),
+            ],
+
             _ActionButton(
-              icon: Icons.videocam_off,
-              label: 'Playback Unavailable',
-              onPressed: null,
-              background: Colors.transparent,
-              border: cs.primary,
-              textColor: cs.primary,
+              icon: Icons.call,
+              label: 'Call Patient',
+              onPressed: () => _callPatient(context),
+              background: cs.primary,
+              textColor: cs.onPrimary,
             ),
             const SizedBox(height: 10),
+            _ActionButton(
+              icon: Icons.message_outlined,
+              label: 'Send Message',
+              onPressed: () => _messagePatient(context),
+              background: cs.surface,
+              border: theme.dividerColor.withOpacity(0.24),
+              textColor: cs.onSurface,
+            ),
+            const SizedBox(height: 10),
+            _ActionButton(
+              icon: Icons.emergency_share_rounded,
+              label: 'Contact Emergency Services',
+              onPressed: () => _alertEmergency(context),
+              background: cs.error,
+              textColor: cs.onError,
+            ),
+            const SizedBox(height: 18),
+
+            // Details
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _SectionTitle('Details'),
+                  _MetaRow(
+                      'Detected at', alert.detectedAtUtc.toLocal().toString()),
+                  _MetaRow('Source', alert.source),
+                  _MetaRow(
+                      'Patient phone', alert.patientPhone ?? 'Not available'),
+                  _MetaRow(
+                      'Playback', hasPlayback ? 'Available' : 'Not available'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
           ],
-
-          _ActionButton(
-            icon: Icons.call,
-            label: 'Call Patient',
-            onPressed: () => _callPatient(context),
-            background: cs.primary,
-            textColor: cs.onPrimary,
-          ),
-          const SizedBox(height: 10),
-          _ActionButton(
-            icon: Icons.message_outlined,
-            label: 'Send Message',
-            onPressed: () => _messagePatient(context),
-            background: cs.surface,
-            border: theme.dividerColor.withOpacity(0.24),
-            textColor: cs.onSurface,
-          ),
-          const SizedBox(height: 10),
-          _ActionButton(
-            icon: Icons.emergency_share_rounded,
-            label: 'Contact Emergency Services',
-            onPressed: () => _alertEmergency(context),
-            background: cs.error,
-            textColor: cs.onError,
-          ),
-          const SizedBox(height: 18),
-
-          // Details
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.dividerColor.withOpacity(0.10)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionTitle('Details'),
-                _MetaRow('Detected at', alert.detectedAtUtc.toLocal().toString()),
-                _MetaRow('Source', alert.source),
-                _MetaRow('Patient phone', alert.patientPhone ?? 'Not available'),
-                _MetaRow('Playback', hasPlayback ? 'Available' : 'Not available'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
-    ),
-  );
-}
-
- 
+    );
+  }
 
   Future<void> _callPatient(BuildContext context) async {
     final phone = alert.patientPhone;
@@ -247,12 +252,17 @@ Widget build(BuildContext context) {
 
   Future<void> _messagePatient(BuildContext context) async {
     final phone = alert.patientPhone;
-    final message = 'I got an alert that you may have fallen. Are you okay? Please reply or call me if you need help.' ;
+    final message =
+        'I got an alert that you may have fallen. Are you okay? Please reply or call me if you need help.';
     if (phone == null || phone.isEmpty) {
       _toast(context, 'No phone number available');
       return;
     }
-    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': message},);
+    final uri = Uri(
+      scheme: 'sms',
+      path: phone,
+      queryParameters: {'body': message},
+    );
     if (!await launchUrl(uri)) {
       _toast(context, 'Message failed to start');
     }
@@ -265,14 +275,25 @@ Widget build(BuildContext context) {
       return;
     }
 
+    // A caregiver gets the caregiver page, Medicare tab included, as from the
+    // patient list (DEF-MCR-33). No signed-in user: the patient view.
+    var isCaregiver = false;
+    try {
+      isCaregiver =
+          Provider.of<UserProvider>(context, listen: false).isCaregiver;
+    } on ProviderNotFoundException {
+      isCaregiver = false;
+    }
+
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PatientDetailsPage(patientId: id),
+        builder: (_) =>
+            PatientDetailsPage(patientId: id, isCaregiver: isCaregiver),
         settings: const RouteSettings(name: '/patient-details'),
       ),
     );
   }
-  
+
   Future<void> _alertEmergency(BuildContext context) async {
     final emergencyNumber = '911'; // consider making this region-aware
     final contactName = alert.emergencyContactName ?? 'Emergency Contact';
@@ -280,10 +301,10 @@ Widget build(BuildContext context) {
 
     await showModalBottomSheet(
       context: context,
-       backgroundColor: Theme.of(context).colorScheme.surface,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return SafeArea(
           child: Padding(
@@ -296,7 +317,8 @@ Widget build(BuildContext context) {
                   contentPadding: EdgeInsets.zero,
                   title: Text(
                     'Emergency actions',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700),
                   ),
                   subtitle: Text(
                     'Choose how you want to escalate',
@@ -353,11 +375,12 @@ Widget build(BuildContext context) {
   // --- Helpers (Unchanged) ---
 
   static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    final parts =
+        name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return (parts[0][0] + parts.last[0]).toUpperCase();
-    }
+  }
 
   static String _formatTimeAgo(Duration d) {
     if (d.inSeconds < 60) return '${d.inSeconds}s ago';
@@ -384,7 +407,7 @@ class _EmergencyTile extends StatelessWidget {
     this.enabled = true,
   });
 
-   @override
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return ListTile(
@@ -392,17 +415,20 @@ class _EmergencyTile extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       tileColor: cs.surface,
       leading: CircleAvatar(
-        backgroundColor: enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
+        backgroundColor:
+            enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
         child: Icon(icon, color: cs.onSecondaryContainer),
       ),
-      title: Text(label, style: Theme.of(context).textTheme.bodyLarge!.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(label,
+          style: Theme.of(context)
+              .textTheme
+              .bodyLarge!
+              .copyWith(fontWeight: FontWeight.w600)),
       subtitle: subtitle != null ? Text(subtitle!) : null,
       onTap: enabled ? onTap : null,
     );
   }
 }
- 
-
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
@@ -444,7 +470,9 @@ class _ActionButton extends StatelessWidget {
             Icon(icon, color: effectiveText),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(label, style: TextStyle(color: effectiveText, fontWeight: FontWeight.w600)),
+              child: Text(label,
+                  style: TextStyle(
+                      color: effectiveText, fontWeight: FontWeight.w600)),
             ),
             if (trailing != null) Icon(trailing, color: effectiveText),
           ],
@@ -454,7 +482,7 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-  class _SectionTitle extends StatelessWidget {
+class _SectionTitle extends StatelessWidget {
   final String text;
   const _SectionTitle(this.text);
 
@@ -494,7 +522,8 @@ class _MetaRow extends StatelessWidget {
             width: 120,
             child: Text(
               label,
-              style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: cs.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 8),
@@ -503,7 +532,7 @@ class _MetaRow extends StatelessWidget {
               value,
               style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
               overflow: TextOverflow.ellipsis,
-              maxLines: 2,  
+              maxLines: 2,
             ),
           ),
         ],

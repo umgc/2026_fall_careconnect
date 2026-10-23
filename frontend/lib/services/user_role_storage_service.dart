@@ -48,7 +48,8 @@ class UserRoleStorageService {
     ]);
 
     if (kDebugMode) {
-      print('UserRoleStorageService: Stored user data - Role: $role, UserID: $userId');
+      print(
+          'UserRoleStorageService: Stored user data - Role: $role, UserID: $userId');
     }
   }
 

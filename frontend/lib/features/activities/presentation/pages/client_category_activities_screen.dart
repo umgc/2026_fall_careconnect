@@ -104,7 +104,8 @@ class _ClientCategoryActivitiesScreenState
           });
         }
       } else {
-        if (mounted) setState(() => _error = 'Failed to load: ${res.statusCode}');
+        if (mounted)
+          setState(() => _error = 'Failed to load: ${res.statusCode}');
       }
     } catch (e) {
       if (mounted) setState(() => _error = 'Error: $e');
@@ -113,8 +114,7 @@ class _ClientCategoryActivitiesScreenState
 
   Future<void> _loadManageData() async {
     try {
-      final res =
-          await ApiService.getActivities(category: widget.category);
+      final res = await ApiService.getActivities(category: widget.category);
       List<Activity> all = [];
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
@@ -131,7 +131,8 @@ class _ClientCategoryActivitiesScreenState
       if (clientRes.statusCode == 200) {
         final clientList = jsonDecode(clientRes.body) as List<dynamic>?;
         for (final e in clientList ?? []) {
-          final a = ClientActivity.fromJson(Map<String, dynamic>.from(e as Map));
+          final a =
+              ClientActivity.fromJson(Map<String, dynamic>.from(e as Map));
           if (a.category.toUpperCase() == widget.category.toUpperCase()) {
             configMap[a.id] = a;
           }
@@ -196,7 +197,9 @@ class _ClientCategoryActivitiesScreenState
   }
 
   List<ClientActivity> get _enabledForLog => _clientActivities
-      .where((a) => a.enabled && a.category.toUpperCase() == widget.category.toUpperCase())
+      .where((a) =>
+          a.enabled &&
+          a.category.toUpperCase() == widget.category.toUpperCase())
       .toList();
 
   bool _isEnabledForClient(int activityId) {
@@ -281,8 +284,11 @@ class _ClientCategoryActivitiesScreenState
             Text(
               widget.clientName,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.8),
+                  ),
             ),
           ],
         ),
@@ -305,7 +311,8 @@ class _ClientCategoryActivitiesScreenState
             ),
           ),
           Expanded(
-            child: _modeIndex == _modeLog ? _buildLogMode() : _buildManageMode(),
+            child:
+                _modeIndex == _modeLog ? _buildLogMode() : _buildManageMode(),
           ),
         ],
       ),

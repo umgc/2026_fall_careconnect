@@ -185,7 +185,8 @@ class _CommunicationHistoryCardState extends State<CommunicationHistoryCard> {
       final sentimentLabel = (event['sentimentLabel'] ?? '').toString().trim();
       final sentimentScore = (event['sentimentScore'] as num?)?.toDouble();
       final metadata = _extractJsonMap(event['metadataJson']);
-      final callKind = (metadata['callKind'] ?? '').toString().trim().toUpperCase();
+      final callKind =
+          (metadata['callKind'] ?? '').toString().trim().toUpperCase();
       final isCareTeamCall = callKind == 'CARE_TEAM';
 
       final existing = byCallId[rawCallId];
@@ -206,16 +207,16 @@ class _CommunicationHistoryCardState extends State<CommunicationHistoryCard> {
           isCareTeamCall: isCareTeamCall,
         );
       } else {
-        final hasFinal =
-            existing.finalSentimentLabel != null || existing.finalSentimentScore != null;
+        final hasFinal = existing.finalSentimentLabel != null ||
+            existing.finalSentimentScore != null;
         byCallId[rawCallId] = _CallSummary(
           callId: existing.callId,
           lastOccurredAt: occurredAt.isAfter(existing.lastOccurredAt)
               ? occurredAt
               : existing.lastOccurredAt,
           totalEvents: existing.totalEvents + 1,
-          sentimentEvents:
-              existing.sentimentEvents + (eventType.startsWith('SENTIMENT_') ? 1 : 0),
+          sentimentEvents: existing.sentimentEvents +
+              (eventType.startsWith('SENTIMENT_') ? 1 : 0),
           lastSentimentLabel: sentimentLabel.isNotEmpty
               ? sentimentLabel
               : existing.lastSentimentLabel,
@@ -227,7 +228,8 @@ class _CommunicationHistoryCardState extends State<CommunicationHistoryCard> {
           finalSentimentScore: hasFinal
               ? existing.finalSentimentScore
               : (eventType == 'SENTIMENT_FINAL' ? sentimentScore : null),
-          callOutcome: _resolveCallOutcomeFromEvent(eventType, existing.callOutcome),
+          callOutcome:
+              _resolveCallOutcomeFromEvent(eventType, existing.callOutcome),
           isCareTeamCall: existing.isCareTeamCall || isCareTeamCall,
         );
       }
@@ -281,7 +283,8 @@ class _CommunicationHistoryCardState extends State<CommunicationHistoryCard> {
     return scoreText ?? labelText;
   }
 
-  String _resolveCallOutcomeFromEvent(String eventType, String? existingOutcome) {
+  String _resolveCallOutcomeFromEvent(
+      String eventType, String? existingOutcome) {
     if (existingOutcome != null && existingOutcome != '--') {
       return existingOutcome;
     }

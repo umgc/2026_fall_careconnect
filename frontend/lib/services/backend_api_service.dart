@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import '../config/env_constant.dart';
 
 /// Service to integrate with your Spring Boot backend at localhost:8080
@@ -15,15 +16,15 @@ class BackendApiService {
   }
 
   static Map<String, String> get _headers {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Connection': 'keep-alive',
-        'Sec-Fetch-Dest': 'empty',
-        'Sec-Fetch-Mode': 'cors',
-        'Sec-Fetch-Site': 'same-site',
-      };
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Connection': 'keep-alive',
+      'Sec-Fetch-Dest': 'empty',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Site': 'same-site',
+    };
 
     if (_authToken != null) {
       headers['Authorization'] = 'Bearer $_authToken';
@@ -259,14 +260,15 @@ class BackendApiService {
         'endTime': endTime?.toIso8601String(),
         'wasAnswered': wasAnswered,
         'isVideoCall': isVideoCall,
-        'duration': endTime != null
-            ? endTime.difference(startTime).inSeconds
-            : 0,
+        'duration':
+            endTime != null ? endTime.difference(startTime).inSeconds : 0,
         'platform': kIsWeb
             ? 'web'
             : (defaultTargetPlatform == TargetPlatform.android
-                  ? 'android'
-                  : (defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'other')),
+                ? 'android'
+                : (defaultTargetPlatform == TargetPlatform.iOS
+                    ? 'ios'
+                    : 'other')),
       };
 
       print('📊 Logging call to backend: $callData');

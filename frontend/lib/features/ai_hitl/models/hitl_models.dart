@@ -21,7 +21,8 @@ class HitlQueueItem {
   factory HitlQueueItem.fromJson(Map<String, dynamic> json) {
     final heldItemId = json['heldItemId'];
     if (heldItemId is! String || heldItemId.trim().isEmpty) {
-      throw const FormatException('HITL queue heldItemId must be a non-empty string');
+      throw const FormatException(
+          'HITL queue heldItemId must be a non-empty string');
     }
     final patientIdRaw = json['patientId'];
     final int patientId;
@@ -98,7 +99,8 @@ class HitlDetail {
   factory HitlDetail.fromJson(Map<String, dynamic> json) {
     final heldItemId = json['heldItemId'];
     if (heldItemId is! String || heldItemId.trim().isEmpty) {
-      throw const FormatException('HITL detail heldItemId must be a non-empty string');
+      throw const FormatException(
+          'HITL detail heldItemId must be a non-empty string');
     }
     final patientIdRaw = json['patientId'];
     final int patientId;
@@ -112,7 +114,8 @@ class HitlDetail {
     final status = json['status'];
     final deliveryStatus = json['deliveryStatus'];
     if (status is! String || status.trim().isEmpty) {
-      throw const FormatException('HITL detail status must be a non-empty string');
+      throw const FormatException(
+          'HITL detail status must be a non-empty string');
     }
     if (deliveryStatus is! String || deliveryStatus.trim().isEmpty) {
       throw const FormatException(

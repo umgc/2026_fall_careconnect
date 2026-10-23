@@ -183,34 +183,34 @@ class _FileUploadDemoState extends State<FileUploadDemo> {
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _uploadedFiles.isEmpty
-                ? Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.folder_open,
-                              size: 48,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurface.withOpacity(0.5),
+                    ? Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Center(
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.folder_open,
+                                  size: 48,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withOpacity(0.5),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'No files uploaded yet',
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'No files uploaded yet',
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                          ],
+                          ),
                         ),
+                      )
+                    : Column(
+                        children: _uploadedFiles
+                            .map((file) => _buildFileCard(file))
+                            .toList(),
                       ),
-                    ),
-                  )
-                : Column(
-                    children: _uploadedFiles
-                        .map((file) => _buildFileCard(file))
-                        .toList(),
-                  ),
           ],
         ),
       ),
@@ -261,17 +261,17 @@ class _FileUploadDemoState extends State<FileUploadDemo> {
                 Text(
                   endpoint,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 Text(
                   description,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.7),
-                  ),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.7),
+                      ),
                 ),
               ],
             ),
@@ -484,9 +484,5 @@ class _FileUploadDemoState extends State<FileUploadDemo> {
       return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
     }
     return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
   }
 }

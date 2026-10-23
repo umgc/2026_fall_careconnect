@@ -16,6 +16,7 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/communication_service.dart';
 import 'package:care_connect_app/features/ui_preview/new_ui_preview_card.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../services/evv_service.dart';
@@ -35,11 +36,9 @@ class PatientDashboard extends StatefulWidget {
 }
 
 class _PatientDashboardState extends State<PatientDashboard> {
-
   // Patient data
   Map<String, dynamic>? patient;
   List<Map<String, dynamic>> caregivers = [];
-  List<Map<String, dynamic>> familyMembers = [];
 
   // Loading states
   bool loading = true;
@@ -60,8 +59,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
   String currentMoodLabel = '';
   List<String> moodTags = [];
 
-  // Notifications state
-  bool _callNotificationInitialized = false;
   bool _isOffline = false;
   DateTime? _lastSynced;
   List<AlertNotification> activeAlerts = [];
@@ -83,8 +80,34 @@ class _PatientDashboardState extends State<PatientDashboard> {
     super.didChangeDependencies();
     if (_initialized) return;
     _initialized = true;
+    // Defer to after the current build frame: _initializeAndLoad() awaits
+    // UserProvider.initializeUser(), which calls notifyListeners() synchronously.
+    // Invoking that during didChangeDependencies' build window throws
+    // "cannot be marked as needing to build ... the framework is already building".
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _initializeAndLoad();
+    });
+  }
+
+  /// Restore the user session BEFORE the dashboard's data calls read user.id /
+  /// user.patientId. UserProvider.initializeUser() runs asynchronously at app
+  /// start, so on a fresh (re)load the dashboard would otherwise race it and
+  /// wrongly show "User not logged in". Awaiting it here populates the session
+  /// (including patientId) for every load method below.
+  Future<void> _initializeAndLoad() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    if (userProvider.user == null) {
+      await userProvider.initializeUser();
+    }
+    if (!mounted) return;
+    // If there is still no authenticated user after restoring the session (e.g.
+    // the stored token was stale/expired and got cleared), send the user to the
+    // login page instead of showing the dead-end "User not logged in" dashboard.
+    if (userProvider.user == null) {
+      context.go('/login');
+      return;
+    }
     _loadDashboardData();
-    _callNotificationInitialized = true;
     _checkConnectivity();
     _loadRecentMoodData();
     _loadMedicationReminders();
@@ -117,10 +140,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
       final int? patientId = user?.patientId;
 
       if (id == null) {
-        setState(() {
-          error = t.ptdashboard_userNotLoggedIn;
-          loading = false;
-        });
+        // No authenticated user: route to login rather than showing a dead-end
+        // "User not logged in" error on the dashboard.
+        if (mounted) context.go('/login');
         return;
       }
 
@@ -611,9 +633,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
     }
 
     _providerVideoCallsEnabled = enabled;
-    _providerCallPolicyMessage = enabled
-        ? null
-        : t.ptdashboard_videoCallDisabledByProvider;
+    _providerCallPolicyMessage =
+        enabled ? null : t.ptdashboard_videoCallDisabledByProvider;
   }
 
   int? _parseMoodScore(dynamic value) {
@@ -692,9 +713,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
     final t = AppLocalizations.of(context)!;
     final next = existing
         .where(
-          (alert) =>
-              !(alert.type == AlertType.important &&
-                  alert.message == t.ptdashboard_moodScoreLow),
+          (alert) => !(alert.type == AlertType.important &&
+              alert.message == t.ptdashboard_moodScoreLow),
         )
         .toList();
 
@@ -734,9 +754,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
     required bool hasPendingUntaken,
   }) {
     final t = AppLocalizations.of(context)!;
-    final next = existing
-        .where((alert) => !_isPendingMedicationAlert(alert))
-        .toList();
+    final next =
+        existing.where((alert) => !_isPendingMedicationAlert(alert)).toList();
 
     if (!hasPendingUntaken) {
       dismissedAlertIds.remove(t.ptdashboard_medPendingReminder);
@@ -842,43 +861,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
     ];
   }
 
-  /// Load family members
-  Future<void> _loadFamilyMembers() async {
-    if (!isLoading) {
-      setState(() {
-        isLoading = true;
-      });
-    }
-
-    try {
-      final user = Provider.of<UserProvider>(context, listen: false).user;
-      final userId = widget.userId ?? user?.id ?? 1;
-
-      final response = await ApiService.getFamilyMembers(userId);
-
-      if (mounted) {
-        if (response.statusCode == 200) {
-          final List<dynamic> data = jsonDecode(response.body);
-          setState(() {
-            familyMembers = List<Map<String, dynamic>>.from(data);
-            isLoading = false;
-          });
-        } else {
-          setState(() {
-            isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      print('Error loading family members: $e');
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
-    }
-  }
-
   /// Handle medication action
   Future<void> _handleMedicationAction(int medicationId, bool taken) async {
     final t = AppLocalizations.of(context)!;
@@ -897,6 +879,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
       return;
     }
 
+    final previousReminders = List<MedicationReminderItem>.from(
+      medicationReminders,
+    );
     final actionAt = DateTime.now().toUtc();
     if (taken) {
       _medicationReminderService.markTaken(
@@ -905,6 +890,21 @@ class _PatientDashboardState extends State<PatientDashboard> {
       );
     } else {
       _medicationReminderService.markMissed(medicationId: medicationId);
+    }
+
+    if (mounted) {
+      setState(() {
+        medicationReminders = _medicationReminderService.applyLocalOverrides(
+          reminders: medicationReminders,
+          t: t,
+        );
+        activeAlerts = _withMedicationReminderAlert(
+          activeAlerts,
+          hasPendingUntaken: _hasPendingMedicationReminders(
+            medicationReminders,
+          ),
+        );
+      });
     }
 
     final response = taken
@@ -923,6 +923,17 @@ class _PatientDashboardState extends State<PatientDashboard> {
 
     if (!success) {
       _medicationReminderService.clearLocalOverride(medicationId: medicationId);
+      if (mounted) {
+        setState(() {
+          medicationReminders = previousReminders;
+          activeAlerts = _withMedicationReminderAlert(
+            activeAlerts,
+            hasPendingUntaken: _hasPendingMedicationReminders(
+              medicationReminders,
+            ),
+          );
+        });
+      }
     }
 
     if (mounted) {
@@ -963,7 +974,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
 
-    await _loadMedicationReminders();
+    // Keep the optimistic reminder state while an offline write is queued.
+    // MainScreen owns the persistent queue banner and failed-sync status.
+    if (success && !queuedOffline) {
+      await _loadMedicationReminders();
+    }
   }
 
   /// Handle contacting provider
@@ -1027,37 +1042,38 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 _providerVideoCallsEnabled
                     ? t.ptdashboard_startVideoCallProvider
                     : (_providerCallPolicyMessage ??
-                          t.ptdashboard_disabledVideoCallProvider),
+                        t.ptdashboard_disabledVideoCallProvider),
               ),
               enabled: _providerVideoCallsEnabled,
               onTap: _providerVideoCallsEnabled
                   ? () async {
                       Navigator.pop(context);
 
-                if (primaryCareProvider == null) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text(t.ptdashboard_providerInfoUnavailable),
-                    ),
-                  );
-                  return;
-                }
+                      if (primaryCareProvider == null) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content:
+                                Text(t.ptdashboard_providerInfoUnavailable),
+                          ),
+                        );
+                        return;
+                      }
 
                       final user = Provider.of<UserProvider>(
                         this.context,
                         listen: false,
                       ).user;
 
-                if (user == null) {
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(this.context).showSnackBar(
-                    SnackBar(
-                      content: Text(t.ptdashboard_notLoggedInCall),
-                    ),
-                  );
-                  return;
-                }
+                      if (user == null) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          SnackBar(
+                            content: Text(t.ptdashboard_notLoggedInCall),
+                          ),
+                        );
+                        return;
+                      }
 
                       final targetCaregiver = <String, dynamic>{
                         ...?primaryCareProvider,
@@ -1164,13 +1180,13 @@ class _PatientDashboardState extends State<PatientDashboard> {
               height: sheetHeight,
               child: AIChat(
                 key: ValueKey(
-                  'ai-chat-${AiChatMode.groundedRecords.name}-${user?.patientId ?? 'none'}',
+                  'ai-chat-${AiChatMode.legacyGeneral.name}-${user?.patientId ?? 'none'}',
                 ),
                 role: 'patient',
                 isModal: true,
                 patientId: user?.patientId, // Pass the actual patient ID
                 userId: user?.id,
-                mode: AiChatMode.groundedRecords,
+                mode: AiChatMode.legacyGeneral,
               ),
             ),
           );
@@ -1496,43 +1512,6 @@ class _PatientDashboardState extends State<PatientDashboard> {
     );
   }
 
-  Widget _buildQuickActionChip({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
-    final primaryColor = theme.primaryColor;
-    final primaryColorLight = theme.primaryColorLight;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: primaryColorLight.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: primaryColor.withValues(alpha: 0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 20, color: primaryColor),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: primaryColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // SMS Dialog
   void _showSendMessageDialog(
     BuildContext context,
@@ -1577,7 +1556,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
                 );
                 ScaffoldMessenger.of(
                   context,
-                ).showSnackBar(SnackBar(content: Text('${t.ptdashboard_smsSent} $name')));
+                ).showSnackBar(
+                    SnackBar(content: Text('${t.ptdashboard_smsSent} $name')));
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).primaryColor,

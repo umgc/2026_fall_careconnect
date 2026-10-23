@@ -23,8 +23,7 @@ class RecurrenceForm extends StatefulWidget {
     DateTime? endDate,
     int? dayOfMonth,
     bool? applyToSeries,
-  })
-  onChanged;
+  }) onChanged;
 
   final bool initialIsRecurring;
   final String? initialRecurrenceType;
@@ -329,14 +328,13 @@ class _RecurrenceFormState extends State<RecurrenceForm> {
                     if (picked != null) {
                       setState(() => endDate = TaskUtils.normalizeDate(picked));
                       if (recurrenceType != null) {
-                        final iv = (interval == null || interval! < 1)
-                            ? 1
-                            : interval!;
+                        final iv =
+                            (interval == null || interval! < 1) ? 1 : interval!;
                         // critical: choose the correct start for count math
                         final effectiveStart = applyToSeries
                             ? (widget.anchorStartDate ??
-                                  startDate ??
-                                  DateTime.now())
+                                startDate ??
+                                DateTime.now())
                             : (startDate ?? DateTime.now());
 
                         count = RecurrenceUtils.calculateCount(

@@ -1,9 +1,9 @@
 /// TODO: ARCHITECTURAL DEBT NOTICE
-/// Currently, the database uses a 'split-profile' strategy where core data is 
+/// Currently, the database uses a 'split-profile' strategy where core data is
 /// fragmented across three tables: [users], [caregivers], and [patients].
-/// 
-/// ISSUE: This forces the frontend to perform multi-step fetches and complex 
-/// mapping logic because 'address' and 'contact' info live in role-specific 
+///
+/// ISSUE: This forces the frontend to perform multi-step fetches and complex
+/// mapping logic because 'address' and 'contact' info live in role-specific
 /// tables rather than a unified [address] table with a user_id foreign key.
 library;
 
@@ -192,6 +192,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
       if (user != null) {
         // Prepare the payload based on your API's nested address structure
+        // TODO: the update call below is commented out, so this
+        // payload is never sent and the success message is misleading.
+        // ignore: unused_local_variable
         final profileData = {
           'firstName': _nameController.text.split(' ').first,
           'lastName': _nameController.text.contains(' ')
@@ -396,9 +399,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   backgroundColor: Theme.of(
                     context,
                   ).colorScheme.surfaceContainerHighest,
-                  backgroundImage: _imageFile != null
-                      ? FileImage(_imageFile!)
-                      : null,
+                  backgroundImage:
+                      _imageFile != null ? FileImage(_imageFile!) : null,
                   child: avatarChild,
                 ),
                 if (_isEditing)

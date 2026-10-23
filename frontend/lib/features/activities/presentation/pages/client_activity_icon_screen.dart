@@ -15,7 +15,8 @@ class ClientActivityIconScreen extends StatefulWidget {
   });
 
   @override
-  State<ClientActivityIconScreen> createState() => _ClientActivityIconScreenState();
+  State<ClientActivityIconScreen> createState() =>
+      _ClientActivityIconScreenState();
 }
 
 class _ClientActivityIconScreenState extends State<ClientActivityIconScreen> {
@@ -40,7 +41,8 @@ class _ClientActivityIconScreenState extends State<ClientActivityIconScreen> {
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
         final activities = (list ?? [])
-            .map((e) => ClientActivity.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) =>
+                ClientActivity.fromJson(Map<String, dynamic>.from(e as Map)))
             .where((a) => a.enabled)
             .toList();
         if (mounted) {
@@ -163,7 +165,8 @@ class _ClientActivityIconScreenState extends State<ClientActivityIconScreen> {
                     )
                   : GridView.builder(
                       padding: const EdgeInsets.all(16),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: 2,
                         mainAxisExtent: 200, // larger tiles for client use
                         mainAxisSpacing: 16,
@@ -202,7 +205,8 @@ class _ClientActivityIconScreenState extends State<ClientActivityIconScreen> {
                                     Text(
                                       a.name,
                                       textAlign: TextAlign.center,
-                                      style: theme.textTheme.titleMedium?.copyWith(
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -217,4 +221,3 @@ class _ClientActivityIconScreenState extends State<ClientActivityIconScreen> {
     );
   }
 }
-

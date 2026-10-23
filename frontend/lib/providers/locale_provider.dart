@@ -12,13 +12,12 @@ class LocaleProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final code = prefs.getString(_key);
     if (code != null && code.isNotEmpty) {
-      if(AppLocalizations.delegate.isSupported(Locale(code))){
-          _locale = Locale(code);
-          notifyListeners();
-      }
-      else{
-          clearLocale();
-          notifyListeners();
+      if (AppLocalizations.delegate.isSupported(Locale(code))) {
+        _locale = Locale(code);
+        notifyListeners();
+      } else {
+        clearLocale();
+        notifyListeners();
       }
     }
   }

@@ -20,6 +20,10 @@ public class UserAIConfigDTO {
     private String openaiModel = "gpt-4";
     @Builder.Default
     private String deepseekModel = "deepseek-chat";
+    @Builder.Default
+    private String ollamaModel = "llama3.2:1b";
+    @Builder.Default
+    private String colibriModel = "olmoe-colibri";
     @Min(value = 100, message = "Max tokens must be at least 100")
     @Max(value = 8000, message = "Max tokens cannot exceed 8000")
     @Builder.Default
@@ -48,73 +52,24 @@ public class UserAIConfigDTO {
     @Builder.Default
     private Boolean isActive = true;
     private String systemPrompt;
-
     // Explicit getters for compatibility
-    public Long getId() {
-        return id;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public Long getPatientId() {
-        return patientId;
-    }
-
-    public AIProvider getAiProvider() {
-        return aiProvider;
-    }
-
-    public String getOpenaiModel() {
-        return openaiModel;
-    }
-
-    public String getDeepseekModel() {
-        return deepseekModel;
-    }
-
-    public Integer getMaxTokens() {
-        return maxTokens;
-    }
-
-    public Double getTemperature() {
-        return temperature;
-    }
-
-    public Integer getConversationHistoryLimit() {
-        return conversationHistoryLimit;
-    }
-
-    public Boolean getIncludeVitalsByDefault() {
-        return includeVitalsByDefault;
-    }
-
-    public Boolean getIncludeMedicationsByDefault() {
-        return includeMedicationsByDefault;
-    }
-
-    public Boolean getIncludeNotesByDefault() {
-        return includeNotesByDefault;
-    }
-
-    public Boolean getIncludeMoodPainLogsByDefault() {
-        return includeMoodPainLogsByDefault;
-    }
-
-    public Boolean getIncludeAllergiesByDefault() {
-        return includeAllergiesByDefault;
-    }
-
-    public Boolean getIncludeDocumentsByDefault() {
-        return includeDocumentsByDefault;
-    }
-
-    public Boolean getIsActive() {
-        return isActive;
-    }
-
-    public String getSystemPrompt() {
-        return systemPrompt;
-    }
+    public Long getId() { return id; }
+    public Long getUserId() { return userId; }
+    public Long getPatientId() { return patientId; }
+    public AIProvider getAiProvider() { return aiProvider; }
+    public String getOpenaiModel() { return openaiModel; }
+    public String getDeepseekModel() { return deepseekModel; }
+    public String getOllamaModel() { return ollamaModel; }
+    public String getColibriModel() { return colibriModel; }
+    public Integer getMaxTokens() { return maxTokens; }
+    public Double getTemperature() { return temperature; }
+    public Integer getConversationHistoryLimit() { return conversationHistoryLimit; }
+    public Boolean getIncludeVitalsByDefault() { return includeVitalsByDefault; }
+    public Boolean getIncludeMedicationsByDefault() { return includeMedicationsByDefault; }
+    public Boolean getIncludeNotesByDefault() { return includeNotesByDefault; }
+    public Boolean getIncludeMoodPainLogsByDefault() { return includeMoodPainLogsByDefault; }
+    public Boolean getIncludeAllergiesByDefault() { return includeAllergiesByDefault; }
+    public Boolean getIncludeDocumentsByDefault() { return includeDocumentsByDefault; }
+    public Boolean getIsActive() { return isActive; }
+    public String getSystemPrompt() { return systemPrompt; }
 }

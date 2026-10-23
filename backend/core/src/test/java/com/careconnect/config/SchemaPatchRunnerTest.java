@@ -1,5 +1,6 @@
 package com.careconnect.config;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
@@ -16,9 +17,14 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+/**
+ * Test IDs TC-EHR-SCH-020..021 (the two {@code requireSafeIdentifier} tests) are permanent. Never renumber,
+ * never reuse.
+ */
 class SchemaPatchRunnerTest {
 
     @Test
+    @DisplayName("TC-EHR-SCH-020: plain identifiers pass the guard unchanged")
     void requireSafeIdentifier_acceptsPlainIdentifiers() {
         assertThat(SchemaPatchRunner.requireSafeIdentifier("ehr_raw_payload")).isEqualTo("ehr_raw_payload");
         assertThat(SchemaPatchRunner.requireSafeIdentifier("fk_ehr_crosswalk_patient"))
@@ -27,6 +33,7 @@ class SchemaPatchRunnerTest {
     }
 
     @Test
+    @DisplayName("TC-EHR-SCH-021: an identifier that could change the statement is rejected")
     void requireSafeIdentifier_rejectsAnythingThatCouldChangeTheStatement() {
         for (final String hostile : new String[]{
                 "patient; DROP TABLE patient",

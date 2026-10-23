@@ -46,7 +46,8 @@ class VisitCompletedSuccessPage extends StatefulWidget {
   });
 
   @override
-  State<VisitCompletedSuccessPage> createState() => _VisitCompletedSuccessPageState();
+  State<VisitCompletedSuccessPage> createState() =>
+      _VisitCompletedSuccessPageState();
 }
 
 class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
@@ -88,9 +89,13 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
         for (var json in data) {
           try {
             Map<String, dynamic> patientJson;
-            if (json is Map && json.containsKey('patient') && json['patient'] != null) {
+            if (json is Map &&
+                json.containsKey('patient') &&
+                json['patient'] != null) {
               final patientData = json['patient'];
-              patientJson = patientData is Map ? Map<String, dynamic>.from(patientData) : Map<String, dynamic>.from(json);
+              patientJson = patientData is Map
+                  ? Map<String, dynamic>.from(patientData)
+                  : Map<String, dynamic>.from(json);
             } else {
               patientJson = Map<String, dynamic>.from(json);
             }
@@ -107,7 +112,8 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
         }
         throw Exception('Patient not found');
       } else {
-        throw Exception('Failed to load patient details: ${response.statusCode}');
+        throw Exception(
+            'Failed to load patient details: ${response.statusCode}');
       }
     } catch (e) {
       if (!mounted) return;
@@ -162,7 +168,8 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
 
   String _uniqueFileName(String base) {
     final ts = DateTime.now().toUtc().microsecondsSinceEpoch;
-    final rand = math.Random().nextInt(0xFFFF).toRadixString(16).padLeft(4, '0');
+    final rand =
+        math.Random().nextInt(0xFFFF).toRadixString(16).padLeft(4, '0');
     return '${base}_${ts}_$rand.edi';
   }
 
@@ -173,7 +180,9 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
     try {
       if (_selectedPatient == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Patient data not available for export'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text('Patient data not available for export'),
+              backgroundColor: Colors.red),
         );
         return;
       }
@@ -186,7 +195,8 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
         final a = html.document.createElement('a') as html.AnchorElement
           ..href = url
           ..style.display = 'none'
-          ..download = 'visit_${_selectedPatient!.id}_${widget.checkinTime.millisecondsSinceEpoch}.edi';
+          ..download =
+              'visit_${_selectedPatient!.id}_${widget.checkinTime.millisecondsSinceEpoch}.edi';
         html.document.body?.children.add(a);
         a.click();
         html.document.body?.children.remove(a);
@@ -200,10 +210,12 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
             downloadsPath = ext?.path ?? downloadsPath;
           }
           final savePath = '$downloadsPath/$fileName';
-          await File(savePath).writeAsBytes(Uint8List.fromList(bytes), flush: true);
+          await File(savePath)
+              .writeAsBytes(Uint8List.fromList(bytes), flush: true);
           await OpenFilex.open(savePath);
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to: $savePath')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Saved to: $savePath')));
         } catch (_) {
           final tmp = await getTemporaryDirectory();
           final path = '${tmp.path}/$fileName';
@@ -215,13 +227,16 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Visit data exported successfully'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Visit data exported successfully'),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e'), backgroundColor: Colors.red),
+        SnackBar(
+            content: Text('Export failed: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -244,7 +259,11 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Preview EDI', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                Text('Preview EDI',
+                    style: Theme.of(ctx)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 12),
                 Container(
                   constraints: const BoxConstraints(maxHeight: 320),
@@ -255,7 +274,9 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
                     border: Border.all(color: border),
                   ),
                   child: SingleChildScrollView(
-                    child: SelectableText(edi, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                    child: SelectableText(edi,
+                        style: const TextStyle(
+                            fontFamily: 'monospace', fontSize: 12)),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -266,7 +287,9 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
                         onPressed: () async {
                           await Clipboard.setData(ClipboardData(text: edi));
                           if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Copied to clipboard')));
                         },
                         icon: const Icon(Icons.copy),
                         label: const Text('Copy'),
@@ -293,39 +316,53 @@ class _VisitCompletedSuccessPageState extends State<VisitCompletedSuccessPage> {
   // ---------- EDI ----------
   String _generateEDIContent() {
     final patient = _selectedPatient!;
-    final maNumber = patient.maNumber ?? 'SUBSCR${patient.id.toString().padLeft(5, '0')}';
+    final maNumber =
+        patient.maNumber ?? 'SUBSCR${patient.id.toString().padLeft(5, '0')}';
 
     final now = DateTime.now();
-    final isaDate = '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final isaTime = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-    final gsDate = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final gsTime = '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final isaDate =
+        '${now.year.toString().substring(2)}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final isaTime =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final gsDate =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final gsTime =
+        '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
 
-    final serviceDate = '${widget.checkinTime.year}${widget.checkinTime.month.toString().padLeft(2, '0')}${widget.checkinTime.day.toString().padLeft(2, '0')}';
+    final serviceDate =
+        '${widget.checkinTime.year}${widget.checkinTime.month.toString().padLeft(2, '0')}${widget.checkinTime.day.toString().padLeft(2, '0')}';
 
     String patientDob = '19700101';
     if (patient.dob.isNotEmpty) {
       try {
         final dob = DateTime.parse(patient.dob);
-        patientDob = '${dob.year}${dob.month.toString().padLeft(2, '0')}${dob.day.toString().padLeft(2, '0')}';
+        patientDob =
+            '${dob.year}${dob.month.toString().padLeft(2, '0')}${dob.day.toString().padLeft(2, '0')}';
       } catch (_) {}
     }
 
-    final gender = (patient.gender?.toUpperCase() == 'MALE' || patient.gender?.toUpperCase() == 'M') ? 'M' : 'F';
-    final claimId = '${patient.id}${widget.checkinTime.millisecondsSinceEpoch.toString().substring(0, 10)}';
+    final gender = (patient.gender?.toUpperCase() == 'MALE' ||
+            patient.gender?.toUpperCase() == 'M')
+        ? 'M'
+        : 'F';
+    final claimId =
+        '${patient.id}${widget.checkinTime.millisecondsSinceEpoch.toString().substring(0, 10)}';
     final evvId = 'EVV-$claimId';
     final units = ((widget.duration / 15).ceil()).toString();
-    final totalCharge = (30.0 * (widget.duration / 15).ceil()).toStringAsFixed(2);
+    final totalCharge =
+        (30.0 * (widget.duration / 15).ceil()).toStringAsFixed(2);
 
     final addressLine1 = patient.address?.line1 ?? '123 Main St';
     final city = patient.address?.city ?? 'Richmond';
     final state = patient.address?.state ?? 'VA';
     final zip = patient.address?.zip ?? '23220';
 
-    final controlNumber = now.millisecondsSinceEpoch.toString().substring(3, 12);
+    final controlNumber =
+        now.millisecondsSinceEpoch.toString().substring(3, 12);
     final segmentCount = widget.notes.isNotEmpty ? 31 : 30;
 
-    final ediContent = '''ISA*00*          *00*          *ZZ*SUBMIT123      *ZZ*987654321      *$isaDate*$isaTime*^*00501*$controlNumber*0*P*:~
+    final ediContent =
+        '''ISA*00*          *00*          *ZZ*SUBMIT123      *ZZ*987654321      *$isaDate*$isaTime*^*00501*$controlNumber*0*P*:~
 GS*HC*SUBMIT123*987654321*$gsDate*$gsTime*$controlNumber*X*005010X222A1~
 ST*837*0001*005010X222A1~
 BHT*0019*00*$claimId*$gsDate*$gsTime*CH~
@@ -370,8 +407,8 @@ IEA*1*$controlNumber~
     return Scaffold(
       appBar: AppBar(
         title: const Text('Visit Completed'),
-       
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+        leading: IconButton(
+            icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
         actions: [
           TextButton.icon(
             onPressed: () => context.go('/dashboard?role=CAREGIVER'),
@@ -398,13 +435,19 @@ IEA*1*$controlNumber~
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+            Icon(Icons.error_outline,
+                size: 64, color: Theme.of(context).colorScheme.error),
             const SizedBox(height: 16),
-            const Text('Error Loading Patient', style: AppTheme.headingSmall, textAlign: TextAlign.center),
+            const Text('Error Loading Patient',
+                style: AppTheme.headingSmall, textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text(_error!, style: AppTheme.bodyMedium, textAlign: TextAlign.center),
+            Text(_error!,
+                style: AppTheme.bodyMedium, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: _loadPatientDetails, style: AppTheme.primaryButtonStyle, child: const Text('Try Again')),
+            ElevatedButton(
+                onPressed: _loadPatientDetails,
+                style: AppTheme.primaryButtonStyle,
+                child: const Text('Try Again')),
           ],
         ),
       ),
@@ -421,11 +464,16 @@ IEA*1*$controlNumber~
           children: [
             Icon(Icons.person_off, size: 64, color: cs.onSurfaceVariant),
             const SizedBox(height: 16),
-            const Text('Patient Not Found', style: AppTheme.headingSmall, textAlign: TextAlign.center),
+            const Text('Patient Not Found',
+                style: AppTheme.headingSmall, textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            const Text('The selected patient could not be found.', style: AppTheme.bodyMedium, textAlign: TextAlign.center),
+            const Text('The selected patient could not be found.',
+                style: AppTheme.bodyMedium, textAlign: TextAlign.center),
             const SizedBox(height: 24),
-            ElevatedButton(onPressed: () => context.go('/evv/select-patient'), style: AppTheme.primaryButtonStyle, child: const Text('Back to Patient Selection')),
+            ElevatedButton(
+                onPressed: () => context.go('/evv/select-patient'),
+                style: AppTheme.primaryButtonStyle,
+                child: const Text('Back to Patient Selection')),
           ],
         ),
       ),
@@ -438,12 +486,15 @@ IEA*1*$controlNumber~
 
     final patient = _selectedPatient!;
     final fullName = '${patient.firstName} ${patient.lastName}';
-    final maNumber = patient.maNumber ?? 'MA${patient.id.toString().padLeft(9, '0')}';
+    final maNumber =
+        patient.maNumber ?? 'MA${patient.id.toString().padLeft(9, '0')}';
     final addr = _formatAddress(patient);
     final duration = Duration(seconds: widget.duration);
 
-    final inLoc = _formatLocation(widget.checkinLocationType, widget.checkinLatitude, widget.checkinLongitude, patient);
-    final outLoc = _formatLocation(widget.checkoutLocationType, widget.checkoutLatitude, widget.checkoutLongitude, patient);
+    final inLoc = _formatLocation(widget.checkinLocationType,
+        widget.checkinLatitude, widget.checkinLongitude, patient);
+    final outLoc = _formatLocation(widget.checkoutLocationType,
+        widget.checkoutLatitude, widget.checkoutLongitude, patient);
 
     // success banner colors that work in dark and light
     final successColor = Colors.green;
@@ -466,7 +517,10 @@ IEA*1*$controlNumber~
               border: Border.all(color: successBorder),
             ),
             child: Text('Visit completed and ready for submission',
-                style: TextStyle(color: successText, fontSize: 13, fontWeight: FontWeight.w700)),
+                style: TextStyle(
+                    color: successText,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
           ),
           const SizedBox(height: 8),
 
@@ -481,17 +535,33 @@ IEA*1*$controlNumber~
             final left = _card(
               context: context,
               children: [
-                _sectionHeader(context, Icons.person_outline, 'Patient & Service'),
+                _sectionHeader(
+                    context, Icons.person_outline, 'Patient & Service'),
                 const SizedBox(height: 6),
-                Text(fullName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                Text(fullName,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 4),
                 _chip(context, maNumber),
                 const SizedBox(height: 6),
-                Text(addr, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text(addr,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant)),
                 const Divider(height: 16),
-                Text('Service Type', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                Text('Service Type',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
-                Text(widget.serviceType, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700)),
+                Text(widget.serviceType,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
               ],
             );
 
@@ -502,14 +572,21 @@ IEA*1*$controlNumber~
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(child: _kv(context, 'Check-In', _formatTime(widget.checkinTime))),
-                    Expanded(child: _kv(context, 'Check-Out', _formatTime(widget.checkoutTime))),
+                    Expanded(
+                        child: _kv(context, 'Check-In',
+                            _formatTime(widget.checkinTime))),
+                    Expanded(
+                        child: _kv(context, 'Check-Out',
+                            _formatTime(widget.checkoutTime))),
                   ],
                 ),
                 const SizedBox(height: 4),
                 _kv(context, 'Total', _formatDuration(duration)),
                 Text('(${_formatDurationDetailed(duration)})',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: cs.onSurfaceVariant)),
               ],
             );
 
@@ -529,7 +606,8 @@ IEA*1*$controlNumber~
   }
 
   // ---------- pieces ----------
-  Widget _card({required BuildContext context, required List<Widget> children}) {
+  Widget _card(
+      {required BuildContext context, required List<Widget> children}) {
     final cs = Theme.of(context).colorScheme;
     return Card(
       elevation: 0,
@@ -539,7 +617,11 @@ IEA*1*$controlNumber~
         side: BorderSide(color: cs.outlineVariant),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children)),
+      child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children)),
     );
   }
 
@@ -549,7 +631,9 @@ IEA*1*$controlNumber~
       children: [
         Icon(icon, size: 18, color: cs.onSurfaceVariant),
         const SizedBox(width: 6),
-        Text(title, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+        Text(title,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -559,9 +643,15 @@ IEA*1*$controlNumber~
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+        Text(label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
         const SizedBox(height: 1),
-        Text(value, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700)),
+        Text(value,
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w700)),
       ],
     );
   }
@@ -573,8 +663,15 @@ IEA*1*$controlNumber~
     final border = cs.outlineVariant.withOpacity(isDark ? 0.45 : 0.35);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12), border: Border.all(color: border)),
-      child: Text(text, style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+      decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border)),
+      child: Text(text,
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
+              ?.copyWith(fontWeight: FontWeight.w700)),
     );
   }
 
@@ -587,15 +684,23 @@ IEA*1*$controlNumber~
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withOpacity(isDark ? 0.40 : 0.28)),
       ),
-      child: Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700, color: color)),
+      child: Text(label,
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
+              ?.copyWith(fontWeight: FontWeight.w700, color: color)),
     );
   }
 
   Widget _evvCompact(BuildContext context, String inLoc, String outLoc) {
     final cs = Theme.of(context).colorScheme;
-    final okText = Theme.of(context).brightness == Brightness.dark ? Colors.blue.shade200 : Colors.blue.shade700;
-    final okBg = Colors.blue.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.12);
-    final okBorder = Colors.blue.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.40 : 0.28);
+    final okText = Theme.of(context).brightness == Brightness.dark
+        ? Colors.blue.shade200
+        : Colors.blue.shade700;
+    final okBg = Colors.blue.withOpacity(
+        Theme.of(context).brightness == Brightness.dark ? 0.20 : 0.12);
+    final okBorder = Colors.blue.withOpacity(
+        Theme.of(context).brightness == Brightness.dark ? 0.40 : 0.28);
 
     return _card(
       context: context,
@@ -604,35 +709,68 @@ IEA*1*$controlNumber~
         const SizedBox(height: 6),
         Row(
           children: [
-            Icon(widget.checkinLocationType.toLowerCase() == 'gps' ? Icons.gps_fixed : Icons.home,
-                size: 16, color: cs.onSurfaceVariant),
+            Icon(
+                widget.checkinLocationType.toLowerCase() == 'gps'
+                    ? Icons.gps_fixed
+                    : Icons.home,
+                size: 16,
+                color: cs.onSurfaceVariant),
             const SizedBox(width: 6),
-            Text('Check-In', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            Text('Check-In',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
             const SizedBox(width: 6),
-            _badge(context, widget.checkinLocationType.toLowerCase() == 'gps' ? 'GPS' : 'PATIENT ADDRESS', Colors.blue),
+            _badge(
+                context,
+                widget.checkinLocationType.toLowerCase() == 'gps'
+                    ? 'GPS'
+                    : 'PATIENT ADDRESS',
+                Colors.blue),
           ],
         ),
         const SizedBox(height: 2),
-        Padding(padding: const EdgeInsets.only(left: 22), child: Text(inLoc, style: Theme.of(context).textTheme.bodySmall)),
+        Padding(
+            padding: const EdgeInsets.only(left: 22),
+            child: Text(inLoc, style: Theme.of(context).textTheme.bodySmall)),
         const SizedBox(height: 8),
         Row(
           children: [
-            Icon(widget.checkoutLocationType.toLowerCase() == 'gps' ? Icons.gps_fixed : Icons.home,
-                size: 16, color: cs.onSurfaceVariant),
+            Icon(
+                widget.checkoutLocationType.toLowerCase() == 'gps'
+                    ? Icons.gps_fixed
+                    : Icons.home,
+                size: 16,
+                color: cs.onSurfaceVariant),
             const SizedBox(width: 6),
-            Text('Check-Out', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+            Text('Check-Out',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
             const SizedBox(width: 6),
-            _badge(context, widget.checkoutLocationType.toLowerCase() == 'gps' ? 'GPS' : 'PATIENT ADDRESS', Colors.blue),
+            _badge(
+                context,
+                widget.checkoutLocationType.toLowerCase() == 'gps'
+                    ? 'GPS'
+                    : 'PATIENT ADDRESS',
+                Colors.blue),
           ],
         ),
         const SizedBox(height: 2),
-        Padding(padding: const EdgeInsets.only(left: 22), child: Text(outLoc, style: Theme.of(context).textTheme.bodySmall)),
+        Padding(
+            padding: const EdgeInsets.only(left: 22),
+            child: Text(outLoc, style: Theme.of(context).textTheme.bodySmall)),
         const SizedBox(height: 8),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: okBg, borderRadius: BorderRadius.circular(8), border: Border.all(color: okBorder)),
-          child: Text('EVV compliance confirmed for this visit.', style: Theme.of(context).textTheme.labelSmall?.copyWith(color: okText)),
+          decoration: BoxDecoration(
+              color: okBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: okBorder)),
+          child: Text('EVV compliance confirmed for this visit.',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelSmall
+                  ?.copyWith(color: okText)),
         ),
       ],
     );
@@ -640,7 +778,8 @@ IEA*1*$controlNumber~
 
   Widget _actionsRow(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
+    final shape =
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(10));
     return Padding(
       padding: const EdgeInsets.fromLTRB(_kPad, 6, _kPad, 14),
       child: Row(
@@ -648,7 +787,9 @@ IEA*1*$controlNumber~
           Expanded(
             child: OutlinedButton.icon(
               onPressed: _exportVisitData,
-              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), shape: shape),
+              style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: shape),
               icon: const Icon(Icons.file_download_outlined, size: 18),
               label: const Text('Export EDI'),
             ),
@@ -658,7 +799,9 @@ IEA*1*$controlNumber~
             Expanded(
               child: OutlinedButton.icon(
                 onPressed: _previewVisitEdi,
-                style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), shape: shape),
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: shape),
                 icon: const Icon(Icons.remove_red_eye_outlined, size: 18),
                 label: const Text('Preview'),
               ),
@@ -667,7 +810,10 @@ IEA*1*$controlNumber~
           Expanded(
             child: FilledButton.icon(
               onPressed: _goToDashboard,
-              style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 10), shape: shape, backgroundColor: cs.secondary),
+              style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: shape,
+                  backgroundColor: cs.secondary),
               icon: const Icon(Icons.dashboard_customize_outlined, size: 18),
               label: Text('Dashboard', style: TextStyle(color: cs.onSecondary)),
             ),

@@ -21,7 +21,6 @@ class Telemetry {
   // Keep this short so curl flips reflect quickly.
   static const Duration _backendCacheTtl = Duration(seconds: 1);
 
-
   // One session ID per app run
   static String? _sessionId;
 
@@ -65,7 +64,6 @@ class Telemetry {
     final backend = await _enabledBackendCached();
     return backend;
   }
-
 
   // ---------------------------
   // Backend toggle helpers
@@ -162,7 +160,7 @@ class Telemetry {
     try {
       final resp = await ApiService.sendTelemetryEventV3(
         payload: Map<String, dynamic>.from(payload),
-      );  
+      );
 
       final queued = resp.headers['x-offline-queued'] == 'true';
 

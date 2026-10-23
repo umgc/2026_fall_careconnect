@@ -188,13 +188,6 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
   Widget build(BuildContext context) {
     final disabled = !_apiReady;
 
-    // static list for dropdown
-    final severities = const <String>[
-      'Mild (Minor symptoms)',
-      'Moderate (Noticeable symptoms)',
-      'Severe (Life-threatening)',
-    ];
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

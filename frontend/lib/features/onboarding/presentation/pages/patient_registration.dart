@@ -197,9 +197,8 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
         validationResult = _validateMaNumber(value);
         break;
       case 'gender':
-        validationResult = _selectedGender == null
-            ? 'Please select gender'
-            : null;
+        validationResult =
+            _selectedGender == null ? 'Please select gender' : null;
         break;
       case 'addressLine1':
         validationResult = value.isEmpty ? 'Please enter address line 1' : null;
@@ -236,18 +235,18 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
     if (value == null || value.isEmpty) {
       return 'Please enter MA Number';
     }
-    
+
     // Check if it starts with "MA"
     if (!value.toUpperCase().startsWith('MA')) {
       return 'MA Number must start with "MA"';
     }
-    
+
     // Check if it has exactly 9 digits after "MA"
     final digitsOnly = value.substring(2).replaceAll(RegExp(r'[^0-9]'), '');
     if (digitsOnly.length != 9) {
       return 'MA Number must have exactly 9 digits after "MA" (e.g., MA123456789)';
     }
-    
+
     return null;
   }
 
@@ -365,29 +364,29 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
                   if (details.stepIndex < 2)
                     ElevatedButton(
                       onPressed: _isLoading ? null : () => _nextStep(),
-                      style: Theme.of(context).elevatedButtonTheme.style
-                          ?.copyWith(
-                            backgroundColor: WidgetStateProperty.all(
-                              Theme.of(context).colorScheme.primary,
-                            ),
-                            foregroundColor: WidgetStateProperty.all(
-                              Theme.of(context).colorScheme.onPrimary,
-                            ),
-                          ),
+                      style:
+                          Theme.of(context).elevatedButtonTheme.style?.copyWith(
+                                backgroundColor: WidgetStateProperty.all(
+                                  Theme.of(context).colorScheme.primary,
+                                ),
+                                foregroundColor: WidgetStateProperty.all(
+                                  Theme.of(context).colorScheme.onPrimary,
+                                ),
+                              ),
                       child: const Text('Next'),
                     )
                   else
                     ElevatedButton(
                       onPressed: _isLoading ? null : () => _registerPatient(),
-                      style: Theme.of(context).elevatedButtonTheme.style
-                          ?.copyWith(
-                            backgroundColor: WidgetStateProperty.all(
-                              Theme.of(context).colorScheme.secondary,
-                            ),
-                            foregroundColor: WidgetStateProperty.all(
-                              Theme.of(context).colorScheme.onSecondary,
-                            ),
-                          ),
+                      style:
+                          Theme.of(context).elevatedButtonTheme.style?.copyWith(
+                                backgroundColor: WidgetStateProperty.all(
+                                  Theme.of(context).colorScheme.secondary,
+                                ),
+                                foregroundColor: WidgetStateProperty.all(
+                                  Theme.of(context).colorScheme.onSecondary,
+                                ),
+                              ),
                       child: _isLoading
                           ? const SizedBox(
                               width: 16,
@@ -415,9 +414,8 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
                 title: const Text('Personal Information'),
                 content: _buildPersonalInfoStep(),
                 isActive: _currentStep >= 0,
-                state: _currentStep > 0
-                    ? StepState.complete
-                    : StepState.indexed,
+                state:
+                    _currentStep > 0 ? StepState.complete : StepState.indexed,
               ),
               Step(
                 title: const Text('Address Information'),
@@ -426,16 +424,15 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
                 state: _currentStep > 1
                     ? StepState.complete
                     : _currentStep == 1
-                    ? StepState.indexed
-                    : StepState.disabled,
+                        ? StepState.indexed
+                        : StepState.disabled,
               ),
               Step(
                 title: const Text('Relationship'),
                 content: _buildRelationshipStep(),
                 isActive: _currentStep >= 2,
-                state: _currentStep == 2
-                    ? StepState.indexed
-                    : StepState.disabled,
+                state:
+                    _currentStep == 2 ? StepState.indexed : StepState.disabled,
               ),
             ],
           ),
@@ -456,8 +453,7 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
                   controller: _firstNameController,
                   focusNode: _firstNameFocus,
                   decoration: AppTheme.inputDecoration('First Name *').copyWith(
-                    errorText:
-                        _firstNameController.text.isNotEmpty &&
+                    errorText: _firstNameController.text.isNotEmpty &&
                             !_fieldValidStatus['firstName']!
                         ? 'Please enter valid first name (no numbers)'
                         : null,
@@ -473,8 +469,7 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
                   controller: _lastNameController,
                   focusNode: _lastNameFocus,
                   decoration: AppTheme.inputDecoration('Last Name *').copyWith(
-                    errorText:
-                        _lastNameController.text.isNotEmpty &&
+                    errorText: _lastNameController.text.isNotEmpty &&
                             !_fieldValidStatus['lastName']!
                         ? 'Please enter valid last name (no numbers)'
                         : null,
@@ -492,8 +487,7 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
             decoration: AppTheme.inputDecoration('Email Address *').copyWith(
               prefixIcon: const Icon(Icons.email),
               helperText: 'Must contain @ symbol (e.g., name@example.com)',
-              errorText:
-                  _emailController.text.isNotEmpty &&
+              errorText: _emailController.text.isNotEmpty &&
                       !_fieldValidStatus['email']!
                   ? _validateEmail(_emailController.text)
                   : null,
@@ -534,8 +528,7 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
             decoration: AppTheme.inputDecoration('Phone Number *').copyWith(
               prefixIcon: const Icon(Icons.phone),
               helperText: 'Enter a valid phone number',
-              errorText:
-                  _phoneController.text.isNotEmpty &&
+              errorText: _phoneController.text.isNotEmpty &&
                       !_fieldValidStatus['phone']!
                   ? 'Please enter a valid phone number'
                   : null,
@@ -557,8 +550,8 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
               hintText: 'MM/DD/YYYY',
               errorText:
                   _dobController.text.isNotEmpty && !_fieldValidStatus['dob']!
-                  ? 'Please enter a valid date of birth'
-                  : null,
+                      ? 'Please enter a valid date of birth'
+                      : null,
             ),
             validator: (value) {
               if (value == null || value.isEmpty) {
@@ -589,8 +582,8 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
             decoration: AppTheme.inputDecoration('MA Number *').copyWith(
               prefixIcon: const Icon(Icons.badge),
               helperText: 'Format: MA followed by 9 digits (e.g., MA123456789)',
-              errorText:
-                  _maNumberController.text.isNotEmpty && !_fieldValidStatus['maNumber']!
+              errorText: _maNumberController.text.isNotEmpty &&
+                      !_fieldValidStatus['maNumber']!
                   ? _validateMaNumber(_maNumberController.text)
                   : null,
             ),
@@ -605,8 +598,8 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
               prefixIcon: const Icon(Icons.person),
               errorText:
                   _selectedGender == null && !_fieldValidStatus['gender']!
-                  ? 'Please select gender'
-                  : null,
+                      ? 'Please select gender'
+                      : null,
             ),
             items: const [
               DropdownMenuItem(value: 'MALE', child: Text('Male')),
@@ -731,10 +724,10 @@ class _PatientRegistrationPageState extends State<PatientRegistrationPage> {
         children: [
           TextFormField(
             controller: _relationshipController,
-            decoration: AppTheme.inputDecoration('Relationship to Patient *')
-                .copyWith(
-                  hintText: 'e.g., Parent, Spouse, Child, Daughter, Son, etc.',
-                ),
+            decoration:
+                AppTheme.inputDecoration('Relationship to Patient *').copyWith(
+              hintText: 'e.g., Parent, Spouse, Child, Daughter, Son, etc.',
+            ),
             validator: (value) {
               if (value == null || value.isEmpty) {
                 return 'Please enter relationship to patient';

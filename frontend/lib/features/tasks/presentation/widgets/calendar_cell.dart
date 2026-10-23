@@ -65,9 +65,8 @@ class CalendarCell extends StatelessWidget {
           Text(
             "${date.day}",
             style: (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
-              color: isInMonth
-                  ? theme.colorScheme.onSurface
-                  : theme.disabledColor,
+              color:
+                  isInMonth ? theme.colorScheme.onSurface : theme.disabledColor,
             ),
           ),
           Wrap(

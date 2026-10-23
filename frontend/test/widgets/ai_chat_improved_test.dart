@@ -754,7 +754,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.enterText(find.byType(TextField), 'Hello AI');
+      await tester.enterText(
+        find.byType(TextField),
+        'Can I change my medication dosage?',
+      );
       await tester.pump();
 
       await tester.tap(find.byIcon(Icons.send));
@@ -762,7 +765,7 @@ void main() {
       await tester.pump(); // post-frame auto-scroll
 
       // The user message should appear
-      expect(find.text('Hello AI'), findsOneWidget);
+      expect(find.text('Can I change my medication dosage?'), findsOneWidget);
     });
 
     testWidgets('sending message triggers loading state', (tester) async {
@@ -771,7 +774,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.enterText(find.byType(TextField), 'Test message');
+      await tester.enterText(
+        find.byType(TextField),
+        'Can I change my medication dosage?',
+      );
       await tester.pump();
 
       await tester.tap(find.byIcon(Icons.send));
@@ -779,7 +785,7 @@ void main() {
       await tester.pump(); // post-frame auto-scroll
 
       // The message should be displayed regardless of loading state
-      expect(find.text('Test message'), findsOneWidget);
+      expect(find.text('Can I change my medication dosage?'), findsOneWidget);
     });
 
     testWidgets('sending message clears text field', (tester) async {
@@ -788,7 +794,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.enterText(find.byType(TextField), 'Some text');
+      await tester.enterText(
+        find.byType(TextField),
+        'Can I change my medication dosage?',
+      );
       await tester.pump();
 
       await tester.tap(find.byIcon(Icons.send));
@@ -854,7 +863,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      await tester.enterText(find.byType(TextField), 'Submit test');
+      await tester.enterText(
+        find.byType(TextField),
+        'Can I change my medication dosage?',
+      );
       await tester.pump();
 
       // Submit via keyboard
@@ -862,7 +874,7 @@ void main() {
       await tester.pump();
       await tester.pump(); // post-frame auto-scroll
 
-      expect(find.text('Submit test'), findsOneWidget);
+      expect(find.text('Can I change my medication dosage?'), findsOneWidget);
     });
 
     // === NULL USER ID ===
@@ -1474,7 +1486,10 @@ void main() {
 
       // Replace with empty container to trigger dispose
       await tester.pumpWidget(
-        const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SizedBox())),
+        const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(body: SizedBox())),
       );
       await tester.pump();
 
@@ -1537,7 +1552,10 @@ void main() {
         await tester.pump();
 
         await tester.pumpWidget(
-          const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: Scaffold(body: SizedBox())),
+          const MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: Scaffold(body: SizedBox())),
         );
         await tester.pump();
         release.complete();
@@ -2595,9 +2613,11 @@ void main() {
             },
           };
 
-      http.Client mockAskClient(String answerText) => MockClient((request) async {
+      http.Client mockAskClient(String answerText) =>
+          MockClient((request) async {
             if (request.url.path == '/api/ai/ask') {
-              return http.Response(jsonEncode(deliveredResponse(answerText)), 200);
+              return http.Response(
+                  jsonEncode(deliveredResponse(answerText)), 200);
             }
             if (request.url.path.contains('/retention-period')) {
               return http.Response(jsonEncode({'retentionDays': 30}), 200);

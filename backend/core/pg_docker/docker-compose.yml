@@ -1,4 +1,4 @@
-version: '3.5'
+#version: '3.5'
 
 services:
   postgres:
@@ -23,7 +23,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  
+
   pgadmin:
     container_name: pgadmin_container
     image: dpage/pgadmin4

@@ -5,6 +5,7 @@ import '../../providers/user_provider.dart';
 import '../../features/profile/presentation/pages/profile_settings_page.dart';
 import '../../features/social/presentation/pages/chat_inbox_screen.dart';
 import '../../screens/patient_reports.dart';
+
 class PatientHomeTab extends StatelessWidget {
   const PatientHomeTab({super.key});
 
@@ -25,7 +26,6 @@ class PatientHealthTab extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Health'),
-       
       ),
       body: const Center(
         child: Column(

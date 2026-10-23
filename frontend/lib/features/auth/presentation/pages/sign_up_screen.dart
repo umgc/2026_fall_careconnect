@@ -152,72 +152,64 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   bool get _isLastStep => _currentStep == _totalSteps - 1;
 
-  String _untranslateGenderValue(String value){
+  String _untranslateGenderValue(String value) {
     final t = AppLocalizations.of(context)!;
-    if(value == t.signup_accountMale){
-        return 'Male';
-    }
-    else if(value == t.signup_accountFemale){
-        return 'Female';
-    }
-    else if(value == t.signup_accountOther){
-        return 'Other';
-    }
-    else if(value == t.signup_accountNoSay){
-        return 'Prefer not to say';
-    }
-    else{
+    if (value == t.signup_accountMale) {
+      return 'Male';
+    } else if (value == t.signup_accountFemale) {
+      return 'Female';
+    } else if (value == t.signup_accountOther) {
+      return 'Other';
+    } else if (value == t.signup_accountNoSay) {
+      return 'Prefer not to say';
+    } else {
       return value;
     }
   }
 
-  String _untranslateCaregiverValue(String value){
+  String _untranslateCaregiverValue(String value) {
     final t = AppLocalizations.of(context)!;
-    if(value == t.signup_accountProfessional){
-        return 'Professional';
-    }
-    else if(value == t.signup_accountFamilyMemb){
-        return 'Family Member';
-    }
-    else if(value == t.signup_accountOther){
-        return 'Other';
-    }
-    else if(value == t.signup_accountFriend){
-        return 'Friend';
-    }
-    else{
+    if (value == t.signup_accountProfessional) {
+      return 'Professional';
+    } else if (value == t.signup_accountFamilyMemb) {
+      return 'Family Member';
+    } else if (value == t.signup_accountOther) {
+      return 'Other';
+    } else if (value == t.signup_accountFriend) {
+      return 'Friend';
+    } else {
       return value;
     }
   }
 
-  String _translateRole(String role){
-    switch(role){
-      case('Patient'):
+  String _translateRole(String role) {
+    switch (role) {
+      case ('Patient'):
         return AppLocalizations.of(context)!.signup_patient;
-      case('Caregiver'):
-        return AppLocalizations.of(context)!.signup_caregiver; 
+      case ('Caregiver'):
+        return AppLocalizations.of(context)!.signup_caregiver;
       default:
         return role;
     }
   }
 
-  String _translateRoleSubtitle(String role){
-    switch(role){
-      case('Patient'):
+  String _translateRoleSubtitle(String role) {
+    switch (role) {
+      case ('Patient'):
         return AppLocalizations.of(context)!.signup_patientSubtitle;
-      case('Caregiver'):
-        return AppLocalizations.of(context)!.signup_caregiverSubtitle; 
+      case ('Caregiver'):
+        return AppLocalizations.of(context)!.signup_caregiverSubtitle;
       default:
         return role;
     }
   }
 
-  String _translateRoleDescription(String role){
-    switch(role){
-      case('Patient'):
+  String _translateRoleDescription(String role) {
+    switch (role) {
+      case ('Patient'):
         return AppLocalizations.of(context)!.signup_patientDescription;
-      case('Caregiver'):
-        return AppLocalizations.of(context)!.signup_caregiverDescription; 
+      case ('Caregiver'):
+        return AppLocalizations.of(context)!.signup_caregiverDescription;
       default:
         return role;
     }
@@ -272,18 +264,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
   }
 
   bool _validateContactInformation() {
-    final emailValid =
-        _emailController.text.isNotEmpty &&
+    final emailValid = _emailController.text.isNotEmpty &&
         RegExp(
           r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
         ).hasMatch(_emailController.text);
-    final addressValid =
-        _addressLine1Controller.text.isNotEmpty &&
+    final addressValid = _addressLine1Controller.text.isNotEmpty &&
         _cityController.text.isNotEmpty &&
         _stateController.text.isNotEmpty &&
         _zipController.text.isNotEmpty;
-    final professionalValid =
-        _selectedRole != 'Caregiver' ||
+    final professionalValid = _selectedRole != 'Caregiver' ||
         _selectedCaregiverType != 'Professional' ||
         (_licenseNumberController.text.isNotEmpty &&
             _issuingStateController.text.isNotEmpty &&
@@ -334,9 +323,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (mounted) {
         if (_selectedRole == 'Caregiver') {
           final email = _emailController.text;
-          final addressState = _stateController.text.isNotEmpty
-              ? _stateController.text
-              : null;
+          final addressState =
+              _stateController.text.isNotEmpty ? _stateController.text : null;
           context.go('/select-subscription-tier', extra: {
             'email': email,
             'state': addressState,
@@ -349,14 +337,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: $e'),
+            content: Text(
+                '${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
   }
-  
+
   Future<void> _submitPatientRegistration() async {
     // For now, use the basic auth registration endpoint
     // In the future, this should be a dedicated patient registration endpoint
@@ -406,7 +395,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
           '❌ Patient registration failed: ${response.statusCode} - ${response.body}',
         );
       }
-      throw Exception('${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: ${response.body}');
+      throw Exception(
+          '${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: ${response.body}');
     }
   }
 
@@ -463,7 +453,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
           '❌ Caregiver registration failed: ${response.statusCode} - ${response.body}',
         );
       }
-      throw Exception('${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: ${response.body}');
+      throw Exception(
+          '${AppLocalizations.of(context)!.authservice_emailRegistrationFailed}: ${response.body}');
     }
   }
 
@@ -497,16 +488,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
             color: AppTheme.primary,
           ),
         ),
-
         const SizedBox(height: 8),
-
         Text(
           t.signup_accountRoleHint,
           style: TextStyle(fontSize: 14, color: Colors.grey[600]),
         ),
-
         const SizedBox(height: 32),
-
         Text(
           '${t.signup_accountRole} *',
           style: TextStyle(
@@ -515,9 +502,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             color: AppTheme.textPrimary,
           ),
         ),
-
         const SizedBox(height: 8),
-
         Row(
           children: _roles.keys.map((String role) {
             final isSelected = _selectedRole == role;
@@ -537,13 +522,15 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           });
                         },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 20, horizontal: 16),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? AppTheme.primary.withOpacity(0.08)
                           : Colors.white,
                       border: Border.all(
-                        color: isSelected ? AppTheme.primary : Colors.grey[300]!,
+                        color:
+                            isSelected ? AppTheme.primary : Colors.grey[300]!,
                         width: isSelected ? 2 : 1,
                       ),
                       borderRadius: BorderRadius.circular(12),
@@ -553,7 +540,8 @@ class _RegistrationPageState extends State<RegistrationPage> {
                         Icon(
                           _roles[role]!['icon'],
                           size: 32,
-                          color: isSelected ? AppTheme.primary : Colors.grey[500],
+                          color:
+                              isSelected ? AppTheme.primary : Colors.grey[500],
                         ),
                         const SizedBox(height: 10),
                         Text(
@@ -561,7 +549,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                            color: isSelected
+                                ? AppTheme.primary
+                                : AppTheme.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -569,7 +559,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           _translateRoleSubtitle(role),
                           style: TextStyle(
                             fontSize: 12,
-                            color: isSelected ? AppTheme.primary.withOpacity(0.7) : Colors.grey[500],
+                            color: isSelected
+                                ? AppTheme.primary.withOpacity(0.7)
+                                : Colors.grey[500],
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -581,9 +573,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             );
           }).toList(),
         ),
-
         const SizedBox(height: 20),
-
         if (_selectedRole != null) ...[
           Container(
             width: double.infinity,
@@ -677,7 +667,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
             value: _selectedGender,
             label: t.signup_accountGender,
             isRequired: true,
-            items: [t.signup_accountMale, t.signup_accountFemale, t.signup_accountOther, t.signup_accountNoSay],
+            items: [
+              t.signup_accountMale,
+              t.signup_accountFemale,
+              t.signup_accountOther,
+              t.signup_accountNoSay
+            ],
             onChanged: (value) {
               setState(() {
                 _selectedGender = _untranslateGenderValue(value!);
@@ -698,7 +693,12 @@ class _RegistrationPageState extends State<RegistrationPage> {
               value: _selectedCaregiverType,
               label: t.signup_accountCaregiverType,
               isRequired: true,
-              items: [t.signup_accountProfessional, t.signup_accountFamilyMemb, t.signup_accountFriend, t.signup_accountOther],
+              items: [
+                t.signup_accountProfessional,
+                t.signup_accountFamilyMemb,
+                t.signup_accountFriend,
+                t.signup_accountOther
+              ],
               onChanged: (value) {
                 setState(() {
                   _selectedCaregiverType = _untranslateCaregiverValue(value!);
@@ -901,7 +901,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             style: TextStyle(fontSize: 14, color: Colors.grey[600]),
           ),
           const SizedBox(height: 32),
-
           _buildPasswordFormField(
             controller: _passwordController,
             label: t.login_passwordLabel,
@@ -923,7 +922,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             },
           ),
           const SizedBox(height: 20),
-
           _buildPasswordFormField(
             controller: _confirmPasswordController,
             label: t.signup_accountConfirmPassword,
@@ -945,7 +943,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
             },
           ),
           const SizedBox(height: 20),
-
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -995,7 +992,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
           style: TextStyle(fontSize: 14, color: Colors.grey[600]),
         ),
         const SizedBox(height: 32),
-
         _buildReviewSection(t.signup_accountTypeSection, _selectedRole ?? ''),
         _buildReviewSection(
           t.signup_accountNameSection,
@@ -1005,27 +1001,25 @@ class _RegistrationPageState extends State<RegistrationPage> {
         _buildReviewSection(t.signup_accountPhone, _phoneController.text),
         _buildReviewSection(t.signup_accountDOB, _dobController.text),
         _buildReviewSection(t.signup_accountGender, _selectedGender ?? ''),
-
         if (_selectedRole == 'Caregiver')
-          _buildReviewSection(t.signup_accountCaregiverType, _selectedCaregiverType ?? ''),
-
+          _buildReviewSection(
+              t.signup_accountCaregiverType, _selectedCaregiverType ?? ''),
         _buildReviewSection(
           t.signup_accountAddress,
           '${_addressLine1Controller.text}${_addressLine2Controller.text.isNotEmpty ? ', ${_addressLine2Controller.text}' : ''}\n${_cityController.text}, ${_stateController.text} ${_zipController.text}',
         ),
-
         if (_selectedRole == 'Caregiver' &&
             _selectedCaregiverType == 'Professional') ...[
-          _buildReviewSection(t.signup_accountLicenseNumber, _licenseNumberController.text),
-          _buildReviewSection(t.signup_accountIssueState, _issuingStateController.text),
+          _buildReviewSection(
+              t.signup_accountLicenseNumber, _licenseNumberController.text),
+          _buildReviewSection(
+              t.signup_accountIssueState, _issuingStateController.text),
           _buildReviewSection(
             t.signup_accountYearXp,
             _yearsExperienceController.text,
           ),
         ],
-
         const SizedBox(height: 24),
-
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1304,8 +1298,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: isMobile ? double.infinity : 600,
-                minHeight:
-                    MediaQuery.of(context).size.height -
+                minHeight: MediaQuery.of(context).size.height -
                     MediaQuery.of(context).padding.top -
                     MediaQuery.of(context).padding.bottom,
               ),
@@ -1507,7 +1500,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                             : () => context.go('/login'),
                         icon: const Icon(Icons.arrow_back, size: 18),
                         label: Text(
-                          _currentStep > 0 ? t.signup_previousButton : t.signup_backLoginButton,
+                          _currentStep > 0
+                              ? t.signup_previousButton
+                              : t.signup_backLoginButton,
                         ),
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.textSecondary,
@@ -1540,7 +1535,9 @@ class _RegistrationPageState extends State<RegistrationPage> {
                           _isLastStep ? Icons.check : Icons.arrow_forward,
                           size: 18,
                         ),
-                        label: Text(_isLastStep ? t.signup_signUpButton : t.signup_nextButton),
+                        label: Text(_isLastStep
+                            ? t.signup_signUpButton
+                            : t.signup_nextButton),
                       ),
                     ],
                   ),

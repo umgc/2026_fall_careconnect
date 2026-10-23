@@ -57,7 +57,8 @@ class DashboardsScreen extends StatelessWidget {
             context,
             icon: Icons.psychology_outlined,
             title: 'Behavioral Frequency',
-            subtitle: 'Incident count by week and most frequent behavior keywords',
+            subtitle:
+                'Incident count by week and most frequent behavior keywords',
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -130,7 +131,8 @@ class DashboardsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+              Icon(Icons.chevron_right,
+                  color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),

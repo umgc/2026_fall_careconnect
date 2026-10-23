@@ -116,8 +116,8 @@ class _ComplianceChecklistPageState extends State<ComplianceChecklistPage> {
                       items: DocumentComplianceService.statuses
                           .map((s) => DropdownMenuItem(
                                 value: s,
-                                child: Text(
-                                    DocumentComplianceService.prettify(s)),
+                                child:
+                                    Text(DocumentComplianceService.prettify(s)),
                               ))
                           .toList(),
                       onChanged: (value) {
@@ -229,7 +229,8 @@ class _ComplianceChecklistPageState extends State<ComplianceChecklistPage> {
                 ),
                 Expanded(
                   child: history.isEmpty
-                      ? const Center(child: Text('No status changes recorded yet'))
+                      ? const Center(
+                          child: Text('No status changes recorded yet'))
                       : ListView.builder(
                           controller: scrollController,
                           itemCount: history.length,

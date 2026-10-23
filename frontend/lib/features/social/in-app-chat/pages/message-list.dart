@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 class MessagesListPage extends StatefulWidget {
   const MessagesListPage({super.key});
 
@@ -40,7 +39,9 @@ class _MessagesListPageState extends State<MessagesListPage> {
     final q = _searchController.text.trim().toLowerCase();
     setState(() {
       _filtered = _conversations
-          .where((c) => c.name.toLowerCase().contains(q) || c.role.toLowerCase().contains(q))
+          .where((c) =>
+              c.name.toLowerCase().contains(q) ||
+              c.role.toLowerCase().contains(q))
           .toList();
     });
   }
@@ -62,10 +63,13 @@ class _MessagesListPageState extends State<MessagesListPage> {
         if (list is List && list.isNotEmpty) {
           final last = Map<String, dynamic>.from(list.last as Map);
 
-          final String senderName = (last['senderName'] ?? 'Unknown').toString();
+          final String senderName =
+              (last['senderName'] ?? 'Unknown').toString();
           final String lastMessage = (last['message'] ?? '').toString();
           final String role = (last['messageType'] ?? 'Care Team').toString();
-          final DateTime ts = DateTime.tryParse((last['timestamp'] ?? '').toString()) ?? DateTime.now();
+          final DateTime ts =
+              DateTime.tryParse((last['timestamp'] ?? '').toString()) ??
+                  DateTime.now();
           final bool hasUnread = !(last['read'] ?? false);
 
           // Build a conversation row using the last entry
@@ -124,14 +128,20 @@ class _MessagesListPageState extends State<MessagesListPage> {
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     // fallback date for older items
     return '${t.month}/${t.day}/${t.year}';
-    }
+  }
 
   Color _avatarColorFromSeed(String seed) {
     // quick stable color from name
     final code = seed.runes.fold<int>(0, (p, c) => p + c);
     final colors = [
-      Colors.blue, Colors.orange, Colors.purple, Colors.red,
-      Colors.teal, Colors.indigo, Colors.green, Colors.brown,
+      Colors.blue,
+      Colors.orange,
+      Colors.purple,
+      Colors.red,
+      Colors.teal,
+      Colors.indigo,
+      Colors.green,
+      Colors.brown,
     ];
     return colors[code % colors.length];
   }
@@ -144,7 +154,8 @@ class _MessagesListPageState extends State<MessagesListPage> {
       body: Column(
         children: [
           Container(
-            color: Theme.of(context).scaffoldBackgroundColor.withValues(alpha: .1),
+            color:
+                Theme.of(context).scaffoldBackgroundColor.withValues(alpha: .1),
             margin: const EdgeInsets.all(16),
             child: TextField(
               controller: _searchController,
@@ -152,7 +163,8 @@ class _MessagesListPageState extends State<MessagesListPage> {
                 hintText: 'Search conversations...',
                 hintStyle: TextStyle(color: Colors.grey[500]),
                 prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               ),
               // live filter as you type (the listener also covers this)
               onChanged: (_) {},
@@ -178,8 +190,10 @@ class _MessagesListPageState extends State<MessagesListPage> {
                             background: Container(
                               color: Colors.red,
                               alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: const Icon(Icons.delete, color: Colors.white),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              child:
+                                  const Icon(Icons.delete, color: Colors.white),
                             ),
                             onDismissed: (_) => _deleteConversation(c.id),
                             child: _buildMessageItem(
@@ -202,14 +216,14 @@ class _MessagesListPageState extends State<MessagesListPage> {
 
   // ——— your original row builder kept EXACTLY the same API ———
   Widget _buildMessageItem(
-      BuildContext context,
-      String name,
-      String role,
-      String lastMessage,
-      String time,
-      Color avatarColor, {
-        bool hasUnread = false,
-      }) {
+    BuildContext context,
+    String name,
+    String role,
+    String lastMessage,
+    String time,
+    Color avatarColor, {
+    bool hasUnread = false,
+  }) {
     return InkWell(
       onTap: () {
         Navigator.push(

@@ -11,7 +11,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:care_connect_app/features/shift_scheduling/models/scheduled_visit_model.dart';
 import 'package:care_connect_app/features/shift_scheduling/services/schedule_api_service.dart';
 import 'package:care_connect_app/services/api_client.dart';
 

@@ -121,7 +121,8 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
 
       final response = await ApiService.getCaregiverPatients(caregiverId);
       if (response.statusCode != 200) {
-        throw Exception('Failed to load caregiver patients (${response.statusCode}).');
+        throw Exception(
+            'Failed to load caregiver patients (${response.statusCode}).');
       }
 
       final decoded = jsonDecode(response.body);
@@ -136,11 +137,17 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
         final link = item['link'];
         final patient = item['patient'];
 
-        final linkMap = link is Map<String, dynamic> ? link : const <String, dynamic>{};
-        final patientMap = patient is Map<String, dynamic> ? patient : const <String, dynamic>{};
+        final linkMap =
+            link is Map<String, dynamic> ? link : const <String, dynamic>{};
+        final patientMap = patient is Map<String, dynamic>
+            ? patient
+            : const <String, dynamic>{};
 
-        final patientUserId = _asInt(linkMap['patientUserId']) ?? _asInt(patientMap['userId']);
-        if (patientUserId == null || patientUserId <= 0 || seen.contains(patientUserId)) {
+        final patientUserId =
+            _asInt(linkMap['patientUserId']) ?? _asInt(patientMap['userId']);
+        if (patientUserId == null ||
+            patientUserId <= 0 ||
+            seen.contains(patientUserId)) {
           continue;
         }
         seen.add(patientUserId);
@@ -148,13 +155,16 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
         final firstName = (patientMap['firstName'] ?? '').toString().trim();
         final lastName = (patientMap['lastName'] ?? '').toString().trim();
         final fallbackName = (linkMap['patientName'] ?? '').toString().trim();
-        final displayName = [firstName, lastName].where((e) => e.isNotEmpty).join(' ').trim();
+        final displayName =
+            [firstName, lastName].where((e) => e.isNotEmpty).join(' ').trim();
 
         patients.add(_AnalyticsPatient(
           userId: patientUserId,
           name: displayName.isNotEmpty
               ? displayName
-              : (fallbackName.isNotEmpty ? fallbackName : 'Patient $patientUserId'),
+              : (fallbackName.isNotEmpty
+                  ? fallbackName
+                  : 'Patient $patientUserId'),
         ));
       }
 
@@ -233,12 +243,6 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  String _shortDate(DateTime dt) {
-    final month = dt.month.toString().padLeft(2, '0');
-    final day = dt.day.toString().padLeft(2, '0');
-    return '$month/$day';
-  }
-
   String _shortDateWithYear(DateTime dt) {
     final month = dt.month.toString().padLeft(2, '0');
     final day = dt.day.toString().padLeft(2, '0');
@@ -273,7 +277,8 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
           start: now.subtract(const Duration(days: 30)),
           end: now,
         );
-    var start = DateTime(initial.start.year, initial.start.month, initial.start.day);
+    var start =
+        DateTime(initial.start.year, initial.start.month, initial.start.day);
     var end = DateTime(initial.end.year, initial.end.month, initial.end.day);
     var editingStart = true;
 
@@ -322,12 +327,14 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                       onDateChanged: (picked) {
                         setLocalState(() {
                           if (editingStart) {
-                            start = DateTime(picked.year, picked.month, picked.day);
+                            start =
+                                DateTime(picked.year, picked.month, picked.day);
                             if (start.isAfter(end)) {
                               end = start;
                             }
                           } else {
-                            end = DateTime(picked.year, picked.month, picked.day);
+                            end =
+                                DateTime(picked.year, picked.month, picked.day);
                             if (end.isBefore(start)) {
                               start = end;
                             }
@@ -430,11 +437,16 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
     final points = <_MetricPoint>[];
     for (final item in _moodHistory) {
       final dt = _asDateTime(
-        item['createdAt'] ?? item['timestamp'] ?? item['date'] ?? item['takenAt'],
+        item['createdAt'] ??
+            item['timestamp'] ??
+            item['date'] ??
+            item['takenAt'],
       );
-      final raw = _asDouble(item['score'] ?? item['moodValue'] ?? item['value'], -1);
+      final raw =
+          _asDouble(item['score'] ?? item['moodValue'] ?? item['value'], -1);
       if (raw < 0) continue;
-      final normalized = raw > 1.0 ? (raw / 10.0).clamp(0.0, 1.0) : raw.clamp(0.0, 1.0);
+      final normalized =
+          raw > 1.0 ? (raw / 10.0).clamp(0.0, 1.0) : raw.clamp(0.0, 1.0);
       points.add(_MetricPoint(date: dt, score: normalized));
     }
     points.sort((a, b) => a.date.compareTo(b.date));
@@ -442,7 +454,8 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
   }
 
   double _moodScoreFromItem(Map<String, dynamic> item) {
-    final raw = _asDouble(item['score'] ?? item['moodValue'] ?? item['value'], -1);
+    final raw =
+        _asDouble(item['score'] ?? item['moodValue'] ?? item['value'], -1);
     if (raw < 0) return 0.5;
     return raw > 1.0 ? (raw / 10.0).clamp(0.0, 1.0) : raw.clamp(0.0, 1.0);
   }
@@ -464,8 +477,8 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
       const rowExtent = 74.0;
       final viewport = _historyScrollController.position.viewportDimension;
       final centered = (idx * rowExtent) - (viewport / 2) + (rowExtent / 2);
-      final target = centered
-          .clamp(0.0, _historyScrollController.position.maxScrollExtent);
+      final target = centered.clamp(
+          0.0, _historyScrollController.position.maxScrollExtent);
       _historyScrollController.animateTo(
         target,
         duration: const Duration(milliseconds: 260),
@@ -487,8 +500,7 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final hasAnyAnalyticsData =
-        _history.isNotEmpty || _moodHistory.isNotEmpty;
+    final hasAnyAnalyticsData = _history.isNotEmpty || _moodHistory.isNotEmpty;
     final visibleHistory = List<Map<String, dynamic>>.from(_history)
       ..removeWhere((item) {
         if (_historyLabelFilter == _HistoryLabelFilter.all) {
@@ -501,13 +513,17 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
     visibleHistory.sort((a, b) {
       switch (_historySort) {
         case _HistorySort.newest:
-          return _asDateTime(b['callDate']).compareTo(_asDateTime(a['callDate']));
+          return _asDateTime(b['callDate'])
+              .compareTo(_asDateTime(a['callDate']));
         case _HistorySort.oldest:
-          return _asDateTime(a['callDate']).compareTo(_asDateTime(b['callDate']));
+          return _asDateTime(a['callDate'])
+              .compareTo(_asDateTime(b['callDate']));
         case _HistorySort.highestScore:
-          return _asDouble(b['overallScore']).compareTo(_asDouble(a['overallScore']));
+          return _asDouble(b['overallScore'])
+              .compareTo(_asDouble(a['overallScore']));
         case _HistorySort.lowestScore:
-          return _asDouble(a['overallScore']).compareTo(_asDouble(b['overallScore']));
+          return _asDouble(a['overallScore'])
+              .compareTo(_asDouble(b['overallScore']));
       }
     });
 
@@ -578,20 +594,22 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
             .reduce((a, b) => a.isAfter(b) ? a : b);
     final minX = minPointDate.millisecondsSinceEpoch.toDouble();
     final maxX = maxPointDate.millisecondsSinceEpoch.toDouble();
-    final totalSpanDays =
-        (maxPointDate.difference(minPointDate).inHours / 24.0).abs().clamp(1.0, 5000.0);
-    final showCallsHistory =
-        _plotFilter == _AnalyticsPlotFilter.all || _plotFilter == _AnalyticsPlotFilter.calls;
-    final showMoodHistory =
-        _plotFilter == _AnalyticsPlotFilter.all || _plotFilter == _AnalyticsPlotFilter.mood;
-    final visibleMoodHistory = _moodHistory
-        .where((item) {
-          final dt = _asDateTime(
-            item['createdAt'] ?? item['timestamp'] ?? item['date'] ?? item['takenAt'],
-          );
-          return _isInSelectedTimeframe(dt, latestDataDate);
-        })
-        .toList()
+    final totalSpanDays = (maxPointDate.difference(minPointDate).inHours / 24.0)
+        .abs()
+        .clamp(1.0, 5000.0);
+    final showCallsHistory = _plotFilter == _AnalyticsPlotFilter.all ||
+        _plotFilter == _AnalyticsPlotFilter.calls;
+    final showMoodHistory = _plotFilter == _AnalyticsPlotFilter.all ||
+        _plotFilter == _AnalyticsPlotFilter.mood;
+    final visibleMoodHistory = _moodHistory.where((item) {
+      final dt = _asDateTime(
+        item['createdAt'] ??
+            item['timestamp'] ??
+            item['date'] ??
+            item['takenAt'],
+      );
+      return _isInSelectedTimeframe(dt, latestDataDate);
+    }).toList()
       ..sort((a, b) {
         final ad = _asDateTime(
           a['createdAt'] ?? a['timestamp'] ?? a['date'] ?? a['takenAt'],
@@ -626,545 +644,15 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
-                        child: Text('No linked patients found for this caregiver.'),
+                        child: Text(
+                            'No linked patients found for this caregiver.'),
                       ),
                     )
-              : RefreshIndicator(
-                  onRefresh: _loadPatients,
-                  child: ListView(
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Patient',
-                                style: TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                              const SizedBox(height: 8),
-                              DropdownButtonFormField<int>(
-                                initialValue: _selectedPatientUserId,
-                                items: _patients
-                                    .map(
-                                      (patient) => DropdownMenuItem<int>(
-                                        value: patient.userId,
-                                        child: Text(patient.name),
-                                      ),
-                                    )
-                                    .toList(),
-                                onChanged: (value) {
-                                  if (value == null) return;
-                                  setState(() => _selectedPatientUserId = value);
-                                  _loadHistory(value);
-                                },
-                                decoration: const InputDecoration(
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_loadingHistory)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 40),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_selectedPatientUserId == null)
-                        const Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('Select a patient to load analytics.'),
-                          ),
-                        )
-                      else if (!hasAnyAnalyticsData)
-                        const Card(
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text(
-                              'No sentiment or mood history found for this patient yet.',
-                            ),
-                          ),
-                        )
-                      else ...[
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 180,
-                                        child: DropdownButtonFormField<_HistorySort>(
-                                          initialValue: _historySort,
-                                          items: _HistorySort.values
-                                              .map(
-                                                (sort) => DropdownMenuItem<_HistorySort>(
-                                                  value: sort,
-                                                  child: Text(sort.label),
-                                                ),
-                                              )
-                                              .toList(),
-                                          onChanged: (value) {
-                                            if (value == null) return;
-                                            setState(() => _historySort = value);
-                                          },
-                                          decoration: const InputDecoration(
-                                            labelText: 'Sort',
-                                            border: OutlineInputBorder(),
-                                            isDense: true,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      SizedBox(
-                                        width: 160,
-                                        child: DropdownButtonFormField<_HistoryLabelFilter>(
-                                          initialValue: _historyLabelFilter,
-                                          items: _HistoryLabelFilter.values
-                                              .map(
-                                                (filter) => DropdownMenuItem<_HistoryLabelFilter>(
-                                                  value: filter,
-                                                  child: Text(filter.label),
-                                                ),
-                                              )
-                                              .toList(),
-                                          onChanged: (value) {
-                                            if (value == null) return;
-                                            setState(() => _historyLabelFilter = value);
-                                          },
-                                          decoration: const InputDecoration(
-                                            labelText: 'Label',
-                                            border: OutlineInputBorder(),
-                                            isDense: true,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      SizedBox(
-                                        width: 150,
-                                        child: DropdownButtonFormField<_AnalyticsPlotFilter>(
-                                          initialValue: _plotFilter,
-                                          items: _AnalyticsPlotFilter.values
-                                              .map(
-                                                (filter) => DropdownMenuItem<_AnalyticsPlotFilter>(
-                                                  value: filter,
-                                                  child: Text(filter.label),
-                                                ),
-                                              )
-                                              .toList(),
-                                          onChanged: (value) {
-                                            if (value == null) return;
-                                            setState(() => _plotFilter = value);
-                                          },
-                                          decoration: const InputDecoration(
-                                            labelText: 'Plot',
-                                            border: OutlineInputBorder(),
-                                            isDense: true,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      SizedBox(
-                                        width: 180,
-                                        child: DropdownButtonFormField<_AnalyticsTimeframe>(
-                                          initialValue: _timeframe,
-                                          items: _AnalyticsTimeframe.values
-                                              .map(
-                                                (tf) => DropdownMenuItem<_AnalyticsTimeframe>(
-                                                  value: tf,
-                                                  child: Text(tf.label),
-                                                ),
-                                              )
-                                              .toList(),
-                                          onChanged: (value) {
-                                            if (value == null) return;
-                                            if (value == _AnalyticsTimeframe.custom) {
-                                              _showCustomRangeModal().then((picked) {
-                                                if (!mounted || picked == null) return;
-                                                setState(() {
-                                                  _customDateRange = picked;
-                                                  _timeframe = _AnalyticsTimeframe.custom;
-                                                });
-                                              });
-                                              return;
-                                            }
-                                            setState(() {
-                                              _timeframe = value;
-                                            });
-                                          },
-                                          decoration: const InputDecoration(
-                                            labelText: 'Timeframe',
-                                            border: OutlineInputBorder(),
-                                            isDense: true,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'Longitudinal Sentiment Trend',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${_shortDateWithYear(minPointDate)} - ${_shortDateWithYear(maxPointDate)}',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: renderedSeries
-                                      .map(
-                                        (series) => Chip(
-                                          visualDensity: VisualDensity.compact,
-                                          avatar: Icon(
-                                            Icons.circle,
-                                            size: 12,
-                                            color: series.color,
-                                          ),
-                                          label: Text(series.kind.label),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                                const SizedBox(height: 12),
-                                if (renderedSeries.isEmpty)
-                                  const SizedBox(
-                                    height: 220,
-                                    child: Center(
-                                      child: Text('No points available for selected plot filter.'),
-                                    ),
-                                  )
-                                else
-                                  LayoutBuilder(
-                                    builder: (context, constraints) {
-                                      final maxPointCount = renderedSeries
-                                          .map((s) => s.points.length)
-                                          .fold<int>(0, (a, b) => a > b ? a : b);
-                                      final chartWidth = (maxPointCount * 24.0)
-                                          .clamp(constraints.maxWidth, 12000.0);
-                                      final xSpan = (maxX - minX).abs();
-                                      final dayMs = const Duration(days: 1).inMilliseconds.toDouble();
-                                      final desiredDaysPerTick = totalSpanDays > 720
-                                          ? 120.0
-                                          : totalSpanDays > 365
-                                              ? 60.0
-                                              : totalSpanDays > 180
-                                                  ? 30.0
-                                                  : totalSpanDays > 90
-                                                      ? 14.0
-                                                      : totalSpanDays > 45
-                                                          ? 7.0
-                                                          : totalSpanDays > 14
-                                                              ? 3.0
-                                                              : 1.0;
-                                      final xInterval = xSpan <= 0 ? dayMs : dayMs * desiredDaysPerTick;
-
-                                      return SizedBox(
-                                        height: 220,
-                                        child: Scrollbar(
-                                          controller: _chartScrollController,
-                                          thumbVisibility: chartWidth > constraints.maxWidth,
-                                          child: SingleChildScrollView(
-                                            controller: _chartScrollController,
-                                            scrollDirection: Axis.horizontal,
-                                            child: SizedBox(
-                                              width: chartWidth,
-                                              child: LineChart(
-                                                  LineChartData(
-                                                minY: 0,
-                                                maxY: 1,
-                                                minX: minX,
-                                                maxX: maxX <= minX ? minX + 1 : maxX,
-                                                gridData: const FlGridData(show: true),
-                                                borderData: FlBorderData(show: true),
-                                                titlesData: FlTitlesData(
-                                                  rightTitles: const AxisTitles(
-                                                    sideTitles: SideTitles(showTitles: false),
-                                                  ),
-                                                  topTitles: const AxisTitles(
-                                                    sideTitles: SideTitles(showTitles: false),
-                                                  ),
-                                                  leftTitles: AxisTitles(
-                                                    sideTitles: SideTitles(
-                                                      showTitles: true,
-                                                      reservedSize: 32,
-                                                      interval: 0.25,
-                                                      getTitlesWidget: (value, meta) => Text(
-                                                        value.toStringAsFixed(2),
-                                                        style: const TextStyle(fontSize: 10),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  bottomTitles: AxisTitles(
-                                                    sideTitles: SideTitles(
-                                                      showTitles: true,
-                                                      reservedSize: 30,
-                                                      interval: xInterval,
-                                                      getTitlesWidget: (value, meta) {
-                                                        final dt = DateTime.fromMillisecondsSinceEpoch(
-                                                          value.round(),
-                                                        );
-                                                        return Padding(
-                                                          padding: const EdgeInsets.only(top: 6),
-                                                          child: Text(
-                                                            _axisLabelForDate(dt, totalSpanDays),
-                                                            style: const TextStyle(fontSize: 10),
-                                                          ),
-                                                        );
-                                                      },
-                                                    ),
-                                                  ),
-                                                ),
-                                                lineTouchData: LineTouchData(
-                                                  handleBuiltInTouches: true,
-                                                  touchCallback: (event, response) {
-                                                    if (event is! FlTapUpEvent) {
-                                                      return;
-                                                    }
-                                                    final spots = response?.lineBarSpots;
-                                                    if (spots == null || spots.isEmpty) {
-                                                      return;
-                                                    }
-                                                    final selected = spots.first;
-                                                    final barIndex = selected.barIndex;
-                                                    if (barIndex < 0 ||
-                                                        barIndex >= renderedSeries.length) {
-                                                      return;
-                                                    }
-                                                    final series = renderedSeries[barIndex];
-                                                    if (series.kind != _SeriesKind.calls) {
-                                                      return;
-                                                    }
-                                                    final pointIdx = selected.spotIndex;
-                                                    if (pointIdx < 0 ||
-                                                        pointIdx >= series.points.length) {
-                                                      return;
-                                                    }
-                                                    final callId = series.points[pointIdx].callId;
-                                                    if (callId == null || callId.isEmpty) {
-                                                      return;
-                                                    }
-                                                    setState(() {
-                                                      _selectedCallId = callId;
-                                                    });
-                                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                                      _scrollToSelectedHistoryRow(visibleHistory);
-                                                    });
-                                                  },
-                                                ),
-                                                lineBarsData: renderedSeries.map((series) {
-                                                  return LineChartBarData(
-                                                    isCurved: false,
-                                                    color: series.color,
-                                                    barWidth: 2.2,
-                                                    dotData: FlDotData(
-                                                      show: true,
-                                                      getDotPainter: (spot, _, __, ___) {
-                                                        final dotColor = _colorForScore(spot.y);
-                                                        return FlDotCirclePainter(
-                                                          radius: 3.6,
-                                                          color: dotColor,
-                                                          strokeColor: dotColor.withValues(alpha: 0.75),
-                                                          strokeWidth: 1,
-                                                        );
-                                                      },
-                                                    ),
-                                                    spots: series.points
-                                                        .map((p) => FlSpot(
-                                                              p.date.millisecondsSinceEpoch.toDouble(),
-                                                              p.score,
-                                                            ))
-                                                        .toList(),
-                                                  );
-                                                }).toList(),
-                                                  ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Wrap(
-                              spacing: 16,
-                              runSpacing: 8,
-                              children: [
-                                Text('Average score: ${avgScore.toStringAsFixed(3)}'),
-                                Text('Trend: $trendText'),
-                                Text('Recent label: $recentLabel'),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (showCallsHistory)
-                          Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Call History',
-                                  style: TextStyle(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${visibleHistory.length} calls recorded',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                ),
-                                const SizedBox(height: 8),
-                                SizedBox(
-                                  height: 260,
-                                  child: Scrollbar(
-                                    controller: _historyScrollController,
-                                    thumbVisibility: visibleHistory.length > 5,
-                                    child: ListView.separated(
-                                    controller: _historyScrollController,
-                                    itemCount: visibleHistory.length,
-                                    separatorBuilder: (_, __) => const Divider(height: 1),
-                                    itemBuilder: (context, index) {
-                                      final item = visibleHistory[index];
-                                      final callId = (item['callId'] ?? '').toString();
-                                      final callDate = _asDateTime(item['callDate']);
-                                      final label = (item['overallLabel'] ?? 'N/A').toString();
-                                      final score = _asDouble(item['overallScore']);
-                                      final durationMinutes = _asDouble(item['durationMinutes']);
-                                      final isSelected = _selectedCallId == callId;
-                                      final scoreColor = _colorForScore(score);
-                                      final colorScheme = Theme.of(context).colorScheme;
-                                      return Container(
-                                        key: _keyForHistoryRow(index),
-                                        height: 74,
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? colorScheme.onSurface.withValues(alpha: 0.08)
-                                              : null,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: isSelected
-                                              ? Border.all(
-                                                  color: colorScheme.onSurface.withValues(alpha: 0.22),
-                                                  width: 1,
-                                                )
-                                              : null,
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            AnimatedContainer(
-                                              duration: const Duration(milliseconds: 180),
-                                              curve: Curves.easeOut,
-                                              width: 3,
-                                              height: 58,
-                                              decoration: BoxDecoration(
-                                                color: isSelected
-                                                    ? colorScheme.onSurface.withValues(alpha: 0.45)
-                                                    : Colors.transparent,
-                                                borderRadius: const BorderRadius.only(
-                                                  topLeft: Radius.circular(8),
-                                                  bottomLeft: Radius.circular(8),
-                                                ),
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: ListTile(
-                                                dense: false,
-                                                contentPadding:
-                                                    const EdgeInsets.symmetric(horizontal: 8),
-                                                leading: Icon(Icons.call, color: colorScheme.primary),
-                                                title: Text(
-                                                  _formatCallTitle(callId),
-                                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                ),
-                                                subtitle: Text(
-                                                  '${_formatDateTime(callDate)} - Ended - Duration ${durationMinutes.toStringAsFixed(1)} min',
-                                                ),
-                                                trailing: SizedBox(
-                                                  width: 88,
-                                                  child: Column(
-                                                    mainAxisAlignment: MainAxisAlignment.center,
-                                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                                    children: [
-                                                      Text(
-                                                        '${(score * 100).toStringAsFixed(1)}%',
-                                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                                              color: scoreColor,
-                                                              fontWeight: FontWeight.w700,
-                                                            ),
-                                                      ),
-                                                      Text(
-                                                        label.toUpperCase(),
-                                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                                              color: scoreColor,
-                                                              fontWeight: FontWeight.w600,
-                                                            ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                onTap: callId.isEmpty
-                                                    ? null
-                                                    : () {
-                                                        setState(() {
-                                                          _selectedCallId = callId;
-                                                        });
-                                                        WidgetsBinding.instance
-                                                            .addPostFrameCallback((_) {
-                                                          _scrollToSelectedHistoryRow(
-                                                            visibleHistory,
-                                                          );
-                                                        });
-                                                        Navigator.of(context).push(
-                                                          MaterialPageRoute(
-                                                            builder: (_) =>
-                                                                PostCallTelemetrySummaryScreen(
-                                                              callId: callId,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      },
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (showCallsHistory) const SizedBox(height: 12),
-                        if (showMoodHistory)
+                  : RefreshIndicator(
+                      onRefresh: _loadPatients,
+                      child: ListView(
+                        padding: const EdgeInsets.all(12),
+                        children: [
                           Card(
                             child: Padding(
                               padding: const EdgeInsets.all(12),
@@ -1172,92 +660,835 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Mood History',
-                                    style: TextStyle(fontWeight: FontWeight.w700),
+                                    'Patient',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w600),
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(
-                                    '${visibleMoodHistory.length} mood entries',
-                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    height: 220,
-                                    child: ListView.separated(
-                                      itemCount: visibleMoodHistory.length,
-                                      separatorBuilder: (_, __) => const Divider(height: 1),
-                                      itemBuilder: (context, index) {
-                                        final item = visibleMoodHistory[index];
-                                        final dt = _asDateTime(
-                                          item['createdAt'] ??
-                                              item['timestamp'] ??
-                                              item['date'] ??
-                                              item['takenAt'],
-                                        );
-                                        final score = _moodScoreFromItem(item);
-                                        final label = _labelForScore(score);
-                                        final color = _colorForScore(score);
-                                        return ListTile(
-                                          dense: true,
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                                          leading: Icon(Icons.mood, color: color),
-                                          title: Text('Mood entry - ${_formatDateTime(dt)}'),
-                                          subtitle: Text(
-                                            (item['notes'] ?? item['note'] ?? item['description'] ?? '')
-                                                .toString()
-                                                .trim()
-                                                .isEmpty
-                                                ? 'No notes'
-                                                : (item['notes'] ??
-                                                        item['note'] ??
-                                                        item['description'])
-                                                    .toString(),
+                                  DropdownButtonFormField<int>(
+                                    initialValue: _selectedPatientUserId,
+                                    items: _patients
+                                        .map(
+                                          (patient) => DropdownMenuItem<int>(
+                                            value: patient.userId,
+                                            child: Text(patient.name),
                                           ),
-                                          trailing: SizedBox(
-                                            width: 88,
-                                            child: Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              children: [
-                                                Text(
-                                                  '${(score * 100).toStringAsFixed(1)}%',
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .labelSmall
-                                                      ?.copyWith(
-                                                        color: color,
-                                                        fontWeight: FontWeight.w700,
-                                                      ),
-                                                ),
-                                                Text(
-                                                  label,
-                                                  style: Theme.of(context)
-                                                      .textTheme
-                                                      .labelSmall
-                                                      ?.copyWith(
-                                                        color: color,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        );
-                                      },
+                                        )
+                                        .toList(),
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(
+                                          () => _selectedPatientUserId = value);
+                                      _loadHistory(value);
+                                    },
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                      isDense: true,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                           ),
-                        if (showMoodHistory) const SizedBox(height: 12),
-                      ],
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
+                          const SizedBox(height: 12),
+                          if (_loadingHistory)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 40),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          else if (_selectedPatientUserId == null)
+                            const Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child:
+                                    Text('Select a patient to load analytics.'),
+                              ),
+                            )
+                          else if (!hasAnyAnalyticsData)
+                            const Card(
+                              child: Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Text(
+                                  'No sentiment or mood history found for this patient yet.',
+                                ),
+                              ),
+                            )
+                          else ...[
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 180,
+                                            child: DropdownButtonFormField<
+                                                _HistorySort>(
+                                              initialValue: _historySort,
+                                              items: _HistorySort.values
+                                                  .map(
+                                                    (sort) => DropdownMenuItem<
+                                                        _HistorySort>(
+                                                      value: sort,
+                                                      child: Text(sort.label),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: (value) {
+                                                if (value == null) return;
+                                                setState(
+                                                    () => _historySort = value);
+                                              },
+                                              decoration: const InputDecoration(
+                                                labelText: 'Sort',
+                                                border: OutlineInputBorder(),
+                                                isDense: true,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            width: 160,
+                                            child: DropdownButtonFormField<
+                                                _HistoryLabelFilter>(
+                                              initialValue: _historyLabelFilter,
+                                              items: _HistoryLabelFilter.values
+                                                  .map(
+                                                    (filter) => DropdownMenuItem<
+                                                        _HistoryLabelFilter>(
+                                                      value: filter,
+                                                      child: Text(filter.label),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: (value) {
+                                                if (value == null) return;
+                                                setState(() =>
+                                                    _historyLabelFilter =
+                                                        value);
+                                              },
+                                              decoration: const InputDecoration(
+                                                labelText: 'Label',
+                                                border: OutlineInputBorder(),
+                                                isDense: true,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            width: 150,
+                                            child: DropdownButtonFormField<
+                                                _AnalyticsPlotFilter>(
+                                              initialValue: _plotFilter,
+                                              items: _AnalyticsPlotFilter.values
+                                                  .map(
+                                                    (filter) => DropdownMenuItem<
+                                                        _AnalyticsPlotFilter>(
+                                                      value: filter,
+                                                      child: Text(filter.label),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: (value) {
+                                                if (value == null) return;
+                                                setState(
+                                                    () => _plotFilter = value);
+                                              },
+                                              decoration: const InputDecoration(
+                                                labelText: 'Plot',
+                                                border: OutlineInputBorder(),
+                                                isDense: true,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          SizedBox(
+                                            width: 180,
+                                            child: DropdownButtonFormField<
+                                                _AnalyticsTimeframe>(
+                                              initialValue: _timeframe,
+                                              items: _AnalyticsTimeframe.values
+                                                  .map(
+                                                    (tf) => DropdownMenuItem<
+                                                        _AnalyticsTimeframe>(
+                                                      value: tf,
+                                                      child: Text(tf.label),
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                              onChanged: (value) {
+                                                if (value == null) return;
+                                                if (value ==
+                                                    _AnalyticsTimeframe
+                                                        .custom) {
+                                                  _showCustomRangeModal()
+                                                      .then((picked) {
+                                                    if (!mounted ||
+                                                        picked == null) return;
+                                                    setState(() {
+                                                      _customDateRange = picked;
+                                                      _timeframe =
+                                                          _AnalyticsTimeframe
+                                                              .custom;
+                                                    });
+                                                  });
+                                                  return;
+                                                }
+                                                setState(() {
+                                                  _timeframe = value;
+                                                });
+                                              },
+                                              decoration: const InputDecoration(
+                                                labelText: 'Timeframe',
+                                                border: OutlineInputBorder(),
+                                                isDense: true,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    const Text(
+                                      'Longitudinal Sentiment Trend',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_shortDateWithYear(minPointDate)} - ${_shortDateWithYear(maxPointDate)}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: renderedSeries
+                                          .map(
+                                            (series) => Chip(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              avatar: Icon(
+                                                Icons.circle,
+                                                size: 12,
+                                                color: series.color,
+                                              ),
+                                              label: Text(series.kind.label),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (renderedSeries.isEmpty)
+                                      const SizedBox(
+                                        height: 220,
+                                        child: Center(
+                                          child: Text(
+                                              'No points available for selected plot filter.'),
+                                        ),
+                                      )
+                                    else
+                                      LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          final maxPointCount = renderedSeries
+                                              .map((s) => s.points.length)
+                                              .fold<int>(
+                                                  0, (a, b) => a > b ? a : b);
+                                          final chartWidth =
+                                              (maxPointCount * 24.0).clamp(
+                                                  constraints.maxWidth,
+                                                  12000.0);
+                                          final xSpan = (maxX - minX).abs();
+                                          final dayMs = const Duration(days: 1)
+                                              .inMilliseconds
+                                              .toDouble();
+                                          final desiredDaysPerTick =
+                                              totalSpanDays > 720
+                                                  ? 120.0
+                                                  : totalSpanDays > 365
+                                                      ? 60.0
+                                                      : totalSpanDays > 180
+                                                          ? 30.0
+                                                          : totalSpanDays > 90
+                                                              ? 14.0
+                                                              : totalSpanDays >
+                                                                      45
+                                                                  ? 7.0
+                                                                  : totalSpanDays >
+                                                                          14
+                                                                      ? 3.0
+                                                                      : 1.0;
+                                          final xInterval = xSpan <= 0
+                                              ? dayMs
+                                              : dayMs * desiredDaysPerTick;
+
+                                          return SizedBox(
+                                            height: 220,
+                                            child: Scrollbar(
+                                              controller:
+                                                  _chartScrollController,
+                                              thumbVisibility: chartWidth >
+                                                  constraints.maxWidth,
+                                              child: SingleChildScrollView(
+                                                controller:
+                                                    _chartScrollController,
+                                                scrollDirection:
+                                                    Axis.horizontal,
+                                                child: SizedBox(
+                                                  width: chartWidth,
+                                                  child: LineChart(
+                                                    LineChartData(
+                                                      minY: 0,
+                                                      maxY: 1,
+                                                      minX: minX,
+                                                      maxX: maxX <= minX
+                                                          ? minX + 1
+                                                          : maxX,
+                                                      gridData:
+                                                          const FlGridData(
+                                                              show: true),
+                                                      borderData: FlBorderData(
+                                                          show: true),
+                                                      titlesData: FlTitlesData(
+                                                        rightTitles:
+                                                            const AxisTitles(
+                                                          sideTitles:
+                                                              SideTitles(
+                                                                  showTitles:
+                                                                      false),
+                                                        ),
+                                                        topTitles:
+                                                            const AxisTitles(
+                                                          sideTitles:
+                                                              SideTitles(
+                                                                  showTitles:
+                                                                      false),
+                                                        ),
+                                                        leftTitles: AxisTitles(
+                                                          sideTitles:
+                                                              SideTitles(
+                                                            showTitles: true,
+                                                            reservedSize: 32,
+                                                            interval: 0.25,
+                                                            getTitlesWidget:
+                                                                (value, meta) =>
+                                                                    Text(
+                                                              value
+                                                                  .toStringAsFixed(
+                                                                      2),
+                                                              style:
+                                                                  const TextStyle(
+                                                                      fontSize:
+                                                                          10),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        bottomTitles:
+                                                            AxisTitles(
+                                                          sideTitles:
+                                                              SideTitles(
+                                                            showTitles: true,
+                                                            reservedSize: 30,
+                                                            interval: xInterval,
+                                                            getTitlesWidget:
+                                                                (value, meta) {
+                                                              final dt = DateTime
+                                                                  .fromMillisecondsSinceEpoch(
+                                                                value.round(),
+                                                              );
+                                                              return Padding(
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .only(
+                                                                        top: 6),
+                                                                child: Text(
+                                                                  _axisLabelForDate(
+                                                                      dt,
+                                                                      totalSpanDays),
+                                                                  style: const TextStyle(
+                                                                      fontSize:
+                                                                          10),
+                                                                ),
+                                                              );
+                                                            },
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      lineTouchData:
+                                                          LineTouchData(
+                                                        handleBuiltInTouches:
+                                                            true,
+                                                        touchCallback:
+                                                            (event, response) {
+                                                          if (event
+                                                              is! FlTapUpEvent) {
+                                                            return;
+                                                          }
+                                                          final spots = response
+                                                              ?.lineBarSpots;
+                                                          if (spots == null ||
+                                                              spots.isEmpty) {
+                                                            return;
+                                                          }
+                                                          final selected =
+                                                              spots.first;
+                                                          final barIndex =
+                                                              selected.barIndex;
+                                                          if (barIndex < 0 ||
+                                                              barIndex >=
+                                                                  renderedSeries
+                                                                      .length) {
+                                                            return;
+                                                          }
+                                                          final series =
+                                                              renderedSeries[
+                                                                  barIndex];
+                                                          if (series.kind !=
+                                                              _SeriesKind
+                                                                  .calls) {
+                                                            return;
+                                                          }
+                                                          final pointIdx =
+                                                              selected
+                                                                  .spotIndex;
+                                                          if (pointIdx < 0 ||
+                                                              pointIdx >=
+                                                                  series.points
+                                                                      .length) {
+                                                            return;
+                                                          }
+                                                          final callId = series
+                                                              .points[pointIdx]
+                                                              .callId;
+                                                          if (callId == null ||
+                                                              callId.isEmpty) {
+                                                            return;
+                                                          }
+                                                          setState(() {
+                                                            _selectedCallId =
+                                                                callId;
+                                                          });
+                                                          WidgetsBinding
+                                                              .instance
+                                                              .addPostFrameCallback(
+                                                                  (_) {
+                                                            _scrollToSelectedHistoryRow(
+                                                                visibleHistory);
+                                                          });
+                                                        },
+                                                      ),
+                                                      lineBarsData:
+                                                          renderedSeries
+                                                              .map((series) {
+                                                        return LineChartBarData(
+                                                          isCurved: false,
+                                                          color: series.color,
+                                                          barWidth: 2.2,
+                                                          dotData: FlDotData(
+                                                            show: true,
+                                                            getDotPainter:
+                                                                (spot, _, __,
+                                                                    ___) {
+                                                              final dotColor =
+                                                                  _colorForScore(
+                                                                      spot.y);
+                                                              return FlDotCirclePainter(
+                                                                radius: 3.6,
+                                                                color: dotColor,
+                                                                strokeColor: dotColor
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.75),
+                                                                strokeWidth: 1,
+                                                              );
+                                                            },
+                                                          ),
+                                                          spots: series.points
+                                                              .map(
+                                                                  (p) => FlSpot(
+                                                                        p.date
+                                                                            .millisecondsSinceEpoch
+                                                                            .toDouble(),
+                                                                        p.score,
+                                                                      ))
+                                                              .toList(),
+                                                        );
+                                                      }).toList(),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Wrap(
+                                  spacing: 16,
+                                  runSpacing: 8,
+                                  children: [
+                                    Text(
+                                        'Average score: ${avgScore.toStringAsFixed(3)}'),
+                                    Text('Trend: $trendText'),
+                                    Text('Recent label: $recentLabel'),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (showCallsHistory)
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Call History',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '${visibleHistory.length} calls recorded',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: 260,
+                                        child: Scrollbar(
+                                          controller: _historyScrollController,
+                                          thumbVisibility:
+                                              visibleHistory.length > 5,
+                                          child: ListView.separated(
+                                            controller:
+                                                _historyScrollController,
+                                            itemCount: visibleHistory.length,
+                                            separatorBuilder: (_, __) =>
+                                                const Divider(height: 1),
+                                            itemBuilder: (context, index) {
+                                              final item =
+                                                  visibleHistory[index];
+                                              final callId =
+                                                  (item['callId'] ?? '')
+                                                      .toString();
+                                              final callDate =
+                                                  _asDateTime(item['callDate']);
+                                              final label =
+                                                  (item['overallLabel'] ??
+                                                          'N/A')
+                                                      .toString();
+                                              final score = _asDouble(
+                                                  item['overallScore']);
+                                              final durationMinutes = _asDouble(
+                                                  item['durationMinutes']);
+                                              final isSelected =
+                                                  _selectedCallId == callId;
+                                              final scoreColor =
+                                                  _colorForScore(score);
+                                              final colorScheme =
+                                                  Theme.of(context).colorScheme;
+                                              return Container(
+                                                key: _keyForHistoryRow(index),
+                                                height: 74,
+                                                decoration: BoxDecoration(
+                                                  color: isSelected
+                                                      ? colorScheme.onSurface
+                                                          .withValues(
+                                                              alpha: 0.08)
+                                                      : null,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: isSelected
+                                                      ? Border.all(
+                                                          color: colorScheme
+                                                              .onSurface
+                                                              .withValues(
+                                                                  alpha: 0.22),
+                                                          width: 1,
+                                                        )
+                                                      : null,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 180),
+                                                      curve: Curves.easeOut,
+                                                      width: 3,
+                                                      height: 58,
+                                                      decoration: BoxDecoration(
+                                                        color: isSelected
+                                                            ? colorScheme
+                                                                .onSurface
+                                                                .withValues(
+                                                                    alpha: 0.45)
+                                                            : Colors
+                                                                .transparent,
+                                                        borderRadius:
+                                                            const BorderRadius
+                                                                .only(
+                                                          topLeft:
+                                                              Radius.circular(
+                                                                  8),
+                                                          bottomLeft:
+                                                              Radius.circular(
+                                                                  8),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: ListTile(
+                                                        dense: false,
+                                                        contentPadding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 8),
+                                                        leading: Icon(
+                                                            Icons.call,
+                                                            color: colorScheme
+                                                                .primary),
+                                                        title: Text(
+                                                          _formatCallTitle(
+                                                              callId),
+                                                          style:
+                                                              Theme.of(context)
+                                                                  .textTheme
+                                                                  .bodyMedium
+                                                                  ?.copyWith(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                        ),
+                                                        subtitle: Text(
+                                                          '${_formatDateTime(callDate)} - Ended - Duration ${durationMinutes.toStringAsFixed(1)} min',
+                                                        ),
+                                                        trailing: SizedBox(
+                                                          width: 88,
+                                                          child: Column(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .center,
+                                                            crossAxisAlignment:
+                                                                CrossAxisAlignment
+                                                                    .end,
+                                                            children: [
+                                                              Text(
+                                                                '${(score * 100).toStringAsFixed(1)}%',
+                                                                style: Theme.of(
+                                                                        context)
+                                                                    .textTheme
+                                                                    .labelSmall
+                                                                    ?.copyWith(
+                                                                      color:
+                                                                          scoreColor,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w700,
+                                                                    ),
+                                                              ),
+                                                              Text(
+                                                                label
+                                                                    .toUpperCase(),
+                                                                style: Theme.of(
+                                                                        context)
+                                                                    .textTheme
+                                                                    .labelSmall
+                                                                    ?.copyWith(
+                                                                      color:
+                                                                          scoreColor,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
+                                                                    ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                        onTap: callId.isEmpty
+                                                            ? null
+                                                            : () {
+                                                                setState(() {
+                                                                  _selectedCallId =
+                                                                      callId;
+                                                                });
+                                                                WidgetsBinding
+                                                                    .instance
+                                                                    .addPostFrameCallback(
+                                                                        (_) {
+                                                                  _scrollToSelectedHistoryRow(
+                                                                    visibleHistory,
+                                                                  );
+                                                                });
+                                                                Navigator.of(
+                                                                        context)
+                                                                    .push(
+                                                                  MaterialPageRoute(
+                                                                    builder: (_) =>
+                                                                        PostCallTelemetrySummaryScreen(
+                                                                      callId:
+                                                                          callId,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (showCallsHistory) const SizedBox(height: 12),
+                            if (showMoodHistory)
+                              Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Mood History',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '${visibleMoodHistory.length} mood entries',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        height: 220,
+                                        child: ListView.separated(
+                                          itemCount: visibleMoodHistory.length,
+                                          separatorBuilder: (_, __) =>
+                                              const Divider(height: 1),
+                                          itemBuilder: (context, index) {
+                                            final item =
+                                                visibleMoodHistory[index];
+                                            final dt = _asDateTime(
+                                              item['createdAt'] ??
+                                                  item['timestamp'] ??
+                                                  item['date'] ??
+                                                  item['takenAt'],
+                                            );
+                                            final score =
+                                                _moodScoreFromItem(item);
+                                            final label = _labelForScore(score);
+                                            final color = _colorForScore(score);
+                                            return ListTile(
+                                              dense: true,
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8),
+                                              leading: Icon(Icons.mood,
+                                                  color: color),
+                                              title: Text(
+                                                  'Mood entry - ${_formatDateTime(dt)}'),
+                                              subtitle: Text(
+                                                (item['notes'] ??
+                                                            item['note'] ??
+                                                            item[
+                                                                'description'] ??
+                                                            '')
+                                                        .toString()
+                                                        .trim()
+                                                        .isEmpty
+                                                    ? 'No notes'
+                                                    : (item['notes'] ??
+                                                            item['note'] ??
+                                                            item['description'])
+                                                        .toString(),
+                                              ),
+                                              trailing: SizedBox(
+                                                width: 88,
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
+                                                  children: [
+                                                    Text(
+                                                      '${(score * 100).toStringAsFixed(1)}%',
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                            color: color,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                    ),
+                                                    Text(
+                                                      label,
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .labelSmall
+                                                          ?.copyWith(
+                                                            color: color,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (showMoodHistory) const SizedBox(height: 12),
+                          ],
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+                    ),
     );
   }
 }

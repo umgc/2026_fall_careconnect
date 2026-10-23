@@ -58,7 +58,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
 
   void _updateSuggestions() async {
     final query = widget.controller.text.trim();
-    
+
     if (query.isEmpty) {
       setState(() {
         _suggestions = [];
@@ -82,7 +82,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
 
     try {
       final suggestions = await _placesService.getSuggestions(query);
-      
+
       if (mounted) {
         setState(() {
           _suggestions = suggestions;
@@ -105,7 +105,7 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
   void _selectSuggestion(AddressSuggestion suggestion) async {
     // Update the main input with full address
     widget.controller.text = suggestion.fullDescription;
-    
+
     setState(() {
       _showSuggestions = false;
       _suggestions = [];
@@ -114,8 +114,11 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
 
     try {
       // Parse the address into components
-      final parsedAddress = await _placesService.getPlaceDetails(suggestion.placeId.isNotEmpty ? suggestion.placeId : suggestion.fullDescription);
-      
+      final parsedAddress = await _placesService.getPlaceDetails(
+          suggestion.placeId.isNotEmpty
+              ? suggestion.placeId
+              : suggestion.fullDescription);
+
       // Notify parent of parsed address
       if (mounted) {
         widget.onAddressSelected?.call(parsedAddress);
@@ -244,7 +247,8 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
               ),
             ),
           ),
-        if (widget.googlePlacesApiKey == null || widget.googlePlacesApiKey!.isEmpty)
+        if (widget.googlePlacesApiKey == null ||
+            widget.googlePlacesApiKey!.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
             child: Text(
@@ -261,7 +265,10 @@ class _AddressAutocompleteFieldState extends State<AddressAutocompleteField> {
                 const SizedBox(width: 4),
                 Text(
                   'Google Places API active ✓',
-                  style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.green[700],
+                      fontWeight: FontWeight.w500),
                 ),
               ],
             ),

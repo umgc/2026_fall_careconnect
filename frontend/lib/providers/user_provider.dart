@@ -1,5 +1,6 @@
 import 'package:care_connect_app/features/dashboard/models/patient_model.dart';
 import 'package:flutter/material.dart';
+import '../features/emergency_passport/services/qr_code_store.dart';
 import '../services/auth_token_manager.dart';
 import '../services/auth_service.dart';
 import '../services/user_role_storage_service.dart';
@@ -149,19 +150,25 @@ class UserSession {
 class UserProvider extends ChangeNotifier {
   /// Current user session containing authentication and basic user data
   UserSession? _user;
+
   /// Public getter for the current user session
   UserSession? get user => _user;
+
   /// Loading state indicator for async operations
   bool _isLoading = false;
+
   /// Public getter for loading state
   bool get isLoading => _isLoading;
+
   /// Base user model containing core user information
   UserModel? _userModel;
+
   /// Detailed patient model (populated only for patient users)
   PatientUserModel? _patientModel;
+
   /// Detailed caregiver model (populated only for caregiver users)
   CaregiverModel? _caregiverModel;
-  
+
   // BNS 5: Offline Mode
   bool _offlineModeEnabled = true;
   // is the device currently online?
@@ -181,33 +188,35 @@ class UserProvider extends ChangeNotifier {
 
   /// Public getter for base user model
   UserModel? get userModel => _userModel;
+
   /// Public getter for patient model
   PatientUserModel? get patientModel => _patientModel;
+
   /// Public getter for caregiver model
   CaregiverModel? get caregiverModel => _caregiverModel;
 
   UserProvider() {
     // The "Start" button for your listener
     _initConnectivity();
-  }// end constructor
+  } // end constructor
 
   /// Updates the offline persistence setting and notifies listeners.
   /// This will trigger the Dashboard banner to show/hide.
   void setOfflineMode(bool enabled) {
     if (_offlineModeEnabled == enabled) return;
     _offlineModeEnabled = enabled;
-    
+
     notifyListeners();
   }
 
   /// Initializes the hardware connectivity listener to monitor internet status.
-  /// 
+  ///
   /// This method performs two key actions:
   /// 1. **Initial Check**: Queries the current state of the network interface
   ///    immediately upon app/provider initialization.
-  /// 2. **Real-time Subscription**: Sets up a [StreamSubscription] to listen 
+  /// 2. **Real-time Subscription**: Sets up a [StreamSubscription] to listen
   ///    for hardware changes (e.g., toggling Airplane Mode or losing Wi-Fi).
-  /// 
+  ///
   /// When a change is detected, [_updateConnectionStatus] is triggered, which:
   /// - Updates the global `isDeviceOnline` state.
   /// - Forces `offlinePersistenceEnabled` to true if the device goes offline.
@@ -219,7 +228,8 @@ class UserProvider extends ChangeNotifier {
     List<ConnectivityResult> result = await connectivity.checkConnectivity();
     _updateConnectionStatus(result);
     // Subscribe to changes (This is the "Heartbeat")
-    _connectivitySubscription = connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
+    _connectivitySubscription =
+        connectivity.onConnectivityChanged.listen(_updateConnectionStatus);
   }
 
   /// Processes connectivity changes and manages the "Offline Mode" business logic.
@@ -235,35 +245,36 @@ class UserProvider extends ChangeNotifier {
   /// 3. Triggers [notifyListeners] only when a state change occurs to avoid
   ///    unnecessary UI repaints.
   void _updateConnectionStatus(List<ConnectivityResult> results) {
-    // connectivity_plus 6.0+ returns a list. 
+    // connectivity_plus 6.0+ returns a list.
     // We are "online" if any result is NOT 'none'
     bool currentlyOnline = !results.contains(ConnectivityResult.none);
-    
+
     if (_isDeviceOnline != currentlyOnline) {
       _isDeviceOnline = currentlyOnline;
       // If we just lost internet, force the setting back to 'Enabled'
       if (!_isDeviceOnline) {
-        _offlineModeEnabled = true; 
+        _offlineModeEnabled = true;
         // If you are saving this to SharedPreferences, call that save method here too!
-        print('DEBUG: Internet lost. Auto-resetting persistence setting to Enabled.');
+        print(
+            'DEBUG: Internet lost. Auto-resetting persistence setting to Enabled.');
       }
-    
+
       print('DEBUG: Hardware Online Status = $_isDeviceOnline');
       notifyListeners(); // This triggers the banner to show/hide in MainScreen
     }
   }
 
   /// Standard lifecycle method to clean up resources.
-  /// 
-  /// Critically, this cancels the [_connectivitySubscription] to prevent 
-  /// memory leaks. Without this, the listener would continue to run 
+  ///
+  /// Critically, this cancels the [_connectivitySubscription] to prevent
+  /// memory leaks. Without this, the listener would continue to run
   /// in the background even after the Provider is destroyed.
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
     super.dispose();
   }
-  
+
   /// Initializes user authentication state from stored data on app start.
   ///
   /// This method is called when the app starts to restore any existing
@@ -285,7 +296,11 @@ class UserProvider extends ChangeNotifier {
 
       // Use new JWT authentication system to restore session
       final userSession = await AuthTokenManager.restoreSession();
-      if (userSession != null) {
+      if (userSession == null) {
+        // No valid session (none, expired or refused): the patient's emergency
+        // QR code must not outlive it (DEF-EMG-29).
+        await QrCodeStore.clearAll();
+      } else {
         _user = UserSession.fromJson(userSession);
 
         // Update last activity time
@@ -297,6 +312,7 @@ class UserProvider extends ChangeNotifier {
           // Session is stale, clear it and force re-login
           await AuthTokenManager.clearAuthData();
           await UserRoleStorageService.instance.clearUserData();
+          await QrCodeStore.clearAll(); // DEF-EMG-29
           _user = null;
         } else {
           // Sync user data with UserRoleStorageService
@@ -309,6 +325,7 @@ class UserProvider extends ChangeNotifier {
       // If there's an error, clear any stored auth data
       await AuthTokenManager.clearAuthData();
       await UserRoleStorageService.instance.clearUserData();
+      await QrCodeStore.clearAll(); // DEF-EMG-29
       _user = null;
     }
 
@@ -402,8 +419,7 @@ class UserProvider extends ChangeNotifier {
         final patientData = json.decode(response.body);
         // Create PatientModel with combined data
         _patientModel = PatientUserModel(
-          name:
-              '${patientData['firstName']} ${patientData['lastName']}',
+          name: '${patientData['firstName']} ${patientData['lastName']}',
           email: _userModel!.email,
           userId: _userModel!.userId,
           role: _userModel!.role,
@@ -435,7 +451,8 @@ class UserProvider extends ChangeNotifier {
 
     try {
       final response = await http.get(
-        Uri.parse('${ApiConstants.baseUrl}/v1/api/caregivers/${_user!.caregiverId}'),
+        Uri.parse(
+            '${ApiConstants.baseUrl}/v1/api/caregivers/${_user!.caregiverId}'),
         headers: {
           'Authorization': 'Bearer ${_user!.token}',
           'Content-Type': 'application/json',
@@ -493,6 +510,7 @@ class UserProvider extends ChangeNotifier {
     _caregiverModel = null;
     await AuthTokenManager.clearAuthData();
     await UserRoleStorageService.instance.clearUserData();
+    await QrCodeStore.clearAll(); // DEF-EMG-11
     notifyListeners();
   }
 
@@ -562,7 +580,6 @@ class UserProvider extends ChangeNotifier {
           caregiverId: _user!.caregiverId,
         );
       } catch (e) {
-
         print('Error syncing user data to storage: $e');
       }
     }

@@ -40,7 +40,8 @@ Widget buildChimeMeetingEmbed({
   VoidCallback? onEndCallRequested,
   void Function(Map<String, dynamic> transcriptSample)? onTranscriptSample,
   void Function(String status, String? detail)? onTranscriptStatus,
-  void Function(double averageLevel, double speechRatio, double variability)? onVoiceMetricsSample,
+  void Function(double averageLevel, double speechRatio, double variability)?
+      onVoiceMetricsSample,
   void Function(String imageBase64)? onVideoSample,
   void Function(String channel, bool muted)? onSentimentChannelState,
 }) {
@@ -78,7 +79,8 @@ Future<bool> requestChimeAudioToggle({
   if (controller == null) {
     return false;
   }
-  return controller.postFlutterAction({'action': 'toggle-audio', 'muted': muted});
+  return controller
+      .postFlutterAction({'action': 'toggle-audio', 'muted': muted});
 }
 
 Future<bool> requestChimeVideoToggle({
@@ -89,7 +91,8 @@ Future<bool> requestChimeVideoToggle({
   if (controller == null) {
     return false;
   }
-  return controller.postFlutterAction({'action': 'toggle-video', 'muted': muted});
+  return controller
+      .postFlutterAction({'action': 'toggle-video', 'muted': muted});
 }
 
 Future<bool> requestChimeCameraSwitch({String? meetingId}) async {
@@ -152,15 +155,18 @@ class _ChimeMeetingEmbedMobile extends StatefulWidget {
   final bool enableAutoSentimentCapture;
   final int sentimentCaptureIntervalMs;
   final VoidCallback? onEndCallRequested;
-  final void Function(Map<String, dynamic> transcriptSample)? onTranscriptSample;
+  final void Function(Map<String, dynamic> transcriptSample)?
+      onTranscriptSample;
   final void Function(String status, String? detail)? onTranscriptStatus;
-  final void Function(double averageLevel, double speechRatio, double variability)?
-  onVoiceMetricsSample;
+  final void Function(
+          double averageLevel, double speechRatio, double variability)?
+      onVoiceMetricsSample;
   final void Function(String imageBase64)? onVideoSample;
   final void Function(String channel, bool muted)? onSentimentChannelState;
 
   @override
-  State<_ChimeMeetingEmbedMobile> createState() => _ChimeMeetingEmbedMobileState();
+  State<_ChimeMeetingEmbedMobile> createState() =>
+      _ChimeMeetingEmbedMobileState();
 }
 
 class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
@@ -168,17 +174,18 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
   String? _error;
   String _status = 'Setting up your call...';
 
-        static const String _androidLocalSdkUrlPrimary =
-          'file:///android_asset/flutter_assets/web/amazon-chime-sdk.min.js';
-        static const String _androidLocalSdkUrlSecondary =
-          'https://appassets.androidplatform.net/assets/flutter_assets/web/amazon-chime-sdk.min.js';
+  static const String _androidLocalSdkUrlPrimary =
+      'file:///android_asset/flutter_assets/web/amazon-chime-sdk.min.js';
+  static const String _androidLocalSdkUrlSecondary =
+      'https://appassets.androidplatform.net/assets/flutter_assets/web/amazon-chime-sdk.min.js';
 
   @override
   void initState() {
     super.initState();
 
     if (!_supportsMobilePlatform) {
-      _error = 'Real-time Chime media is supported on Android/iOS for mobile builds.';
+      _error =
+          'Real-time Chime media is supported on Android/iOS for mobile builds.';
       return;
     }
 
@@ -188,8 +195,8 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
       'joinToken': widget.joinToken,
       'mediaPlacement': widget.mediaPlacement,
       'mediaRegion': widget.mediaRegion ?? 'us-east-1',
-      'externalUserId':
-          widget.externalUserId ?? 'careconnect-${widget.attendeeId.substring(0, 8)}',
+      'externalUserId': widget.externalUserId ??
+          'careconnect-${widget.attendeeId.substring(0, 8)}',
       'videoEnabled': widget.videoEnabled,
       'audioEnabled': widget.audioEnabled,
       'enableAutoSentimentCapture': widget.enableAutoSentimentCapture,
@@ -286,7 +293,7 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
 
       if (mounted && (!camOk || !micOk)) {
         setState(() {
-            _status =
+          _status =
               'Please allow camera and microphone access to start the call';
         });
       }
@@ -440,12 +447,17 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
       return;
     }
 
-    if (action == 'sentiment-voice-metrics' && payload is Map<String, dynamic>) {
-      final averageLevel = double.tryParse((payload['averageLevel'] ?? '').toString());
-      final speechRatio = double.tryParse((payload['speechRatio'] ?? '').toString());
-      final variability = double.tryParse((payload['variability'] ?? '').toString());
+    if (action == 'sentiment-voice-metrics' &&
+        payload is Map<String, dynamic>) {
+      final averageLevel =
+          double.tryParse((payload['averageLevel'] ?? '').toString());
+      final speechRatio =
+          double.tryParse((payload['speechRatio'] ?? '').toString());
+      final variability =
+          double.tryParse((payload['variability'] ?? '').toString());
       if (averageLevel != null && speechRatio != null && variability != null) {
-        widget.onVoiceMetricsSample?.call(averageLevel, speechRatio, variability);
+        widget.onVoiceMetricsSample
+            ?.call(averageLevel, speechRatio, variability);
       }
       return;
     }
@@ -458,8 +470,10 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
       return;
     }
 
-    if (action == 'sentiment-channel-state' && payload is Map<String, dynamic>) {
-      final channel = (payload['channel'] ?? '').toString().trim().toLowerCase();
+    if (action == 'sentiment-channel-state' &&
+        payload is Map<String, dynamic>) {
+      final channel =
+          (payload['channel'] ?? '').toString().trim().toLowerCase();
       final muted = payload['muted'] == true;
       if (channel == 'text' || channel == 'voice' || channel == 'video') {
         widget.onSentimentChannelState?.call(channel, muted);
@@ -493,7 +507,8 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
     }
     final lower = message.toLowerCase();
     if (lower.contains('chime transcript capture subscribed')) {
-      widget.onTranscriptStatus!.call('AWAITING', 'Subscribed, waiting for transcript');
+      widget.onTranscriptStatus!
+          .call('AWAITING', 'Subscribed, waiting for transcript');
       return;
     }
     if (lower.contains('speech transcription capture started')) {
@@ -503,7 +518,8 @@ class _ChimeMeetingEmbedMobileState extends State<_ChimeMeetingEmbedMobile> {
     if (lower.contains('speechrecognition api unavailable') ||
         lower.contains('speech recognition error: not-allowed') ||
         lower.contains('speech recognition error: service-not-allowed')) {
-      widget.onTranscriptStatus!.call('BLOCKED', 'Microphone or browser blocked');
+      widget.onTranscriptStatus!
+          .call('BLOCKED', 'Microphone or browser blocked');
       return;
     }
     if ((level == 'warn' || level == 'warning') &&
@@ -2528,5 +2544,3 @@ String _buildMobileMeetingHtml(String configJson) {
 </html>
 ''';
 }
-
-

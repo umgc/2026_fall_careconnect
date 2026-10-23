@@ -632,15 +632,13 @@ class _PostCallTelemetrySummaryScreenState
     double calmMs = 0, anxiousMs = 0, distressedMs = 0;
 
     for (var i = 0; i < samples.length; i++) {
-      final score =
-          (samples[i]['sentimentScore'] as num?)?.toDouble() ?? 0.5;
+      final score = (samples[i]['sentimentScore'] as num?)?.toDouble() ?? 0.5;
       final from = _safeDate(samples[i]['occurredAt']);
       final to = i + 1 < samples.length
           ? _safeDate(samples[i + 1]['occurredAt'])
           : (_callEnd ?? from);
 
-      final durationMs =
-          to.difference(from).inMilliseconds.toDouble();
+      final durationMs = to.difference(from).inMilliseconds.toDouble();
       if (durationMs <= 0) continue;
 
       if (score >= SentimentColors.calmThreshold) {
@@ -674,10 +672,9 @@ class _PostCallTelemetrySummaryScreenState
         .map((e) => (e['sentimentScore'] as num?)?.toDouble() ?? 0.5)
         .toList();
     final mean = scores.reduce((a, b) => a + b) / scores.length;
-    final variance = scores
-            .map((s) => (s - mean) * (s - mean))
-            .reduce((a, b) => a + b) /
-        scores.length;
+    final variance =
+        scores.map((s) => (s - mean) * (s - mean)).reduce((a, b) => a + b) /
+            scores.length;
     final stdDev = math.sqrt(variance);
     // Typical max std-dev for a 0–1 variable is 0.5; normalise against that.
     return (1.0 - (stdDev / 0.5)).clamp(0.0, 1.0);
@@ -685,22 +682,14 @@ class _PostCallTelemetrySummaryScreenState
 
   // ── Final overall sentiment ───────────────────────────────────────
 
-  int get _sentimentEventCount => _callTelemetry
-      .where((e) =>
-          (e['eventType'] as String?)?.toUpperCase().startsWith('SENTIMENT_') ==
-          true)
-      .length;
-
   Map<String, dynamic>? get _finalOverallEvent {
     for (final event in _callTelemetry.reversed) {
-      final eventType =
-          (event['eventType'] as String?)?.trim().toUpperCase();
+      final eventType = (event['eventType'] as String?)?.trim().toUpperCase();
       if (eventType == 'SENTIMENT_FINAL') return event;
     }
     for (final event in _callTelemetry.reversed) {
       final channel = (event['channel'] as String?)?.trim().toUpperCase();
-      final eventType =
-          (event['eventType'] as String?)?.trim().toUpperCase();
+      final eventType = (event['eventType'] as String?)?.trim().toUpperCase();
       if (channel == 'COMBINED' || eventType == 'SENTIMENT_COMBINED') {
         return event;
       }
@@ -747,7 +736,8 @@ class _PostCallTelemetrySummaryScreenState
     if (score < 0.30) {
       return 'High concern — check in immediately and assess acute distress signs.';
     }
-    if (score < 0.45) return 'Elevated concern — increase monitoring and follow up soon.';
+    if (score < 0.45)
+      return 'Elevated concern — increase monitoring and follow up soon.';
     if (score < 0.65) return 'Moderate concern — continue routine monitoring.';
     return 'Stable — maintain normal follow-up cadence.';
   }
@@ -758,8 +748,7 @@ class _PostCallTelemetrySummaryScreenState
     for (final event in _callTelemetry.reversed) {
       final eventType =
           (event['eventType'] as String?)?.trim().toUpperCase() ?? '';
-      final status =
-          (event['status'] as String?)?.trim().toUpperCase() ?? '';
+      final status = (event['status'] as String?)?.trim().toUpperCase() ?? '';
       if (status == 'ERROR') return 'Failed';
       switch (eventType) {
         case 'WS_DECLINE_CALL':
@@ -789,8 +778,7 @@ class _PostCallTelemetrySummaryScreenState
     final errorMessage = (finalEvent['errorMessage'] as String?)?.trim();
     if (errorMessage != null && errorMessage.isNotEmpty) return errorMessage;
 
-    final payloadReason =
-        _extractReasonFromJsonBlob(finalEvent['payloadJson']);
+    final payloadReason = _extractReasonFromJsonBlob(finalEvent['payloadJson']);
     if (payloadReason != null) return payloadReason;
 
     if (status == 'ERROR') return 'The call action failed to complete.';
@@ -824,8 +812,7 @@ class _PostCallTelemetrySummaryScreenState
     for (final event in _callTelemetry.reversed) {
       final eventType =
           (event['eventType'] as String?)?.trim().toUpperCase() ?? '';
-      final status =
-          (event['status'] as String?)?.trim().toUpperCase() ?? '';
+      final status = (event['status'] as String?)?.trim().toUpperCase() ?? '';
       if (status == 'ERROR') return event;
       if (eventType == 'WS_DECLINE_CALL' ||
           eventType == 'WS_ACCEPT_CALL' ||
@@ -935,16 +922,14 @@ class _PostCallTelemetrySummaryScreenState
       _TimelineChannel.video: <_ScoreSample>[],
     };
     for (final event in _callTelemetry) {
-      final eventType =
-          (event['eventType'] as String?)?.toUpperCase() ?? '';
+      final eventType = (event['eventType'] as String?)?.toUpperCase() ?? '';
       if (!eventType.startsWith('SENTIMENT_')) continue;
       final channel = _resolveEventChannel(event);
       if (channel == null || !byChannel.containsKey(channel)) continue;
       final score = (event['sentimentScore'] as num?)?.toDouble();
       if (score == null) continue;
       final at = _safeDate(event['occurredAt']);
-      final minuteOffset =
-          at.difference(start).inMilliseconds / 60000.0;
+      final minuteOffset = at.difference(start).inMilliseconds / 60000.0;
       byChannel[channel]!.add(
         _ScoreSample(
           minuteOffset: minuteOffset.clamp(0.0, _callDurationMinutes),
@@ -962,9 +947,7 @@ class _PostCallTelemetrySummaryScreenState
   Map<_TimelineChannel, List<_ScoreSample>> get _visibleSeries {
     final all = _allChannelSeries;
     if (_selectedChannel == _TimelineChannel.all) return all;
-    return {
-      _selectedChannel: all[_selectedChannel] ?? const <_ScoreSample>[]
-    };
+    return {_selectedChannel: all[_selectedChannel] ?? const <_ScoreSample>[]};
   }
 
   void _handleTimelineTap({
@@ -1117,8 +1100,7 @@ class _PostCallTelemetrySummaryScreenState
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
 
-    final bool showCountdown =
-        widget.autoDismiss && _dismissSecondsLeft > 0;
+    final bool showCountdown = widget.autoDismiss && _dismissSecondsLeft > 0;
 
     return GestureDetector(
       onTap: _cancelDismiss,
@@ -1250,7 +1232,6 @@ class _PostCallTelemetrySummaryScreenState
     final transcriptionStatus =
         (rec['transcriptionStatus'] as String? ?? '').toUpperCase();
 
-
     // A system-initiated recording (initiatedByUserId == null) is for transcription only —
     // the S3 file is deleted after transcription so playback is never available for it.
     final isSystemRecording = !isUserInitiatedCallRecording(rec);
@@ -1265,20 +1246,12 @@ class _PostCallTelemetrySummaryScreenState
       }
     }
 
-    final hasNoRecording =
-        status == 'NO_RECORDING' ||
+    final hasNoRecording = status == 'NO_RECORDING' ||
         status == 'NOT_FOUND' ||
         status.isEmpty ||
         isSystemRecording;
     final isCapturing = status == 'STARTED' || status == 'CAPTURING';
     final isReady = status == 'STOPPED';
-    final statusColor = hasNoRecording
-        ? Colors.blueGrey.shade600
-        : isReady
-            ? Colors.green.shade700
-            : isCapturing
-                ? Colors.orange.shade700
-                : Colors.grey;
     final availabilityLabel = switch (concatenationStatus) {
       _ when hasNoRecording => 'NOT RECORDED',
       'READY' => 'VIDEO READY',
@@ -1301,13 +1274,13 @@ class _PostCallTelemetrySummaryScreenState
       'STITCH FAILED' => errorMessage?.isNotEmpty == true
           ? errorMessage!
           : 'Video stitching did not complete successfully.',
-      'STITCHING' || 'PROCESSING' =>
+      'STITCHING' ||
+      'PROCESSING' =>
         'The final video is still processing. Pull to refresh in about 1-2 minutes.',
       'NOT RECORDED' => isSystemRecording
-        ? 'The Record button was not pressed during this call. Toggle recording next time to enable playback.'
-        : 'Recording was not started for this call, so no playback is available.',
-      'UNAVAILABLE' =>
-        'Recording is not available for this call.',
+          ? 'The Record button was not pressed during this call. Toggle recording next time to enable playback.'
+          : 'Recording was not started for this call, so no playback is available.',
+      'UNAVAILABLE' => 'Recording is not available for this call.',
       _ => 'Recording is still in progress.',
     };
 
@@ -1365,7 +1338,8 @@ class _PostCallTelemetrySummaryScreenState
               width: double.infinity,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: availabilityColor.withValues(alpha: isDark ? 0.16 : 0.08),
+                color:
+                    availabilityColor.withValues(alpha: isDark ? 0.16 : 0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: availabilityColor.withValues(alpha: 0.20),
@@ -1392,7 +1366,8 @@ class _PostCallTelemetrySummaryScreenState
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(10),
@@ -1400,12 +1375,14 @@ class _PostCallTelemetrySummaryScreenState
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange.shade700),
+                    Icon(Icons.warning_amber_rounded,
+                        size: 16, color: Colors.orange.shade700),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         'Automatic transcript generation did not complete for this call.',
-                        style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.orange.shade800),
                       ),
                     ),
                   ],
@@ -1458,8 +1435,10 @@ class _PostCallTelemetrySummaryScreenState
     }
 
     final channelColors = <_TimelineChannel, Color>{
-      _TimelineChannel.voice: SentimentColors.forChannel('VOICE', isDark: isDark),
-      _TimelineChannel.video: SentimentColors.forChannel('VIDEO', isDark: isDark),
+      _TimelineChannel.voice:
+          SentimentColors.forChannel('VOICE', isDark: isDark),
+      _TimelineChannel.video:
+          SentimentColors.forChannel('VIDEO', isDark: isDark),
     };
     final window = _resolveTimelineWindow(duration);
     final windowDuration = math.max(0.1, window.endMinute - window.startMinute);
@@ -1712,7 +1691,8 @@ class _PostCallTelemetrySummaryScreenState
     final h = totalSeconds ~/ 3600;
     final m = (totalSeconds % 3600) ~/ 60;
     final s = totalSeconds % 60;
-    if (h > 0) return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    if (h > 0)
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
@@ -1819,9 +1799,7 @@ class _PostCallTelemetrySummaryScreenState
                     setState(() => _transcriptExpanded = !_transcriptExpanded);
                   },
                   icon: Icon(
-                    _transcriptExpanded
-                        ? Icons.unfold_less
-                        : Icons.unfold_more,
+                    _transcriptExpanded ? Icons.unfold_less : Icons.unfold_more,
                     size: 18,
                   ),
                   visualDensity: VisualDensity.compact,
@@ -1869,8 +1847,8 @@ class _PostCallTelemetrySummaryScreenState
                       rangeObj != null &&
                       !selectedAt.isBefore(rangeObj.start) &&
                       !selectedAt.isAfter(rangeObj.end);
-                  final isNearestSelected =
-                      selectedSegmentIndex != null && selectedSegmentIndex == index;
+                  final isNearestSelected = selectedSegmentIndex != null &&
+                      selectedSegmentIndex == index;
                   final showBadges = selectedAt != null &&
                       (isSelectedRange || isNearestSelected);
                   if (text.isEmpty) {
@@ -1898,7 +1876,8 @@ class _PostCallTelemetrySummaryScreenState
                         borderRadius: BorderRadius.circular(8),
                       ),
                       // selected match gets stronger border, nearest fallback gets soft border
-                      foregroundDecoration: (isSelectedRange || isNearestSelected)
+                      foregroundDecoration: (isSelectedRange ||
+                              isNearestSelected)
                           ? BoxDecoration(
                               border: Border.all(
                                 color: isSelectedRange
@@ -1986,7 +1965,9 @@ class _PostCallTelemetrySummaryScreenState
     }
     return resolveTranscriptHighlightCallStart(
       fromTranscriptSegments: fromSegments ??
-          (anchorOccurredAt.millisecondsSinceEpoch > 0 ? anchorOccurredAt : null),
+          (anchorOccurredAt.millisecondsSinceEpoch > 0
+              ? anchorOccurredAt
+              : null),
       callJoinStart: fallbackCallStart,
     );
   }
@@ -2307,8 +2288,8 @@ class _SummarySection extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: (isDark
-                            ? Colors.white12
-                            : Colors.black.withValues(alpha: 0.06)),
+                        ? Colors.white12
+                        : Colors.black.withValues(alpha: 0.06)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -2791,14 +2772,14 @@ class _SentimentTimelinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (durationMinutes <= 0) return;
-    const leftPad   = 72.0;
-    const rightPad  = 20.0;
-    const topPad    = 20.0;
+    const leftPad = 72.0;
+    const rightPad = 20.0;
+    const topPad = 20.0;
     const bottomPad = 44.0;
 
-    final plotWidth  = math.max(1.0, size.width  - leftPad - rightPad);
-    final plotHeight = math.max(1.0, size.height - topPad  - bottomPad);
-    final plotRect   = Rect.fromLTWH(leftPad, topPad, plotWidth, plotHeight);
+    final plotWidth = math.max(1.0, size.width - leftPad - rightPad);
+    final plotHeight = math.max(1.0, size.height - topPad - bottomPad);
+    final plotRect = Rect.fromLTWH(leftPad, topPad, plotWidth, plotHeight);
 
     // Frame
     canvas.drawRect(
@@ -2822,11 +2803,14 @@ class _SentimentTimelinePainter extends CustomPainter {
     for (final (lo, hi, mid) in bands) {
       canvas.drawRect(
         Rect.fromLTRB(
-          plotRect.left, yForScore(hi), plotRect.right, yForScore(lo),
+          plotRect.left,
+          yForScore(hi),
+          plotRect.right,
+          yForScore(lo),
         ),
         Paint()
           ..color = SentimentColors.forScore(mid, isDark: isDark)
-                    .withValues(alpha: isDark ? 0.14 : 0.10),
+              .withValues(alpha: isDark ? 0.14 : 0.10),
       );
     }
 
@@ -2838,7 +2822,7 @@ class _SentimentTimelinePainter extends CustomPainter {
         Offset(plotRect.right, y),
         Paint()
           ..color = SentimentColors.forScore(mid, isDark: isDark)
-                    .withValues(alpha: 0.5)
+              .withValues(alpha: 0.5)
           ..strokeWidth = 1,
       );
     }
@@ -2848,7 +2832,8 @@ class _SentimentTimelinePainter extends CustomPainter {
     for (final tick in [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]) {
       final y = yForScore(tick);
       canvas.drawLine(
-        Offset(leftPad - 6, y), Offset(leftPad, y),
+        Offset(leftPad - 6, y),
+        Offset(leftPad, y),
         Paint()..color = axisColor,
       );
       tp.text = TextSpan(
@@ -2856,8 +2841,7 @@ class _SentimentTimelinePainter extends CustomPainter {
         style: TextStyle(color: axisColor, fontSize: 10),
       );
       tp.layout();
-      tp.paint(canvas,
-          Offset(leftPad - tp.width - 10, y - tp.height / 2));
+      tp.paint(canvas, Offset(leftPad - tp.width - 10, y - tp.height / 2));
     }
 
     // Y-axis title
@@ -2878,13 +2862,14 @@ class _SentimentTimelinePainter extends CustomPainter {
       if (points.isEmpty) continue;
       final color = channelColors[entry.key] ??
           SentimentColors.forChannel(
-            entry.key.name.toUpperCase(), isDark: isDark,
+            entry.key.name.toUpperCase(),
+            isDark: isDark,
           );
 
       final path = Path();
       for (var i = 0; i < points.length; i++) {
-        final x = leftPad +
-            (points[i].minuteOffset / durationMinutes) * plotWidth;
+        final x =
+            leftPad + (points[i].minuteOffset / durationMinutes) * plotWidth;
         final y = yForScore(points[i].score);
         i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
         canvas.drawCircle(Offset(x, y), 3.5, Paint()..color = color);
@@ -2899,8 +2884,9 @@ class _SentimentTimelinePainter extends CustomPainter {
     }
 
     if (selectedMinute != null && selectedScore != null) {
-      final sx =
-          leftPad + (selectedMinute!.clamp(0.0, durationMinutes) / durationMinutes) * plotWidth;
+      final sx = leftPad +
+          (selectedMinute!.clamp(0.0, durationMinutes) / durationMinutes) *
+              plotWidth;
       final sy = yForScore(selectedScore!.clamp(0.0, 1.0));
       final marker = SentimentColors.forScore(selectedScore!, isDark: isDark);
       canvas.drawLine(
@@ -2927,11 +2913,12 @@ class _SentimentTimelinePainter extends CustomPainter {
     // X-axis ticks + labels
     const tickCount = 5;
     for (var i = 0; i < tickCount; i++) {
-      final ratio     = i / (tickCount - 1);
-      final x         = leftPad + ratio * plotWidth;
+      final ratio = i / (tickCount - 1);
+      final x = leftPad + ratio * plotWidth;
       final tickMinute = durationMinutes * ratio;
       canvas.drawLine(
-        Offset(x, plotRect.bottom), Offset(x, plotRect.bottom + 6),
+        Offset(x, plotRect.bottom),
+        Offset(x, plotRect.bottom + 6),
         Paint()..color = axisColor,
       );
       tp.text = TextSpan(
@@ -2939,8 +2926,7 @@ class _SentimentTimelinePainter extends CustomPainter {
         style: TextStyle(color: axisColor, fontSize: 11),
       );
       tp.layout();
-      tp.paint(canvas,
-          Offset(x - tp.width / 2, plotRect.bottom + 10));
+      tp.paint(canvas, Offset(x - tp.width / 2, plotRect.bottom + 10));
     }
 
     // X-axis title
@@ -2951,8 +2937,7 @@ class _SentimentTimelinePainter extends CustomPainter {
     tp.layout();
     tp.paint(
       canvas,
-      Offset(leftPad + plotWidth / 2 - tp.width / 2,
-             size.height - tp.height),
+      Offset(leftPad + plotWidth / 2 - tp.width / 2, size.height - tp.height),
     );
   }
 
@@ -3063,7 +3048,8 @@ class _RecordingMetaChip extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: isDark ? Colors.white54 : Colors.black45),
+            Icon(icon,
+                size: 13, color: isDark ? Colors.white54 : Colors.black45),
             const SizedBox(width: 4),
             Text(
               label,
@@ -3083,4 +3069,3 @@ class _RecordingMetaChip extends StatelessWidget {
     );
   }
 }
-

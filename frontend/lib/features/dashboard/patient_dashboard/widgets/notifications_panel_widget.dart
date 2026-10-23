@@ -44,10 +44,10 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
     _expanded = widget.initiallyExpanded;
   }
 
-  String _translateDefaultHeader(String header){
+  String _translateDefaultHeader(String header) {
     final t = AppLocalizations.of(context)!;
-    switch(header){
-      case('Notifications'):
+    switch (header) {
+      case ('Notifications'):
         return t.notificationspanelwidget_notifications;
       default:
         return header;
@@ -85,9 +85,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
                 ? Column(
                     children: [
                       const SizedBox(height: 8),
-                      for (int i = 0;
-                          i < widget.notifications.length;
-                          i++) ...[
+                      for (int i = 0; i < widget.notifications.length; i++) ...[
                         _NotificationCard(item: widget.notifications[i]),
                         if (i != widget.notifications.length - 1)
                           const SizedBox(height: 12),
@@ -99,8 +97,7 @@ class _NotificationsPanelState extends State<NotificationsPanel> {
                     child: Text(
                       t.notificationspanelwidget_noNotifToShow,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withOpacity(0.6),
+                        color: theme.colorScheme.onSurface.withOpacity(0.6),
                       ),
                     ),
                   ),
@@ -143,10 +140,11 @@ class _Header extends StatelessWidget {
           onTap: onToggle,
           borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Text(
-              expanded ? t.notificationspanelwidget_hideButton : t.notificationspanelwidget_showButton,
+              expanded
+                  ? t.notificationspanelwidget_hideButton
+                  : t.notificationspanelwidget_showButton,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,
@@ -155,9 +153,7 @@ class _Header extends StatelessWidget {
           ),
         ),
         Icon(
-          expanded
-              ? Icons.keyboard_arrow_up
-              : Icons.keyboard_arrow_down,
+          expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
           color: theme.colorScheme.onSurface.withOpacity(0.7),
         ),
       ],
@@ -178,15 +174,18 @@ class _NotificationCard extends StatelessWidget {
       NotificationKind.urgent => (
           theme.colorScheme.error.withOpacity(0.10),
           theme.colorScheme.error.withOpacity(0.45),
-          theme.colorScheme.error),
+          theme.colorScheme.error
+        ),
       NotificationKind.important => (
           theme.colorScheme.tertiary.withOpacity(0.08),
           theme.colorScheme.tertiary.withOpacity(0.45),
-          theme.colorScheme.tertiary),
+          theme.colorScheme.tertiary
+        ),
       NotificationKind.reminder => (
           const Color(0xFFFFF6E0),
           const Color(0xFFFFD78C),
-          const Color(0xFFB78100)),
+          const Color(0xFFB78100)
+        ),
     };
 
     final bool showCTA =
@@ -203,8 +202,7 @@ class _NotificationCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded,
-              color: iconColor, size: 24),
+          Icon(Icons.warning_amber_rounded, color: iconColor, size: 24),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -212,16 +210,15 @@ class _NotificationCard extends StatelessWidget {
               children: [
                 Text(
                   item.title,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w700),
+                  style: theme.textTheme.bodyLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 if (item.subtitle != null) ...[
                   const SizedBox(height: 8),
                   Text(
                     item.subtitle!,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface
-                          .withOpacity(0.75),
+                      color: theme.colorScheme.onSurface.withOpacity(0.75),
                     ),
                   ),
                 ],
@@ -233,18 +230,16 @@ class _NotificationCard extends StatelessWidget {
               onPressed: item.onTapCTA,
               style: ElevatedButton.styleFrom(
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 18, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 shape: const StadiumBorder(),
-                backgroundColor: theme.colorScheme.errorContainer
-                    .withOpacity(0.90),
-                foregroundColor:
-                    theme.colorScheme.onErrorContainer,
+                backgroundColor:
+                    theme.colorScheme.errorContainer.withOpacity(0.90),
+                foregroundColor: theme.colorScheme.onErrorContainer,
               ),
               child: Text(
                 item.ctaLabel!,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w700),
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
         ],

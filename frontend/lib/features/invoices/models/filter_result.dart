@@ -22,12 +22,14 @@ class FilterResult {
     this.amountRange,
   });
 }
+
 class DesktopTable extends StatelessWidget {
   final List<Invoice> invoices;
   final void Function(Invoice) onView;
   final void Function(Invoice) onPay;
 
-  const DesktopTable({super.key, 
+  const DesktopTable({
+    super.key,
     required this.invoices,
     required this.onView,
     required this.onPay,
@@ -68,8 +70,6 @@ class DesktopTable extends StatelessWidget {
     );
   }
 }
-
-
 
 class MobileCard extends StatelessWidget {
   const MobileCard({
@@ -127,8 +127,7 @@ class MobileCard extends StatelessWidget {
                       ),
                       if (isOverdue)
                         _pill(context, 'Overdue',
-                            bg: Colors.red.shade100,
-                            fg: Colors.red.shade800),
+                            bg: Colors.red.shade100, fg: Colors.red.shade800),
                       if (isRejected)
                         _pill(context, 'Rejected',
                             bg: cs.errorContainer, fg: cs.onErrorContainer),
@@ -188,7 +187,7 @@ class MobileCard extends StatelessWidget {
                 _kv('Statement Date', _date(invoice.dates.statementDate)),
                 _kv('Services',
                     '${invoice.services.length} ${invoice.services.length == 1 ? 'item' : 'items'}'),
-                _kv('Provider Phone', invoice.provider.phone ?? '—'), 
+                _kv('Provider Phone', invoice.provider.phone),
               ],
             ),
 

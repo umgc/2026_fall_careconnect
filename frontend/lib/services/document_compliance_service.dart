@@ -234,10 +234,12 @@ class DocumentComplianceService {
         .replace(queryParameters: {
       if (subjectType != null) 'subjectType': subjectType,
     });
-    final response =
-        await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
-      throw Exception(_errorFrom(response, 'Failed to load compliance dashboard'));
+      throw Exception(
+          _errorFrom(response, 'Failed to load compliance dashboard'));
     }
     final List<dynamic> rows = json.decode(response.body);
     return rows.map((e) => ComplianceSummary.fromJson(e)).toList();
@@ -273,8 +275,9 @@ class DocumentComplianceService {
       if (subjectType != null) 'subjectType': subjectType,
       if (documentType != null) 'documentType': documentType,
     });
-    final response =
-        await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
       throw Exception(_errorFrom(response, 'Failed to load missing documents'));
     }
@@ -293,10 +296,12 @@ class DocumentComplianceService {
       if (subjectType != null) 'subjectType': subjectType,
       if (documentType != null) 'documentType': documentType,
     });
-    final response =
-        await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
-      throw Exception(_errorFrom(response, 'Failed to export missing documents'));
+      throw Exception(
+          _errorFrom(response, 'Failed to export missing documents'));
     }
     return response.body;
   }
@@ -342,8 +347,9 @@ class DocumentComplianceService {
         .replace(queryParameters: {
       if (documentType != null) 'documentType': documentType,
     });
-    final response =
-        await http.get(uri, headers: headers).timeout(const Duration(seconds: 30));
+    final response = await http
+        .get(uri, headers: headers)
+        .timeout(const Duration(seconds: 30));
     if (response.statusCode != 200) {
       throw Exception(_errorFrom(response, 'Failed to load history'));
     }

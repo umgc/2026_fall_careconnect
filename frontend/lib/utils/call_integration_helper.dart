@@ -6,6 +6,7 @@ import '../providers/user_provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../services/api_service.dart';
+import '../config/env_constant.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -26,9 +27,9 @@ class CallIntegrationHelper {
     if (user?.isCaregiver == true) {
       final canUseVideoCalls =
           await SubscriptionService.checkPremiumAccessWithDialog(
-            context,
-            isVideoCall ? 'Video Calls' : 'Voice Calls',
-          );
+        context,
+        isVideoCall ? 'Video Calls' : 'Voice Calls',
+      );
 
       if (!canUseVideoCalls) {
         return; // User doesn't have premium access, dialog was shown
@@ -46,8 +47,10 @@ class CallIntegrationHelper {
     final caregiverData = _extractCaregiverData(currentUser);
 
     debugPrint('🎥 Starting video call:');
-    debugPrint('   Caller: ${caregiverData['name']} (${caregiverData['email']})');
-    debugPrint('   Recipient: ${patientData['name']} (${patientData['email']})');
+    debugPrint(
+        '   Caller: ${caregiverData['name']} (${caregiverData['email']})');
+    debugPrint(
+        '   Recipient: ${patientData['name']} (${patientData['email']})');
     debugPrint('   Call ID: $callId');
 
     // Direct video call without WebSocket dependency
@@ -89,7 +92,8 @@ class CallIntegrationHelper {
 
     debugPrint('🎥 Starting video call:');
     debugPrint('   Caller: ${patientData['name']} (${patientData['email']})');
-    debugPrint('   Recipient: ${caregiverData['name']} (${caregiverData['email']})');
+    debugPrint(
+        '   Recipient: ${caregiverData['name']} (${caregiverData['email']})');
     debugPrint('   Call ID: $callId');
 
     // Direct video call without WebSocket dependency
@@ -169,8 +173,8 @@ class CallIntegrationHelper {
       final patient = patientObject['patient'];
       return {
         'id': patient['id'] ?? 'unknown',
-        'name': '${patient['firstName'] ?? ''} ${patient['lastName'] ?? ''}'
-            .trim(),
+        'name':
+            '${patient['firstName'] ?? ''} ${patient['lastName'] ?? ''}'.trim(),
         'email': patient['email'] ?? 'unknown@example.com',
         'phone': patient['phone'] ?? '0000000000',
       };
@@ -180,8 +184,7 @@ class CallIntegrationHelper {
     if (patientObject is Map) {
       return {
         'id': patientObject['id'] ?? 'unknown',
-        'name':
-            patientObject['name'] ??
+        'name': patientObject['name'] ??
             '${patientObject['firstName'] ?? ''} ${patientObject['lastName'] ?? ''}'
                 .trim(),
         'email': patientObject['email'] ?? 'unknown@example.com',
@@ -214,8 +217,7 @@ class CallIntegrationHelper {
       final caregiver = caregiverObject['caregiver'];
       return {
         'id': caregiver['id'] ?? 'unknown',
-        'name':
-            caregiver['name'] ??
+        'name': caregiver['name'] ??
             '${caregiver['firstName'] ?? ''} ${caregiver['lastName'] ?? ''}'
                 .trim(),
         'email': caregiver['email'] ?? 'unknown@example.com',
@@ -227,8 +229,7 @@ class CallIntegrationHelper {
     if (caregiverObject is Map) {
       return {
         'id': caregiverObject['id'] ?? 'unknown',
-        'name':
-            caregiverObject['name'] ??
+        'name': caregiverObject['name'] ??
             '${caregiverObject['firstName'] ?? ''} ${caregiverObject['lastName'] ?? ''}'
                 .trim(),
         'email': caregiverObject['email'] ?? 'unknown@example.com',
@@ -442,7 +443,7 @@ class CallIntegrationHelper {
       debugPrint('📡 Sending SOS request to API: $sosRequest');
 
       final response = await http.post(
-        Uri.parse('http://localhost:8080/api/websocket/sos-call'),
+        Uri.parse('${getBackendBaseUrl()}/api/websocket/sos-call'),
         headers: {...authHeaders, 'Content-Type': 'application/json'},
         body: jsonEncode(sosRequest),
       );
@@ -475,7 +476,8 @@ class CallIntegrationHelper {
           );
         }
       } else {
-        debugPrint('❌ Failed to send SOS alert. Status: ${response.statusCode}');
+        debugPrint(
+            '❌ Failed to send SOS alert. Status: ${response.statusCode}');
         debugPrint('Response: ${response.body}');
 
         if (context.mounted) {
@@ -703,8 +705,7 @@ class CallIntegrationHelper {
           child: SingleChildScrollView(
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxHeight:
-                    MediaQuery.of(context).size.height *
+                maxHeight: MediaQuery.of(context).size.height *
                     0.6, // 60% of screen height
               ),
               child: Column(

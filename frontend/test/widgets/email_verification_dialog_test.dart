@@ -901,6 +901,7 @@ void main() {
     test('skips check when already checking', () {
       bool isCheckingVerification = true;
       bool mounted = true;
+      // ignore: dead_code
       final shouldSkip = isCheckingVerification || !mounted;
       expect(shouldSkip, isTrue);
     });
@@ -908,6 +909,7 @@ void main() {
     test('skips check when not mounted', () {
       bool isCheckingVerification = false;
       bool mounted = false;
+      // ignore: dead_code
       final shouldSkip = isCheckingVerification || !mounted;
       expect(shouldSkip, isTrue);
     });
@@ -915,6 +917,7 @@ void main() {
     test('proceeds when not checking and mounted', () {
       bool isCheckingVerification = false;
       bool mounted = true;
+      // ignore: dead_code
       final shouldSkip = isCheckingVerification || !mounted;
       expect(shouldSkip, isFalse);
     });
@@ -922,6 +925,7 @@ void main() {
     test('skips when both checking and not mounted', () {
       bool isCheckingVerification = true;
       bool mounted = false;
+      // ignore: dead_code
       final shouldSkip = isCheckingVerification || !mounted;
       expect(shouldSkip, isTrue);
     });
@@ -934,18 +938,21 @@ void main() {
   group('EmailVerificationDialog - conditional UI sections', () {
     test('resendMessage null: success section not shown', () {
       const String? resendMessage = null;
+      // ignore: unnecessary_null_comparison
       final showSuccess = resendMessage != null;
       expect(showSuccess, isFalse);
     });
 
     test('resendMessage set: success section shown', () {
       const String resendMessage = 'Verification email sent successfully!';
+      // ignore: unnecessary_null_comparison
       final showSuccess = resendMessage != null;
       expect(showSuccess, isTrue);
     });
 
     test('resendError null: error section not shown', () {
       const String? resendError = null;
+      // ignore: unnecessary_null_comparison
       final showError = resendError != null;
       expect(showError, isFalse);
     });
@@ -953,6 +960,7 @@ void main() {
     test('resendError set: error section shown', () {
       const String resendError =
           'Failed to send verification email. Please try again.';
+      // ignore: unnecessary_null_comparison
       final showError = resendError != null;
       expect(showError, isTrue);
     });

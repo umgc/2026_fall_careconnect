@@ -51,9 +51,8 @@ class DashboardAnalytics {
       periodStart: json['periodStart'] != null
           ? DateTime.parse(json['periodStart'])
           : null,
-      periodEnd: json['periodEnd'] != null
-          ? DateTime.parse(json['periodEnd'])
-          : null,
+      periodEnd:
+          json['periodEnd'] != null ? DateTime.parse(json['periodEnd']) : null,
     );
   }
 }

@@ -98,7 +98,9 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: isToday ? cs.tertiaryContainer.withOpacity(0.3) : Colors.transparent,
+                        color: isToday
+                            ? cs.tertiaryContainer.withOpacity(0.3)
+                            : Colors.transparent,
                         border: Border(
                           bottom: BorderSide(
                             color: isToday ? cs.tertiary : cs.outlineVariant,
@@ -160,8 +162,8 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                                             .withOpacity(0.15),
                                         border: Border(
                                           left: BorderSide(
-                                            color:
-                                                _getPriorityColor(visit.priority),
+                                            color: _getPriorityColor(
+                                                visit.priority),
                                             width: 4,
                                           ),
                                         ),
@@ -185,11 +187,12 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                                             children: [
                                               Text(
                                                 '${visit.scheduledTime.hour.toString().padLeft(2, '0')}:${visit.scheduledTime.minute.toString().padLeft(2, '0')} - ${visit.serviceType}',
-                                                style: theme.textTheme.bodySmall,
+                                                style:
+                                                    theme.textTheme.bodySmall,
                                               ),
                                               Container(
-                                                padding: const EdgeInsets
-                                                    .symmetric(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
                                                   horizontal: 8,
                                                   vertical: 2,
                                                 ),
@@ -202,8 +205,8 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                                                 ),
                                                 child: Text(
                                                   visit.priority,
-                                                  style: theme.textTheme
-                                                      .labelSmall
+                                                  style: theme
+                                                      .textTheme.labelSmall
                                                       ?.copyWith(
                                                     color: _getPriorityColor(
                                                         visit.priority),

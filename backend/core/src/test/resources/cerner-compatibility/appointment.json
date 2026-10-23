@@ -1,0 +1,27 @@
+{
+  "resourceType": "Appointment",
+  "id": "synthetic-a1",
+  "status": "booked",
+  "start": "2026-11-01T01:30:00-04:00",
+  "end": "2026-11-01T01:30:00-05:00",
+  "created": "2026-09-20T10:00:00-04:00",
+  "meta": {
+    "versionId": "opaque-v7",
+    "lastUpdated": "2026-09-24T01:00:00+02:00"
+  },
+  "participant": [
+    {
+      "actor": {
+        "reference": "Patient/synthetic-p1"
+      },
+      "status": "accepted"
+    },
+    {
+      "actor": {
+        "reference": "Practitioner/synthetic-clinician",
+        "display": "Synthetic Clinician"
+      },
+      "status": "accepted"
+    }
+  ]
+}

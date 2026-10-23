@@ -8,7 +8,8 @@ DigestRaw buildSimpleDigest({
 }) {
   final t = title ?? 'Your USPS Informed Delivery Daily Digest';
   final imgs = List<String>.generate(imageCount, (i) => 'piece${i + 1}');
-  final imgTags = imgs.map((id) => '<img src="cid:$id" alt="$id" />').join('\n');
+  final imgTags =
+      imgs.map((id) => '<img src="cid:$id" alt="$id" />').join('\n');
 
   final html = '''
 <!doctype html>

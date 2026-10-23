@@ -56,8 +56,12 @@ class PatientInfo {
     return PatientInfo(
       name: name ?? this.name,
       address: identical(address, _unset) ? this.address : address as String?,
-      accountNumber: identical(accountNumber, _unset) ? this.accountNumber : accountNumber as String?,
-      billingAddress: identical(billingAddress, _unset) ? this.billingAddress : billingAddress as String?,
+      accountNumber: identical(accountNumber, _unset)
+          ? this.accountNumber
+          : accountNumber as String?,
+      billingAddress: identical(billingAddress, _unset)
+          ? this.billingAddress
+          : billingAddress as String?,
     );
   }
 }
@@ -83,7 +87,8 @@ class InvoiceDates {
     return InvoiceDates(
       statementDate: statementDate ?? this.statementDate,
       dueDate: dueDate ?? this.dueDate,
-      paidDate: identical(paidDate, _unset) ? this.paidDate : paidDate as DateTime?,
+      paidDate:
+          identical(paidDate, _unset) ? this.paidDate : paidDate as DateTime?,
     );
   }
 }
@@ -115,11 +120,19 @@ class ServiceLine {
     Object? insuranceAdjustments = _unset,
   }) {
     return ServiceLine(
-      description: identical(description, _unset) ? this.description : description as String?,
-      serviceCode: identical(serviceCode, _unset) ? this.serviceCode : serviceCode as String?,
-      serviceDate: identical(serviceDate, _unset) ? this.serviceDate : serviceDate as DateTime?,
+      description: identical(description, _unset)
+          ? this.description
+          : description as String?,
+      serviceCode: identical(serviceCode, _unset)
+          ? this.serviceCode
+          : serviceCode as String?,
+      serviceDate: identical(serviceDate, _unset)
+          ? this.serviceDate
+          : serviceDate as DateTime?,
       charge: identical(charge, _unset) ? this.charge : charge as double?,
-      patientBalance: identical(patientBalance, _unset) ? this.patientBalance : patientBalance as double?,
+      patientBalance: identical(patientBalance, _unset)
+          ? this.patientBalance
+          : patientBalance as double?,
       insuranceAdjustments: identical(insuranceAdjustments, _unset)
           ? this.insuranceAdjustments
           : insuranceAdjustments as double?,
@@ -148,10 +161,15 @@ class Amounts {
     Object? amountDue = _unset,
   }) {
     return Amounts(
-      totalCharges: identical(totalCharges, _unset) ? this.totalCharges : totalCharges as double?,
-      totalAdjustments: identical(totalAdjustments, _unset) ? this.totalAdjustments : totalAdjustments as double?,
+      totalCharges: identical(totalCharges, _unset)
+          ? this.totalCharges
+          : totalCharges as double?,
+      totalAdjustments: identical(totalAdjustments, _unset)
+          ? this.totalAdjustments
+          : totalAdjustments as double?,
       total: identical(total, _unset) ? this.total : total as double?,
-      amountDue: identical(amountDue, _unset) ? this.amountDue : amountDue as double?,
+      amountDue:
+          identical(amountDue, _unset) ? this.amountDue : amountDue as double?,
     );
   }
 }
@@ -178,7 +196,8 @@ class PaymentReferences {
     this.qrCodeUrl,
     this.notes,
     required List<String> supportedMethods,
-  }) : supportedMethods = UnmodifiableListView(List<String>.from(supportedMethods));
+  }) : supportedMethods =
+            UnmodifiableListView(List<String>.from(supportedMethods));
 
   PaymentReferences copyWith({
     Object? paymentLink = _unset,
@@ -187,8 +206,11 @@ class PaymentReferences {
     List<String>? supportedMethods,
   }) {
     return PaymentReferences(
-      paymentLink: identical(paymentLink, _unset) ? this.paymentLink : paymentLink as String?,
-      qrCodeUrl: identical(qrCodeUrl, _unset) ? this.qrCodeUrl : qrCodeUrl as String?,
+      paymentLink: identical(paymentLink, _unset)
+          ? this.paymentLink
+          : paymentLink as String?,
+      qrCodeUrl:
+          identical(qrCodeUrl, _unset) ? this.qrCodeUrl : qrCodeUrl as String?,
       notes: identical(notes, _unset) ? this.notes : notes as String?,
       supportedMethods: supportedMethods ?? this.supportedMethods,
     );
@@ -261,12 +283,12 @@ class Invoice {
   final String createdBy;
   final String updatedBy;
 
-  final String? documentLink;  
+  final String? documentLink;
   final UnmodifiableListView<HistoryEntry> history;
 
   final String? aiSummary;
   final UnmodifiableListView<String>? recommendedActions;
-  final UnmodifiableListView<PaymentRecord>? payments;  
+  final UnmodifiableListView<PaymentRecord>? payments;
   Invoice({
     required this.id,
     required this.invoiceNumber,
@@ -284,14 +306,16 @@ class Invoice {
     required this.createdBy,
     required this.updatedBy,
     this.documentLink,
-    List<HistoryEntry>? history, 
+    List<HistoryEntry>? history,
     required List<PaymentRecord>? payments,
     this.aiSummary,
     List<String>? recommendedActions,
-    
-  })  : services = UnmodifiableListView(List<ServiceLine>.from(services ?? const [])),
-        payments = UnmodifiableListView(List<PaymentRecord>.from(payments?? const [])),
-        history = UnmodifiableListView(List<HistoryEntry>.from(history ?? const [])),
+  })  : services =
+            UnmodifiableListView(List<ServiceLine>.from(services ?? const [])),
+        payments = UnmodifiableListView(
+            List<PaymentRecord>.from(payments ?? const [])),
+        history =
+            UnmodifiableListView(List<HistoryEntry>.from(history ?? const [])),
         recommendedActions = recommendedActions == null
             ? null
             : UnmodifiableListView(List<String>.from(recommendedActions));
@@ -327,22 +351,28 @@ class Invoice {
       billedToInsurance: billedToInsurance ?? this.billedToInsurance,
       amounts: amounts ?? this.amounts,
       paymentReferences: paymentReferences ?? this.paymentReferences,
-      checkPayableTo: identical(checkPayableTo, _unset) ? this.checkPayableTo : checkPayableTo as CheckPayableTo?,
+      checkPayableTo: identical(checkPayableTo, _unset)
+          ? this.checkPayableTo
+          : checkPayableTo as CheckPayableTo?,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       createdBy: createdBy,
       updatedBy: updatedBy ?? this.updatedBy,
-      documentLink: identical(documentLink, _unset) ? this.documentLink : documentLink as String?,
+      documentLink: identical(documentLink, _unset)
+          ? this.documentLink
+          : documentLink as String?,
       history: history != null
           ? UnmodifiableListView(List<HistoryEntry>.from(history))
           : this.history,
       payments: payments ?? this.payments,
-      aiSummary: identical(aiSummary, _unset) ? this.aiSummary : aiSummary as String?,
+      aiSummary:
+          identical(aiSummary, _unset) ? this.aiSummary : aiSummary as String?,
       recommendedActions: identical(recommendedActions, _unset)
           ? this.recommendedActions
           : (recommendedActions == null
               ? null
-              : UnmodifiableListView(List<String>.from(recommendedActions as List<String>))),
+              : UnmodifiableListView(
+                  List<String>.from(recommendedActions as List<String>))),
     );
   }
 }
@@ -351,7 +381,7 @@ extension InvoiceFactories on Invoice {
   static Invoice empty() {
     final now = DateTime.now();
     String iso(DateTime d) => d.toIso8601String();
- 
+
     return Invoice(
       id: 'local-${now.millisecondsSinceEpoch}', // temporary client id
       invoiceNumber: '',
@@ -400,7 +430,7 @@ extension InvoiceFactories on Invoice {
     );
   }
 }
- 
+
 @immutable
 class PaymentRecord {
   final String id; // server generated UUID or client temp
@@ -429,7 +459,8 @@ class PaymentRecord {
     double? amountPaid,
     bool? planEnabled,
     int? planDurationMonths,
-  }) => PaymentRecord(
+  }) =>
+      PaymentRecord(
         id: id ?? this.id,
         confirmationNumber: confirmationNumber ?? this.confirmationNumber,
         date: date ?? this.date,
@@ -440,22 +471,22 @@ class PaymentRecord {
       );
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'confirmationNumber': confirmationNumber,
-    'date': date.toIso8601String(),
-    'methodKey': methodKey,
-    'amountPaid': amountPaid,
-    'planEnabled': planEnabled,
-    'planDurationMonths': planDurationMonths,
-  };
+        'id': id,
+        'confirmationNumber': confirmationNumber,
+        'date': date.toIso8601String(),
+        'methodKey': methodKey,
+        'amountPaid': amountPaid,
+        'planEnabled': planEnabled,
+        'planDurationMonths': planDurationMonths,
+      };
 
-  static PaymentRecord fromJson(Map<String,dynamic> j) => PaymentRecord(
-    id: j['id'] as String,
-    confirmationNumber: j['confirmationNumber'] as String,
-    date: DateTime.parse(j['date'] as String),
-    methodKey: j['methodKey'] as String,
-    amountPaid: (j['amountPaid'] as num).toDouble(),
-    planEnabled: j['planEnabled'] as bool? ?? false,
-    planDurationMonths: j['planDurationMonths'] as int?,
-  );
+  static PaymentRecord fromJson(Map<String, dynamic> j) => PaymentRecord(
+        id: j['id'] as String,
+        confirmationNumber: j['confirmationNumber'] as String,
+        date: DateTime.parse(j['date'] as String),
+        methodKey: j['methodKey'] as String,
+        amountPaid: (j['amountPaid'] as num).toDouble(),
+        planEnabled: j['planEnabled'] as bool? ?? false,
+        planDurationMonths: j['planDurationMonths'] as int?,
+      );
 }

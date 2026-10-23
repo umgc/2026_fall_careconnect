@@ -162,15 +162,15 @@ class _ComplianceDashboardPageState extends State<ComplianceDashboardPage>
   void _openChecklist(String subjectType, int subjectId, String subjectName) {
     Navigator.of(context)
         .push(
-          MaterialPageRoute(
-            builder: (routeContext) => ComplianceChecklistPage(
-              subjectType: subjectType,
-              subjectId: subjectId,
-              subjectName: subjectName,
-              canEdit: true,
-            ),
-          ),
-        )
+      MaterialPageRoute(
+        builder: (routeContext) => ComplianceChecklistPage(
+          subjectType: subjectType,
+          subjectId: subjectId,
+          subjectName: subjectName,
+          canEdit: true,
+        ),
+      ),
+    )
         .then((_) {
       // Statuses may have changed while drilled in.
       _loadSummaries();
@@ -333,7 +333,10 @@ class _ComplianceDashboardPageState extends State<ComplianceDashboardPage>
   // ==================== MISSING FORMS TAB ====================
 
   Widget _buildMissingTab() {
-    final documentTypes = <String>{'ALL', ..._missing.map((m) => m.documentType)};
+    final documentTypes = <String>{
+      'ALL',
+      ..._missing.map((m) => m.documentType)
+    };
     if (_missingDocumentFilter != 'ALL' &&
         !documentTypes.contains(_missingDocumentFilter)) {
       documentTypes.add(_missingDocumentFilter);
@@ -434,8 +437,7 @@ class _ComplianceDashboardPageState extends State<ComplianceDashboardPage>
                 rejected ? Icons.cancel : Icons.warning_amber,
                 color: rejected ? Colors.red : Colors.orange,
               ),
-              title:
-                  Text(DocumentComplianceService.prettify(row.documentType)),
+              title: Text(DocumentComplianceService.prettify(row.documentType)),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -15,6 +15,7 @@ import '../services/local_db/offline_sync_service.dart';
 import '../features/telemetry/telemetry.dart';
 import '../services/call_notification_service.dart';
 import '../widgets/hybrid_video_call_widget.dart';
+import '../widgets/menu/menu_page.dart';
 
 /// Main screen of the application. This is where the user is navigated to
 /// after logging in. This contains the bottom nav bar and main screens
@@ -164,6 +165,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return;
     }
     _isOfflineSyncInProgress = true;
+    var anySucceeded = false;
 
     try {
       while (mounted && _pendingSyncQueue.isNotEmpty) {
@@ -187,6 +189,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         setState(() {
           _currentlySyncingRequestId = null;
           if (synced) {
+            anySucceeded = true;
             _pendingSyncQueue = _pendingSyncQueue
                 .where((queued) => queued.id != item.id)
                 .toList();
@@ -203,8 +206,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           }
         });
 
+        // Drop items the backend can never accept. Once a request exhausts its
+        // replay attempts it is marked terminal ('dead') in the DB and excluded
+        // from getOfflineSyncQueue(), so reconciling here lets a permanently
+        // unreachable backend stop pinning the sync banner open forever.
+        final live = await ApiService.getOfflineSyncQueue();
+        if (!mounted) {
+          break;
+        }
+        final liveIds = live.map((queued) => queued.id).toSet();
+        setState(() {
+          _pendingSyncQueue = _pendingSyncQueue
+              .where((queued) => liveIds.contains(queued.id))
+              .toList();
+        });
+
         if (_pendingSyncQueue.isEmpty) {
-          _showSyncCompleteToastBanner();
+          // Only celebrate a genuine sync; if every item was abandoned we clear
+          // the banner silently rather than falsely reporting completion.
+          if (anySucceeded) {
+            _showSyncCompleteToastBanner();
+          }
           break;
         }
 
@@ -832,6 +854,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           // Flyout mode keeps users in context instead of route-switching to a
           // dedicated voice page, which reduces navigation side effects.
           presentationMode: VoiceCommandPresentation.flyout,
+          theme: VoiceCommandTheme.classic,
           onCloseRequested: () {
             if (overlayNavigator.canPop()) {
               overlayNavigator.pop();
@@ -841,9 +864,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             if (overlayNavigator.canPop()) {
               overlayNavigator.pop();
             }
-            if (mounted) {
-              context.go(destination);
+
+            if (!mounted) return;
+
+            if (destination == '/dashboard') {
+              _onItemTapped(0);
+              return;
             }
+
+            if (destination == '/dashboard?tab=menu') {
+              showModalBottomSheet<void>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => const MenuPage(),
+              );
+              return;
+            }
+
+            context.go(destination);
           },
         );
       },

@@ -1,9 +1,9 @@
 /// Must mirror backend enum: TEXT, YES_NO, TRUE_FALSE, NUMBER
 enum BackendQuestionType {
-  text,       // TEXT
-  yesNo,      // YES_NO
-  trueFalse,  // TRUE_FALSE
-  number;     // NUMBER
+  text, // TEXT
+  yesNo, // YES_NO
+  trueFalse, // TRUE_FALSE
+  number; // NUMBER
 
   /// Convert backend wire value -> enum
   static BackendQuestionType fromWire(String? value) {
@@ -24,7 +24,7 @@ enum BackendQuestionType {
       case 'NUMERIC': // tolerate alias if it ever appears
         return BackendQuestionType.number;
       default:
-      // Fallback so UI doesn’t crash; you can log this if you want
+        // Fallback so UI doesn’t crash; you can log this if you want
         return BackendQuestionType.text;
     }
   }
@@ -43,4 +43,3 @@ enum BackendQuestionType {
     }
   }
 }
-

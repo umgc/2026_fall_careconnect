@@ -61,8 +61,9 @@ class _EmailVerificationDialogState extends State<EmailVerificationDialog> {
       // Build WebSocket endpoint from configured backend URL.
       final backendUrl = Uri.parse(getBackendBaseUrl());
       final wsScheme = backendUrl.scheme == 'https' ? 'wss' : 'ws';
-      final wsHost =
-          backendUrl.hasPort ? '${backendUrl.host}:${backendUrl.port}' : backendUrl.host;
+      final wsHost = backendUrl.hasPort
+          ? '${backendUrl.host}:${backendUrl.port}'
+          : backendUrl.host;
       final wsUrl = Uri.parse('$wsScheme://$wsHost/ws/careconnect');
       _wsChannel = WebSocketChannel.connect(wsUrl);
 
@@ -98,7 +99,8 @@ class _EmailVerificationDialogState extends State<EmailVerificationDialog> {
             'type': 'subscribe-email-verification',
             'email': widget.email,
           }));
-          debugPrint('WebSocket subscription request sent for: ${widget.email}');
+          debugPrint(
+              'WebSocket subscription request sent for: ${widget.email}');
         }
       });
 
@@ -136,7 +138,8 @@ class _EmailVerificationDialogState extends State<EmailVerificationDialog> {
       final response = await http.get(uri).timeout(const Duration(seconds: 5));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final verified = data is Map<String, dynamic> && data['verified'] == true;
+        final verified =
+            data is Map<String, dynamic> && data['verified'] == true;
         if (verified) {
           _handleEmailVerified();
         }
@@ -305,8 +308,7 @@ class _EmailVerificationDialogState extends State<EmailVerificationDialog> {
             decoration: BoxDecoration(
               color: Colors.purple.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border:
-                  Border.all(color: Colors.purple.withValues(alpha: 0.3)),
+              border: Border.all(color: Colors.purple.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [

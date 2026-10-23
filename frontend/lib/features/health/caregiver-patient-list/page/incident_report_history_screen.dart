@@ -16,10 +16,12 @@ class IncidentReportHistoryScreen extends StatefulWidget {
   });
 
   @override
-  State<IncidentReportHistoryScreen> createState() => _IncidentReportHistoryScreenState();
+  State<IncidentReportHistoryScreen> createState() =>
+      _IncidentReportHistoryScreenState();
 }
 
-class _IncidentReportHistoryScreenState extends State<IncidentReportHistoryScreen> {
+class _IncidentReportHistoryScreenState
+    extends State<IncidentReportHistoryScreen> {
   List<IncidentReportEntry> _reports = [];
   bool _loading = true;
   String? _error;
@@ -40,7 +42,8 @@ class _IncidentReportHistoryScreenState extends State<IncidentReportHistoryScree
       if (res.statusCode == 200) {
         final list = jsonDecode(res.body) as List<dynamic>?;
         final reports = (list ?? [])
-            .map((e) => IncidentReportEntry.fromJson(Map<String, dynamic>.from(e as Map)))
+            .map((e) => IncidentReportEntry.fromJson(
+                Map<String, dynamic>.from(e as Map)))
             .toList();
         if (mounted) {
           setState(() {
@@ -122,14 +125,16 @@ class _IncidentReportHistoryScreenState extends State<IncidentReportHistoryScree
                         itemCount: _reports.length,
                         itemBuilder: (context, index) {
                           final r = _reports[index];
-                          final dateStr = DateFormat.yMMMd().add_jm().format(r.occurredAt);
+                          final dateStr =
+                              DateFormat.yMMMd().add_jm().format(r.occurredAt);
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
-                                    builder: (context) => IncidentReportDetailScreen(
+                                    builder: (context) =>
+                                        IncidentReportDetailScreen(
                                       clientName: widget.clientName,
                                       report: r,
                                     ),
@@ -138,7 +143,8 @@ class _IncidentReportHistoryScreenState extends State<IncidentReportHistoryScree
                               },
                               title: Text(
                                 r.incidentType.replaceAll('_', ' '),
-                                style: const TextStyle(fontWeight: FontWeight.w600),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
                               ),
                               subtitle: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,4 +176,3 @@ class _IncidentReportHistoryScreenState extends State<IncidentReportHistoryScree
     );
   }
 }
-

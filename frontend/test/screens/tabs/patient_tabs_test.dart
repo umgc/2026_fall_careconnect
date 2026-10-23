@@ -25,12 +25,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/screens/tabs/patient_tabs.dart';
 
+MaterialApp _app(Widget child) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: child,
+    );
+
 /// Wraps [child] in a minimal MaterialApp with a [UserProvider] whose
 /// initial session is null (logged-out state).
 Widget _withNullUser(Widget child) {
   return ChangeNotifierProvider<UserProvider>(
     create: (_) => UserProvider(),
-    child: MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: child),
+    child: _app(child),
   );
 }
 
@@ -46,7 +53,7 @@ Widget _withPatientUser(Widget child) {
   ));
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: child),
+    child: _app(child),
   );
 }
 
@@ -66,13 +73,18 @@ void main() {
       // Verifies the purely static UI renders without errors and displays
       // the expected title and text strings.
       await tester.pumpWidget(
-        const MaterialApp(localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: PatientHealthTab()),
+        const MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: PatientHealthTab()),
       );
       await tester.pump();
 
       expect(find.text('Health'), findsOneWidget);
       expect(find.text('Health Tracking'), findsOneWidget);
-      expect(find.text('Monitor your health metrics, medications, and wellness goals.'),
+      expect(
+          find.text(
+              'Monitor your health metrics, medications, and wellness goals.'),
           findsOneWidget);
       expect(find.byIcon(Icons.health_and_safety), findsOneWidget);
     });

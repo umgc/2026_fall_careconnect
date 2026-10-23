@@ -3,7 +3,6 @@ package com.careconnect.service.consent;
 import com.careconnect.model.Patient;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.service.CaregiverPatientLinkService;
-import com.careconnect.service.ConsentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;

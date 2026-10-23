@@ -18,16 +18,16 @@ class HealthApi {
   String get _base => EnvironmentConfig.baseUrl;
 
   Map<String, String> get _headers => {
-    'Authorization': 'Bearer $jwt',
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-  };
+        'Authorization': 'Bearer $jwt',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
 
   Duration get _timeout => const Duration(seconds: 20);
 
   Uri _uri(String path, {Map<String, String>? query}) {
     final normalizedBase =
-    _base.endsWith('/') ? _base.substring(0, _base.length - 1) : _base;
+        _base.endsWith('/') ? _base.substring(0, _base.length - 1) : _base;
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     return Uri.parse('$normalizedBase$normalizedPath')
         .replace(queryParameters: query);
@@ -38,47 +38,37 @@ class HealthApi {
       http.get(_uri(path, query: query), headers: _headers).timeout(_timeout);
 
   Future<http.Response> _post(String path,
-      {Object? body, Map<String, String>? query}) =>
+          {Object? body, Map<String, String>? query}) =>
       http
           .post(_uri(path, query: query),
-          headers: _headers, body: _encodeBody(body))
+              headers: _headers, body: _encodeBody(body))
           .timeout(_timeout);
 
   Future<http.Response> _put(String path,
-      {Object? body, Map<String, String>? query}) =>
+          {Object? body, Map<String, String>? query}) =>
       http
           .put(_uri(path, query: query),
-          headers: _headers, body: _encodeBody(body))
+              headers: _headers, body: _encodeBody(body))
           .timeout(_timeout);
 
   Future<http.Response> _patch(String path,
-      {Object? body, Map<String, String>? query}) =>
+          {Object? body, Map<String, String>? query}) =>
       http
           .patch(_uri(path, query: query),
-          headers: _headers, body: _encodeBody(body))
+              headers: _headers, body: _encodeBody(body))
           .timeout(_timeout);
 
   Future<http.Response> _delete(String path,
-      {Object? body, Map<String, String>? query}) =>
+          {Object? body, Map<String, String>? query}) =>
       http
           .delete(_uri(path, query: query),
-          headers: _headers, body: _encodeBody(body))
+              headers: _headers, body: _encodeBody(body))
           .timeout(_timeout);
 
   String? _encodeBody(Object? body) {
     if (body == null) return null;
     if (body is String) return body; // already JSON
     return jsonEncode(body);
-  }
-
-  T _decodeOrThrow<T>(http.Response res) {
-    final code = res.statusCode;
-    if (code >= 200 && code < 300) {
-      if (res.body.isEmpty) return (null as dynamic) as T;
-      final decoded = jsonDecode(res.body);
-      return decoded as T;
-    }
-    throw ApiException(code, res.body.isEmpty ? 'Request failed' : res.body);
   }
 
   // =========================================================
@@ -94,7 +84,7 @@ class HealthApi {
     }
     final body = json.decode(res.body);
     final Map<String, dynamic> m =
-    (body is Map<String, dynamic>) ? body : <String, dynamic>{};
+        (body is Map<String, dynamic>) ? body : <String, dynamic>{};
     final id = m['id'] ?? (m['data'] is Map ? m['data']['id'] : null);
     if (id == null) {
       throw ApiException(500, 'patient id not found in response');
@@ -115,15 +105,17 @@ class HealthApi {
   // =========================================================
 
   // GET all allergies for a patient (returns `data: [AllergyDTO,...]`).
-  Future<List<Map<String, dynamic>>> getAllergiesForPatient(int patientId) async {
+  Future<List<Map<String, dynamic>>> getAllergiesForPatient(
+      int patientId) async {
     final res = await _get('/v1/api/allergies/patient/$patientId');
     if (res.statusCode != 200) {
       throw ApiException(
           res.statusCode, 'getAllergiesForPatient failed: ${res.body}');
     }
     final body = json.decode(res.body);
-    final list =
-    (body is Map && body['data'] is List) ? (body['data'] as List) : const [];
+    final list = (body is Map && body['data'] is List)
+        ? (body['data'] as List)
+        : const [];
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
@@ -132,23 +124,24 @@ class HealthApi {
       int patientId) async {
     final res = await _get('/v1/api/allergies/patient/$patientId/active');
     if (res.statusCode != 200) {
-      throw ApiException(res.statusCode,
-          'getActiveAllergiesForPatient failed: ${res.body}');
+      throw ApiException(
+          res.statusCode, 'getActiveAllergiesForPatient failed: ${res.body}');
     }
     final body = json.decode(res.body);
-    final list =
-    (body is Map && body['data'] is List) ? (body['data'] as List) : const [];
+    final list = (body is Map && body['data'] is List)
+        ? (body['data'] as List)
+        : const [];
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
   Future<Map<String, dynamic>> createAllergy({
     required int patientId,
     required String allergen,
-    required String allergyType,   // "DRUG"
-    required String severity,      // "MILD" | "MODERATE" | "SEVERE"
+    required String allergyType, // "DRUG"
+    required String severity, // "MILD" | "MODERATE" | "SEVERE"
     required String reaction,
     String? notes,
-    String? diagnosedDate,         // optional: "YYYY-MM-DD"
+    String? diagnosedDate, // optional: "YYYY-MM-DD"
     bool isActive = true,
   }) async {
     final payload = {
@@ -176,11 +169,11 @@ class HealthApi {
   Future<Map<String, dynamic>> updateAllergy({
     required int id,
     String? allergen,
-    String? allergyType,     // "DRUG" | "FOOD" | "ENVIRONMENTAL" | ...
-    String? severity,        // "MILD" | "MODERATE" | "SEVERE"
+    String? allergyType, // "DRUG" | "FOOD" | "ENVIRONMENTAL" | ...
+    String? severity, // "MILD" | "MODERATE" | "SEVERE"
     String? reaction,
     String? notes,
-    String? diagnosedDate,   // "YYYY-MM-DD"
+    String? diagnosedDate, // "YYYY-MM-DD"
     bool? isActive,
   }) async {
     final payload = <String, dynamic>{};
@@ -206,7 +199,8 @@ class HealthApi {
   Future<void> deactivateAllergy(int id) async {
     final res = await _patch('/v1/api/allergies/$id/deactivate');
     if (res.statusCode != 200) {
-      throw ApiException(res.statusCode, 'deactivateAllergy failed: ${res.body}');
+      throw ApiException(
+          res.statusCode, 'deactivateAllergy failed: ${res.body}');
     }
   }
 

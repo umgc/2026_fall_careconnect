@@ -97,7 +97,7 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
         Text(
           plan.description(t),
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
           ),
         ),
         const SizedBox(height: 16),
@@ -162,7 +162,8 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
           ),
           onPressed: () {
             final tierId = plan.id;
-            final userIdInt = widget.userId != null ? int.tryParse(widget.userId!) : null;
+            final userIdInt =
+                widget.userId != null ? int.tryParse(widget.userId!) : null;
             if (kIsWeb) {
               context.go('/web-pay', extra: {
                 'tierId': int.tryParse(tierId) ?? 0,
@@ -203,10 +204,10 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : errorMessage != null
-          ? _buildErrorView(theme)
-          : plans.isEmpty
-          ? _buildEmptyView(theme)
-          : _buildPackageListView(theme),
+              ? _buildErrorView(theme)
+              : plans.isEmpty
+                  ? _buildEmptyView(theme)
+                  : _buildPackageListView(theme),
     );
   }
 
@@ -220,7 +221,7 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
             Icon(
               Icons.error_outline,
               size: 64,
-              color: theme.colorScheme.error.withValues(alpha:0.7),
+              color: theme.colorScheme.error.withValues(alpha: 0.7),
             ),
             const SizedBox(height: 16),
             Text(
@@ -253,7 +254,7 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
             Icon(
               Icons.info_outline,
               size: 64,
-              color: theme.colorScheme.primary.withValues(alpha:0.7),
+              color: theme.colorScheme.primary.withValues(alpha: 0.7),
             ),
             const SizedBox(height: 16),
             Text(
@@ -326,7 +327,7 @@ class _SelectPackagePageState extends State<SelectPackagePage> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: theme.colorScheme.primary.withValues(alpha:0.2),
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
           width: 1,
         ),
       ),

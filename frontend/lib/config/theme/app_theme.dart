@@ -13,13 +13,13 @@ class AppTheme {
   // Status colors
   static const Color success = Color(0xFF10B981); // emerald-500
   static const Color warning = Color(0xFFF59E0B); // amber-500
-  static const Color error = Color(0xFFEF4444);   // red-500
-  static const Color info = Color(0xFF00A7C8);    // cyan accent
+  static const Color error = Color(0xFFEF4444); // red-500
+  static const Color info = Color(0xFF00A7C8); // cyan accent
 
   // Text colors
-  static const Color textPrimary = Color(0xFF0F172A);   // slate-900
+  static const Color textPrimary = Color(0xFF0F172A); // slate-900
   static const Color textSecondary = Color(0xFF6B7280); // gray-500/600
-  static const Color textLight = Color(0xFFFFFFFF);     // white
+  static const Color textLight = Color(0xFFFFFFFF); // white
 
   // Background colors
   static const Color backgroundPrimary = Color(0xFFFFFFFF); // white
@@ -39,38 +39,44 @@ class AppTheme {
   // Status colors - slightly lighter for dark theme
   static const Color successDarkTheme = Color(0xFF34D399); // emerald-400
   static const Color warningDarkTheme = Color(0xFFFBBF24); // amber-400
-  static const Color errorDarkTheme = Color(0xFFF87171);   // red-400
+  static const Color errorDarkTheme = Color(0xFFF87171); // red-400
   static const Color infoDarkTheme = Color(0xFF25BEDA);
 
   // Text colors for dark theme
-  static const Color textPrimaryDarkTheme = Color(0xFFE5E7EB);   // gray-200
+  static const Color textPrimaryDarkTheme = Color(0xFFE5E7EB); // gray-200
   static const Color textSecondaryDarkTheme = Color(0xFF9CA3AF); // gray-400
-  static const Color textDarkThemeDark = Color(0xFF001014);      // on-cyan
+  static const Color textDarkThemeDark = Color(0xFF001014); // on-cyan
 
   // Background colors for dark theme
-  static const Color backgroundPrimaryDarkTheme = Color(0xFF0B1220); // near-black with blue hint
-  static const Color backgroundSecondaryDarkTheme = Color(0xFF111827); // gray-900
-  static const Color cardBackgroundDarkTheme = Color(0xFF131B2B);      // lifted card
+  static const Color backgroundPrimaryDarkTheme =
+      Color(0xFF0B1220); // near-black with blue hint
+  static const Color backgroundSecondaryDarkTheme =
+      Color(0xFF111827); // gray-900
+  static const Color cardBackgroundDarkTheme = Color(0xFF131B2B); // lifted card
   // Border colors for dark theme
   static const Color borderColorDarkTheme = Color(0xFF1F2A3A); // deep slate
 
   // Video call specific colors
   static const Color videoCallBackground = Color(0xFF000000); // black
-  static const Color videoCallBackgroundDarkTheme = Color(0xFF0B1220); // dark background
+  static const Color videoCallBackgroundDarkTheme =
+      Color(0xFF0B1220); // dark background
   static const Color videoCallText = Color(0xFFFFFFFF); // white
   static const Color videoCallTextSecondary = Color(0xFFBFC7D1);
   static const Color videoCallTextTertiary = Color(0xFF98A4B3);
   static const Color videoCallEndCall = Color(0xFFEF4444); // red
-  static const Color videoCallEndCallDarkTheme = Color(0xFFF87171); // lighter red for dark
+  static const Color videoCallEndCallDarkTheme =
+      Color(0xFFF87171); // lighter red for dark
 
   // Chat/messaging specific colors
   static const Color chatUserMessage = Color(0xFF00A7C8);
   static const Color chatUserMessageDarkTheme = Color(0xFF008DA8);
   static const Color chatBotMessage = Color(0xFFF3F4F6); // gray-100
   static const Color chatBotMessageDarkTheme = Color(0xFF111827); // gray-900
-  static const Color chatTextOnPrimary = Color(0xFFFFFFFF); // white text on cyan
+  static const Color chatTextOnPrimary =
+      Color(0xFFFFFFFF); // white text on cyan
   static const Color chatTextOnSecondary = Color(0xFF0F172A); // slate-900
-  static const Color chatTextOnSecondaryDarkTheme = Color(0xFFE5E7EB); // gray-200
+  static const Color chatTextOnSecondaryDarkTheme =
+      Color(0xFFE5E7EB); // gray-200
 
   // Typography styles
   static const TextStyle headingLarge = TextStyle(
@@ -230,7 +236,8 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(style: textButtonStyle),
       inputDecorationTheme: InputDecorationTheme(
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         fillColor: backgroundPrimary,
         filled: true,
         labelStyle: const TextStyle(color: textSecondary),
@@ -310,7 +317,8 @@ class AppTheme {
           foregroundColor: textDarkThemeDark,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           textStyle: buttonText,
         ),
       ),
@@ -318,7 +326,8 @@ class AppTheme {
         style: TextButton.styleFrom(
           foregroundColor: primaryDarkThemeLight,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ),
@@ -331,7 +340,8 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: primaryDarkThemeLight, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         fillColor: backgroundSecondaryDarkTheme,
         filled: true,
         labelStyle: const TextStyle(color: textSecondaryDarkTheme),
@@ -353,9 +363,12 @@ class AppTheme {
           fontWeight: FontWeight.bold,
           color: textPrimaryDarkTheme,
         ),
-        bodyLarge: TextStyle(fontSize: 16, height: 1.5, color: textPrimaryDarkTheme),
-        bodyMedium: TextStyle(fontSize: 14, height: 1.5, color: textPrimaryDarkTheme),
-        bodySmall: TextStyle(fontSize: 12, height: 1.4, color: textSecondaryDarkTheme),
+        bodyLarge:
+            TextStyle(fontSize: 16, height: 1.5, color: textPrimaryDarkTheme),
+        bodyMedium:
+            TextStyle(fontSize: 14, height: 1.5, color: textPrimaryDarkTheme),
+        bodySmall:
+            TextStyle(fontSize: 12, height: 1.4, color: textSecondaryDarkTheme),
       ),
       dividerTheme: const DividerThemeData(
         thickness: 1,

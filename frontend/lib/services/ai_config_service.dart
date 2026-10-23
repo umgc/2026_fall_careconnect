@@ -55,12 +55,10 @@ class PatientAIConfigDTO {
       medicalContextEnabled: json['medicalContextEnabled'] ?? true,
       language: json['language'] ?? 'en',
       emergencyAlertsEnabled: json['emergencyAlertsEnabled'] ?? true,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : null,
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
-          : null,
+      createdAt:
+          json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null,
+      updatedAt:
+          json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null,
       isActive: json['isActive'] ?? true,
     );
   }
@@ -159,8 +157,7 @@ class AIConfigService {
         'includeAllergiesByDefault':
             config.preferences['includeAllergiesByDefault'] ?? true,
         'isActive': config.isActive,
-        'systemPrompt':
-            config.preferences['systemPrompt'] ??
+        'systemPrompt': config.preferences['systemPrompt'] ??
             'You are a helpful AI assistant that helps patients access their health information.',
       };
 

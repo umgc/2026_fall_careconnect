@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../models/fall_alert.dart';
 import '../pages/alert_details_page.dart';
- 
 
 class AlertNavigation {
   static void navigateFromPayload(
@@ -28,7 +27,7 @@ class AlertNavigation {
             emergencyNumber: '911', // make region aware later
             emergencyContactName: alert.emergencyContactName,
             emergencyContactPhone: alert.emergencyContactPhone,
-          
+
             onAcknowledgeOk: () async {
               // TODO: mark alert as acknowledged for this patient
             },
@@ -39,7 +38,6 @@ class AlertNavigation {
         ),
       );
     } else {
-       
       Navigator.of(context).push(
         MaterialPageRoute(
           settings: const RouteSettings(name: AlertDetailsPage.routeName),

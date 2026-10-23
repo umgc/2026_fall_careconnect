@@ -16,11 +16,12 @@ const Map<String, IconData> _kIconMap = {
 };
 
 IconData _iconFromName(String name) => _kIconMap[name] ?? Icons.task;
-String _iconToName(IconData icon) =>
-    _kIconMap.entries.firstWhere(
+String _iconToName(IconData icon) => _kIconMap.entries
+    .firstWhere(
       (e) => e.value.codePoint == icon.codePoint,
       orElse: () => const MapEntry('task', Icons.task),
-    ).key;
+    )
+    .key;
 
 /// =============================
 /// TaskTypeManager (Colors + Icons)
@@ -42,8 +43,8 @@ class TaskTypeManager extends ChangeNotifier {
   /// Accessors
   /// =============================
   Map<String, Color> get taskTypeColors => {
-    for (final e in _taskTypes.entries) e.key: e.value.color,
-  };
+        for (final e in _taskTypes.entries) e.key: e.value.color,
+      };
 
   IconData getIcon(String? type) {
     if (type == null) return Icons.task;
@@ -172,7 +173,7 @@ class _TaskTypeData {
   }
 
   Map<String, dynamic> toJson() => {
-    'color': color.toARGB32(),
-    'icon': _iconToName(icon),
-  };
+        'color': color.toARGB32(),
+        'icon': _iconToName(icon),
+      };
 }

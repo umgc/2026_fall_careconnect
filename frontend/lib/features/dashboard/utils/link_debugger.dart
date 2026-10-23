@@ -14,7 +14,8 @@ class LinkDebugger {
     try {
       print('');
       print('🔍 ----- LINK DEBUGGER STARTING -----');
-      print('🔍 Debugging linkId for patient: ${patient.id} - ${patient.firstName} ${patient.lastName}');
+      print(
+          '🔍 Debugging linkId for patient: ${patient.id} - ${patient.firstName} ${patient.lastName}');
       print('🔍 Current patient data: $patient');
       final user = Provider.of<UserProvider>(context, listen: false).user;
       if (user == null) {
@@ -56,18 +57,18 @@ class LinkDebugger {
     print(
       '🔍 Searching through ${items.length} items for patient ID: $patientId',
     );
-    
+
     int mapItems = 0;
     int itemsWithId = 0;
     int itemsWithPatientField = 0;
-    
+
     for (final item in items) {
       if (item is! Map<String, dynamic>) continue;
       mapItems++;
-      
+
       if (item.containsKey('id')) itemsWithId++;
       if (item.containsKey('patient')) itemsWithPatientField++;
-      
+
       // Direct patient structure
       if (item.containsKey('id') && item['id'] == patientId) {
         print('✅ Found patient with direct structure');
@@ -95,10 +96,11 @@ class LinkDebugger {
               final linkData = item['link'] as Map<String, dynamic>;
               print('🔑 Link keys: ${linkData.keys.toList()}');
               _checkForLinkIdInLink(linkData);
-              
+
               // WORKAROUND: Try using the ID directly for testing
               if (linkData.containsKey('id')) {
-                print('💡 RECOMMENDED: Use this ID for relationship operations: ${linkData['id']}');
+                print(
+                    '💡 RECOMMENDED: Use this ID for relationship operations: ${linkData['id']}');
               }
             } else {
               print('⚠️ Link data is not a map: ${item['link'].runtimeType}');
@@ -113,10 +115,11 @@ class LinkDebugger {
         }
       }
     }
-    
+
     print('⚠️ Patient ID $patientId not found in API response');
     print('📊 Summary: Searched through ${items.length} items');
-    print('📊 Found $mapItems maps, $itemsWithId with ID field, $itemsWithPatientField with patient field');
+    print(
+        '📊 Found $mapItems maps, $itemsWithId with ID field, $itemsWithPatientField with patient field');
   }
 
   static void _checkForLinkIdInItem(Map<String, dynamic> item) {
@@ -143,44 +146,48 @@ class LinkDebugger {
     }
 
     print('🔎 Examining link data for ID field...');
-    
+
     // Check for ID field - many possible formats
     int? foundId;
     String? idSource;
-    
+
     if (linkData.containsKey('id')) {
-      foundId = linkData['id'] is int 
-          ? linkData['id'] 
+      foundId = linkData['id'] is int
+          ? linkData['id']
           : int.tryParse(linkData['id'].toString());
       idSource = 'link.id';
-      print('✅ linkId found in link.id: ${linkData['id']} (${linkData['id'].runtimeType})');
+      print(
+          '✅ linkId found in link.id: ${linkData['id']} (${linkData['id'].runtimeType})');
     } else if (linkData.containsKey('linkId')) {
-      foundId = linkData['linkId'] is int 
-          ? linkData['linkId'] 
+      foundId = linkData['linkId'] is int
+          ? linkData['linkId']
           : int.tryParse(linkData['linkId'].toString());
       idSource = 'link.linkId';
-      print('✅ linkId found in link.linkId: ${linkData['linkId']} (${linkData['linkId'].runtimeType})');
+      print(
+          '✅ linkId found in link.linkId: ${linkData['linkId']} (${linkData['linkId'].runtimeType})');
     } else if (linkData.containsKey('relationshipId')) {
-      foundId = linkData['relationshipId'] is int 
-          ? linkData['relationshipId'] 
+      foundId = linkData['relationshipId'] is int
+          ? linkData['relationshipId']
           : int.tryParse(linkData['relationshipId'].toString());
       idSource = 'link.relationshipId';
-      print('✅ linkId found in link.relationshipId: ${linkData['relationshipId']} (${linkData['relationshipId'].runtimeType})');
+      print(
+          '✅ linkId found in link.relationshipId: ${linkData['relationshipId']} (${linkData['relationshipId'].runtimeType})');
     } else {
       print(
         '⚠️ No linkId found in link data. Available keys: ${linkData.keys.toList()}',
       );
     }
-    
+
     // Check for status field - many possible formats
     print('🔎 Examining link data for status field...');
     String? foundStatus;
     String? statusSource;
-    
+
     if (linkData.containsKey('status')) {
       foundStatus = linkData['status']?.toString();
       statusSource = 'link.status';
-      print('✅ linkStatus found: ${linkData['status']} (${linkData['status'].runtimeType})');
+      print(
+          '✅ linkStatus found: ${linkData['status']} (${linkData['status'].runtimeType})');
     } else if (linkData.containsKey('isActive')) {
       final isActive = linkData['isActive'] == true;
       foundStatus = isActive ? 'ACTIVE' : 'SUSPENDED';
@@ -194,7 +201,7 @@ class LinkDebugger {
     } else {
       print('⚠️ No status found in link data');
     }
-    
+
     // Summary
     if (foundId != null && foundStatus != null) {
       print('');
@@ -205,21 +212,26 @@ class LinkDebugger {
       print('');
     }
   }
-  
+
   /// Provides actionable recommendations to fix the linkId issue
   static void suggestFixes(BuildContext context) {
     print('');
     print('🛠️ ----- RECOMMENDED FIXES -----');
-    print('1. Check if the API response includes a link object for each patient');
-    print('2. If no link object is found, check if there are IDs directly on the patient object');
-    print('3. Update PatientParser.dart to extract linkId from all possible locations:');
+    print(
+        '1. Check if the API response includes a link object for each patient');
+    print(
+        '2. If no link object is found, check if there are IDs directly on the patient object');
+    print(
+        '3. Update PatientParser.dart to extract linkId from all possible locations:');
     print('   - From link.id');
     print('   - From link.linkId');
     print('   - From link.relationshipId');
     print('   - From container.id (if different from patient.id)');
-    print('4. Make sure your backend API returns relationship IDs consistently');
+    print(
+        '4. Make sure your backend API returns relationship IDs consistently');
     print('');
-    print('💡 Temporary workaround: You can add a code to generate temporary linkIds');
+    print(
+        '💡 Temporary workaround: You can add a code to generate temporary linkIds');
     print('   in PatientParser.dart when linkId is null but status is ACTIVE:');
     print('');
     print('   // TEMPORARY: Generate a linkId if null but status is ACTIVE');

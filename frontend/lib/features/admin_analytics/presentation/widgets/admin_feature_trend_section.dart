@@ -39,7 +39,8 @@ class AdminFeatureTrendSection extends StatelessWidget {
                 Icon(Icons.show_chart, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Feature Trend', style: theme.textTheme.titleMedium),
+                  child:
+                      Text('Feature Trend', style: theme.textTheme.titleMedium),
                 ),
               ],
             ),

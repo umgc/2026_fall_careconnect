@@ -13,8 +13,18 @@ import java.util.Optional;
 
 public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Long> {
 
+    Optional<EhrRawPayload> findByPatientIdAndSourceIdAndResourceTypeAndExternalResourceId(
+            Long patientId, Long sourceId, String resourceType, String externalResourceId);
+
     /** Most recent stored body for one resource type, used to re-derive a mapping. */
     Optional<EhrRawPayload> findFirstByPatientIdAndSourceIdAndResourceTypeOrderByRetrievedAtDesc(
+            Long patientId, Long sourceId, String resourceType);
+
+    /**
+     * All stored bodies for one resource type, newest first (by id when two share a retrieval
+     * time). The first row per external resource id is that resource's current copy.
+     */
+    List<EhrRawPayload> findByPatientIdAndSourceIdAndResourceTypeOrderByRetrievedAtDescIdDesc(
             Long patientId, Long sourceId, String resourceType);
 
     /** Retrieval history for one patient and source, newest first. */
@@ -42,4 +52,13 @@ public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Lo
     @Query("delete from EhrRawPayload p where p.retrievedAt < :cutoff and p.patientId in :patientIds")
     int deleteRetrievedBeforeForPatients(
             @Param("cutoff") OffsetDateTime cutoff, @Param("patientIds") List<Long> patientIds);
+
+    /**
+     * Unlink (FR-MCR-11, Addendum A1-Q1): removes every row this source holds for this patient.
+     * Called by {@code MedicareConnectionService.disconnect} inside its transaction.
+     */
+    @Modifying
+    @Transactional
+    @Query("delete from EhrRawPayload e where e.patientId = :patientId and e.sourceId = :sourceId")
+    int deleteAllForPatientAndSource(@Param("patientId") Long patientId, @Param("sourceId") Long sourceId);
 }

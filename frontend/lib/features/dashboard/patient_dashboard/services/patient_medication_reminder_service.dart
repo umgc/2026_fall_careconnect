@@ -21,9 +21,11 @@ class PatientMedicationReminderService {
       return const <MedicationReminderItem>[];
     }
 
-    final response = await ApiService.getPatientMedicationsForPatient(patientId);
+    final response =
+        await ApiService.getPatientMedicationsForPatient(patientId);
     unawaited(
-          Telemetry.event('feature.medications.view_all', {'statusCode': response.statusCode}),
+      Telemetry.event(
+          'feature.medications.view_all', {'statusCode': response.statusCode}),
     );
 
     if (response.statusCode != 200) {
@@ -58,14 +60,18 @@ class PatientMedicationReminderService {
       final medicationId = _parseInt(row['id']) ?? syntheticId--;
       activeMedicationIds.add(medicationId);
 
-      final dosage = (row['dosage'] ?? t.ptmedreminderservice_doseNotSet).toString();
-      final frequency = (row['frequency'] ?? t.ptmedreminderservice_frequencyNotSet).toString();
+      final dosage =
+          (row['dosage'] ?? t.ptmedreminderservice_doseNotSet).toString();
+      final frequency =
+          (row['frequency'] ?? t.ptmedreminderservice_frequencyNotSet)
+              .toString();
       final startDate = DateTime.tryParse((row['startDate'] ?? '').toString());
       final frequencyInterval = _frequencyInterval(frequency, t);
       final serverLastTaken = _parseDateTime(row['lastTaken']);
       final hasLocalOverride =
           _localLastTakenOverrideByMedicationId.containsKey(medicationId);
-      final localLastTaken = _localLastTakenOverrideByMedicationId[medicationId];
+      final localLastTaken =
+          _localLastTakenOverrideByMedicationId[medicationId];
 
       final effectiveLastTaken =
           hasLocalOverride ? localLastTaken : serverLastTaken;
@@ -131,6 +137,47 @@ class PatientMedicationReminderService {
     _localLastTakenOverrideByMedicationId.remove(medicationId);
   }
 
+  List<MedicationReminderItem> applyLocalOverrides({
+    required List<MedicationReminderItem> reminders,
+    required AppLocalizations t,
+  }) {
+    final now = DateTime.now();
+    final next = reminders.map((reminder) {
+      if (!_localLastTakenOverrideByMedicationId.containsKey(
+        reminder.medicationId,
+      )) {
+        return reminder;
+      }
+
+      final localLastTaken =
+          _localLastTakenOverrideByMedicationId[reminder.medicationId];
+      final nextDueAt = localLastTaken == null
+          ? now
+          : localLastTaken.toLocal().add(
+                _frequencyInterval(reminder.frequency, t),
+              );
+
+      return MedicationReminderItem(
+        medicationId: reminder.medicationId,
+        medicationName: reminder.medicationName,
+        dosage: reminder.dosage,
+        frequency: reminder.frequency,
+        nextDueAt: nextDueAt,
+        isTakenForCurrentWindow:
+            localLastTaken != null && nextDueAt.isAfter(now),
+      );
+    }).toList();
+
+    next.sort((a, b) {
+      if (a.isTakenForCurrentWindow != b.isTakenForCurrentWindow) {
+        return a.isTakenForCurrentWindow ? 1 : -1;
+      }
+      return a.nextDueAt.compareTo(b.nextDueAt);
+    });
+
+    return next;
+  }
+
   bool hasPendingUntaken(List<MedicationReminderItem> reminders) {
     return reminders.any((item) => !item.isTakenForCurrentWindow);
   }
@@ -161,13 +208,21 @@ class PatientMedicationReminderService {
   Duration _frequencyInterval(String frequency, AppLocalizations t) {
     final text = frequency.toLowerCase();
 
-    if (text.contains('twice') || text.contains(t.ptmedreminderservice_twice) || text.contains('2x') || text.contains('two') || text.contains(t.ptmedreminderservice_two)) {
+    if (text.contains('twice') ||
+        text.contains(t.ptmedreminderservice_twice) ||
+        text.contains('2x') ||
+        text.contains('two') ||
+        text.contains(t.ptmedreminderservice_two)) {
       return const Duration(hours: 12);
     }
-    if (text.contains('three') || text.contains(t.ptmedreminderservice_three) || text.contains('3x')) {
+    if (text.contains('three') ||
+        text.contains(t.ptmedreminderservice_three) ||
+        text.contains('3x')) {
       return const Duration(hours: 8);
     }
-    if ((text.contains('every') && text.contains('hour')) || (text.contains(t.ptmedreminderservice_every) && text.contains(t.ptmedreminderservice_hour))) {
+    if ((text.contains('every') && text.contains('hour')) ||
+        (text.contains(t.ptmedreminderservice_every) &&
+            text.contains(t.ptmedreminderservice_hour))) {
       final match = RegExp(r'(\d+)').firstMatch(text);
       final hours = match == null ? 1 : int.tryParse(match.group(1)!) ?? 1;
       return Duration(hours: hours.clamp(1, 24));
@@ -178,7 +233,10 @@ class PatientMedicationReminderService {
     if (text.contains('month') || text.contains(t.ptmedreminderservice_month)) {
       return const Duration(days: 30);
     }
-    if (text.contains('day') || text.contains(t.ptmedreminderservice_day) || text.contains('daily') || text.contains(t.ptmedreminderservice_daily)) {
+    if (text.contains('day') ||
+        text.contains(t.ptmedreminderservice_day) ||
+        text.contains('daily') ||
+        text.contains(t.ptmedreminderservice_daily)) {
       return const Duration(days: 1);
     }
 

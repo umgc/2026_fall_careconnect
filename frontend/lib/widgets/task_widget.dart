@@ -146,8 +146,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
         ),
         content: TaskForm(
           key: const ValueKey('custom-task-form'),
-          initialTask:
-              widget.existingTask ??
+          initialTask: widget.existingTask ??
               (selectedTemplateForForm != null
                   ? Task(
                       id: -1,
@@ -161,8 +160,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                       frequency: selectedTemplateForForm!.frequency,
                       interval: selectedTemplateForForm!.interval,
                       count: selectedTemplateForForm!.count,
-                      daysOfWeek:
-                          selectedTemplateForForm!.daysOfWeek ??
+                      daysOfWeek: selectedTemplateForForm!.daysOfWeek ??
                           List<bool>.filled(7, false),
                     )
                   : null),
@@ -207,71 +205,72 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
               child: Center(child: CircularProgressIndicator()),
             )
           : templateError != null
-          ? Text(templateError!)
-          : SizedBox(
-              width: 350,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Choose a task template or create a custom task.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 10),
-                  Expanded(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: templates.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 5),
-                            child: ListTile(
-                              leading: Icon(
-                                Icons.task,
-                                size: 40,
-                                color: Theme.of(context).colorScheme.primary,
+              ? Text(templateError!)
+              : SizedBox(
+                  width: 350,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Choose a task template or create a custom task.',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: templates.length + 1,
+                          itemBuilder: (context, index) {
+                            if (index == 0) {
+                              return Card(
+                                margin: const EdgeInsets.symmetric(vertical: 5),
+                                child: ListTile(
+                                  leading: Icon(
+                                    Icons.task,
+                                    size: 40,
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                                  title: const Text('Custom Task'),
+                                  subtitle: const Text(
+                                    'Create a custom task for your patient.',
+                                  ),
+                                  trailing: const Icon(Icons.arrow_forward_ios),
+                                  onTap: () {
+                                    setState(() {
+                                      showForm = true;
+                                      selectedTemplateForForm = null;
+                                    });
+                                  },
+                                ),
+                              );
+                            }
+                            final template = templates[index - 1];
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 5),
+                              child: ListTile(
+                                leading: Icon(
+                                  _getIconFromCode(template.iconCode),
+                                  size: 40,
+                                  color: Colors.indigo,
+                                ),
+                                title: Text(template.name),
+                                subtitle: Text(template.description),
+                                trailing: const Icon(Icons.arrow_forward_ios),
+                                onTap: () {
+                                  setState(() {
+                                    showForm = true;
+                                    selectedTemplateForForm = template;
+                                  });
+                                },
                               ),
-                              title: const Text('Custom Task'),
-                              subtitle: const Text(
-                                'Create a custom task for your patient.',
-                              ),
-                              trailing: const Icon(Icons.arrow_forward_ios),
-                              onTap: () {
-                                setState(() {
-                                  showForm = true;
-                                  selectedTemplateForForm = null;
-                                });
-                              },
-                            ),
-                          );
-                        }
-                        final template = templates[index - 1];
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 5),
-                          child: ListTile(
-                            leading: Icon(
-                              _getIconFromCode(template.iconCode),
-                              size: 40,
-                              color: Colors.indigo,
-                            ),
-                            title: Text(template.name),
-                            subtitle: Text(template.description),
-                            trailing: const Icon(Icons.arrow_forward_ios),
-                            onTap: () {
-                              setState(() {
-                                showForm = true;
-                                selectedTemplateForForm = template;
-                              });
-                            },
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
       actions: [
         TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
       ],
@@ -508,16 +507,13 @@ class TaskInfo extends StatelessWidget {
     if (task.daysOfWeek != null) {
       const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       final selectedDays = <String>[];
-      for (
-        int i = 0;
-        i < task.daysOfWeek!.length && i < dayLabels.length;
-        i++
-      ) {
+      for (int i = 0;
+          i < task.daysOfWeek!.length && i < dayLabels.length;
+          i++) {
         if (task.daysOfWeek![i]) selectedDays.add(dayLabels[i]);
       }
-      daysOfWeekString = selectedDays.isNotEmpty
-          ? selectedDays.join(', ')
-          : 'None';
+      daysOfWeekString =
+          selectedDays.isNotEmpty ? selectedDays.join(', ') : 'None';
     }
 
     return AlertDialog(

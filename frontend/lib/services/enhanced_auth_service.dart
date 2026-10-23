@@ -8,11 +8,10 @@ import '../providers/user_provider.dart';
 class EnhancedAuthService {
   /// Login with role validation
   /// This method performs login and validates that the user's actual role matches the expected role
-  static Future<AuthResult> loginWithRoleValidation({
-    required String email,
-    required String password,
-    required AppLocalizations t
-  }) async {
+  static Future<AuthResult> loginWithRoleValidation(
+      {required String email,
+      required String password,
+      required AppLocalizations t}) async {
     try {
       // Perform the actual login
       final userSession = await AuthService.login(
@@ -52,10 +51,8 @@ class EnhancedAuthService {
   }
 
   /// Google OAuth login with role validation
-  static Future<AuthResult> loginWithGoogleAndRoleValidation({
-    required String expectedRole,
-    required AppLocalizations loc
-  }) async {
+  static Future<AuthResult> loginWithGoogleAndRoleValidation(
+      {required String expectedRole, required AppLocalizations loc}) async {
     try {
       // Perform Google OAuth login
       final userSession = await AuthService.loginWithGoogle(loc);

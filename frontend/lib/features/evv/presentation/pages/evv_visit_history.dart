@@ -14,18 +14,18 @@ class EvvVisitHistoryPage extends StatefulWidget {
 class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
   final EvvService _evvService = EvvService();
   final _searchFormKey = GlobalKey<FormState>();
-  
+
   // Search form controllers
   final _patientNameController = TextEditingController();
   final _serviceTypeController = TextEditingController();
   final _caregiverIdController = TextEditingController();
-  
+
   // Search parameters
   DateTime? _startDate;
   DateTime? _endDate;
   String _selectedStateCode = '';
   String _selectedStatus = '';
-  
+
   bool _isLoading = false;
   EvvSearchResult? _searchResult;
   int _currentPage = 0;
@@ -48,9 +48,15 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
 
     try {
       final request = EvvSearchRequest(
-        patientName: _patientNameController.text.trim().isEmpty ? null : _patientNameController.text.trim(),
-        serviceType: _serviceTypeController.text.trim().isEmpty ? null : _serviceTypeController.text.trim(),
-        caregiverId: _caregiverIdController.text.trim().isEmpty ? null : int.tryParse(_caregiverIdController.text.trim()),
+        patientName: _patientNameController.text.trim().isEmpty
+            ? null
+            : _patientNameController.text.trim(),
+        serviceType: _serviceTypeController.text.trim().isEmpty
+            ? null
+            : _serviceTypeController.text.trim(),
+        caregiverId: _caregiverIdController.text.trim().isEmpty
+            ? null
+            : int.tryParse(_caregiverIdController.text.trim()),
         startDate: _startDate,
         endDate: _endDate,
         stateCode: _selectedStateCode.isEmpty ? null : _selectedStateCode,
@@ -62,7 +68,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
       );
 
       final result = await _evvService.searchRecords(request);
-      
+
       setState(() {
         _searchResult = result;
         _isLoading = false;
@@ -98,7 +104,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
           ? DateTimeRange(start: _startDate!, end: _endDate!)
           : null,
     );
-    
+
     if (picked != null) {
       setState(() {
         _startDate = picked.start;
@@ -151,9 +157,10 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                       children: [
                         Text(
                           'Search Filters',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                         ),
                         const Spacer(),
                         TextButton.icon(
@@ -164,7 +171,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // First row
                     Row(
                       children: [
@@ -192,7 +199,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Second row
                     Row(
                       children: [
@@ -219,7 +226,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(Icons.date_range, color: Colors.grey),
+                                  const Icon(Icons.date_range,
+                                      color: Colors.grey),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
@@ -227,7 +235,9 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                           ? '${_formatDate(_startDate!)} - ${_formatDate(_endDate!)}'
                                           : 'Select Date Range',
                                       style: TextStyle(
-                                        color: _startDate != null ? Colors.black : Colors.grey,
+                                        color: _startDate != null
+                                            ? Colors.black
+                                            : Colors.grey,
                                       ),
                                     ),
                                   ),
@@ -239,19 +249,22 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Third row
                     Row(
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            initialValue: _selectedStateCode.isEmpty ? null : _selectedStateCode,
+                            initialValue: _selectedStateCode.isEmpty
+                                ? null
+                                : _selectedStateCode,
                             decoration: const InputDecoration(
                               labelText: 'State',
                               border: OutlineInputBorder(),
                             ),
                             items: [
-                              const DropdownMenuItem(value: '', child: Text('All States')),
+                              const DropdownMenuItem(
+                                  value: '', child: Text('All States')),
                               ...EvvService.stateCodes.map((code) {
                                 String stateName = '';
                                 switch (code) {
@@ -281,16 +294,23 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            initialValue: _selectedStatus.isEmpty ? null : _selectedStatus,
+                            initialValue: _selectedStatus.isEmpty
+                                ? null
+                                : _selectedStatus,
                             decoration: const InputDecoration(
                               labelText: 'Status',
                               border: OutlineInputBorder(),
                             ),
                             items: const [
-                              DropdownMenuItem(value: '', child: Text('All Statuses')),
-                              DropdownMenuItem(value: 'UNDER_REVIEW', child: Text('Under Review')),
-                              DropdownMenuItem(value: 'APPROVED', child: Text('Approved')),
-                              DropdownMenuItem(value: 'REJECTED', child: Text('Rejected')),
+                              DropdownMenuItem(
+                                  value: '', child: Text('All Statuses')),
+                              DropdownMenuItem(
+                                  value: 'UNDER_REVIEW',
+                                  child: Text('Under Review')),
+                              DropdownMenuItem(
+                                  value: 'APPROVED', child: Text('Approved')),
+                              DropdownMenuItem(
+                                  value: 'REJECTED', child: Text('Rejected')),
                             ],
                             onChanged: (value) {
                               setState(() {
@@ -306,7 +326,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
               ),
             ),
           ),
-          
+
           // Results
           Expanded(
             child: _isLoading
@@ -344,12 +364,14 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                         children: [
                           // Results header
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
                             child: Row(
                               children: [
                                 Text(
                                   'Found ${_searchResult!.totalElements} records',
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w500),
                                 ),
                                 const Spacer(),
                                 Text(
@@ -359,12 +381,14 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                               ],
                             ),
                           ),
-                          
+
                           // Records list
                           Expanded(
                             child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              itemCount: _searchResult!.content.length + (_searchResult!.last ? 0 : 1),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: _searchResult!.content.length +
+                                  (_searchResult!.last ? 0 : 1),
                               itemBuilder: (context, index) {
                                 if (index == _searchResult!.content.length) {
                                   // Load more button
@@ -378,13 +402,14 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                     ),
                                   );
                                 }
-                                
+
                                 final record = _searchResult!.content[index];
                                 return Card(
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: ListTile(
                                     leading: CircleAvatar(
-                                      backgroundColor: _getStatusColor(record.status),
+                                      backgroundColor:
+                                          _getStatusColor(record.status),
                                       child: Icon(
                                         _getStatusIcon(record.status),
                                         color: Colors.white,
@@ -392,26 +417,38 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                     ),
                                     title: Text(
                                       record.individualName,
-                                      style: const TextStyle(fontWeight: FontWeight.w500),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w500),
                                     ),
                                     subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text('${record.serviceType} - ${_formatDate(record.dateOfService)}'),
-                                        Text('${_formatTime(record.timeIn)} - ${_formatTime(record.timeOut)}'),
-                                        Text('MA: ${record.patient?.maNumber ?? 'N/A'}'),
+                                        Text(
+                                            '${record.serviceType} - ${_formatDate(record.dateOfService)}'),
+                                        Text(
+                                            '${_formatTime(record.timeIn)} - ${_formatTime(record.timeOut)}'),
+                                        Text(
+                                            'MA: ${record.patient?.maNumber ?? 'N/A'}'),
                                         Row(
                                           children: [
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
                                               decoration: BoxDecoration(
-                                                color: _getStatusColor(record.status).withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(8),
+                                                color: _getStatusColor(
+                                                        record.status)
+                                                    .withOpacity(0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                               child: Text(
                                                 record.status,
                                                 style: TextStyle(
-                                                  color: _getStatusColor(record.status),
+                                                  color: _getStatusColor(
+                                                      record.status),
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
                                                 ),
@@ -419,10 +456,15 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                             ),
                                             const SizedBox(width: 8),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2),
                                               decoration: BoxDecoration(
-                                                color: Colors.blue.withOpacity(0.2),
-                                                borderRadius: BorderRadius.circular(8),
+                                                color: Colors.blue
+                                                    .withOpacity(0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                               child: Text(
                                                 record.stateCode,
@@ -436,10 +478,15 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                             if (record.isOffline) ...[
                                               const SizedBox(width: 8),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: Colors.orange.withOpacity(0.2),
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  color: Colors.orange
+                                                      .withOpacity(0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
                                                 ),
                                                 child: const Text(
                                                   'OFFLINE',
@@ -455,7 +502,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                         ),
                                       ],
                                     ),
-                                    trailing: const Icon(Icons.arrow_forward_ios),
+                                    trailing:
+                                        const Icon(Icons.arrow_forward_ios),
                                     onTap: () => _showRecordDetails(record),
                                   ),
                                 );
@@ -576,14 +624,15 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
     String locationDisplay;
     Color iconColor;
     IconData iconData;
-    
+
     if (locationSource == null || locationSource.isEmpty) {
       locationDisplay = 'Not recorded';
       iconColor = Colors.grey;
       iconData = Icons.help_outline;
     } else if (locationSource == 'GPS') {
       if (latitude != null && longitude != null) {
-        locationDisplay = 'GPS: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+        locationDisplay =
+            'GPS: ${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
         iconColor = Colors.blue;
         iconData = Icons.gps_fixed;
       } else {
@@ -600,7 +649,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
         if (addr.city?.isNotEmpty == true) parts.add(addr.city!);
         if (addr.state?.isNotEmpty == true) parts.add(addr.state!);
         if (addr.zip?.isNotEmpty == true) parts.add(addr.zip!);
-        locationDisplay = parts.isNotEmpty ? parts.join(', ') : 'Address not available';
+        locationDisplay =
+            parts.isNotEmpty ? parts.join(', ') : 'Address not available';
         iconColor = Colors.green;
         iconData = Icons.home;
       } else {
@@ -613,7 +663,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
       iconColor = Colors.grey;
       iconData = Icons.location_on;
     }
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

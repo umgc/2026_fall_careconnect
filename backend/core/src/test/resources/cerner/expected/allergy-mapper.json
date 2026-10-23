@@ -1,0 +1,93 @@
+{
+  "status": "Compatibility expectations for current provisional mapper; not an approved API contract",
+  "authorizedPatient": "synthetic-patient-1",
+  "cases": {
+    "bundle-empty.json": [],
+    "bundle-entered-in-error.json": [],
+    "bundle-missing-reaction.json": [
+      {
+        "source": "CERNER",
+        "sourceRecordId": "synthetic-missing-reaction-allergy",
+        "substanceText": "Atrophic-hyperplastic gastritis",
+        "substanceCode": "3308008",
+        "clinicalStatus": "active",
+        "verificationStatus": "confirmed",
+        "severity": null,
+        "recordedDate": "2021-09-23T16:42:52Z",
+        "reactions": []
+      }
+    ],
+    "bundle-one-active-confirmed-allergy.json": [
+      {
+        "source": "CERNER",
+        "sourceRecordId": "synthetic-active-allergy",
+        "substanceText": "aspirin",
+        "substanceCode": "1191",
+        "clinicalStatus": "active",
+        "verificationStatus": "confirmed",
+        "severity": "severe",
+        "recordedDate": "2024-09-25T05:56:38Z",
+        "reactions": [
+          "Papular eruption"
+        ]
+      }
+    ],
+    "bundle-text-only-substance.json": [
+      {
+        "source": "CERNER",
+        "sourceRecordId": "synthetic-text-only-allergy",
+        "substanceText": "Sulfamethoxazole",
+        "substanceCode": null,
+        "clinicalStatus": "active",
+        "verificationStatus": "unconfirmed",
+        "severity": null,
+        "recordedDate": "2026-07-24T16:44:26Z",
+        "reactions": [
+          "Rash"
+        ]
+      }
+    ],
+    "bundle-three-allergies.json": [
+      {
+        "source": "CERNER",
+        "sourceRecordId": "synthetic-allergy-medication-1",
+        "substanceText": "amoxapine",
+        "substanceCode": "722",
+        "clinicalStatus": "active",
+        "verificationStatus": "confirmed",
+        "severity": "severe",
+        "recordedDate": "2022-06-28T13:18:42Z",
+        "reactions": [
+          "Bullous eruption"
+        ]
+      },
+      {
+        "source": "CERNER",
+        "sourceRecordId": "synthetic-allergy-environment-1",
+        "substanceText": "Saccharin",
+        "substanceCode": "27138006",
+        "clinicalStatus": "active",
+        "verificationStatus": "confirmed",
+        "severity": null,
+        "recordedDate": "2024-06-03T15:09:21Z",
+        "reactions": [
+          "Hives",
+          "Wheal"
+        ]
+      },
+      {
+        "source": "CERNER",
+        "sourceRecordId": "synthetic-allergy-food-1",
+        "substanceText": "Mustard",
+        "substanceCode": "51905005",
+        "clinicalStatus": "active",
+        "verificationStatus": "confirmed",
+        "severity": null,
+        "recordedDate": "2023-12-19T11:30:49Z",
+        "reactions": [
+          "Itching of skin"
+        ]
+      }
+    ]
+  }
+}

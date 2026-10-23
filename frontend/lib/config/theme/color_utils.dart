@@ -77,7 +77,7 @@ class ColorUtils {
   // Chart colors - tuned for dark backgrounds
   static Color getChartPrimary() => AppTheme.primary;
   static Color getChartSecondary() => const Color(0xFF60A5FA); // blue-400
-  static Color getChartTertiary() => const Color(0xFFA78BFA);  // violet-300
+  static Color getChartTertiary() => const Color(0xFFA78BFA); // violet-300
   static Color getChartQuaternary() => const Color(0xFF34D399); // emerald-400
 
   // Platform-specific color utilities

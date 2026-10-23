@@ -17,10 +17,13 @@ class AdminSyncMetricsCard extends StatelessWidget {
 
     final items = <_SyncMetricItem>[
       _SyncMetricItem('Started', metrics.started, Icons.play_arrow_outlined),
-      _SyncMetricItem('Completed', metrics.completed, Icons.check_circle_outline),
-      _SyncMetricItem('Failed events', metrics.failedEvents, Icons.error_outline),
+      _SyncMetricItem(
+          'Completed', metrics.completed, Icons.check_circle_outline),
+      _SyncMetricItem(
+          'Failed events', metrics.failedEvents, Icons.error_outline),
       _SyncMetricItem('Attempted', metrics.attempted, Icons.sync),
-      _SyncMetricItem('Succeeded', metrics.succeeded, Icons.cloud_done_outlined),
+      _SyncMetricItem(
+          'Succeeded', metrics.succeeded, Icons.cloud_done_outlined),
       _SyncMetricItem('Failed', metrics.failed, Icons.cloud_off_outlined),
       _SyncMetricItem('Success rate', successRateText, Icons.percent),
     ];
@@ -36,7 +39,8 @@ class AdminSyncMetricsCard extends StatelessWidget {
                 Icon(Icons.sync, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Sync Metrics', style: theme.textTheme.titleMedium),
+                  child:
+                      Text('Sync Metrics', style: theme.textTheme.titleMedium),
                 ),
                 IconButton(
                   tooltip: 'About sync events',

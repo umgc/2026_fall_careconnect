@@ -7,7 +7,6 @@ import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import '../../../../providers/user_provider.dart';
 import '../model/search_user_dto.dart';
 
-
 class SearchUserScreen extends StatefulWidget {
   const SearchUserScreen({super.key});
 
@@ -21,7 +20,6 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
   bool isLoading = false;
 
   Future<void> searchUsers(int currentUserId) async {
-
     setState(() => isLoading = true);
     try {
       final response = await ApiService.searchUsers(
@@ -82,7 +80,7 @@ class _SearchUserScreenState extends State<SearchUserScreen> {
       appBar: AppBarHelper.createAppBar(
         context,
         title: 'Search Users',
-        ),
+      ),
       body: Column(
         children: [
           Padding(

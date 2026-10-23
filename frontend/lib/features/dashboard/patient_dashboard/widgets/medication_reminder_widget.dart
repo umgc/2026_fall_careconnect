@@ -18,16 +18,24 @@ class MedicationRemindersWidget extends StatelessWidget {
   String _translateFrequency(String frequency, AppLocalizations t) {
     final text = frequency.toLowerCase();
 
-    if (text.contains('twice') || text.contains(t.ptmedreminderservice_twice) || text.contains('2x') || text.contains('two') || text.contains(t.ptmedreminderservice_two)) {
+    if (text.contains('twice') ||
+        text.contains(t.ptmedreminderservice_twice) ||
+        text.contains('2x') ||
+        text.contains('two') ||
+        text.contains(t.ptmedreminderservice_two)) {
       return t.ptdashboard_twiceDaily;
     }
-    if (text.contains('three') || text.contains(t.ptmedreminderservice_three) || text.contains('3x')) {
+    if (text.contains('three') ||
+        text.contains(t.ptmedreminderservice_three) ||
+        text.contains('3x')) {
       return t.ptdashboard_threeTimesDaily;
     }
     if (text.contains('four') || text.contains('4x')) {
       return t.ptdashboard_fourTimesDaily;
     }
-    if ((text.contains('every') && text.contains('hour')) || (text.contains(t.ptmedreminderservice_every) && text.contains(t.ptmedreminderservice_hour))) {
+    if ((text.contains('every') && text.contains('hour')) ||
+        (text.contains(t.ptmedreminderservice_every) &&
+            text.contains(t.ptmedreminderservice_hour))) {
       return t.ptdashboard_hourly;
     }
     if (text.contains('week') || text.contains(t.ptmedreminderservice_week)) {
@@ -36,13 +44,16 @@ class MedicationRemindersWidget extends StatelessWidget {
     if (text.contains('month') || text.contains(t.ptmedreminderservice_month)) {
       return t.ptdashboard_monthly;
     }
-    if (text.contains('day') || text.contains(t.ptmedreminderservice_day) || text.contains('daily') || text.contains(t.ptmedreminderservice_daily)) {
-      if(text.contains('at bedtime')){
+    if (text.contains('day') ||
+        text.contains(t.ptmedreminderservice_day) ||
+        text.contains('daily') ||
+        text.contains(t.ptmedreminderservice_daily)) {
+      if (text.contains('at bedtime')) {
         return t.ptdashboard_onceAtBed;
       }
       return t.ptdashboard_onceDaily;
     }
-    if (text.contains('as needed')){
+    if (text.contains('as needed')) {
       return t.ptdashboard_asNeeded;
     }
     return frequency;
@@ -128,7 +139,8 @@ class MedicationRemindersWidget extends StatelessWidget {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: reminder.isTakenForCurrentWindow
-                      ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+                      ? theme.colorScheme.primaryContainer
+                          .withValues(alpha: 0.28)
                       : theme.colorScheme.surfaceContainerHighest.withValues(
                           alpha: 0.3,
                         ),
@@ -160,7 +172,8 @@ class MedicationRemindersWidget extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.14),
+                              color: theme.colorScheme.primary
+                                  .withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(99),
                             ),
                             child: Text(
@@ -179,7 +192,8 @@ class MedicationRemindersWidget extends StatelessWidget {
                       '${reminder.dosage} • ${_translateFrequency(reminder.frequency, t)}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.76),
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.76),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -189,7 +203,8 @@ class MedicationRemindersWidget extends StatelessWidget {
                           : '${t.medicationreminderwidget_due} ${_formatScheduledTime(reminder.nextDueAt, t)}',
                       style: TextStyle(
                         fontSize: 13,
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.62),
                       ),
                     ),
                     if (!reminder.isTakenForCurrentWindow) ...[
@@ -203,7 +218,8 @@ class MedicationRemindersWidget extends StatelessWidget {
                                   : () => onMarkTaken!(reminder.medicationId),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: theme.colorScheme.tertiary,
-                                side: BorderSide(color: theme.colorScheme.tertiary),
+                                side: BorderSide(
+                                    color: theme.colorScheme.tertiary),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -219,12 +235,14 @@ class MedicationRemindersWidget extends StatelessWidget {
                                   : () => onMarkMissed!(reminder.medicationId),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: theme.colorScheme.error,
-                                side: BorderSide(color: theme.colorScheme.error),
+                                side:
+                                    BorderSide(color: theme.colorScheme.error),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: Text(t.medicationreminderwidget_markMissed),
+                              child:
+                                  Text(t.medicationreminderwidget_markMissed),
                             ),
                           ),
                         ],

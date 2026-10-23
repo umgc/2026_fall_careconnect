@@ -26,7 +26,7 @@ class FallAlert {
     this.liveVideoUrl,
     this.patientPhone,
     this.emergencyContactName,
-    this.emergencyContactPhone, 
+    this.emergencyContactPhone,
     this.playbackData,
   });
 
@@ -42,7 +42,7 @@ class FallAlert {
       'patientPhone': patientPhone ?? '',
       'emergencyContactName': emergencyContactName ?? '',
       'emergencyContactPhone': emergencyContactPhone ?? '',
-      
+
       // --- 4. ADDED JSON ENCODING ---
       // Encodes the map into a JSON string for storage
       'playbackData': playbackData != null ? jsonEncode(playbackData!) : '',
@@ -57,11 +57,18 @@ class FallAlert {
       detectedAtUtc: DateTime.parse(p['detectedAtUtc']!),
       source: p['source']!,
       hasLiveVideo: p['hasLiveVideo'] == 'true',
-      liveVideoUrl: (p['liveVideoUrl']?.isNotEmpty ?? false) ? Uri.parse(p['liveVideoUrl']!) : null,
-      patientPhone: (p['patientPhone']?.isNotEmpty ?? false) ? p['patientPhone']! : null,
-      emergencyContactName: (p['emergencyContactName']?.isNotEmpty ?? false) ? p['emergencyContactName']! : null,
-      emergencyContactPhone: (p['emergencyContactPhone']?.isNotEmpty ?? false) ? p['emergencyContactPhone']! : null,
-      
+      liveVideoUrl: (p['liveVideoUrl']?.isNotEmpty ?? false)
+          ? Uri.parse(p['liveVideoUrl']!)
+          : null,
+      patientPhone:
+          (p['patientPhone']?.isNotEmpty ?? false) ? p['patientPhone']! : null,
+      emergencyContactName: (p['emergencyContactName']?.isNotEmpty ?? false)
+          ? p['emergencyContactName']!
+          : null,
+      emergencyContactPhone: (p['emergencyContactPhone']?.isNotEmpty ?? false)
+          ? p['emergencyContactPhone']!
+          : null,
+
       // --- 5. ADDED JSON DECODING ---
       // Parses the JSON string back into a Map
       playbackData: (p['playbackData']?.isNotEmpty ?? false)

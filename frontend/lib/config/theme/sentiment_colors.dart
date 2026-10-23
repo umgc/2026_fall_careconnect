@@ -17,36 +17,36 @@ class SentimentColors {
   static const double anxiousThreshold = 0.35;
 
   // ── Band colours — light mode ────────────────────────────────────
-  static const Color calmLight       = Color(0xFF27AE60); // green-700
-  static const Color anxiousLight    = Color(0xFFF39C12); // amber
+  static const Color calmLight = Color(0xFF27AE60); // green-700
+  static const Color anxiousLight = Color(0xFFF39C12); // amber
   static const Color distressedLight = Color(0xFFE74C3C); // red
 
   // ── Band colours — dark mode (lighter tints) ─────────────────────
-  static const Color calmDark        = Color(0xFF81C784); // green-300
-  static const Color anxiousDark     = Color(0xFFFFB74D); // orange-300
-  static const Color distressedDark  = Color(0xFFE57373); // red-300
+  static const Color calmDark = Color(0xFF81C784); // green-300
+  static const Color anxiousDark = Color(0xFFFFB74D); // orange-300
+  static const Color distressedDark = Color(0xFFE57373); // red-300
 
   // ── Band fill alphas for chart backgrounds ───────────────────────
   static const double bandFillAlphaLight = 0.10;
-  static const double bandFillAlphaDark  = 0.14;
+  static const double bandFillAlphaDark = 0.14;
 
   // ── Channel colours ──────────────────────────────────────────────
-  static const Color voiceLight  = Color(0xFF9B59B6);
-  static const Color voiceDark   = Color(0xFFCE93D8);
-  static const Color videoLight  = Color(0xFF1ABC9C);
-  static const Color videoDark   = Color(0xFF4DD0E1);
-  static const Color textLight   = Color(0xFF3498DB);
-  static const Color textDark    = Color(0xFF64B5F6);
+  static const Color voiceLight = Color(0xFF9B59B6);
+  static const Color voiceDark = Color(0xFFCE93D8);
+  static const Color videoLight = Color(0xFF1ABC9C);
+  static const Color videoDark = Color(0xFF4DD0E1);
+  static const Color textLight = Color(0xFF3498DB);
+  static const Color textDark = Color(0xFF64B5F6);
 
   // ── Neutral / status colours ─────────────────────────────────────
-  static const Color awaiting    = Color(0xFF95A5A6);
-  static const Color quiet       = Color(0xFF5D6D7E);
+  static const Color awaiting = Color(0xFF95A5A6);
+  static const Color quiet = Color(0xFF5D6D7E);
 
   // ── Public helpers ───────────────────────────────────────────────
 
   /// Colour for a raw 0–1 sentiment score.
   static Color forScore(double score, {required bool isDark}) {
-    if (score >= calmThreshold)    return isDark ? calmDark    : calmLight;
+    if (score >= calmThreshold) return isDark ? calmDark : calmLight;
     if (score >= anxiousThreshold) return isDark ? anxiousDark : anxiousLight;
     return isDark ? distressedDark : distressedLight;
   }

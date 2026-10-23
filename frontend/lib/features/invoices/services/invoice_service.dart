@@ -26,9 +26,12 @@ class InvoiceService {
   }) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
-      final uri = Uri.parse(ApiConstants.invoices).replace(queryParameters: _cleanQueryParams({
+      final uri = Uri.parse(ApiConstants.invoices).replace(
+          queryParameters: _cleanQueryParams({
         'search': _nz(search),
-        'status': status == null || status.isEmpty ? null : status.map(_paymentStatusToWire).join(','),
+        'status': status == null || status.isEmpty
+            ? null
+            : status.map(_paymentStatusToWire).join(','),
         'providerName': _nz(providerName),
         'patientName': _nz(patientName),
         'dueStart': dueRange == null ? null : _dateOnly(dueRange.start),
@@ -40,7 +43,9 @@ class InvoiceService {
         'pageSize': pageSize?.toString(),
       }));
 
-      final resp = await http.get(uri, headers: headers).timeout(const Duration(seconds: 20));
+      final resp = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 20));
       if (resp.statusCode != 200) {
         print('Failed to fetch invoices: ${resp.statusCode} ${resp.body}');
         return <Invoice>[];
@@ -48,7 +53,9 @@ class InvoiceService {
 
       final body = jsonDecode(resp.body);
       if (body is List) {
-        return body.map<Invoice>((e) => _invoiceFromJson(e as Map<String, dynamic>)).toList();
+        return body
+            .map<Invoice>((e) => _invoiceFromJson(e as Map<String, dynamic>))
+            .toList();
       }
       if (body is Map && body['items'] is List) {
         return (body['items'] as List)
@@ -69,7 +76,9 @@ class InvoiceService {
       final headers = await AuthTokenManager.getAuthHeaders();
       final uri = Uri.parse('${ApiConstants.invoices}/$id');
 
-      final resp = await http.get(uri, headers: headers).timeout(const Duration(seconds: 15));
+      final resp = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
       if (resp.statusCode != 200) {
         print('Failed to fetch invoice $id: ${resp.statusCode}');
         return null;
@@ -121,7 +130,8 @@ class InvoiceService {
           .timeout(const Duration(seconds: 20));
 
       if (resp.statusCode != 200) {
-        print('Failed to update invoice ${invoice.id}: ${resp.statusCode} ${resp.body}');
+        print(
+            'Failed to update invoice ${invoice.id}: ${resp.statusCode} ${resp.body}');
         return null;
       }
       final map = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -137,7 +147,9 @@ class InvoiceService {
       final headers = await AuthTokenManager.getAuthHeaders();
       final uri = Uri.parse('${ApiConstants.invoices}/$id');
 
-      final resp = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 15));
+      final resp = await http
+          .delete(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
       if (resp.statusCode == 204 || resp.statusCode == 200) {
         return true;
       }
@@ -192,9 +204,12 @@ class InvoiceService {
   }) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
-      final uri = Uri.parse('${ApiConstants.invoices}/$invoiceId/payments/$paymentId');
+      final uri =
+          Uri.parse('${ApiConstants.invoices}/$invoiceId/payments/$paymentId');
 
-      final resp = await http.delete(uri, headers: headers).timeout(const Duration(seconds: 15));
+      final resp = await http
+          .delete(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
       if (resp.statusCode != 200) {
         print('Failed to delete payment: ${resp.statusCode} ${resp.body}');
         return null;
@@ -209,7 +224,8 @@ class InvoiceService {
 
   // ---------- PDF helpers (optional) ----------
 
-  String pdfDownloadUrl(String invoiceId) => '${ApiConstants.invoices}/$invoiceId/pdf';
+  String pdfDownloadUrl(String invoiceId) =>
+      '${ApiConstants.invoices}/$invoiceId/pdf';
 
   Future<bool> openPdf(String invoiceId) async {
     final url = pdfDownloadUrl(invoiceId);
@@ -255,7 +271,8 @@ class InvoiceService {
       paymentStatus: _paymentStatusFromWire(j['paymentStatus'] as String?),
       billedToInsurance: j['billedToInsurance'] as bool? ?? false,
       amounts: _amountsFromJson(j['amounts'] as Map<String, dynamic>?),
-      paymentReferences: _payRefsFromJson(j['paymentReferences'] as Map<String, dynamic>?),
+      paymentReferences:
+          _payRefsFromJson(j['paymentReferences'] as Map<String, dynamic>?),
       checkPayableTo: j['checkPayableTo'] == null
           ? null
           : _checkPayableFromJson(j['checkPayableTo'] as Map<String, dynamic>),
@@ -287,7 +304,9 @@ class InvoiceService {
       'billedToInsurance': i.billedToInsurance,
       'amounts': _amountsToJson(i.amounts),
       'paymentReferences': _payRefsToJson(i.paymentReferences),
-      'checkPayableTo': i.checkPayableTo == null ? null : _checkPayableToJson(i.checkPayableTo!),
+      'checkPayableTo': i.checkPayableTo == null
+          ? null
+          : _checkPayableToJson(i.checkPayableTo!),
       'createdAt': i.createdAt,
       'updatedAt': i.updatedAt,
       'createdBy': i.createdBy,
@@ -347,7 +366,8 @@ class InvoiceService {
   ServiceLine _serviceFromJson(Map<String, dynamic> j) => ServiceLine(
         description: j['description'] as String?,
         serviceCode: j['serviceCode'] as String?,
-        serviceDate: j['serviceDate'] == null ? null : _parseDate(j['serviceDate']),
+        serviceDate:
+            j['serviceDate'] == null ? null : _parseDate(j['serviceDate']),
         charge: _asDouble(j['charge']),
         patientBalance: _asDouble(j['patientBalance']),
         insuranceAdjustments: _asDouble(j['insuranceAdjustments']),
@@ -376,7 +396,8 @@ class InvoiceService {
         'amountDue': a.amountDue,
       };
 
-  PaymentReferences _payRefsFromJson(Map<String, dynamic>? j) => PaymentReferences(
+  PaymentReferences _payRefsFromJson(Map<String, dynamic>? j) =>
+      PaymentReferences(
         paymentLink: j?['paymentLink'] as String?,
         qrCodeUrl: j?['qrCodeUrl'] as String?,
         notes: j?['notes'] as String?,
@@ -393,7 +414,8 @@ class InvoiceService {
         'supportedMethods': p.supportedMethods.toList(),
       };
 
-  CheckPayableTo _checkPayableFromJson(Map<String, dynamic> j) => CheckPayableTo(
+  CheckPayableTo _checkPayableFromJson(Map<String, dynamic> j) =>
+      CheckPayableTo(
         name: j['name'] as String? ?? '',
         address: j['address'] as String? ?? '',
         reference: j['reference'] as String? ?? '',
@@ -411,7 +433,8 @@ class InvoiceService {
         userId: j['userId'] as String? ?? '',
         action: j['action'] as String? ?? '',
         details: j['details'] as String? ?? '',
-        timestamp: j['timestamp'] as String? ?? DateTime.now().toIso8601String(),
+        timestamp:
+            j['timestamp'] as String? ?? DateTime.now().toIso8601String(),
       );
 
   Map<String, dynamic> _historyToJson(HistoryEntry h) => {

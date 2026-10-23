@@ -106,11 +106,12 @@ class _IncomingCallPopupState extends State<IncomingCallPopup>
                             widget.isConferenceInvite
                                 ? 'Joining Existing Call'
                                 : 'Incoming ${widget.isVideoCall ? 'Video' : 'Audio'} Call',
-                            style: Theme.of(context).textTheme.titleLarge
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color:
-                                      Theme.of(context).brightness ==
+                                  color: Theme.of(context).brightness ==
                                           Brightness.dark
                                       ? Colors.white
                                       : Colors.black87,
@@ -121,7 +122,9 @@ class _IncomingCallPopupState extends State<IncomingCallPopup>
                             widget.isConferenceInvite
                                 ? 'invited by ${widget.callerRole == 'CAREGIVER' ? 'Caregiver' : widget.callerRole.toLowerCase()}'
                                 : 'from ${widget.callerRole == 'CAREGIVER' ? 'Caregiver' : widget.callerRole.toLowerCase()}',
-                            style: Theme.of(context).textTheme.bodyMedium
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
                                 ?.copyWith(color: Colors.grey[600]),
                           ),
                         ],
@@ -156,11 +159,10 @@ class _IncomingCallPopupState extends State<IncomingCallPopup>
                                   ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color:
-                                          (widget.isVideoCall
-                                                  ? Colors.blue
-                                                  : Colors.green)
-                                              .withOpacity(0.3),
+                                      color: (widget.isVideoCall
+                                              ? Colors.blue
+                                              : Colors.green)
+                                          .withOpacity(0.3),
                                       blurRadius: 20,
                                       spreadRadius: 5,
                                     ),
@@ -180,11 +182,12 @@ class _IncomingCallPopupState extends State<IncomingCallPopup>
                         const SizedBox(height: 20),
                         Text(
                           widget.callerName,
-                          style: Theme.of(context).textTheme.headlineSmall
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
                               ?.copyWith(
                                 fontWeight: FontWeight.w600,
-                                color:
-                                    Theme.of(context).brightness ==
+                                color: Theme.of(context).brightness ==
                                         Brightness.dark
                                     ? Colors.white
                                     : Colors.black87,
@@ -290,7 +293,9 @@ class _IncomingCallPopupState extends State<IncomingCallPopup>
                           const SizedBox(width: 8),
                           Text(
                             'Tap to accept or decline',
-                            style: Theme.of(context).textTheme.bodySmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
                                 ?.copyWith(color: Colors.grey[500]),
                           ),
                         ],
