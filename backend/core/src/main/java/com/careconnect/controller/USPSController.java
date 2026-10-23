@@ -43,7 +43,7 @@ public class USPSController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) throws UnauthorizedException {
         User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         // USPSDigestService keys cache/credentials by the patient's database user id (string).
         String serviceUserId = String.valueOf(patientUser.getId());

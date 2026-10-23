@@ -1,15 +1,18 @@
 package com.careconnect.service;
 
+import com.careconnect.dto.ConnectionRequestSummary;
 import com.careconnect.model.ConnectionRequest;
 import com.careconnect.model.User;
 import com.careconnect.model.CaregiverPatientLink;
+import com.careconnect.security.Role;
 import com.careconnect.repository.ConnectionRequestRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.CaregiverRepository;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,26 +28,35 @@ public class ConnectionRequestService {
     private final ConnectionRequestRepository connectionRequestRepo;
     private final UserRepository userRepo;
     private final CaregiverPatientLinkRepository linkRepo;
+    private final CaregiverRepository caregiverRepo;
+    private final PatientRepository patientRepo;
     private final EmailService emailService;
 
     @Autowired(required = false)
     private NotificationService notificationService;
 
-    @Value("${frontend.base-url:http://localhost:3000}")
-    private String frontendBaseUrl;
 
     /**
-     * Create a connection request from a caregiver to a patient
+     * Create a connection request from a caregiver to a patient. The caregiver can see
+     * nothing of the patient until the patient accepts (see {@link #respond}).
+     *
+     * @param caregiverUserId the requesting caregiver's user ID, taken from the
+     *                        authenticated caller, never from the request body
      */
     @Transactional
-    public ConnectionRequest createRequest(Long caregiverId, String patientEmail,
+    public ConnectionRequest createRequest(Long caregiverUserId, String patientEmail,
                                            String relationshipType, String message) {
-        // Find caregiver and patient
-        User caregiver = userRepo.findById(caregiverId)
-                .orElseThrow(() -> new IllegalArgumentException("Caregiver not found"));
+        User caregiver = userRepo.findById(caregiverUserId)
+                .filter(User::isCaregiver)
+                .orElseThrow(() -> new IllegalArgumentException("Only caregivers can send connection requests"));
 
-        User patient = userRepo.findByEmail(patientEmail)
+        User patient = userRepo.findByEmailAndRole(patientEmail, Role.PATIENT)
                 .orElseThrow(() -> new IllegalArgumentException("Patient not found with email: " + patientEmail));
+
+        if (linkRepo.existsByCaregiverUserAndPatientUserAndStatus(
+                caregiver, patient, CaregiverPatientLink.LinkStatus.ACTIVE)) {
+            throw new IllegalStateException("You are already connected to this patient");
+        }
 
         // Check if there's already a pending request
         if (connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")) {
@@ -73,14 +85,14 @@ public class ConnectionRequestService {
                 notificationService.sendNotificationToUser(
                         patient.getId(),
                         "🔗 New Connection Request",
-                        String.format("%s would like to connect with you as your caregiver", caregiver.getName()),
+                        String.format("%s would like to connect with you as your caregiver", displayName(caregiver)),
                         "CONNECTION_REQUEST",
                         Map.of(
                                 "type", "CONNECTION_REQUEST",
-                                "caregiverName", caregiver.getName(),
+                                "caregiverName", displayName(caregiver),
                                 "caregiverId", caregiver.getId().toString(),
                                 "relationshipType", relationshipType,
-                                "requestToken", request.getToken(),
+                                "requestId", String.valueOf(request.getId()),
                                 "requestedAt", request.getRequestedAt().toString()
                         )
                 );
@@ -94,12 +106,17 @@ public class ConnectionRequestService {
     }
 
     /**
-     * Process a patient's response to a connection request
+     * Record the patient's answer to one of their own pending requests; accepting
+     * creates the caregiver-patient link.
+     *
+     * <p>A request addressed to someone else is reported as not found, so callers
+     * cannot probe which request IDs exist.
      */
     @Transactional
-    public void processResponse(String token, boolean accepted) {
-        ConnectionRequest request = connectionRequestRepo.findByToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid request token"));
+    public void respond(Long requestId, User patient, boolean accepted) {
+        ConnectionRequest request = connectionRequestRepo.findById(requestId)
+                .filter(r -> r.getPatient() != null && r.getPatient().getId().equals(patient.getId()))
+                .orElseThrow(() -> new IllegalArgumentException("Connection request not found"));
 
         if (!"PENDING".equals(request.getStatus())) {
             throw new IllegalStateException("This request has already been processed");
@@ -120,11 +137,11 @@ public class ConnectionRequestService {
                             request.getCaregiver().getId(),
                             "✅ Connection Request Accepted",
                             String.format("%s has accepted your connection request! You are now connected.",
-                                    request.getPatient().getName()),
+                                    displayName(request.getPatient())),
                             "CONNECTION_ACCEPTED",
                             Map.of(
                                     "type", "CONNECTION_ACCEPTED",
-                                    "patientName", request.getPatient().getName(),
+                                    "patientName", displayName(request.getPatient()),
                                     "patientId", request.getPatient().getId().toString(),
                                     "relationshipType", request.getRelationshipType() != null ? request.getRelationshipType() : "Caregiver",
                                     "acceptedAt", request.getRespondedAt().toString()
@@ -145,6 +162,10 @@ public class ConnectionRequestService {
      * Create caregiver-patient link
      */
     private void createCaregiverPatientLink(ConnectionRequest request) {
+        if (linkRepo.existsByCaregiverUserAndPatientUserAndStatus(
+                request.getCaregiver(), request.getPatient(), CaregiverPatientLink.LinkStatus.ACTIVE)) {
+            return;
+        }
         CaregiverPatientLink link = new CaregiverPatientLink(
                 request.getCaregiver(),
                 request.getPatient(),
@@ -164,10 +185,7 @@ public class ConnectionRequestService {
         User caregiver = request.getCaregiver();
         User patient = request.getPatient();
 
-        String subject = "CareConnect: Connection Request from " + caregiver.getName();
-        // Use frontend base URL from application properties
-        String baseUrl = frontendBaseUrl;
-
+        String subject = "CareConnect: Connection Request from " + displayName(caregiver);
         String emailBody = String.format(
                 "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n" +
                         "    <h2 style=\"color: #2c3e50; text-align: center;\">CareConnect Connection Request</h2>\n" +
@@ -182,28 +200,9 @@ public class ConnectionRequestService {
                         "    \n" +
                         "    %s\n" +
                         "    \n" +
-                        "    <div style=\"text-align: center; margin: 30px 0;\">\n" +
-                        "        <a href=\"%s/approve-connection?token=%s\" \n" +
-                        "           style=\"background-color: #2ecc71; \n" +
-                        "                  color: white; \n" +
-                        "                  padding: 10px 20px; \n" +
-                        "                  text-decoration: none; \n" +
-                        "                  border-radius: 5px; \n" +
-                        "                  font-weight: bold; \n" +
-                        "                  margin-right: 10px;\">\n" +
-                        "            Approve\n" +
-                        "        </a>\n" +
-                        "        \n" +
-                        "        <a href=\"%s/reject-connection?token=%s\" \n" +
-                        "           style=\"background-color: #e74c3c; \n" +
-                        "                  color: white; \n" +
-                        "                  padding: 10px 20px; \n" +
-                        "                  text-decoration: none; \n" +
-                        "                  border-radius: 5px; \n" +
-                        "                  font-weight: bold;\">\n" +
-                        "            Reject\n" +
-                        "        </a>\n" +
-                        "    </div>\n" +
+                        "    <p style=\"font-size: 16px; line-height: 1.6; color: #333;\">\n" +
+                        "        Sign in to CareConnect to accept or decline this request from your dashboard.\n" +
+                        "    </p>\n" +
                         "    \n" +
                         "    <p style=\"font-size: 14px; color: #666; text-align: center;\">\n" +
                         "        If you didn't expect this connection request, you can safely ignore it.\n" +
@@ -215,15 +214,11 @@ public class ConnectionRequestService {
                         "        This is an automated message from CareConnect. Please do not reply to this email.\n" +
                         "    </p>\n" +
                         "</div>\n",
-                patient.getName(),
-                caregiver.getName(),
+                displayName(patient),
+                displayName(caregiver),
                 request.getMessage() != null && !request.getMessage().isEmpty() ?
                         "<p style=\"font-size: 16px; line-height: 1.6; color: #333; font-style: italic;\">" +
-                                "\"" + request.getMessage() + "\"</p>" : "",
-                baseUrl,
-                request.getToken(),
-                baseUrl,
-                request.getToken()
+                                "\"" + request.getMessage() + "\"</p>" : ""
         );
 
         emailService.sendHtmlEmail(patient.getEmail(), subject, emailBody, "html");
@@ -239,7 +234,7 @@ public class ConnectionRequestService {
 
         String subject = "CareConnect: Connection Request " +
                 (accepted ? "Accepted" : "Declined") +
-                " by " + patient.getName();
+                " by " + displayName(patient);
 
         String emailBody = String.format(
                 "<div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n" +
@@ -262,8 +257,8 @@ public class ConnectionRequestService {
                         "    </p>\n" +
                         "</div>\n",
                 accepted ? "Accepted" : "Declined",
-                caregiver.getName(),
-                patient.getName(),
+                displayName(caregiver),
+                displayName(patient),
                 accepted ? "accepted" : "declined",
                 accepted ?
                         "<p style=\"font-size: 16px; line-height: 1.6; color: #333;\">You can now see and manage their care through the CareConnect platform.</p>" :
@@ -274,22 +269,47 @@ public class ConnectionRequestService {
     }
 
     /**
-     * Get pending requests for a patient
+     * Pending requests addressed to this patient.
      */
-    public List<ConnectionRequest> getPendingRequestsForPatient(Long patientId) {
-        User patient = userRepo.findById(patientId)
-                .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
-
+    public List<ConnectionRequest> getPendingRequestsForPatient(User patient) {
         return connectionRequestRepo.findByPatientAndStatus(patient, "PENDING");
     }
 
     /**
-     * Get pending requests sent by a caregiver
+     * Pending requests this caregiver has sent.
      */
-    public List<ConnectionRequest> getPendingRequestsByCaregiver(Long caregiverId) {
-        User caregiver = userRepo.findById(caregiverId)
-                .orElseThrow(() -> new IllegalArgumentException("Caregiver not found"));
-
+    public List<ConnectionRequest> getPendingRequestsByCaregiver(User caregiver) {
         return connectionRequestRepo.findByCaregiverAndStatus(caregiver, "PENDING");
+    }
+
+    /**
+     * The name to show for a user. Seeded and older accounts have no {@code users.name};
+     * their name is on the caregiver or patient profile, and the email is the last resort.
+     */
+    public String displayName(User user) {
+        if (user.getName() != null && !user.getName().isBlank()) {
+            return user.getName().trim();
+        }
+        Optional<String> profileName = Optional.empty();
+        if (user.isCaregiver()) {
+            profileName = caregiverRepo.findByUser(user)
+                    .map(c -> fullName(c.getFirstName(), c.getLastName()));
+        } else if (user.isPatient()) {
+            profileName = patientRepo.findByUser(user)
+                    .map(p -> fullName(p.getFirstName(), p.getLastName()));
+        }
+        return profileName.filter(name -> !name.isBlank()).orElse(user.getEmail());
+    }
+
+    /**
+     * API view of a request, with display names resolved for both users.
+     */
+    public ConnectionRequestSummary toSummary(ConnectionRequest request) {
+        return ConnectionRequestSummary.from(
+                request, displayName(request.getCaregiver()), displayName(request.getPatient()));
+    }
+
+    private static String fullName(String first, String last) {
+        return ((first == null ? "" : first.trim()) + " " + (last == null ? "" : last.trim())).trim();
     }
 }

@@ -59,7 +59,7 @@ public class UspsDigestController {
 
         User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
         var digest = date != null
@@ -79,7 +79,7 @@ public class UspsDigestController {
 
         User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
         var results = uspsDigestService.search(serviceUserId, keyword);
@@ -115,7 +115,7 @@ public class UspsDigestController {
 
         User currentUser = AuthRequestSupport.requireAuthenticated(securityUtil.resolveCurrentUser());
         User patientUser = patientResolver.resolvePatient(patientEmail, userId, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         String serviceUserId = String.valueOf(patientUser.getId());
         uspsDigestService.clearCacheForUser(serviceUserId);

@@ -80,7 +80,7 @@ class EmailCredentialServiceTest {
             EmailConnectionStatus status = service.getGmailConnectionStatus(null);
 
             assertThat(status.connected()).isTrue();
-            verify(authorizationService).requirePatientAccess(patientUser, 42L);
+            verify(authorizationService).requirePatientUserAccess(patientUser, 42L);
         }
 
         @Test
@@ -96,7 +96,7 @@ class EmailCredentialServiceTest {
             String token = service.createGmailOAuthStartToken(null, "http://localhost/usps-test");
 
             assertThat(token).isEqualTo("signed-start");
-            verify(authorizationService).requirePatientAccess(patientUser, 42L);
+            verify(authorizationService).requirePatientUserAccess(patientUser, 42L);
         }
 
         @Test
@@ -113,7 +113,7 @@ class EmailCredentialServiceTest {
 
             service.disconnectGmail(null);
 
-            verify(authorizationService).requirePatientAccess(patientUser, 42L);
+            verify(authorizationService).requirePatientUserAccess(patientUser, 42L);
             verify(googleOAuthService).revokeIfPossible(credential);
             verify(credRepo).delete(credential);
         }
@@ -130,7 +130,7 @@ class EmailCredentialServiceTest {
             when(patientResolver.resolvePatient("other@example.com", null, patientUser))
                     .thenReturn(otherPatient);
             doThrow(new UnauthorizedException("Patients can only access their own data"))
-                    .when(authorizationService).requirePatientAccess(patientUser, 99L);
+                    .when(authorizationService).requirePatientUserAccess(patientUser, 99L);
 
             assertThatThrownBy(() -> service.getGmailConnectionStatus("other@example.com"))
                     .isInstanceOf(UnauthorizedException.class)

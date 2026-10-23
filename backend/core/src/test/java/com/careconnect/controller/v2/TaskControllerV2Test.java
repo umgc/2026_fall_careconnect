@@ -1,6 +1,11 @@
 package com.careconnect.controller.v2;
 
 import com.careconnect.dto.v2.TaskDtoV2;
+import com.careconnect.model.Patient;
+import com.careconnect.model.Task;
+import com.careconnect.model.User;
+import com.careconnect.security.Role;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.service.v2.TaskServiceV2;
 import com.careconnect.util.SecurityUtil;
@@ -16,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -190,5 +196,84 @@ class TaskControllerV2Test {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         assertThat(response.getBody()).isNull();
         verify(taskService).deleteTask(8L, true);
+    }
+
+    // ─── access to individual tasks ────────────────────────────────────────────
+
+    private User caregiver() {
+        final User user = new User();
+        user.setId(10L);
+        user.setRole(Role.CAREGIVER);
+        return user;
+    }
+
+    private Task taskOfPatient(final long taskId, final long patientId) {
+        return Task.builder().id(taskId).name("Check Vitals")
+                .patient(Patient.builder().id(patientId).build()).build();
+    }
+
+    @Test
+    void getAllTasks_isAdminOnly() throws Exception {
+        final User user = caregiver();
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        doThrow(new UnauthorizedException("Admin access required"))
+                .when(authorizationService).requireAdmin(user);
+
+        assertThatThrownBy(() -> controller.getAllTasks()).isInstanceOf(UnauthorizedException.class);
+        verify(taskService, never()).getAllTasks();
+    }
+
+    @Test
+    void getTaskById_refusedWhenCallerCannotAccessTheTasksPatient() throws Exception {
+        final User user = caregiver();
+        final Task task = taskOfPatient(7L, 5L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(task);
+        doThrow(new UnauthorizedException("not assigned"))
+                .when(authorizationService).requireTaskAccess(user, task);
+
+        assertThatThrownBy(() -> controller.getTaskById(7L)).isInstanceOf(UnauthorizedException.class);
+        verify(taskService, never()).getTaskDtoById(anyLong());
+    }
+
+    @Test
+    void updateTask_refusedWhenCallerCannotAccessTheTasksPatient() throws Exception {
+        // Arrange: an unlinked caregiver tries to edit another patient's task
+        final User user = caregiver();
+        final Task task = taskOfPatient(7L, 5L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(task);
+        doThrow(new UnauthorizedException("not assigned"))
+                .when(authorizationService).requireTaskAccess(user, task);
+
+        // Act / Assert
+        assertThatThrownBy(() -> controller.updateTask(7L, TaskDtoV2.builder().name("x").build()))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(taskService, never()).updateTask(anyLong(), any());
+    }
+
+    @Test
+    void updateTaskCompletion_checksAccessToTheTask() throws Exception {
+        final User user = caregiver();
+        final Task task = taskOfPatient(7L, 5L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(task);
+
+        controller.updateTaskCompletion(7L, Map.of("isComplete", true));
+
+        verify(authorizationService).requireTaskAccess(user, task);
+    }
+
+    @Test
+    void deleteTask_refusedWhenCallerCannotAccessTheTasksPatient() throws Exception {
+        final User user = caregiver();
+        final Task task = taskOfPatient(7L, 5L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(task);
+        doThrow(new UnauthorizedException("not assigned"))
+                .when(authorizationService).requireTaskAccess(user, task);
+
+        assertThatThrownBy(() -> controller.deleteTask(7L, false)).isInstanceOf(UnauthorizedException.class);
+        verify(taskService, never()).deleteTask(anyLong(), anyBoolean());
     }
 }

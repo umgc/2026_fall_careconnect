@@ -1,11 +1,16 @@
 package com.careconnect.service;
 
+import com.careconnect.model.Caregiver;
 import com.careconnect.model.CaregiverPatientLink;
+import com.careconnect.model.Patient;
 import com.careconnect.model.ConnectionRequest;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
+import com.careconnect.repository.CaregiverRepository;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ConnectionRequestRepository;
 import com.careconnect.repository.UserRepository;
+import com.careconnect.security.Role;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +41,12 @@ class ConnectionRequestServiceTest {
     private CaregiverPatientLinkRepository linkRepo;
 
     @Mock
+    private CaregiverRepository caregiverRepo;
+
+    @Mock
+    private PatientRepository patientRepo;
+
+    @Mock
     private EmailService emailService;
 
     @Mock
@@ -53,20 +64,21 @@ class ConnectionRequestServiceTest {
         MockitoAnnotations.openMocks(this);
 
         // Mockito 5's @InjectMocks uses constructor injection and does NOT inject
-        // remaining @Autowired field-injected dependencies. We must manually inject
-        // notificationService and the @Value frontendBaseUrl via reflection.
+        // remaining @Autowired field-injected dependencies, so notificationService is
+        // set via reflection.
         ReflectionTestUtils.setField(connectionRequestService, "notificationService", notificationService);
-        ReflectionTestUtils.setField(connectionRequestService, "frontendBaseUrl", "http://localhost:3000");
 
         caregiver = new User();
         caregiver.setId(1L);
         caregiver.setName("Jane Caregiver");
         caregiver.setEmail("jane@example.com");
+        caregiver.setRole(Role.CAREGIVER);
 
         patient = new User();
         patient.setId(2L);
         patient.setName("John Patient");
         patient.setEmail("john@example.com");
+        patient.setRole(Role.PATIENT);
 
         pendingRequest = ConnectionRequest.builder()
                 .id(100L)
@@ -88,7 +100,7 @@ class ConnectionRequestServiceTest {
     @DisplayName("createRequest - valid inputs with message and notification service - returns saved request and sends notification")
     void createRequest_validInputsWithMessageAndNotification_returnsSavedRequest() throws Exception {
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("john@example.com")).thenReturn(Optional.of(patient));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")).thenReturn(false);
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -114,7 +126,7 @@ class ConnectionRequestServiceTest {
     @DisplayName("createRequest - valid inputs with null message - returns saved request with null message in email")
     void createRequest_validInputsWithNullMessage_returnsSavedRequest() throws Exception {
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("john@example.com")).thenReturn(Optional.of(patient));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")).thenReturn(false);
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -129,7 +141,7 @@ class ConnectionRequestServiceTest {
     @DisplayName("createRequest - valid inputs with empty message - returns saved request with empty message in email")
     void createRequest_validInputsWithEmptyMessage_returnsSavedRequest() throws Exception {
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("john@example.com")).thenReturn(Optional.of(patient));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")).thenReturn(false);
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -148,7 +160,7 @@ class ConnectionRequestServiceTest {
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> connectionRequestService.createRequest(99L, "john@example.com", "Family", "msg"));
 
-        assertEquals("Caregiver not found", ex.getMessage());
+        assertEquals("Only caregivers can send connection requests", ex.getMessage());
         verify(connectionRequestRepo, never()).save(any());
     }
 
@@ -156,7 +168,7 @@ class ConnectionRequestServiceTest {
     @DisplayName("createRequest - patient not found by email - throws IllegalArgumentException")
     void createRequest_patientNotFound_throwsIllegalArgumentException() throws Exception {
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+        when(userRepo.findByEmailAndRole("unknown@example.com", Role.PATIENT)).thenReturn(Optional.empty());
 
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> connectionRequestService.createRequest(1L, "unknown@example.com", "Family", "msg"));
@@ -169,7 +181,7 @@ class ConnectionRequestServiceTest {
     @DisplayName("createRequest - pending request already exists - throws IllegalStateException")
     void createRequest_pendingRequestAlreadyExists_throwsIllegalStateException() throws Exception {
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("john@example.com")).thenReturn(Optional.of(patient));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")).thenReturn(true);
 
         final IllegalStateException ex = assertThrows(IllegalStateException.class,
@@ -180,13 +192,56 @@ class ConnectionRequestServiceTest {
     }
 
     @Test
+    @DisplayName("createRequest - caller is not a caregiver - throws and saves nothing")
+    void createRequest_callerNotCaregiver_throws() throws Exception {
+        when(userRepo.findById(2L)).thenReturn(Optional.of(patient));
+
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> connectionRequestService.createRequest(2L, "jane@example.com", "Family", "msg"));
+
+        assertEquals("Only caregivers can send connection requests", ex.getMessage());
+        verify(connectionRequestRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createRequest - already connected - throws IllegalStateException")
+    void createRequest_alreadyConnected_throwsIllegalStateException() throws Exception {
+        when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
+        when(linkRepo.existsByCaregiverUserAndPatientUserAndStatus(
+                caregiver, patient, CaregiverPatientLink.LinkStatus.ACTIVE)).thenReturn(true);
+
+        final IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> connectionRequestService.createRequest(1L, "john@example.com", "Family", "msg"));
+
+        assertEquals("You are already connected to this patient", ex.getMessage());
+        verify(connectionRequestRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createRequest - email tells the patient to respond in the app and carries no token")
+    void createRequest_emailHasNoTokenLink() throws Exception {
+        when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
+        when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        final ConnectionRequest request =
+                connectionRequestService.createRequest(1L, "john@example.com", "Family", "msg");
+
+        final ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendHtmlEmail(eq("john@example.com"), anyString(), body.capture(), eq("html"));
+        assertTrue(body.getValue().contains("accept or decline this request from your dashboard"));
+        assertFalse(body.getValue().contains(request.getToken()));
+    }
+
+    @Test
     @DisplayName("createRequest - notification service is null - request still created successfully")
     void createRequest_notificationServiceIsNull_requestStillCreated() throws Exception {
         // Set notificationService to null to cover the null-guard branch
         ReflectionTestUtils.setField(connectionRequestService, "notificationService", null);
 
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("john@example.com")).thenReturn(Optional.of(patient));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")).thenReturn(false);
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -204,7 +259,7 @@ class ConnectionRequestServiceTest {
     void createRequest_notificationServiceThrowsException_requestStillCreated() throws Exception {
         // notificationService is injected via setUp, so the code will actually call it
         when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
-        when(userRepo.findByEmail("john@example.com")).thenReturn(Optional.of(patient));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.existsByCaregiverAndPatientAndStatus(caregiver, patient, "PENDING")).thenReturn(false);
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
         when(notificationService.sendNotificationToUser(anyLong(), anyString(), anyString(), anyString(), anyMap()))
@@ -220,16 +275,16 @@ class ConnectionRequestServiceTest {
     }
 
     // ========================================================================
-    // processResponse tests
+    // respond tests
     // ========================================================================
 
     @Test
-    @DisplayName("processResponse - accepted with notification service - creates link and sends notifications")
-    void processResponse_accepted_createsLinkAndSendsNotifications() throws Exception {
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+    @DisplayName("respond - accepted with notification service - creates link and sends notifications")
+    void respond_accepted_createsLinkAndSendsNotifications() throws Exception {
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        connectionRequestService.processResponse("test-token-123", true);
+        connectionRequestService.respond(100L, patient, true);
 
         assertEquals("ACCEPTED", pendingRequest.getStatus());
         assertNotNull(pendingRequest.getRespondedAt());
@@ -256,12 +311,12 @@ class ConnectionRequestServiceTest {
     }
 
     @Test
-    @DisplayName("processResponse - rejected - sets status and sends email without creating link")
-    void processResponse_rejected_setsStatusAndSendsEmailWithoutLink() throws Exception {
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+    @DisplayName("respond - rejected - sets status and sends email without creating link")
+    void respond_rejected_setsStatusAndSendsEmailWithoutLink() throws Exception {
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        connectionRequestService.processResponse("test-token-123", false);
+        connectionRequestService.respond(100L, patient, false);
 
         assertEquals("REJECTED", pendingRequest.getStatus());
         assertNotNull(pendingRequest.getRespondedAt());
@@ -273,50 +328,82 @@ class ConnectionRequestServiceTest {
     }
 
     @Test
-    @DisplayName("processResponse - invalid token - throws IllegalArgumentException")
-    void processResponse_invalidToken_throwsIllegalArgumentException() throws Exception {
-        when(connectionRequestRepo.findByToken("bad-token")).thenReturn(Optional.empty());
+    @DisplayName("respond - unknown request - throws IllegalArgumentException")
+    void respond_unknownRequest_throwsIllegalArgumentException() throws Exception {
+        when(connectionRequestRepo.findById(404L)).thenReturn(Optional.empty());
 
         final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> connectionRequestService.processResponse("bad-token", true));
+                () -> connectionRequestService.respond(404L, patient, true));
 
-        assertEquals("Invalid request token", ex.getMessage());
+        assertEquals("Connection request not found", ex.getMessage());
     }
 
     @Test
-    @DisplayName("processResponse - request already accepted - throws IllegalStateException")
-    void processResponse_requestAlreadyAccepted_throwsIllegalStateException() throws Exception {
+    @DisplayName("respond - another patient's request - reported as not found and nothing changes")
+    void respond_anotherPatientsRequest_reportedAsNotFound() throws Exception {
+        // Arrange
+        final User otherPatient = new User();
+        otherPatient.setId(3L);
+        otherPatient.setRole(Role.PATIENT);
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
+
+        // Act
+        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> connectionRequestService.respond(100L, otherPatient, true));
+
+        // Assert
+        assertEquals("Connection request not found", ex.getMessage());
+        assertEquals("PENDING", pendingRequest.getStatus());
+        verify(linkRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("respond - accepted when already linked - does not create a second link")
+    void respond_acceptedWhenAlreadyLinked_doesNotDuplicateLink() throws Exception {
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
+        when(linkRepo.existsByCaregiverUserAndPatientUserAndStatus(
+                caregiver, patient, CaregiverPatientLink.LinkStatus.ACTIVE)).thenReturn(true);
+
+        connectionRequestService.respond(100L, patient, true);
+
+        assertEquals("ACCEPTED", pendingRequest.getStatus());
+        verify(linkRepo, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("respond - request already accepted - throws IllegalStateException")
+    void respond_requestAlreadyAccepted_throwsIllegalStateException() throws Exception {
         pendingRequest.setStatus("ACCEPTED");
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
 
         final IllegalStateException ex = assertThrows(IllegalStateException.class,
-                () -> connectionRequestService.processResponse("test-token-123", true));
+                () -> connectionRequestService.respond(100L, patient, true));
 
         assertEquals("This request has already been processed", ex.getMessage());
     }
 
     @Test
-    @DisplayName("processResponse - request already rejected - throws IllegalStateException")
-    void processResponse_requestAlreadyRejected_throwsIllegalStateException() throws Exception {
+    @DisplayName("respond - request already rejected - throws IllegalStateException")
+    void respond_requestAlreadyRejected_throwsIllegalStateException() throws Exception {
         pendingRequest.setStatus("REJECTED");
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
 
         final IllegalStateException ex = assertThrows(IllegalStateException.class,
-                () -> connectionRequestService.processResponse("test-token-123", false));
+                () -> connectionRequestService.respond(100L, patient, false));
 
         assertEquals("This request has already been processed", ex.getMessage());
     }
 
     @Test
-    @DisplayName("processResponse - accepted with null notification service - creates link without notification failure")
-    void processResponse_acceptedWithNullNotificationService_createsLinkSuccessfully() throws Exception {
-        // Set notificationService to null to cover the null-guard branch in processResponse
+    @DisplayName("respond - accepted with null notification service - creates link without notification failure")
+    void respond_acceptedWithNullNotificationService_createsLinkSuccessfully() throws Exception {
+        // Set notificationService to null to cover the null-guard branch in respond
         ReflectionTestUtils.setField(connectionRequestService, "notificationService", null);
 
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        connectionRequestService.processResponse("test-token-123", true);
+        connectionRequestService.respond(100L, patient, true);
 
         assertEquals("ACCEPTED", pendingRequest.getStatus());
         verify(linkRepo).save(any(CaregiverPatientLink.class));
@@ -325,15 +412,15 @@ class ConnectionRequestServiceTest {
     }
 
     @Test
-    @DisplayName("processResponse - accepted but notification throws exception - still completes successfully")
-    void processResponse_acceptedNotificationThrows_stillCompletesSuccessfully() throws Exception {
+    @DisplayName("respond - accepted but notification throws exception - still completes successfully")
+    void respond_acceptedNotificationThrows_stillCompletesSuccessfully() throws Exception {
         // notificationService is injected via setUp, so the code will actually call it and hit the catch
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
         when(notificationService.sendNotificationToUser(anyLong(), anyString(), anyString(), anyString(), anyMap()))
                 .thenThrow(new RuntimeException("Firebase down"));
 
-        connectionRequestService.processResponse("test-token-123", true);
+        connectionRequestService.respond(100L, patient, true);
 
         assertEquals("ACCEPTED", pendingRequest.getStatus());
         verify(linkRepo).save(any(CaregiverPatientLink.class));
@@ -343,13 +430,13 @@ class ConnectionRequestServiceTest {
     }
 
     @Test
-    @DisplayName("processResponse - accepted with null relationshipType - uses 'Caregiver' default in notification data")
-    void processResponse_acceptedWithNullRelationshipType_usesDefaultInNotification() throws Exception {
+    @DisplayName("respond - accepted with null relationshipType - uses 'Caregiver' default in notification data")
+    void respond_acceptedWithNullRelationshipType_usesDefaultInNotification() throws Exception {
         pendingRequest.setRelationshipType(null);
-        when(connectionRequestRepo.findByToken("test-token-123")).thenReturn(Optional.of(pendingRequest));
+        when(connectionRequestRepo.findById(100L)).thenReturn(Optional.of(pendingRequest));
         when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        connectionRequestService.processResponse("test-token-123", true);
+        connectionRequestService.respond(100L, patient, true);
 
         assertEquals("ACCEPTED", pendingRequest.getStatus());
         verify(linkRepo).save(any(CaregiverPatientLink.class));
@@ -371,11 +458,10 @@ class ConnectionRequestServiceTest {
     @Test
     @DisplayName("getPendingRequestsForPatient - valid patient - returns pending requests")
     void getPendingRequestsForPatient_validPatient_returnsPendingRequests() throws Exception {
-        when(userRepo.findById(2L)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.findByPatientAndStatus(patient, "PENDING"))
                 .thenReturn(List.of(pendingRequest));
 
-        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsForPatient(2L);
+        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsForPatient(patient);
 
         assertNotNull(result);
         assertEquals(1, result.size());
@@ -385,25 +471,13 @@ class ConnectionRequestServiceTest {
     @Test
     @DisplayName("getPendingRequestsForPatient - valid patient with no pending requests - returns empty list")
     void getPendingRequestsForPatient_validPatientNoPending_returnsEmptyList() throws Exception {
-        when(userRepo.findById(2L)).thenReturn(Optional.of(patient));
         when(connectionRequestRepo.findByPatientAndStatus(patient, "PENDING"))
                 .thenReturn(List.of());
 
-        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsForPatient(2L);
+        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsForPatient(patient);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
-    }
-
-    @Test
-    @DisplayName("getPendingRequestsForPatient - patient not found - throws IllegalArgumentException")
-    void getPendingRequestsForPatient_patientNotFound_throwsIllegalArgumentException() throws Exception {
-        when(userRepo.findById(99L)).thenReturn(Optional.empty());
-
-        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> connectionRequestService.getPendingRequestsForPatient(99L));
-
-        assertEquals("Patient not found", ex.getMessage());
     }
 
     // ========================================================================
@@ -413,11 +487,10 @@ class ConnectionRequestServiceTest {
     @Test
     @DisplayName("getPendingRequestsByCaregiver - valid caregiver - returns pending requests")
     void getPendingRequestsByCaregiver_validCaregiver_returnsPendingRequests() throws Exception {
-        when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
         when(connectionRequestRepo.findByCaregiverAndStatus(caregiver, "PENDING"))
                 .thenReturn(List.of(pendingRequest));
 
-        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsByCaregiver(1L);
+        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsByCaregiver(caregiver);
 
         assertNotNull(result);
         assertEquals(1, result.size());
@@ -427,24 +500,91 @@ class ConnectionRequestServiceTest {
     @Test
     @DisplayName("getPendingRequestsByCaregiver - valid caregiver with no pending requests - returns empty list")
     void getPendingRequestsByCaregiver_validCaregiverNoPending_returnsEmptyList() throws Exception {
-        when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
         when(connectionRequestRepo.findByCaregiverAndStatus(caregiver, "PENDING"))
                 .thenReturn(List.of());
 
-        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsByCaregiver(1L);
+        final List<ConnectionRequest> result = connectionRequestService.getPendingRequestsByCaregiver(caregiver);
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
     }
 
+    // ========================================================================
+    // display names
+    // ========================================================================
+
     @Test
-    @DisplayName("getPendingRequestsByCaregiver - caregiver not found - throws IllegalArgumentException")
-    void getPendingRequestsByCaregiver_caregiverNotFound_throwsIllegalArgumentException() throws Exception {
-        when(userRepo.findById(99L)).thenReturn(Optional.empty());
+    @DisplayName("displayName - uses users.name when set")
+    void displayName_usesUserName() {
+        assertEquals("Jane Caregiver", connectionRequestService.displayName(caregiver));
+        verifyNoInteractions(caregiverRepo, patientRepo);
+    }
 
-        final IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> connectionRequestService.getPendingRequestsByCaregiver(99L));
+    @Test
+    @DisplayName("displayName - seeded caregiver without users.name uses the caregiver profile")
+    void displayName_caregiverWithoutName_usesProfile() {
+        // Arrange: seeded accounts carry their name only on the profile
+        caregiver.setName(null);
+        final Caregiver profile = new Caregiver();
+        profile.setFirstName("Cara");
+        profile.setLastName("Giver");
+        when(caregiverRepo.findByUser(caregiver)).thenReturn(Optional.of(profile));
 
-        assertEquals("Caregiver not found", ex.getMessage());
+        // Act / Assert
+        assertEquals("Cara Giver", connectionRequestService.displayName(caregiver));
+    }
+
+    @Test
+    @DisplayName("displayName - patient without users.name uses the patient profile")
+    void displayName_patientWithoutName_usesProfile() {
+        patient.setName("  ");
+        when(patientRepo.findByUser(patient))
+                .thenReturn(Optional.of(Patient.builder().firstName("Mary").lastName("Johnson").build()));
+
+        assertEquals("Mary Johnson", connectionRequestService.displayName(patient));
+    }
+
+    @Test
+    @DisplayName("displayName - no name anywhere falls back to the email")
+    void displayName_noNameAnywhere_usesEmail() {
+        caregiver.setName(null);
+        when(caregiverRepo.findByUser(caregiver)).thenReturn(Optional.empty());
+
+        assertEquals("jane@example.com", connectionRequestService.displayName(caregiver));
+    }
+
+    @Test
+    @DisplayName("toSummary - resolves both names and carries no token")
+    void toSummary_resolvesNames() {
+        caregiver.setName(null);
+        final Caregiver profile = new Caregiver();
+        profile.setFirstName("Cara");
+        profile.setLastName("Giver");
+        when(caregiverRepo.findByUser(caregiver)).thenReturn(Optional.of(profile));
+
+        final var summary = connectionRequestService.toSummary(pendingRequest);
+
+        assertEquals("Cara Giver", summary.caregiverName());
+        assertEquals("John Patient", summary.patientName());
+        assertEquals(100L, summary.id());
+    }
+
+    @Test
+    @DisplayName("createRequest - notification names a caregiver who has no users.name")
+    void createRequest_notificationUsesProfileName() throws Exception {
+        caregiver.setName(null);
+        final Caregiver profile = new Caregiver();
+        profile.setFirstName("Cara");
+        profile.setLastName("Giver");
+        when(caregiverRepo.findByUser(caregiver)).thenReturn(Optional.of(profile));
+        when(userRepo.findById(1L)).thenReturn(Optional.of(caregiver));
+        when(userRepo.findByEmailAndRole("john@example.com", Role.PATIENT)).thenReturn(Optional.of(patient));
+        when(connectionRequestRepo.save(any(ConnectionRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        connectionRequestService.createRequest(1L, "john@example.com", "Family", "msg");
+
+        verify(notificationService).sendNotificationToUser(
+                eq(2L), anyString(), eq("Cara Giver would like to connect with you as your caregiver"),
+                eq("CONNECTION_REQUEST"), anyMap());
     }
 }

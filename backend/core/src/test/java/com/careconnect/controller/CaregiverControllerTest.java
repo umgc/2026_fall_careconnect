@@ -14,8 +14,10 @@ import com.careconnect.security.Role;
 import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.service.CaregiverService;
+import com.careconnect.service.ConnectionRequestService;
 import com.careconnect.util.SecurityUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -62,6 +64,8 @@ class CaregiverControllerTest {
     private SecurityUtil securityUtil;
     @Mock
     private AuthorizationService authorizationService;
+    @Mock
+    private ConnectionRequestService connectionRequestService;
     @InjectMocks
     private CaregiverController controller;
 
@@ -204,6 +208,37 @@ class CaregiverControllerTest {
     @Nested
     class AddPatient {
 
+        @BeforeEach
+        void callerOwnsCaregiverRecord() throws Exception {
+            lenient().when(securityUtil.resolveCurrentUser()).thenReturn(makeUser(CG_USER_ID, Role.CAREGIVER));
+        }
+
+        @Test
+        void throwsForbiddenWhenCaregiverAddsToAnotherCaregiversList() throws Exception {
+            // Arrange: caregiver record 1 belongs to user 10, the caller is caregiver user 11
+            when(securityUtil.resolveCurrentUser()).thenReturn(makeUser(11L, Role.CAREGIVER));
+            when(caregiverRepository.findById(CAREGIVER_ID))
+                    .thenReturn(Optional.of(makeCaregiver(CAREGIVER_ID, makeUser(CG_USER_ID, Role.CAREGIVER))));
+
+            // Act / Assert
+            assertThatThrownBy(() -> controller.addPatient(CAREGIVER_ID, emailBody(PATIENT_EMAIL)))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage("Caregivers can only add patients to their own list");
+            verifyNoInteractions(caregiverPatientLinkService);
+        }
+
+        @Test
+        void adminMayAddToAnyCaregiversList() throws Exception {
+            when(securityUtil.resolveCurrentUser()).thenReturn(makeUser(99L, Role.ADMIN));
+            when(caregiverRepository.findById(CAREGIVER_ID))
+                    .thenReturn(Optional.of(makeCaregiver(CAREGIVER_ID, makeUser(CG_USER_ID, Role.CAREGIVER))));
+            when(userRepository.findByEmailAndRole(PATIENT_EMAIL, Role.PATIENT)).thenReturn(Optional.empty());
+
+            final ResponseEntity<?> response = controller.addPatient(CAREGIVER_ID, emailBody(PATIENT_EMAIL));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        }
+
         @Test
         void throwsBadRequestWhenEmailKeyIsAbsent() throws Exception {
             // emptyMap().get("email") == null, triggering the null guard
@@ -273,13 +308,10 @@ class CaregiverControllerTest {
         }
 
         @Test
-        void returnsOkAndCreatesLinkWhenSuccessful() throws Exception {
+        void caregiverSendsRequestInsteadOfLinking() throws Exception {
             final User caregiverUser = makeUser(CG_USER_ID, Role.CAREGIVER);
             final User patientUser = makeUser(PT_USER_ID, Role.PATIENT);
             final Patient patient = mock(Patient.class);
-            when(patient.getId()).thenReturn(PATIENT_ID);
-            when(patient.getFirstName()).thenReturn("Jane");
-            when(patient.getLastName()).thenReturn("Smith");
 
             when(caregiverRepository.findById(CAREGIVER_ID))
                     .thenReturn(Optional.of(makeCaregiver(CAREGIVER_ID, caregiverUser)));
@@ -290,13 +322,56 @@ class CaregiverControllerTest {
 
             final ResponseEntity<?> response = controller.addPatient(CAREGIVER_ID, emailBody(PATIENT_EMAIL));
 
+            // A caregiver only sends a request; the patient must accept before any link exists
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+            assertThat(bodyMap(response).get("action")).isEqualTo("request_sent");
+            verify(connectionRequestService).createRequest(CG_USER_ID, PATIENT_EMAIL, "Caregiver", null);
+            verify(caregiverPatientLinkService, never()).createPermanentLink(any(), any(), any());
+        }
+
+        @Test
+        void adminLinksDirectlyAndReturnsPatient() throws Exception {
+            // Arrange
+            when(securityUtil.resolveCurrentUser()).thenReturn(makeUser(99L, Role.ADMIN));
+            final User caregiverUser = makeUser(CG_USER_ID, Role.CAREGIVER);
+            final User patientUser = makeUser(PT_USER_ID, Role.PATIENT);
+            final Patient patient = mock(Patient.class);
+            when(patient.getId()).thenReturn(PATIENT_ID);
+            when(patient.getFirstName()).thenReturn("Jane");
+            when(patient.getLastName()).thenReturn("Smith");
+            when(caregiverRepository.findById(CAREGIVER_ID))
+                    .thenReturn(Optional.of(makeCaregiver(CAREGIVER_ID, caregiverUser)));
+            when(userRepository.findByEmailAndRole(PATIENT_EMAIL, Role.PATIENT))
+                    .thenReturn(Optional.of(patientUser));
+            when(patientRepository.findByUser(patientUser)).thenReturn(Optional.of(patient));
+            when(caregiverPatientLinkService.hasActiveLink(CG_USER_ID, PT_USER_ID)).thenReturn(false);
+
+            // Act
+            final ResponseEntity<?> response = controller.addPatient(CAREGIVER_ID, emailBody(PATIENT_EMAIL));
+
+            // Assert
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(bodyMap(response).get("message"))
-                    .isEqualTo("Patient successfully added to caregiver");
             assertThat(bodyMap(response).get("patientId")).isEqualTo(PATIENT_ID);
-            assertThat(bodyMap(response).get("patientEmail")).isEqualTo(PATIENT_EMAIL);
             verify(caregiverPatientLinkService)
                     .createPermanentLink(CG_USER_ID, PT_USER_ID, "Patient added by caregiver");
+            verifyNoInteractions(connectionRequestService);
+        }
+
+        @Test
+        void caregiverWithPendingRequestGetsBadRequest() throws Exception {
+            final User caregiverUser = makeUser(CG_USER_ID, Role.CAREGIVER);
+            final User patientUser = makeUser(PT_USER_ID, Role.PATIENT);
+            when(caregiverRepository.findById(CAREGIVER_ID))
+                    .thenReturn(Optional.of(makeCaregiver(CAREGIVER_ID, caregiverUser)));
+            when(userRepository.findByEmailAndRole(PATIENT_EMAIL, Role.PATIENT))
+                    .thenReturn(Optional.of(patientUser));
+            when(patientRepository.findByUser(patientUser)).thenReturn(Optional.of(mock(Patient.class)));
+            when(connectionRequestService.createRequest(CG_USER_ID, PATIENT_EMAIL, "Caregiver", null))
+                    .thenThrow(new IllegalStateException("There's already a pending connection request to this patient"));
+
+            assertThatThrownBy(() -> controller.addPatient(CAREGIVER_ID, emailBody(PATIENT_EMAIL)))
+                    .isInstanceOf(AppException.class)
+                    .hasMessage("There's already a pending connection request to this patient");
         }
     }
 

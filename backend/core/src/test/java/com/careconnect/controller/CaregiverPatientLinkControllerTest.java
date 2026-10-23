@@ -93,7 +93,7 @@ class CaregiverPatientLinkControllerTest {
     // WHY: Caregiver may link patients to their own account
     // ============================================================
     @Test
-    void caregiverCanCreateLinkForSelf() throws Exception {
+    void caregiverCannotCreateLinkDirectly() throws Exception {
 
         final User caregiver = buildUser(5L, Role.CAREGIVER, "cg@test.com");
         mockSecurityContext("cg@test.com", caregiver);
@@ -101,7 +101,7 @@ class CaregiverPatientLinkControllerTest {
         mockMvc.perform(post("/v1/api/caregiver-patient-links/caregivers/5/patients")
                         .contentType("application/json")
                         .content("{}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
     }
 
     // ============================================================

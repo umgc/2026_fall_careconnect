@@ -33,18 +33,17 @@ public class TaskController {
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllTasks() throws UnauthorizedException {
-        // RBAC: Only admins and caregivers can view all tasks
+        // Every patient's tasks: admin only.
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireAdmin(currentUser);
         return ResponseEntity.ok(taskService.getAllTasks().stream().map(this::toResponse).toList());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getTaskById(@PathVariable Long id) throws UnauthorizedException {
-        // RBAC: Only admins and caregivers can view individual tasks
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
         Task task = taskService.getTaskById(id);
+        authorizationService.requireTaskAccess(currentUser, task);
         if (task != null) {
             return ResponseEntity.ok(toResponse(task));
         } else {
@@ -78,7 +77,7 @@ public class TaskController {
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateTask(@PathVariable Long id, @RequestBody TaskDto task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
         Task updated = taskService.updateTask(id, task);
         if (updated != null) {
             return ResponseEntity.ok(toResponse(updated));
@@ -90,7 +89,7 @@ public class TaskController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(@PathVariable Long id) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
         if (taskService.deleteTask(id)) {
             return ResponseEntity.noContent().build();
         } else {

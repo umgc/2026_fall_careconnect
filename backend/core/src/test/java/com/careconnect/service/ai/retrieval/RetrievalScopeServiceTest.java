@@ -82,7 +82,7 @@ class RetrievalScopeServiceTest {
     @BeforeEach
     void setUp() {
         service = new RetrievalScopeService(
-                new AuthorizationService(caregiverPatientLinkRepository, familyMemberLinkRepository),
+                new AuthorizationService(caregiverPatientLinkRepository, familyMemberLinkRepository, patientRepository),
                 patientRepository,
                 caregiverPatientLinkService,
                 familyMemberService,

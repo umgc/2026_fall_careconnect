@@ -43,7 +43,8 @@ public class ConfirmationController {
      */
     private void authorizeReview(User user, ConfirmationItemResponse item) throws UnauthorizedException {
         if (item.getPatientId() != null) {
-            authorizationService.requirePatientAccess(user, item.getPatientId());
+            // Confirmation items store the patient's user ID; accessiblePatientIds lists by it too.
+            authorizationService.requirePatientUserAccess(user, item.getPatientId());
         } else {
             authorizationService.requireAdmin(user);
         }

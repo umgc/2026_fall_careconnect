@@ -3,6 +3,7 @@ package com.careconnect.controller;
 import com.careconnect.dto.TaskDto;
 import com.careconnect.model.Task;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.TaskService;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,7 +21,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -272,6 +276,23 @@ class TaskControllerTest {
 
             // Assert
             verify(taskService).deleteTask(999L);
+        }
+
+        @Test
+        @WithMockUser(username = "caregiver@test.com")
+        @DisplayName("Returns 403 and deletes nothing when the caller cannot access the task's patient")
+        void returns403WhenCallerCannotAccessTask() throws Exception {
+            // Arrange: an unlinked caregiver targets another patient's task
+            when(taskService.getTaskById(1L)).thenReturn(sampleTask);
+            doThrow(new UnauthorizedException("Caregiver is not assigned to patient 5"))
+                    .when(authorizationService).requireTaskAccess(any(), eq(sampleTask));
+
+            // Act + Assert
+            mockMvc.perform(delete("/v3/api/tasks/1").with(csrf()))
+                    .andExpect(status().isForbidden());
+
+            // Assert
+            verify(taskService, never()).deleteTask(anyLong());
         }
     }
 }

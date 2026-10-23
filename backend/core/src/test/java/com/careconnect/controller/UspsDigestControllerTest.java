@@ -80,7 +80,7 @@ class UspsDigestControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(d);
         verify(uspsDigestService).digestForDate("1", date);
-        verify(authorizationService).requirePatientAccess(mockCaller, 1L);
+        verify(authorizationService).requirePatientUserAccess(mockCaller, 1L);
     }
 
     @Test
@@ -116,7 +116,7 @@ class UspsDigestControllerTest {
         final ResponseEntity<USPSDigest> response = controller.getLatestDigest(null, null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        verify(authorizationService).requirePatientAccess(mockCaller, 99L);
+        verify(authorizationService).requirePatientUserAccess(mockCaller, 99L);
         verify(uspsDigestService).latestForUser("99");
     }
 
@@ -188,7 +188,7 @@ class UspsDigestControllerTest {
     @Test
     void getLatestDigest_unlinkedCaregiver_throwsUnauthorized() throws Exception {
         doThrow(new UnauthorizedException("Caregiver is not assigned to patient 1"))
-                .when(authorizationService).requirePatientAccess(mockCaller, 1L);
+                .when(authorizationService).requirePatientUserAccess(mockCaller, 1L);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
                         () -> controller.getLatestDigest("patient@example.com", null, null))

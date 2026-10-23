@@ -1,8 +1,11 @@
 package com.careconnect.security;
 
+import com.careconnect.model.Patient;
+import com.careconnect.model.Task;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.repository.PatientRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -40,11 +43,14 @@ public class AuthorizationService {
 
     private final CaregiverPatientLinkRepository caregiverPatientLinkRepository;
     private final FamilyMemberLinkRepository familyMemberLinkRepository;
+    private final PatientRepository patientRepository;
 
     public AuthorizationService(CaregiverPatientLinkRepository caregiverPatientLinkRepository,
-                                FamilyMemberLinkRepository familyMemberLinkRepository) {
+                                FamilyMemberLinkRepository familyMemberLinkRepository,
+                                PatientRepository patientRepository) {
         this.caregiverPatientLinkRepository = caregiverPatientLinkRepository;
         this.familyMemberLinkRepository = familyMemberLinkRepository;
+        this.patientRepository = patientRepository;
     }
 
     // ========== Permission Enforcement Methods ==========
@@ -210,46 +216,111 @@ public class AuthorizationService {
     // ========== Patient Access Control Methods ==========
 
     /**
-     * Enforce access to a specific patient's data. Always prefer this method over
+     * Enforce access to a specific patient's data, identified by the patient
+     * <b>entity</b> ID ({@code patient.id}). Always prefer this method over
      * {@link #requireAdminOrCaregiver(User)} whenever a concrete patientId is available.
      *
-     * <p><b>Usage guidance:</b> Call this on any endpoint whose data is scoped to a
-     * single patient (e.g., medications, USPS digests by patientEmail, symptoms, notes).
-     * Resolve the patient's database ID before calling — do not pass a raw request
-     * parameter without first looking up the {@code User} entity.
+     * <p>{@code patient.id} and the patient's {@code users.id} are separate sequences
+     * and differ for almost every real patient. Path and body parameters named
+     * {@code patientId} (medications, tasks, notes, symptoms, check-ins, Ask AI) are
+     * entity IDs; use this method for them. When the caller holds the patient's
+     * {@code User} instead (USPS, email), use {@link #requirePatientUserAccess}.
      *
      * <p><b>Access rules:</b>
      * <ul>
-     *   <li>Admins — always allowed</li>
-     *   <li>Patients — allowed only for their own ID</li>
-     *   <li>Caregivers — must hold {@code VIEW_ASSIGNED_PATIENTS} permission AND have an
+     *   <li>Admins: always allowed</li>
+     *   <li>Patients: allowed only for their own patient record</li>
+     *   <li>Caregivers: must hold {@code VIEW_ASSIGNED_PATIENTS} permission AND have an
      *       active, non-expired caregiver-patient link in the database</li>
-     *   <li>Family members — must hold {@code VIEW_HEALTH_DATA} permission AND have an
+     *   <li>Family members: must hold {@code VIEW_HEALTH_DATA} permission AND have an
      *       active, non-expired family-member link in the database</li>
      * </ul>
+     * A non-admin asking for a patient ID that does not exist is denied, the same as
+     * any other patient they cannot access, so the response does not reveal which
+     * IDs exist.
      *
      * @param user      The authenticated user
-     * @param patientId The database ID of the patient being accessed
+     * @param patientId The patient entity ID ({@code patient.id})
      * @throws UnauthorizedException    if user cannot access this patient
      * @throws IllegalArgumentException if patientId is null
      */
     public void requirePatientAccess(User user, Long patientId) throws UnauthorizedException {
+        requireUserAndPatientId(user, patientId);
+        if (user.isAdmin()) {
+            return;
+        }
+        Long patientUserId = patientRepository.findById(patientId)
+                .map(Patient::getUser)
+                .map(User::getId)
+                .orElse(null);
+        checkPatientAccess(user, patientId, patientUserId, patientId);
+    }
+
+    /**
+     * Enforce access to a specific patient's data, identified by the patient's
+     * <b>user</b> ID ({@code users.id}). Same rules as {@link #requirePatientAccess}.
+     *
+     * @param user          The authenticated user
+     * @param patientUserId The patient's user ID ({@code users.id})
+     * @throws UnauthorizedException    if user cannot access this patient
+     * @throws IllegalArgumentException if patientUserId is null
+     */
+    public void requirePatientUserAccess(User user, Long patientUserId) throws UnauthorizedException {
+        requireUserAndPatientId(user, patientUserId);
+        if (user.isAdmin()) {
+            return;
+        }
+        Long patientId = patientRepository.findByUserId(patientUserId)
+                .map(Patient::getId)
+                .orElse(null);
+        checkPatientAccess(user, patientId, patientUserId, patientUserId);
+    }
+
+    /**
+     * Enforce access to one task with the same rules as its patient: the patient, a
+     * linked caregiver or family member, or an admin. A task with no patient is
+     * admin-only.
+     *
+     * @param user The authenticated user
+     * @param task The task being read or changed
+     * @throws UnauthorizedException if user cannot access this task's patient
+     */
+    public void requireTaskAccess(User user, Task task) throws UnauthorizedException {
+        final Long patientId = task.getPatient() == null ? null : task.getPatient().getId();
+        if (patientId == null) {
+            requireAdmin(user);
+            return;
+        }
+        requirePatientAccess(user, patientId);
+    }
+
+    private static void requireUserAndPatientId(User user, Long id) throws UnauthorizedException {
         if (user == null) {
             throw new UnauthorizedException("User is not authenticated");
         }
-
-        if (patientId == null) {
+        if (id == null) {
             throw new IllegalArgumentException("Patient ID cannot be null");
         }
+    }
 
-        // Admins can access all patients
-        if (user.isAdmin()) {
-            return;
+    /**
+     * @param patientId     the patient's entity ID, or null when unknown
+     * @param patientUserId the patient's user ID, or null when the patient does not exist
+     * @param requestedId   the ID the caller asked for, used only in error messages
+     */
+    private void checkPatientAccess(User user, Long patientId, Long patientUserId, Long requestedId)
+            throws UnauthorizedException {
+        if (patientUserId == null) {
+            throw new UnauthorizedException(
+                    String.format("User '%s' is not authorized to access patient %d",
+                            user.getEmail(),
+                            requestedId)
+            );
         }
 
         // Patients can only access themselves
         if (user.isPatient()) {
-            if (!user.getId().equals(patientId)) {
+            if (!user.getId().equals(patientUserId)) {
                 throw new UnauthorizedException(
                         "Patients can only access their own data"
                 );
@@ -268,12 +339,12 @@ public class AuthorizationService {
                 );
             }
             boolean linked = caregiverPatientLinkRepository.existsActiveNonExpiredLinkByUserIds(
-                    user.getId(), patientId, LocalDateTime.now());
+                    user.getId(), patientUserId, LocalDateTime.now());
             if (!linked) {
                 throw new UnauthorizedException(
                         String.format("Caregiver '%s' is not assigned to patient %d",
                                 user.getEmail(),
-                                patientId)
+                                requestedId)
                 );
             }
         } else if (user.isFamilyMember()) {
@@ -282,20 +353,20 @@ public class AuthorizationService {
                         "User does not have permission to view patient data"
                 );
             }
-            boolean linked = familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(
-                    user.getId(), patientId, LocalDateTime.now());
+            boolean linked = familyMemberLinkRepository.existsActiveNonExpiredLinkToPatient(
+                    user.getId(), patientId, patientUserId, LocalDateTime.now());
             if (!linked) {
                 throw new UnauthorizedException(
                         String.format("Family member '%s' is not linked to patient %d",
                                 user.getEmail(),
-                                patientId)
+                                requestedId)
                 );
             }
         } else {
             throw new UnauthorizedException(
                     String.format("User '%s' is not authorized to access patient %d",
                             user.getEmail(),
-                            patientId)
+                            requestedId)
             );
         }
     }

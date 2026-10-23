@@ -429,11 +429,18 @@ public class CaregiverService {
 
             case FAMILY_MEMBER:
                 // Similar check for family members
-                return familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(
-                        userId,
-                        patientId,
-                        LocalDateTime.now()
-                );
+                // patientId is the patient entity ID; family links are keyed by the patient's user ID.
+                Long patientUserId = patientRepository.findById(patientId)
+                        .map(Patient::getUser)
+                        .map(User::getId)
+                        .orElse(null);
+                return patientUserId != null
+                        && familyMemberLinkRepository.existsActiveNonExpiredLinkToPatient(
+                                userId,
+                                patientId,
+                                patientUserId,
+                                LocalDateTime.now()
+                        );
 
             case ADMIN:
                 return true;

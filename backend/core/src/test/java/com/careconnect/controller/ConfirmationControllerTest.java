@@ -69,7 +69,7 @@ class ConfirmationControllerTest {
 
         controller.getItem(1L);
 
-        verify(authorizationService).requirePatientAccess(u, 42L);
+        verify(authorizationService).requirePatientUserAccess(u, 42L);
     }
 
     @Test
@@ -101,7 +101,7 @@ class ConfirmationControllerTest {
         when(securityUtil.resolveCurrentUser()).thenReturn(u);
         when(confirmationService.getItem(1L)).thenReturn(item(42L));
         doThrow(new UnauthorizedException("nope"))
-                .when(authorizationService).requirePatientAccess(u, 42L);
+                .when(authorizationService).requirePatientUserAccess(u, 42L);
 
         assertThatThrownBy(() -> controller.confirmItem(1L, null))
                 .isInstanceOf(UnauthorizedException.class);

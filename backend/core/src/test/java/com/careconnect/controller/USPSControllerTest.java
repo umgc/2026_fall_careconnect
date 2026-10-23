@@ -71,7 +71,7 @@ class USPSControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(digest);
         verify(service).digestForDate("42", date);
-        verify(authorizationService).requirePatientAccess(mockCaller, 42L);
+        verify(authorizationService).requirePatientUserAccess(mockCaller, 42L);
     }
 
     @Test
@@ -84,7 +84,7 @@ class USPSControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo(digest);
         verify(service).latestForUser("42");
-        verify(authorizationService).requirePatientAccess(mockCaller, 42L);
+        verify(authorizationService).requirePatientUserAccess(mockCaller, 42L);
     }
 
     @Test
@@ -98,7 +98,7 @@ class USPSControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
-        verify(authorizationService).requirePatientAccess(mockCaller, 7L);
+        verify(authorizationService).requirePatientUserAccess(mockCaller, 7L);
         verify(service).latestForUser("7");
     }
 
@@ -117,7 +117,7 @@ class USPSControllerTest {
         when(patient.getId()).thenReturn(7L);
         when(patientResolver.resolvePatient("patient@example.com", mockCaller)).thenReturn(patient);
         doThrow(new UnauthorizedException("Caregiver is not assigned to patient 7"))
-                .when(authorizationService).requirePatientAccess(mockCaller, 7L);
+                .when(authorizationService).requirePatientUserAccess(mockCaller, 7L);
 
         assertThatThrownBy(() -> controller.getDigest("patient@example.com", null))
                 .isInstanceOf(UnauthorizedException.class)

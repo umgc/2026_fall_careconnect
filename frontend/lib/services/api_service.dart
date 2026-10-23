@@ -598,17 +598,14 @@ class ApiService {
         .timeout(const Duration(seconds: 20));
   }
 
-  /// Get pending connection requests for a caregiver
-  static Future<http.Response> getPendingRequestsByCaregiver(
-    int caregiverId,
-  ) async {
+  /// Get the signed-in caregiver's pending connection requests (the server
+  /// scopes them to the caller).
+  static Future<http.Response> getPendingRequestsByCaregiver() async {
     final headers = await AuthTokenManager.getAuthHeaders();
 
     return await _httpClient
         .get(
-          Uri.parse(
-            '${ApiConstants.connectionRequests}/pending/caregiver/$caregiverId',
-          ),
+          Uri.parse('${ApiConstants.connectionRequests}/outgoing'),
           headers: headers,
         )
         .timeout(const Duration(seconds: 20));

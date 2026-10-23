@@ -37,7 +37,7 @@ public class EmailCredentialService {
             throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = resolvePatientUser(patientIdentifier, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         String userId = String.valueOf(patientUser.getId());
         Optional<EmailCredential> credOpt = credRepo
@@ -76,7 +76,7 @@ public class EmailCredentialService {
     public void disconnectGmail(String patientIdentifier) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = resolvePatientUser(patientIdentifier, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         String userId = String.valueOf(patientUser.getId());
         credRepo.findFirstByUserIdAndProviderOrderByIdDesc(userId, EmailCredential.Provider.GMAIL)
@@ -94,7 +94,7 @@ public class EmailCredentialService {
             throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         User patientUser = resolvePatientUser(patientIdentifier, currentUser);
-        authorizationService.requirePatientAccess(currentUser, patientUser.getId());
+        authorizationService.requirePatientUserAccess(currentUser, patientUser.getId());
 
         String sanitizedReturnUrl = oauthRedirectValidator.sanitizeReturnUrl(returnUrl);
         return oauthStateSigner.signStartToken(String.valueOf(patientUser.getId()), sanitizedReturnUrl);

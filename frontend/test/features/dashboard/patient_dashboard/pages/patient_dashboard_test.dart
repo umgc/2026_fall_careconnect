@@ -12,6 +12,7 @@
 // 7. Contact Provider bottom sheet
 // 8. FAB tap (AI Chat modal)
 
+import 'package:care_connect_app/features/connection_requests/presentation/widgets/pending_connection_requests_card.dart';
 import 'dart:convert';
 
 import 'package:care_connect_app/l10n/app_localizations.dart';
@@ -279,6 +280,14 @@ void main() {
       await tester.pumpWidget(_wrap());
       await tester.pump();
       expect(find.byType(PatientDashboard), findsOneWidget);
+    });
+
+    testWidgets('mounts the caregiver connection requests card', (tester) async {
+      _setLargeViewport(tester);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_wrap());
+      await tester.pump();
+      expect(find.byType(PendingConnectionRequestsCard), findsOneWidget);
     });
 
     testWidgets('shows Scaffold', (tester) async {
