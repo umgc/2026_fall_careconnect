@@ -25,6 +25,7 @@ class RecurrenceUtils {
   /// - [interval]: gap between recurrences (e.g., every 2 weeks)
   /// - [count]: total number of occurrences (calculated if missing)
   /// - [startDate]: first occurrence date
+  /// - [countStartDate]: series anchor used when calculating [count] during edits
   /// - [endDate]: optional stop date, used to derive [count]
   /// - [dayOfMonth]: for monthly recurrences, which day of month
   ///
@@ -41,6 +42,7 @@ class RecurrenceUtils {
     int? interval,
     int? count,
     DateTime? startDate,
+    DateTime? countStartDate,
     DateTime? endDate,
     int? dayOfMonth,
   }) {
@@ -50,6 +52,7 @@ class RecurrenceUtils {
 
     // Default effective start date
     DateTime effectiveDate = (startDate ?? baseTask.date).toLocal();
+    final recurrenceStartDate = (countStartDate ?? effectiveDate).toLocal();
     // Normalize end date if provided
     DateTime? normalizedEndDate =
         endDate != null ? TaskUtils.normalizeDate(endDate) : null;
@@ -64,7 +67,7 @@ class RecurrenceUtils {
 
           if (normalizedEndDate != null) {
             int occurrences = 0;
-            DateTime cursor = effectiveDate;
+            DateTime cursor = recurrenceStartDate;
             while (!cursor.isAfter(normalizedEndDate)) {
               occurrences++;
               cursor = cursor.add(Duration(days: intervalToSend));
@@ -82,29 +85,57 @@ class RecurrenceUtils {
               : intervalToSend;
 
           if (normalizedEndDate != null) {
+            final now = DateTime.now();
+            final excludePastTimedOccurrences =
+                baseTask.id == null && baseTask.timeOfDay != null;
             int occurrences = 0;
-            DateTime cursor = effectiveDate;
+            DateTime cursor = recurrenceStartDate;
+            DateTime? firstOccurrence;
             // walk week-by-week
             while (!cursor.isAfter(normalizedEndDate)) {
               for (int i = 0; i < 7; i++) {
                 if (daysOfWeek != null &&
                     i < daysOfWeek.length &&
                     daysOfWeek[i]) {
-                  // i=0 is Sunday → Dart DateTime.weekday is Mon=1…Sun=7
-                  int dartDow = (i == 0 ? DateTime.sunday : i + 1);
-                  DateTime candidate = cursor.subtract(
-                    Duration(days: cursor.weekday - dartDow),
+                  // i=0 is Sunday; Dart uses Mon=1…Sun=7.
+                  int dartDow = (i == 0 ? DateTime.sunday : i);
+                  DateTime candidate = DateTime(
+                    cursor.year,
+                    cursor.month,
+                    cursor.day + dartDow - cursor.weekday,
                   );
+                  final candidateDateTime = baseTask.timeOfDay == null
+                      ? candidate
+                      : DateTime(
+                          candidate.year,
+                          candidate.month,
+                          candidate.day,
+                          baseTask.timeOfDay!.hour,
+                          baseTask.timeOfDay!.minute,
+                        );
 
-                  if (!candidate.isBefore(effectiveDate) &&
-                      !candidate.isAfter(normalizedEndDate)) {
+                  if (!candidate.isBefore(recurrenceStartDate) &&
+                      !candidate.isAfter(normalizedEndDate) &&
+                      (!excludePastTimedOccurrences ||
+                          !candidateDateTime.isBefore(now))) {
+                    if (firstOccurrence == null ||
+                        candidate.isBefore(firstOccurrence)) {
+                      firstOccurrence = candidate;
+                    }
                     occurrences++;
                   }
                 }
               }
-              cursor = cursor.add(Duration(days: 7 * intervalToSend));
+              cursor = DateTime(
+                cursor.year,
+                cursor.month,
+                cursor.day + 7 * intervalToSend,
+              );
             }
             countToSend = occurrences;
+            if (countStartDate == null && firstOccurrence != null) {
+              effectiveDate = firstOccurrence;
+            }
           } else {
             countToSend ??= 4; // default 4 weeks if no end date
           }
@@ -116,24 +147,24 @@ class RecurrenceUtils {
               ? 1
               : intervalToSend;
 
-          int dom = dayOfMonth ?? effectiveDate.day;
+          int dom = dayOfMonth ?? recurrenceStartDate.day;
 
           // Adjust the first occurrence so it’s not before the startDate
           final daysInStartMonth = DateUtils.getDaysInMonth(
-            effectiveDate.year,
-            effectiveDate.month,
+            recurrenceStartDate.year,
+            recurrenceStartDate.month,
           );
           dom = dom.clamp(1, daysInStartMonth);
           DateTime firstCandidate = DateTime(
-            effectiveDate.year,
-            effectiveDate.month,
+            recurrenceStartDate.year,
+            recurrenceStartDate.month,
             dom,
           );
 
-          if (firstCandidate.isBefore(effectiveDate)) {
+          if (firstCandidate.isBefore(recurrenceStartDate)) {
             // push to next month
-            final nextMonth = effectiveDate.month + 1;
-            final nextYear = effectiveDate.year + ((nextMonth - 1) ~/ 12);
+            final nextMonth = recurrenceStartDate.month + 1;
+            final nextYear = recurrenceStartDate.year + ((nextMonth - 1) ~/ 12);
             final adjustedMonth = ((nextMonth - 1) % 12) + 1;
             final daysInNextMonth = DateUtils.getDaysInMonth(
               nextYear,
@@ -159,11 +190,14 @@ class RecurrenceUtils {
               cursor = DateTime(nextYear, adjustedMonth, nextDom);
             }
             countToSend = occurrences;
-            effectiveDate =
-                firstCandidate; // anchor to correct first occurrence
+            if (countStartDate == null) {
+              effectiveDate = firstCandidate;
+            }
           } else {
             countToSend ??= 12; // fallback: 12 months
-            effectiveDate = firstCandidate;
+            if (countStartDate == null) {
+              effectiveDate = firstCandidate;
+            }
           }
           break;
 
@@ -175,7 +209,7 @@ class RecurrenceUtils {
 
           if (normalizedEndDate != null) {
             int occurrences = 0;
-            DateTime cursor = effectiveDate;
+            DateTime cursor = recurrenceStartDate;
             while (!cursor.isAfter(normalizedEndDate)) {
               occurrences++;
               cursor = DateTime(
@@ -222,13 +256,34 @@ class RecurrenceUtils {
           final diffWeeks = endDate.difference(startDate).inDays ~/ 7;
           return (diffWeeks ~/ interval) + 1;
         }
+        final effectiveInterval = interval < 1 ? 1 : interval;
+        final normalizedStart = TaskUtils.normalizeDate(startDate);
+        final normalizedEnd = TaskUtils.normalizeDate(endDate);
+        final startOfFirstWeek = DateTime(
+          normalizedStart.year,
+          normalizedStart.month,
+          normalizedStart.day - normalizedStart.weekday % 7,
+        );
+        final startOfFirstWeekUtc = DateTime.utc(
+          startOfFirstWeek.year,
+          startOfFirstWeek.month,
+          startOfFirstWeek.day,
+        );
         int count = 0;
-        DateTime cursor = startDate;
-        while (!cursor.isAfter(endDate)) {
-          if (daysOfWeek[cursor.weekday % 7]) {
+        DateTime cursor = normalizedStart;
+        while (!cursor.isAfter(normalizedEnd)) {
+          final cursorUtc = DateTime.utc(
+            cursor.year,
+            cursor.month,
+            cursor.day,
+          );
+          final weeksFromStart =
+              cursorUtc.difference(startOfFirstWeekUtc).inDays ~/ 7;
+          if (weeksFromStart % effectiveInterval == 0 &&
+              daysOfWeek[cursor.weekday % 7]) {
             count++;
           }
-          cursor = cursor.add(const Duration(days: 1));
+          cursor = DateTime(cursor.year, cursor.month, cursor.day + 1);
         }
         return count;
 
@@ -262,6 +317,41 @@ class RecurrenceUtils {
       case "daily":
         return startDate.add(Duration(days: (count - 1) * interval));
       case "weekly":
+        if (daysOfWeek != null &&
+            daysOfWeek.length == 7 &&
+            daysOfWeek.any((selected) => selected)) {
+          final effectiveInterval = interval < 1 ? 1 : interval;
+          final normalizedStart = TaskUtils.normalizeDate(startDate);
+          final startOfFirstWeek = DateTime(
+            normalizedStart.year,
+            normalizedStart.month,
+            normalizedStart.day - normalizedStart.weekday % 7,
+          );
+          final startOfFirstWeekUtc = DateTime.utc(
+            startOfFirstWeek.year,
+            startOfFirstWeek.month,
+            startOfFirstWeek.day,
+          );
+          final targetCount = count < 1 ? 1 : count;
+          var occurrences = 0;
+          var cursor = normalizedStart;
+
+          while (true) {
+            final cursorUtc = DateTime.utc(
+              cursor.year,
+              cursor.month,
+              cursor.day,
+            );
+            final weeksFromStart =
+                cursorUtc.difference(startOfFirstWeekUtc).inDays ~/ 7;
+            if (weeksFromStart % effectiveInterval == 0 &&
+                daysOfWeek[cursor.weekday % 7]) {
+              occurrences++;
+              if (occurrences == targetCount) return cursor;
+            }
+            cursor = DateTime(cursor.year, cursor.month, cursor.day + 1);
+          }
+        }
         return startDate.add(Duration(days: (count - 1) * 7 * interval));
       case "monthly":
         return DateTime(

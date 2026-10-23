@@ -33,7 +33,8 @@ void main() {
   group('RecurrenceForm – non-recurring default', () {
     testWidgets('renders without crashing', (tester) async {
       // Verifies the widget builds without error.
-      await tester.pumpWidget(_wrap(RecurrenceForm(onChanged: ({
+      await tester.pumpWidget(_wrap(RecurrenceForm(
+          onChanged: ({
         bool? isRecurring,
         String? recurrenceType,
         List<bool>? daysOfWeek,
@@ -49,7 +50,8 @@ void main() {
 
     testWidgets('shows "Recurring Task" checkbox', (tester) async {
       // The CheckboxListTile for enabling recurrence must be visible.
-      await tester.pumpWidget(_wrap(RecurrenceForm(onChanged: ({
+      await tester.pumpWidget(_wrap(RecurrenceForm(
+          onChanged: ({
         bool? isRecurring,
         String? recurrenceType,
         List<bool>? daysOfWeek,
@@ -65,7 +67,8 @@ void main() {
 
     testWidgets('recurring options hidden when not recurring', (tester) async {
       // Recurrence-specific controls must not appear when disabled.
-      await tester.pumpWidget(_wrap(RecurrenceForm(onChanged: ({
+      await tester.pumpWidget(_wrap(RecurrenceForm(
+          onChanged: ({
         bool? isRecurring,
         String? recurrenceType,
         List<bool>? daysOfWeek,
@@ -82,9 +85,11 @@ void main() {
   });
 
   group('RecurrenceForm – enabling recurrence', () {
-    testWidgets('toggling checkbox reveals recurrence controls', (tester) async {
+    testWidgets('toggling checkbox reveals recurrence controls',
+        (tester) async {
       // Tapping the checkbox should expand the recurrence form.
-      await tester.pumpWidget(_wrap(RecurrenceForm(onChanged: ({
+      await tester.pumpWidget(_wrap(RecurrenceForm(
+          onChanged: ({
         bool? isRecurring,
         String? recurrenceType,
         List<bool>? daysOfWeek,
@@ -102,7 +107,8 @@ void main() {
       expect(find.text('Recurrence Type'), findsOneWidget);
     });
 
-    testWidgets('shows recurrence type dropdown when recurring', (tester) async {
+    testWidgets('shows recurrence type dropdown when recurring',
+        (tester) async {
       // The dropdown for daily/weekly/monthly/yearly must appear.
       await tester.pumpWidget(_wrap(RecurrenceForm(
         initialIsRecurring: true,
@@ -121,7 +127,8 @@ void main() {
       expect(find.text('Recurrence Type'), findsOneWidget);
     });
 
-    testWidgets('shows "Pick Start Date" button when recurring', (tester) async {
+    testWidgets('shows "Pick Start Date" button when recurring',
+        (tester) async {
       // The start date picker must be visible when recurrence is enabled.
       await tester.pumpWidget(_wrap(RecurrenceForm(
         initialIsRecurring: true,
@@ -140,7 +147,8 @@ void main() {
       expect(find.text('Pick Start Date'), findsOneWidget);
     });
 
-    testWidgets('shows missing type error when no type selected', (tester) async {
+    testWidgets('shows missing type error when no type selected',
+        (tester) async {
       // If recurring is on but no type is chosen, the error text must appear.
       await tester.pumpWidget(_wrap(RecurrenceForm(
         initialIsRecurring: true,
@@ -242,7 +250,8 @@ void main() {
   group('RecurrenceForm – initialIsRecurring=false', () {
     testWidgets('checkbox is unchecked by default', (tester) async {
       // Confirms the Checkbox widget value is false when not pre-set.
-      await tester.pumpWidget(_wrap(RecurrenceForm(onChanged: ({
+      await tester.pumpWidget(_wrap(RecurrenceForm(
+          onChanged: ({
         bool? isRecurring,
         String? recurrenceType,
         List<bool>? daysOfWeek,
@@ -279,7 +288,8 @@ void main() {
         ).called(greaterThan(0));
       }
 
-      testWidgets('renders and toggles Recurring Task checkbox', (tester) async {
+      testWidgets('renders and toggles Recurring Task checkbox',
+          (tester) async {
         final mockCallback = _OnChangedMock();
 
         await tester.pumpWidget(
@@ -421,6 +431,47 @@ void main() {
         await tester.pumpAndSettle();
 
         verifyCalled(mockCallback);
+      });
+
+      testWidgets('end date uses the original series anchor', (tester) async {
+        final anchor = DateTime(2027, 1, 6);
+        final occurrence = DateTime(2027, 1, 20);
+        int? capturedCount;
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: RecurrenceForm(
+                initialIsRecurring: true,
+                initialRecurrenceType: 'Daily',
+                initialInterval: 1,
+                initialStartDate: occurrence,
+                anchorStartDate: anchor,
+                onChanged: ({
+                  bool? isRecurring,
+                  String? recurrenceType,
+                  List<bool>? daysOfWeek,
+                  int? interval,
+                  int? count,
+                  DateTime? startDate,
+                  DateTime? endDate,
+                  int? dayOfMonth,
+                  bool? applyToSeries,
+                }) {
+                  capturedCount = count;
+                },
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Pick End Date'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('13').last);
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+
+        expect(capturedCount, 8);
       });
 
       testWidgets('shows validation when missing recurrence type', (

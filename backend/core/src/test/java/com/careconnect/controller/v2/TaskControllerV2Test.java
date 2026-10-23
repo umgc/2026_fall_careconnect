@@ -1,6 +1,8 @@
 package com.careconnect.controller.v2;
 
 import com.careconnect.dto.v2.TaskDtoV2;
+import com.careconnect.model.User;
+import com.careconnect.security.Role;
 import com.careconnect.security.AuthorizationService;
 import com.careconnect.service.v2.TaskServiceV2;
 import com.careconnect.util.SecurityUtil;
@@ -129,6 +131,23 @@ class TaskControllerV2Test {
         verify(taskService).updateTask(7L, requestDto);
     }
 
+    @Test
+    void updateTask_patientAuthorizesAgainstAssignedPatient() throws Exception {
+        final User patient = User.builder().id(10L).role(Role.PATIENT).build();
+        final TaskDtoV2 requestDto = TaskDtoV2.builder().name("Updated Task").build();
+        final TaskDtoV2 existingDto = TaskDtoV2.builder().id(7L).patientId(10L).build();
+        final TaskDtoV2 updatedDto = TaskDtoV2.builder().id(7L).name("Updated Task").patientId(10L).build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(patient);
+        when(taskService.getTaskDtoById(7L)).thenReturn(existingDto);
+        when(taskService.updateTask(7L, requestDto)).thenReturn(updatedDto);
+
+        final ResponseEntity<TaskDtoV2> response = controller.updateTask(7L, requestDto);
+
+        assertThat(response.getBody()).isEqualTo(updatedDto);
+        verify(authorizationService).requirePatientAccess(patient, 10L);
+        verify(authorizationService, never()).requireAdminOrCaregiver(any());
+    }
+
     // ─── updateTaskCompletion ─────────────────────────────────────────────────
 
     @Test
@@ -142,6 +161,23 @@ class TaskControllerV2Test {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().isCompleted()).isTrue();
         verify(taskService).updateCompletionStatus(3L, true);
+    }
+
+    @Test
+    void updateTaskCompletion_patientAuthorizesAgainstAssignedPatient() throws Exception {
+        final User patient = User.builder().id(10L).role(Role.PATIENT).build();
+        final TaskDtoV2 existingDto = TaskDtoV2.builder().id(3L).patientId(10L).build();
+        final TaskDtoV2 updatedDto = TaskDtoV2.builder().id(3L).patientId(10L).isCompleted(true).build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(patient);
+        when(taskService.getTaskDtoById(3L)).thenReturn(existingDto);
+        when(taskService.updateCompletionStatus(3L, true)).thenReturn(updatedDto);
+
+        final ResponseEntity<TaskDtoV2> response =
+                controller.updateTaskCompletion(3L, Map.of("isComplete", true));
+
+        assertThat(response.getBody()).isEqualTo(updatedDto);
+        verify(authorizationService).requirePatientAccess(patient, 10L);
+        verify(authorizationService, never()).requireAdminOrCaregiver(any());
     }
 
     @Test

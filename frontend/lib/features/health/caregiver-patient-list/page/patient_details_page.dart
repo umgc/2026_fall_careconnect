@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
 import 'dart:async';
 
 // Pain level card
@@ -2514,6 +2515,26 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   }
 
   /// Build the medications section with loading/error handling
+  Future<void> _showAddMedicationModal() async {
+    final patientId = int.tryParse(widget.patientId);
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to add medication: Invalid patient ID')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddMedicationModal(
+        targetPatientId: patientId,
+        onMedicationAdded: (_) => unawaited(_fetchMedications()),
+      ),
+    );
+  }
+
   Widget _buildMedicationsSection() {
     if (_isLoadingMedications) {
       return Center(
@@ -2569,6 +2590,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       onMedicationUpdated: _fetchMedications,
       // Refresh medications after delete/approve
       caregiverId: caregiverId,
+      onAddMedication:
+          widget.isCaregiver ? _showAddMedicationModal : null,
     );
   }
 

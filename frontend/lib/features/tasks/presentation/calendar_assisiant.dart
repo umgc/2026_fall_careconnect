@@ -789,7 +789,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
       var queuedCount = 0;
       var savedCount = 0;
       for (final Task newTask in expandedTasks) {
-        final response = await ApiService.createTask(
+        final response = await ApiService.createTaskV2(
           newTask.assignedPatientId!,
           jsonEncode(newTask.toJson()),
         );
@@ -998,7 +998,40 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
 
     if (result == null) return;
 
-    final applyToSeries = result['applyToSeries'] as bool? ?? false;
+    var applyToSeries = result['applyToSeries'] as bool? ?? false;
+    if (task.frequency != null || task.parentTaskId != null) {
+      if (!mounted) return;
+      var applyToEntireSeries = true;
+      final confirmedApplyToSeries = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text("Update recurring task"),
+            content: CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("Apply changes to entire series"),
+              value: applyToEntireSeries,
+              onChanged: (value) {
+                setDialogState(() => applyToEntireSeries = value ?? false);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, applyToEntireSeries),
+                child: const Text("Continue"),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmedApplyToSeries == null) return;
+      applyToSeries = confirmedApplyToSeries;
+    }
     final Object? returned = result['task'];
 
     // Normalize into a list of Task objects (dialog always returns a list)

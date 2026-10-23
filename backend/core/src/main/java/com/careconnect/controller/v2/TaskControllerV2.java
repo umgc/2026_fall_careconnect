@@ -152,7 +152,12 @@ public class TaskControllerV2 {
             @PathVariable Long id,
             @RequestBody TaskDtoV2 task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        if (currentUser != null && currentUser.isPatient()) {
+            TaskDtoV2 existingTask = taskService.getTaskDtoById(id);
+            authorizationService.requirePatientAccess(currentUser, existingTask.getPatientId());
+        } else {
+            authorizationService.requireAdminOrCaregiver(currentUser);
+        }
         return ResponseEntity.ok(taskService.updateTask(id, task));
     }
 
@@ -195,7 +200,12 @@ public class TaskControllerV2 {
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> body) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        if (currentUser != null && currentUser.isPatient()) {
+            TaskDtoV2 existingTask = taskService.getTaskDtoById(id);
+            authorizationService.requirePatientAccess(currentUser, existingTask.getPatientId());
+        } else {
+            authorizationService.requireAdminOrCaregiver(currentUser);
+        }
 
         boolean isComplete = body.getOrDefault("isComplete", false);
         TaskDtoV2 updated = taskService.updateCompletionStatus(id, isComplete);

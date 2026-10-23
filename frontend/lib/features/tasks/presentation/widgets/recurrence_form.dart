@@ -322,7 +322,8 @@ class _RecurrenceFormState extends State<RecurrenceForm> {
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: endDate ?? startDate ?? DateTime.now(),
-                      firstDate: startDate ?? DateTime.now(),
+                      firstDate:
+                          widget.anchorStartDate ?? startDate ?? DateTime.now(),
                       lastDate: DateTime(DateTime.now().year + 5),
                     );
                     if (picked != null) {
@@ -330,12 +331,8 @@ class _RecurrenceFormState extends State<RecurrenceForm> {
                       if (recurrenceType != null) {
                         final iv =
                             (interval == null || interval! < 1) ? 1 : interval!;
-                        // critical: choose the correct start for count math
-                        final effectiveStart = applyToSeries
-                            ? (widget.anchorStartDate ??
-                                startDate ??
-                                DateTime.now())
-                            : (startDate ?? DateTime.now());
+                        final effectiveStart =
+                            widget.anchorStartDate ?? startDate ?? DateTime.now();
 
                         count = RecurrenceUtils.calculateCount(
                           startDate: TaskUtils.normalizeDate(effectiveStart),

@@ -4,6 +4,8 @@
 import 'dart:convert';
 
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
+import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -83,7 +85,8 @@ void _setSarahHttpMocks() {
     if (path.contains('/telemetry') || path.contains('/call')) {
       return http.Response(jsonEncode([]), 200);
     }
-    if (path.contains('/search') || path.contains('/check-in') ||
+    if (path.contains('/search') ||
+        path.contains('/check-in') ||
         path.contains('/checkin')) {
       return http.Response(
         jsonEncode({
@@ -270,8 +273,7 @@ void main() {
       expect(find.byType(Scaffold), findsWidgets);
     });
 
-    testWidgets('renders DefaultTabController',
-        (WidgetTester tester) async {
+    testWidgets('renders DefaultTabController', (WidgetTester tester) async {
       await pumpReady(tester, buildTestWidget());
       expect(find.byType(DefaultTabController), findsOneWidget);
     });
@@ -373,6 +375,34 @@ void main() {
     testWidgets('builds with isCaregiver true', (WidgetTester tester) async {
       await pumpReady(tester, buildTestWidget(isCaregiver: true));
       expect(find.text('Sarah Johnson'), findsWidgets);
+    });
+
+    testWidgets('caregiver opens medication form for the selected patient',
+        (WidgetTester tester) async {
+      await pumpReady(tester, buildTestWidget(isCaregiver: true));
+
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+
+      final addButton = find.byKey(const Key('add-medication-button'));
+      await tester.ensureVisible(addButton);
+      await tester.tap(addButton);
+      await tester.pumpAndSettle();
+
+      final modal = tester.widget<AddMedicationModal>(
+        find.byType(AddMedicationModal),
+      );
+      expect(modal.targetPatientId, 42);
+
+      modal.onMedicationAdded(const Medication(
+        patientId: 42,
+        medicationName: 'Metformin',
+        dosage: '500 mg',
+        frequency: 'Twice daily',
+        route: 'oral',
+        isActive: true,
+      ));
+      await tester.pump();
     });
 
     testWidgets('builds with isCaregiver false', (WidgetTester tester) async {
