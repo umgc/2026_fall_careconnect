@@ -129,6 +129,22 @@ void main() {
     expect(a.paths, ['/v1/api/medicare/visits', '/v1/api/medicare/coverage']);
   });
 
+  test('FR-MCR-21: each record says when it was retrieved', () async {
+    String withFetchedAt(String env) =>
+        env.replaceFirst('{', '{"fetchedAt":"2026-10-14T12:00:00Z",');
+    use(RouteAdapter({
+      '/v1/api/medicare/visits':
+          withFetchedAt(envelope(fixtureResources('eob-bundle.json'))),
+      '/v1/api/medicare/coverage':
+          withFetchedAt(envelope(fixtureResources('coverage-bundle.json'))),
+    }));
+    final records = (await MedicareDataService().fetchRecords()).records;
+    expect(records, isNotEmpty);
+    for (final r in records) {
+      expect(r.details.last.label, 'Retrieved', reason: r.id);
+      expect(r.details.last.value, 'Oct 14, 2026', reason: r.id);
+    }
+  });
   test(
       'TC-MCR-CG-020: with a patientId both reads ask for that patient; '
       'without one they read the caller\'s own', () async {

@@ -2708,6 +2708,29 @@ class ApiService {
     }
   }
 
+  /// Returns AI condition screening (per-model status + flags) for [callId], or null on
+  /// any failure. The backend refuses patients (403); callers should not ask for them.
+  static Future<Map<String, dynamic>?> getConditionFlags(String callId) async {
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
+      final uri = Uri.parse('${ApiConstants.callsV3}/$callId/condition-flags');
+      final response = await _httpClient
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        debugPrint(
+          'getConditionFlags failed callId=$callId status=${response.statusCode}',
+        );
+        return null;
+      }
+      final decoded = jsonDecode(response.body);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (e) {
+      debugPrint('getConditionFlags error callId=$callId: $e');
+      return null;
+    }
+  }
+
   static Future<Map<String, dynamic>?> getCallRecordingPlaybackData(
       String callId) async {
     try {

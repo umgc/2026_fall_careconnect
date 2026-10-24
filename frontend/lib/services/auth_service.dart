@@ -179,6 +179,13 @@ class AuthService {
     if (response.statusCode == 200) {
       final userSession = UserSession.fromJson(data);
 
+      // Email not verified yet: keep nothing in storage. Web storage is shared
+      // across tabs, so a stored session would let another tab open the app.
+      // The caller shows the verify-email prompt instead.
+      if (!userSession.emailVerified) {
+        return userSession;
+      }
+
       // Force update JWT token and session using the new token manager
       // This ensures fresh tokens are always used after login
       await AuthTokenManager.saveAuthData(

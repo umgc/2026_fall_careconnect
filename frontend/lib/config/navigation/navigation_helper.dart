@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../services/user_role_storage_service.dart';
 import '../../providers/user_provider.dart';
 import 'main_screen_config.dart';
+import 'bottom_nav_config.dart';
 
 /// Navigation helper that works with stored user data instead of URL parameters
 class NavigationHelper {
@@ -119,68 +120,28 @@ class NavigationHelper {
 
   /// Helper method to convert tab index to tab name based on role
   static String? _getTabNameFromIndex(String role, int tabIndex) {
-    if (role.toUpperCase() == 'PATIENT') {
-      switch (tabIndex) {
-        case 0:
-          return 'home';
-        case 1:
-          return 'health';
-        case 2:
-          return 'messages';
-        case 3:
-          return 'profile';
-        default:
-          return null;
-      }
-    } else {
-      switch (tabIndex) {
-        case 0:
-          return 'patients';
-        case 1:
-          return 'tasks';
-        case 2:
-          return 'analytics';
-        case 3:
-          return 'messages';
-        case 4:
-          return 'profile';
-        default:
-          return null;
-      }
-    }
+    final items = BottomNavConfig.getNavItemsForRole(role);
+    if (tabIndex < 0 || tabIndex >= items.length) return null;
+    return items[tabIndex].routeName;
   }
 
   /// Get tab index from tab name
   static int? getTabIndexFromName(String role, String tabName) {
+    // Use the rendered navigation order; Schedule shifted caregiver Messages
+    // to index 4. Separate hard-coded lists silently opened the wrong tab.
+    final items = BottomNavConfig.getNavItemsForRole(role);
+    var name = tabName.toLowerCase();
+    // Keep existing dashboard links usable after the navigation labels changed.
     if (role.toUpperCase() == 'PATIENT') {
-      switch (tabName.toLowerCase()) {
-        case 'home':
-          return 0;
-        case 'health':
-          return 1;
-        case 'messages':
-          return 2;
-        case 'profile':
-          return 3;
-        default:
-          return null;
-      }
-    } else {
-      switch (tabName.toLowerCase()) {
-        case 'patients':
-          return 0;
-        case 'tasks':
-          return 1;
-        case 'analytics':
-          return 2;
-        case 'messages':
-          return 3;
-        case 'profile':
-          return 4;
-        default:
-          return null;
-      }
+      if (name == 'health') name = 'check-in';
+      if (name == 'profile') name = 'menupage';
+    } else if (name == 'patients') {
+      name = 'home';
     }
+    final index = items.indexWhere(
+      (item) => item.routeName.toLowerCase() == name,
+    );
+    return index < 0 ? null : index;
   }
 }
 

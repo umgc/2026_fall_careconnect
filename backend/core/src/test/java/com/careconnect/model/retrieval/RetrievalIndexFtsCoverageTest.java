@@ -69,7 +69,7 @@ class RetrievalIndexFtsCoverageTest {
     }
 
     @Test
-    @DisplayName("Repository FTS query is patient-scoped and uses plainto_tsquery + ts_rank_cd")
+    @DisplayName("Repository FTS query is patient-scoped, matches any query term, and ranks with ts_rank_cd")
     void repository_ftsQueryContract() throws Exception {
         final String source = Files.readString(Path.of(
                 "src/main/java/com/careconnect/repository/retrieval/RetrievalIndexChunkRepository.java"));
@@ -79,7 +79,11 @@ class RetrievalIndexFtsCoverageTest {
         assertThat(source).contains("patient_id = :patientId");
         assertThat(source).contains("plainto_tsquery('english', :query)");
         assertThat(source).contains("ts_rank_cd(search_vector");
-        assertThat(source).contains("search_vector @@ plainto_tsquery");
+        // Any-term match: plainto_tsquery's & joins become |, in both the filter and the rank.
+        final String anyTerm = "CAST(replace(CAST(plainto_tsquery('english', :query) AS text), ' & ', ' | ') AS tsquery)";
+        assertThat(source).contains("search_vector @@ " + anyTerm);
+        assertThat(source).contains("ts_rank_cd(search_vector, " + anyTerm + ")");
+        assertThat(source).doesNotContain("search_vector @@ plainto_tsquery");
         assertThat(source).contains("record_type IN (:recordTypes)");
         assertThat(source).contains("countMissingSearchVector");
         assertThat(source).contains("countMissingEmbedding");

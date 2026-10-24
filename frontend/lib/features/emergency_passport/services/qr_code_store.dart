@@ -35,7 +35,8 @@ class QrCodeStore {
     }
   }
 
-  QrCodeStore({FlutterSecureStorage? storage, Future<int?> Function()? patientId})
+  QrCodeStore(
+      {FlutterSecureStorage? storage, Future<int?> Function()? patientId})
       : _storage = storage ??
             const FlutterSecureStorage(webOptions: WebOptions.defaultOptions),
         _patientId = patientId ?? UserRoleStorageService.instance.getPatientId;

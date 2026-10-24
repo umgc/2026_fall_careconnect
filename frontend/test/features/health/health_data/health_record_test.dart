@@ -42,4 +42,35 @@ void main() {
     expect(r.sources, isNot(contains(RecordSource.epic)));
     expect(r.sources, [RecordSource.medicare]);
   });
+
+  // PR #381: the FHIR resource type that addresses an EHR record's full page.
+  test('resourceType round-trips, is left out of JSON when unknown, and '
+      'survives copyWith', () {
+    final r = HealthRecord.single(
+        id: 'ath-1',
+        source: RecordSource.athena,
+        type: RecordType.condition,
+        title: 'Asthma',
+        resourceType: 'Condition');
+    final json = r.toJson();
+    expect(json['resourceType'], 'Condition');
+    expect(HealthRecord.fromJson(json).resourceType, 'Condition');
+    expect(r.copyWith(title: 'Asthma, mild').resourceType, 'Condition');
+    expect(r.copyWith(resourceType: 'Observation').resourceType, 'Observation');
+
+    final unknown = HealthRecord.single(
+        id: 'm-1',
+        source: RecordSource.medicare,
+        type: RecordType.claimService,
+        title: 'Office visit');
+    expect(unknown.toJson().containsKey('resourceType'), isFalse);
+    expect(HealthRecord.fromJson(unknown.toJson()).resourceType, isNull);
+  });
+
+  test('every source has its display name, athenahealth spelled as the brand '
+      'spells it', () {
+    expect(RecordSource.values.map((s) => s.label),
+        ['Epic', 'Oracle Health', 'athenahealth', 'Medicare']);
+    expect(RecordSource.athena.badge, 'From athenahealth');
+  });
 }

@@ -33,8 +33,9 @@ class MedicalPassportService {
   static const _timeout = Duration(seconds: 20);
 
   static Future<MedicalPassport> fetch() async {
-    final response =
-        await http.get(Uri.parse(_baseUrl), headers: await _headers()).timeout(_timeout);
+    final response = await http
+        .get(Uri.parse(_baseUrl), headers: await _headers())
+        .timeout(_timeout);
     return MedicalPassport.fromJson(_decode(response));
   }
 
@@ -42,22 +43,26 @@ class MedicalPassportService {
   /// passport as saved.
   static Future<MedicalPassport> updateProfile(
       PassportProfileUpdate update) async {
-    final response = await http.put(
-      Uri.parse('$_baseUrl/profile'),
-      headers: await _headers(json: true),
-      body: jsonEncode(update.toJson()),
-    ).timeout(_timeout);
+    final response = await http
+        .put(
+          Uri.parse('$_baseUrl/profile'),
+          headers: await _headers(json: true),
+          body: jsonEncode(update.toJson()),
+        )
+        .timeout(_timeout);
     return MedicalPassport.fromJson(_decode(response));
   }
 
   /// Shows or hides one section on a scan. Returns the passport as saved.
   static Future<MedicalPassport> setShared(
       PassportField field, bool shared) async {
-    final response = await http.put(
-      Uri.parse('$_baseUrl/visibility/${field.apiName}'),
-      headers: await _headers(json: true),
-      body: jsonEncode({'isPublic': shared}),
-    ).timeout(_timeout);
+    final response = await http
+        .put(
+          Uri.parse('$_baseUrl/visibility/${field.apiName}'),
+          headers: await _headers(json: true),
+          body: jsonEncode({'isPublic': shared}),
+        )
+        .timeout(_timeout);
     return MedicalPassport.fromJson(_decode(response));
   }
 

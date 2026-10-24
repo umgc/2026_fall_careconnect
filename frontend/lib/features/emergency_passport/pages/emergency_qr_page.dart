@@ -97,7 +97,8 @@ class _EmergencyQrPageState extends State<EmergencyQrPage> {
     final code = _code;
     final saved = _saved;
     if (code == null || saved == null) return null;
-    final diff = saved.createdAt.difference(code.createdAt).inMilliseconds.abs();
+    final diff =
+        saved.createdAt.difference(code.createdAt).inMilliseconds.abs();
     return diff < 1000 ? saved.url : null;
   }
 
@@ -116,7 +117,8 @@ class _EmergencyQrPageState extends State<EmergencyQrPage> {
             foregroundColor: Theme.of(ctx).colorScheme.onSurface);
         return AlertDialog(
           title: Text(title),
-          content: Text(message, style: const TextStyle(fontSize: 16, height: 1.4)),
+          content:
+              Text(message, style: const TextStyle(fontSize: 16, height: 1.4)),
           actions: [
             TextButton(
               style: actionStyle,
@@ -344,7 +346,9 @@ class _EmergencyQrPageState extends State<EmergencyQrPage> {
             Flexible(
               child: Text('Active · created $created',
                   style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600, color: _green)),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: _green)),
             ),
           ],
         ),

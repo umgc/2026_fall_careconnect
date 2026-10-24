@@ -385,14 +385,14 @@ public class AiAskService {
             final CitationAssembler.CitationResult claimCitations =
                     citationAssembler.assemble(
                             claim.citationRefs(), context.citationRefMap());
-            if (claim.text() == null
-                    || claim.text().isBlank()
-                    || !hasExtractiveEvidence(
+            final String verifiedSpan = claim.text() == null || claim.text().isBlank()
+                    ? null
+                    : verifiedEvidenceSpan(
                             claim,
                             sanitizedQuery,
                             context.promptExcerptMap(),
-                            context.citationRefMap())
-                    || !claimCitations.grounded()) {
+                            context.citationRefMap());
+            if (verifiedSpan == null || !claimCitations.grounded()) {
                 // Skip only the unsupported claim, not the whole answer — a model that
                 // pads its response with one extraneous or imperfectly-cited claim
                 // shouldn't cause an otherwise correctly-grounded claim to be withheld.
@@ -401,12 +401,12 @@ public class AiAskService {
                 log.debug("Ask AI dropping unsupported claim requestId={}", requestId);
                 continue;
             }
-            verifiedClaimTexts.add(claim.text().trim());
+            verifiedClaimTexts.add(verifiedSpan);
             final String ref = claim.citationRefs().get(0);
             verifiedEvidenceByRef.computeIfAbsent(ref, ignored -> new ArrayList<>())
                     .add(surroundingCitationContext(
                             context.promptExcerptMap().get(ref).text(),
-                            claim.evidenceByRef().get(ref)));
+                            verifiedSpan));
         }
         final String draftAnswer = String.join(" ", verifiedClaimTexts);
         final CitationAssembler.CitationResult citationResult =
@@ -561,7 +561,7 @@ public class AiAskService {
                 1,
                 false,
                 null,
-                new AiAnswerBlock(verifiedAnswer, locale),
+                new AiAnswerBlock(withLeadIn(caller, verifiedAnswer), locale),
                 citations,
                 disclaimer(locale),
                 new AiEscalation(1, escalationLevel, false),
@@ -764,24 +764,87 @@ public class AiAskService {
                 null);
     }
 
-    private static boolean hasExtractiveEvidence(
+    /**
+     * Returns the source span that backs {@code claim}, or null when the claim is not
+     * verbatim, complete sentences of its cited excerpt that answer the query.
+     *
+     * <p>The span is normally the evidence quote itself, which must equal the claim.
+     * Models also quote a whole multi-sentence record as evidence while stating only
+     * one of its sentences as the claim; that claim is used when it appears inside the
+     * evidence.
+     *
+     * <p>Models often trim a sentence's leading label ("Pick up the refill." out of
+     * "Pharmacy pickup details: Pick up the refill."). The returned span is therefore
+     * the complete source sentence(s) containing the quote, and that is what the user
+     * reads: always exact, whole source sentences, so a fragment can never drop the
+     * context around it, such as a negation.
+     */
+    private static String verifiedEvidenceSpan(
             final GroundedAskLlmService.GroundedClaim claim,
             final String query,
             final Map<String, RetrievalContextAssembler.PromptExcerpt> promptExcerptMap,
             final Map<String, com.careconnect.service.ai.retrieval.RankedChunk> refMap) {
         if (claim.citationRefs().size() != 1 || claim.evidenceByRef().size() != 1) {
-            return false;
+            return null;
         }
         final String ref = claim.citationRefs().get(0);
         final RetrievalContextAssembler.PromptExcerpt excerpt = promptExcerptMap.get(ref);
         final String evidence = claim.evidenceByRef().get(ref);
-        return excerpt != null
-                && evidence != null
-                && evidence.codePointCount(0, evidence.length()) >= 20
-                && normalizedTextEquals(claim.text(), evidence)
-                && isCompleteSpan(excerpt, evidence)
+        if (excerpt == null || evidence == null) {
+            return null;
+        }
+        final String span;
+        if (normalizedTextEquals(claim.text(), evidence)) {
+            span = evidence;
+        } else if (normalizedContains(evidence, claim.text())) {
+            span = claim.text();
+        } else {
+            return null;
+        }
+        if (span.codePointCount(0, span.length()) < 20) {
+            return null;
+        }
+        final String sentences = enclosingSentences(excerpt, span);
+        final boolean verified = sentences != null
                 && GroundingRelevancePolicy.isRelevant(
-                        query, evidence, excerpt.text(), refMap.get(ref));
+                        query, sentences, excerpt.text(), refMap.get(ref));
+        return verified ? sentences : null;
+    }
+
+    /**
+     * The complete sentence(s) of the excerpt that contain {@code quote}, verbatim, or
+     * null when the quote is not uniquely in the excerpt or the sentences run into a
+     * truncated edge of the excerpt.
+     */
+    private static String enclosingSentences(
+            final RetrievalContextAssembler.PromptExcerpt excerpt, final String quote) {
+        final String text = excerpt.text();
+        final int[] span = findLenientSpan(text, quote);
+        if (span == null) {
+            return null;
+        }
+        int start = span[0];
+        while (start > 0 && !isSentenceStart(text, start)) {
+            start--;
+        }
+        while (start < span[0] && Character.isWhitespace(text.charAt(start))) {
+            start++;
+        }
+        int end = span[1];
+        while (end < text.length() && !isSentenceEnd(text, end)) {
+            end++;
+        }
+        if ((start == 0 && excerpt.startTruncated())
+                || (end == text.length() && excerpt.endTruncated())) {
+            return null;
+        }
+        return text.substring(start, end).trim();
+    }
+
+    private static boolean normalizedContains(final String haystack, final String needle) {
+        final String canonicalNeedle = canonicalizeForMatch(collapseWhitespace(needle));
+        return !canonicalNeedle.isEmpty()
+                && canonicalizeForMatch(collapseWhitespace(haystack)).contains(canonicalNeedle);
     }
 
     private static final Pattern GROUNDING_WHITESPACE_RUN = Pattern.compile("\\s+");
@@ -1034,6 +1097,16 @@ public class AiAskService {
 
     private static int elapsedMs(final long startedNanos) {
         return (int) Math.min(Integer.MAX_VALUE, (System.nanoTime() - startedNanos) / 1_000_000L);
+    }
+
+    // Answer sentences are verbatim record text and cannot be reworded without failing
+    // grounding, so the answer's person comes from this lead-in instead. Retrieval scope
+    // limits a patient to their own records, so the caller's role says whose they are.
+    private static final String ANSWER_LEAD_IN_SELF = "From your records:";
+    private static final String ANSWER_LEAD_IN_OTHER = "From the patient's records:";
+
+    private static String withLeadIn(final User caller, final String answer) {
+        return (caller.isPatient() ? ANSWER_LEAD_IN_SELF : ANSWER_LEAD_IN_OTHER) + " " + answer;
     }
 
     private static String nullToEmpty(final String value) {

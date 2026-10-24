@@ -84,7 +84,7 @@ class FiltersPanel extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final isCaregiver =
         Provider.of<UserProvider>(context, listen: false).user?.isCaregiver ??
-        false;
+            false;
 
     final manager = context.watch<TaskTypeManager>();
     final types = manager.taskTypeColors.keys.toList();
@@ -121,8 +121,8 @@ class FiltersPanel extends StatelessWidget {
                       child: Text(
                         t.calendarTaskTypes,
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ),
                     Padding(
@@ -139,9 +139,8 @@ class FiltersPanel extends StatelessWidget {
                             label: Text(
                               _localizedTypeName(t, type),
                               style: TextStyle(
-                                color: selectedTypes.contains(type)
-                                    ? color
-                                    : null,
+                                color:
+                                    selectedTypes.contains(type) ? color : null,
                               ),
                             ),
                             selected: selectedTypes.contains(type),
@@ -161,7 +160,9 @@ class FiltersPanel extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                         child: Text(
                           t.calendarPatients,
-                          style: Theme.of(context).textTheme.labelLarge
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),

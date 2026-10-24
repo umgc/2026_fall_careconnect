@@ -24,6 +24,8 @@ import 'package:care_connect_app/features/emergency_passport/pages/emergency_qr_
 import 'package:care_connect_app/features/emergency_passport/pages/passport_scan_page.dart';
 import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
+import 'package:care_connect_app/features/health/health_data/pages/athena_connect_page.dart';
+import 'package:care_connect_app/features/health/health_data/pages/athena_resource_detail_page.dart';
 import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
 import 'package:care_connect_app/features/health/health_data/pages/medicare_sharing_page.dart';
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
@@ -360,6 +362,21 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         result: MedicareConnectPage.takePendingResult(),
       ),
     ),
+    // athenahealth connect (2-legged OAuth: in-app consent, no browser return).
+    GoRoute(
+      path: '/athena-connect',
+      redirect: _requireSignIn,
+      builder: (_, __) => const AthenaConnectPage(),
+    ),
+    // One athenahealth record with its FHIR resource (GET /api/athena/resources/{type}/{id}).
+    GoRoute(
+      path: '/athena/:type/:id',
+      redirect: _requireSignIn,
+      builder: (context, state) => AthenaResourceDetailPage(
+        resourceType: state.pathParameters['type'] ?? '',
+        resourceId: state.pathParameters['id'] ?? '',
+      ),
+    ),
     // WBS 6.2.59: the patient chooses which caregivers see their Medicare data.
     GoRoute(
       path: '/medicare-sharing',
@@ -441,7 +458,9 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         return FutureBuilder<UserData?>(
           future: UserRoleStorageService.instance.getUserData(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            // Retain the shell while a tab URL change refreshes stored user data.
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );

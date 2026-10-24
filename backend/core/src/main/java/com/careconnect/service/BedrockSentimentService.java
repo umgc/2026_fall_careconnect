@@ -637,6 +637,50 @@ public class BedrockSentimentService {
         return isBedrockAvailable() ? "aws_bedrock:" + bedrockModelId : "local:" + SUMMARY_CONFIG_VERSION;
     }
 
+    // ================================================================
+    // SHARED TEXT → JSON INVOCATION (used by condition screening)
+    // ================================================================
+
+    /** Whether Bedrock calls can be made: AWS enabled and a runtime client wired. */
+    public boolean canInvokeBedrock() {
+        return isBedrockAvailable();
+    }
+
+    /** De-identifies free text for a prompt with the same MINIMAL scrub summaries use. */
+    public String anonymizeForPrompt(final String text) {
+        return anonymizeIfAvailable(text);
+    }
+
+    /** The model a text request would use, honoring {@code modelIdOverride} when approved. */
+    public String resolveTextModelId(final String modelIdOverride) {
+        return BedrockModelSupport.resolveModelId(modelIdOverride, bedrockModelId);
+    }
+
+    /**
+     * Sends a text-only prompt and returns the first JSON object in the model's reply, or an
+     * empty string when the reply contains none. The prompt must already be de-identified.
+     * Only metadata is logged, never the prompt or the reply.
+     *
+     * @param prompt          de-identified prompt text
+     * @param modelIdOverride approved model id to use instead of the configured one, or null
+     * @param maxTokens       output token budget
+     */
+    public String completeJson(final String prompt, final String modelIdOverride, final int maxTokens)
+            throws Exception {
+        if (!isBedrockAvailable()) {
+            throw new IllegalStateException("Bedrock is not available");
+        }
+        final String modelId = resolveTextModelId(modelIdOverride);
+        if (log.isInfoEnabled()) {
+            log.info("Bedrock JSON invocation: modelId={}, promptChars={}",
+                    modelId, prompt == null ? 0 : prompt.length());
+        }
+        final String payloadJson = BedrockModelSupport.buildInvokePayload(
+                modelId, prompt, maxTokens, DEFAULT_TEMPERATURE, DEFAULT_TOP_P, objectMapper);
+        final JsonNode root = objectMapper.readTree(invokeModelRaw(modelId, payloadJson));
+        return extractFirstJsonObject(stripCodeFences(extractModelContentText(root)));
+    }
+
     /**
      * Builds the prompt for the combined-schema summary. The schema preserves
      * the legacy flat fields (headline, overallAssessment, keyConcerns,
