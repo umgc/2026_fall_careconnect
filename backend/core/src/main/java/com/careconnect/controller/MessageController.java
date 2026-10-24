@@ -136,7 +136,11 @@ public class MessageController {
             @RequestParam("file") MultipartFile file,
             @RequestParam Long senderId,
             @RequestParam Long receiverId
-    ) {
+    ) throws UnauthorizedException {
+        // The sender comes from the request, so check it is the signed-in user, as /send does;
+        // otherwise anyone could send a file as another user.
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireSelfOrAdmin(currentUser, senderId);
         boolean allowed = linkService.isPatientMessagingEnabled(senderId, receiverId)
                 || linkService.isPatientMessagingEnabled(receiverId, senderId);
         if (!allowed) {

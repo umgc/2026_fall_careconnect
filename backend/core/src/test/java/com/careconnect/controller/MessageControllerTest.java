@@ -37,6 +37,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for {@link MessageController}. Test Plan IDs: TC-MSG-CTL-001…024 (inherited tests, labelled for
+ * PR #386) and TC-MSG-SEC-001, 002 (PR #386's sender check on sendAttachment). The same check over HTTP, with the
+ * real AuthorizationService and GlobalExceptionHandler, is TC-MSG-SEC-003…008 in
+ * {@link MessageControllerAttachmentHttpTest}.
+ */
 @ExtendWith(MockitoExtension.class)
 class MessageControllerTest {
 
@@ -82,6 +88,7 @@ class MessageControllerTest {
     // ─── sendMessage ──────────────────────────────────────────────────────────
 
     @Test
+    @DisplayName("TC-MSG-CTL-001 sendMessage sets the timestamp and unread flag, then saves the message")
     void sendMessage_setsTimestampAndIsRead_thenSaves() throws Exception {
         final Message inbound = new Message();
         inbound.setSenderId(SENDER_ID);
@@ -104,6 +111,7 @@ class MessageControllerTest {
     // ─── getConversation ──────────────────────────────────────────────────────
 
     @Test
+    @DisplayName("TC-MSG-CTL-002 getConversation returns the conversation to user1")
     void getConversation_returns200_withMessages() throws Exception {
         final User currentUser = User.builder().id(SENDER_ID).email("sender@test.com").role(Role.PATIENT).password("p").status("ACTIVE").build();
         when(securityUtil.resolveCurrentUser()).thenReturn(currentUser);
@@ -117,6 +125,7 @@ class MessageControllerTest {
     }
 
     @Test
+    @DisplayName("TC-MSG-CTL-003 getConversation returns an empty conversation")
     void getConversation_returns200_emptyConversation() throws Exception {
         final User currentUser = User.builder().id(SENDER_ID).email("sender@test.com").role(Role.PATIENT).password("p").status("ACTIVE").build();
         when(securityUtil.resolveCurrentUser()).thenReturn(currentUser);
@@ -131,6 +140,7 @@ class MessageControllerTest {
     // ─── getInbox ─────────────────────────────────────────────────────────────
 
     @Test
+    @DisplayName("TC-MSG-CTL-004 getInbox returns an empty list when the user has no messages")
     void getInbox_noMessages_returnsEmptyList() throws Exception {
         when(messageRepo.findAllUserMessages(SENDER_ID)).thenReturn(List.of());
 
@@ -141,6 +151,7 @@ class MessageControllerTest {
     }
 
     @Test
+    @DisplayName("TC-MSG-CTL-005 getInbox shows the receiver as the peer of a message the user sent")
     void getInbox_userIsSender_peerIsReceiver() throws Exception {
         final Message msg = makeMessage(1L, SENDER_ID, RECEIVER_ID, "Hey");
         when(messageRepo.findAllUserMessages(SENDER_ID)).thenReturn(List.of(msg));
@@ -159,6 +170,7 @@ class MessageControllerTest {
     }
 
     @Test
+    @DisplayName("TC-MSG-CTL-006 getInbox shows the sender as the peer of a message the user received")
     void getInbox_userIsReceiver_peerIsSender() throws Exception {
         final Message msg = makeMessage(1L, SENDER_ID, RECEIVER_ID, "Hi from sender");
         when(messageRepo.findAllUserMessages(RECEIVER_ID)).thenReturn(List.of(msg));
@@ -174,6 +186,7 @@ class MessageControllerTest {
     }
 
     @Test
+    @DisplayName("TC-MSG-CTL-007 getInbox skips a peer that has no user record")
     void getInbox_peerNotFoundInRepo_skipsEntry() throws Exception {
         final Message msg = makeMessage(1L, SENDER_ID, RECEIVER_ID, "Hello");
         when(messageRepo.findAllUserMessages(SENDER_ID)).thenReturn(List.of(msg));
@@ -186,6 +199,7 @@ class MessageControllerTest {
     }
 
     @Test
+    @DisplayName("TC-MSG-CTL-008 getInbox keeps only the first (latest) message from each peer")
     void getInbox_multipleMsgsFromSamePeer_onlyFirstKept() throws Exception {
         // Two messages from same peer — inbox should only show the most recent (first in list)
         final Message msg1 = makeMessage(1L, SENDER_ID, RECEIVER_ID, "First");
@@ -202,6 +216,7 @@ class MessageControllerTest {
     }
 
     @Test
+    @DisplayName("TC-MSG-CTL-009 getInbox lists one entry for each distinct peer")
     void getInbox_multipleDistinctPeers_allIncluded() throws Exception {
         final Long peer2Id = 3L;
         final Message msg1 = makeMessage(1L, SENDER_ID, RECEIVER_ID, "To Peer1");
@@ -219,7 +234,7 @@ class MessageControllerTest {
     // ─── getConversation - additional edge cases ─────────────────────────────
 
     @Test
-    @DisplayName("getConversation allows admin to view any conversation")
+    @DisplayName("TC-MSG-CTL-010 getConversation allows admin to view any conversation")
     void getConversation_adminCanViewAnyConversation() throws Exception {
         final User admin = User.builder().id(99L).email("admin@test.com")
                 .role(Role.ADMIN).password("p").status("ACTIVE").build();
@@ -233,7 +248,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getConversation throws UnauthorizedException when user is not participant and not admin")
+    @DisplayName("TC-MSG-CTL-011 getConversation throws UnauthorizedException when user is not participant and not admin")
     void getConversation_nonParticipantNonAdmin_throwsUnauthorized() throws Exception {
         final User otherUser = User.builder().id(99L).email("other@test.com")
                 .role(Role.PATIENT).password("p").status("ACTIVE").build();
@@ -245,7 +260,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getConversation allows when current user equals user2")
+    @DisplayName("TC-MSG-CTL-012 getConversation allows when current user equals user2")
     void getConversation_currentUserIsUser2_succeeds() throws Exception {
         final User currentUser = User.builder().id(RECEIVER_ID).email("receiver@test.com")
                 .role(Role.PATIENT).password("p").status("ACTIVE").build();
@@ -263,7 +278,7 @@ class MessageControllerTest {
     // ─── getInbox - additional edge cases ────────────────────────────────────
 
     @Test
-    @DisplayName("getInbox marks unread correctly when receiver is inbox user and message is unread")
+    @DisplayName("TC-MSG-CTL-013 getInbox marks unread correctly when receiver is inbox user and message is unread")
     void getInbox_unreadMessage_hasUnreadTrue() throws Exception {
         final Message msg = new Message();
         msg.setSenderId(RECEIVER_ID);
@@ -284,7 +299,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getInbox resolves patient display name from patient profile")
+    @DisplayName("TC-MSG-CTL-014 getInbox resolves patient display name from patient profile")
     void getInbox_peerIsPatient_resolvesPatientDisplayName() throws Exception {
         final User peerUser = makeUser(RECEIVER_ID, null, "patient@test.com");
         peerUser.setRole(Role.PATIENT);
@@ -305,7 +320,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getInbox resolves caregiver display name from caregiver profile")
+    @DisplayName("TC-MSG-CTL-015 getInbox resolves caregiver display name from caregiver profile")
     void getInbox_peerIsCaregiver_resolvesCaregiverDisplayName() throws Exception {
         final User peerUser = makeUser(RECEIVER_ID, null, "caregiver@test.com");
         peerUser.setRole(Role.CAREGIVER);
@@ -327,7 +342,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getInbox falls back to user name when no profile name found")
+    @DisplayName("TC-MSG-CTL-016 getInbox falls back to user name when no profile name found")
     void getInbox_noProfileName_fallsBackToUserName() throws Exception {
         final User peerUser = makeUser(RECEIVER_ID, "FallbackName", "peer@test.com");
         peerUser.setRole(Role.ADMIN);
@@ -343,7 +358,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getInbox falls back to email local part when no name available")
+    @DisplayName("TC-MSG-CTL-017 getInbox falls back to email local part when no name available")
     void getInbox_noName_fallsBackToEmailLocalPart() throws Exception {
         final User peerUser = makeUser(RECEIVER_ID, null, "someone@example.com");
         peerUser.setRole(Role.ADMIN);
@@ -359,7 +374,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getInbox returns Unknown when no name and no email")
+    @DisplayName("TC-MSG-CTL-018 getInbox returns Unknown when no name and no email")
     void getInbox_noNameNoEmail_returnsUnknown() throws Exception {
         final User peerUser = makeUser(RECEIVER_ID, null, null);
         peerUser.setRole(Role.ADMIN);
@@ -375,7 +390,7 @@ class MessageControllerTest {
     }
 
     @Test
-    @DisplayName("getInbox shows UNKNOWN role when peer has null role")
+    @DisplayName("TC-MSG-CTL-019 getInbox shows UNKNOWN role when peer has null role")
     void getInbox_peerNullRole_showsUnknown() throws Exception {
         final User peerUser = makeUser(RECEIVER_ID, "Bob", "bob@test.com");
         peerUser.setRole(null);
@@ -393,9 +408,42 @@ class MessageControllerTest {
     // ─── sendAttachment ──────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("sendAttachment returns 403 when messaging not enabled")
-    void sendAttachment_messagingNotEnabled_returnsForbidden() {
+    @DisplayName("TC-MSG-SEC-001 sendAttachment refuses a senderId that isn't the signed-in user, and sends nothing")
+    void sendAttachment_senderNotCurrentUser_throwsAndSendsNothing() throws Exception {
         final MultipartFile file = mock(MultipartFile.class);
+        final User signedIn = makeUser(99L, "Mallory", "mallory@test.com");
+        when(securityUtil.resolveCurrentUser()).thenReturn(signedIn);
+        doThrow(new UnauthorizedException("You can only access your own data unless you are an administrator"))
+                .when(authorizationService).requireSelfOrAdmin(signedIn, SENDER_ID);
+
+        assertThatThrownBy(() -> controller.sendAttachment(file, SENDER_ID, RECEIVER_ID))
+                .isInstanceOf(UnauthorizedException.class);
+
+        verifyNoInteractions(linkService, fileManagementService, messageRepo);
+    }
+
+    @Test
+    @DisplayName("TC-MSG-SEC-002 sendAttachment checks the sender against the signed-in user before anything else")
+    void sendAttachment_checksSenderIsSignedInUser() throws Exception {
+        final MultipartFile file = mock(MultipartFile.class);
+        final User signedIn = makeUser(SENDER_ID, "Alice", "alice@test.com");
+        when(securityUtil.resolveCurrentUser()).thenReturn(signedIn);
+        when(linkService.isPatientMessagingEnabled(SENDER_ID, RECEIVER_ID)).thenReturn(false);
+        when(linkService.isPatientMessagingEnabled(RECEIVER_ID, SENDER_ID)).thenReturn(false);
+
+        controller.sendAttachment(file, SENDER_ID, RECEIVER_ID);
+
+        final org.mockito.InOrder order = inOrder(authorizationService, linkService);
+        order.verify(authorizationService).requireSelfOrAdmin(signedIn, SENDER_ID);
+        order.verify(linkService).isPatientMessagingEnabled(SENDER_ID, RECEIVER_ID);
+    }
+
+    @Test
+    @DisplayName("TC-MSG-CTL-020 sendAttachment returns 403 when messaging not enabled")
+    void sendAttachment_messagingNotEnabled_returnsForbidden() throws Exception {
+        final MultipartFile file = mock(MultipartFile.class);
+        final User signedIn = makeUser(SENDER_ID, "Alice", "alice@test.com");
+        when(securityUtil.resolveCurrentUser()).thenReturn(signedIn);
         when(linkService.isPatientMessagingEnabled(SENDER_ID, RECEIVER_ID)).thenReturn(false);
         when(linkService.isPatientMessagingEnabled(RECEIVER_ID, SENDER_ID)).thenReturn(false);
 
@@ -405,10 +453,12 @@ class MessageControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).isEqualTo(
                 "Messaging is not enabled for this caregiver-patient link.");
+        verify(authorizationService).requireSelfOrAdmin(signedIn, SENDER_ID);
+        verifyNoInteractions(fileManagementService, messageRepo);
     }
 
     @Test
-    @DisplayName("sendAttachment succeeds when messaging enabled in forward direction")
+    @DisplayName("TC-MSG-CTL-021 sendAttachment succeeds when messaging enabled in forward direction")
     void sendAttachment_messagingEnabledForward_succeeds() throws Exception {
         final MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(1024L);
@@ -416,6 +466,7 @@ class MessageControllerTest {
 
         final User sender = makeUser(SENDER_ID, "Alice", "alice@test.com");
         sender.setRole(Role.CAREGIVER);
+        when(securityUtil.resolveCurrentUser()).thenReturn(sender);
         when(userRepo.findById(SENDER_ID)).thenReturn(Optional.of(sender));
 
         final FileUploadResponse uploadResponse = FileUploadResponse.builder()
@@ -441,10 +492,13 @@ class MessageControllerTest {
         assertThat(body).containsKey("message");
         assertThat(body).containsKey("downloadUrl");
         assertThat(body.get("downloadUrl")).isEqualTo("/v1/api/files/50/download");
+        verify(authorizationService).requireSelfOrAdmin(sender, SENDER_ID);
+        verify(messageRepo).save(argThat(m -> SENDER_ID.equals(m.getSenderId())
+                && RECEIVER_ID.equals(m.getReceiverId()) && Long.valueOf(50L).equals(m.getAttachmentId())));
     }
 
     @Test
-    @DisplayName("sendAttachment succeeds when messaging enabled in reverse direction")
+    @DisplayName("TC-MSG-CTL-022 sendAttachment succeeds when messaging enabled in reverse direction")
     void sendAttachment_messagingEnabledReverse_succeeds() throws Exception {
         final MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(2048L);
@@ -453,6 +507,7 @@ class MessageControllerTest {
 
         final User sender = makeUser(SENDER_ID, "Alice", "alice@test.com");
         sender.setRole(Role.PATIENT);
+        when(securityUtil.resolveCurrentUser()).thenReturn(sender);
         when(userRepo.findById(SENDER_ID)).thenReturn(Optional.of(sender));
 
         final FileUploadResponse uploadResponse = FileUploadResponse.builder()
@@ -472,16 +527,18 @@ class MessageControllerTest {
                 controller.sendAttachment(file, SENDER_ID, RECEIVER_ID);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        verify(authorizationService).requireSelfOrAdmin(sender, SENDER_ID);
     }
 
     @Test
-    @DisplayName("sendAttachment returns 500 when file upload fails")
+    @DisplayName("TC-MSG-CTL-023 sendAttachment returns 500 when file upload fails")
     void sendAttachment_uploadFails_returns500() throws Exception {
         final MultipartFile file = mock(MultipartFile.class);
         when(linkService.isPatientMessagingEnabled(SENDER_ID, RECEIVER_ID)).thenReturn(true);
 
         final User sender = makeUser(SENDER_ID, "Alice", "alice@test.com");
         sender.setRole(Role.CAREGIVER);
+        when(securityUtil.resolveCurrentUser()).thenReturn(sender);
         when(userRepo.findById(SENDER_ID)).thenReturn(Optional.of(sender));
 
         when(fileManagementService.uploadFile(
@@ -495,13 +552,17 @@ class MessageControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat((String) response.getBody())
                 .contains("Failed to upload attachment");
+        verify(authorizationService).requireSelfOrAdmin(sender, SENDER_ID);
+        verifyNoInteractions(messageRepo);
     }
 
     @Test
-    @DisplayName("sendAttachment defaults to PATIENT role when sender not found")
+    @DisplayName("TC-MSG-CTL-024 sendAttachment defaults to PATIENT role when sender not found")
     void sendAttachment_senderNotFound_defaultsToPatientRole() throws Exception {
         final MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(512L);
+        final User signedIn = makeUser(SENDER_ID, "Alice", "alice@test.com");
+        when(securityUtil.resolveCurrentUser()).thenReturn(signedIn);
         when(linkService.isPatientMessagingEnabled(SENDER_ID, RECEIVER_ID)).thenReturn(true);
         when(userRepo.findById(SENDER_ID)).thenReturn(Optional.empty());
 
@@ -525,5 +586,6 @@ class MessageControllerTest {
         verify(fileManagementService).uploadFile(
                 eq(file), eq(SENDER_ID), eq("PATIENT"),
                 eq("CHAT_ATTACHMENT"), eq("Chat attachment"), eq(null));
+        verify(authorizationService).requireSelfOrAdmin(signedIn, SENDER_ID);
     }
 }
