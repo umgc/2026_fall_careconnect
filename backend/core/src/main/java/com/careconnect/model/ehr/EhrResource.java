@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -16,6 +15,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -37,7 +38,8 @@ import java.time.Instant;
                 columnNames = {"user_id", "source", "resource_type", "resource_fhir_id"}),
         indexes = {
                 @Index(name = "idx_ehr_resource_user", columnList = "user_id"),
-                @Index(name = "idx_ehr_resource_user_type", columnList = "user_id, resource_type")
+                @Index(name = "idx_ehr_resource_user_type", columnList = "user_id, resource_type"),
+                @Index(name = "idx_ehr_resource_patient_source_type", columnList = "patient_id, source, resource_type")
         })
 @Getter
 @Setter
@@ -53,6 +55,16 @@ public class EhrResource {
     /** CareConnect user (patient) id — the RBAC/indexing scope key. */
     @Column(name = "user_id", nullable = false)
     private Long userId;
+
+    /**
+     * Canonical patient id (nullable, additive) — joins this mirror to the canonical layer
+     * ({@code ehr_raw_payload}, {@code ehr_patient_crosswalk}). Derived from {@code user_id} at
+     * write time (via {@code PatientRepository.findByUserId}) so the two cannot disagree; null for
+     * a user with no patient row. {@code user_id} remains the dedup/RBAC/index scope key.
+     * FK to {@code patient.id} (ON DELETE CASCADE) is applied by {@code SchemaPatchRunner}.
+     */
+    @Column(name = "patient_id")
+    private Long patientId;
 
     @Column(name = "source", nullable = false, length = 32)
     private String source;
@@ -79,8 +91,8 @@ public class EhrResource {
     @Column(name = "content_hash", length = 128)
     private String contentHash;
 
-    @Lob
-    @Column(name = "payload_json")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "payload_json", columnDefinition = "jsonb")
     private String payloadJson;
 
     @Column(name = "last_synced_at", nullable = false)

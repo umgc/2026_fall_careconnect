@@ -949,7 +949,6 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
     ),
     // Oracle Health EHR-initiated SMART launch entry point.
     // Parameter validation and authorization will be added separately.
-
     GoRoute(
       path: '/oracle-health-launch',
       builder: (_, state) => buildOracleHealthLaunchPage(
@@ -965,13 +964,15 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         status: state.uri.queryParameters['status'],
       ),
     ),
-    // Epic citation deep-link target: /epic/{resourceType}/{id}?patientId=... (Epic Phase 2).
+    // Epic citation deep-link target: /epic/{resourceType}/{id}?patientUserId=... (Epic Phase 2).
+    // Accepts the legacy ?patientId= spelling as a fallback for links generated earlier.
     GoRoute(
       path: '/epic/:type/:id',
       builder: (context, state) => EpicResourceDetailPage(
         resourceType: state.pathParameters['type'] ?? '',
         resourceId: state.pathParameters['id'] ?? '',
-        patientId: state.uri.queryParameters['patientId'],
+        patientUserId: state.uri.queryParameters['patientUserId'] ??
+            state.uri.queryParameters['patientId'],
       ),
     ),
     GoRoute(path: '/wearables', builder: (_, __) => const WearablesScreen()),

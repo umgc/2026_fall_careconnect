@@ -107,5 +107,98 @@ void main() {
     );
 
     expect(result, isNull);
+  }); //end test returns null after the request timeout so keyword fallback can run
+
+// ─── Tests for Ambiguous / Conversational Voice Intents ─────────────────
+
+  test('returns successful navigation for ambiguous medication phrase', () async {
+    final client = MockClient((request) async {
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(body['utterance'], 'where are my pills');
+
+      return http.Response(
+        jsonEncode({
+          'intent': 'navigate',
+          'entities': {'destination': 'medication'},
+          'confidence': 0.95,
+          'destination': '/medication',
+          'displayLabel': 'Navigate to medication',
+          'requiresConfirmation': true,
+          'success': true,
+        }),
+        200,
+      );
+    });
+
+    final result = await _withClient(
+      client,
+      () => VoiceIntentService.extractIntent(
+        utterance: 'where are my pills',
+        locale: 'en',
+        screenId: '/voice',
+      ),
+    );
+
+    expect(result, isNotNull);
+    expect(result!.intent, 'navigate');
+    expect(result.entities['destination'], 'medication');
+    expect(result.destination, '/medication');
+    expect(result.requiresConfirmation, isTrue);
   });
-}
+
+  test('returns successful navigation for gamification / achievements', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'intent': 'navigate',
+          'entities': {'destination': 'achievements'},
+          'confidence': 0.93,
+          'destination': '/gamification',
+          'displayLabel': 'Navigate to achievements',
+          'requiresConfirmation': true,
+          'success': true,
+        }),
+        200,
+      );
+    });
+
+    final result = await _withClient(
+      client,
+      () => VoiceIntentService.extractIntent(
+        utterance: 'show my points and badges',
+        locale: 'en',
+      ),
+    );
+
+    expect(result, isNotNull);
+    expect(result!.intent, 'navigate');
+    expect(result.destination, '/gamification');
+  });
+
+  test('returns null when backend responds with intent: unknown (off-topic chatter)', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'intent': 'unknown',
+          'entities': {},
+          'confidence': 0.99,
+          'destination': null,
+          'success': false,
+        }),
+        200,
+      );
+    });
+
+    final result = await _withClient(
+      client,
+      () => VoiceIntentService.extractIntent(
+        utterance: 'what is the weather like right now',
+      ),
+    );
+
+    // Because success is false, extractIntent returns null so UI falls back
+    expect(result, isNull);
+  });
+
+} //end main
+

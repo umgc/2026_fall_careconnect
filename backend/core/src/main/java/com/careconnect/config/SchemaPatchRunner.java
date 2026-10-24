@@ -390,6 +390,9 @@ public class SchemaPatchRunner implements CommandLineRunner {
         applyAiAuditLedgerPatches();
         applyUspsMailpiecePatches();
         applyEhrCanonicalSchemaPatches();
+        applyEhrResourceJsonbPatch();
+        applyEhrResourcePatientIdPatch();
+        applyEhrTypedProjectionUniqueIndexes();
         applyEhrIdentityReconciliationPatches();
         applyPatientAuditTimestampBackfill();
         applyEhrAuditTimestampZonePatches();
@@ -603,6 +606,141 @@ public class SchemaPatchRunner implements CommandLineRunner {
                 );
             }
         }
+    }
+
+    /**
+     * Convert the interim mirror's {@code ehr_resource.payload_json} from the legacy {@code @Lob}
+     * large-object ({@code oid}) mapping to native {@code jsonb}, aligning it with
+     * {@code ehr_raw_payload.payload} (Team E canonical standardization; EPIC Status.md §2 / Q3).
+     * <p>
+     * The guard fires only when the column is still {@code oid}: on a fresh database the entity's
+     * {@code @JdbcTypeCode(JSON)} mapping already creates it as {@code jsonb}, so this is a no-op.
+     * <p>
+     * The conversion <b>preserves existing payloads</b> rather than discarding them: it stages a
+     * {@code jsonb} column, reads each large object back ({@code lo_get} → {@code convert_from} →
+     * {@code ::jsonb}), then swaps the staged column into place. Each row is converted in its own
+     * {@code BEGIN ... EXCEPTION} block, so a single unreadable large object (e.g. one already
+     * reclaimed by {@code vacuumlo}) or a body that is not valid UTF-8 JSON leaves only that row's
+     * payload {@code NULL} and raises a {@code WARNING}, instead of aborting the whole table — the
+     * verbatim body for any skipped row is still held in {@code ehr_raw_payload} and returns on the
+     * next sync. The block runs as one autocommit statement (a single transaction), so a structural
+     * failure (add/drop/rename) rolls back cleanly and boot retries, while row-level skips are
+     * tolerated. After the old {@code oid} column is dropped its large objects are orphaned in
+     * {@code pg_largeobject} — harmless, reclaimable later with {@code vacuumlo}.
+     */
+    private void applyEhrResourceJsonbPatch() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL ehr_resource jsonb patch for non-PostgreSQL datasource");
+            return;
+        }
+        // Label is traceability-only (patches are not ledger-keyed). Uses a fresh, unused version
+        // string rather than V2610041200, which belongs to the unrelated crosswalk pending-link
+        // change — the Flyway V2610041200__ehr_crosswalk_pending_link.sql migration (#296) and its
+        // ddl-auto counterpart patch V2610041200a below.
+        applyRequiredPatch(
+                "V2610151300 - ehr_resource.payload_json is jsonb, payloads preserved (was @Lob oid)",
+                "DO $$ DECLARE r RECORD; converted INT := 0; skipped INT := 0; BEGIN "
+                        + "IF EXISTS (SELECT 1 FROM information_schema.columns "
+                        + "WHERE table_schema = current_schema() AND table_name = 'ehr_resource' "
+                        + "AND column_name = 'payload_json' AND data_type = 'oid') THEN "
+                        // Stage a jsonb column alongside the legacy oid column.
+                        + "ALTER TABLE ehr_resource ADD COLUMN IF NOT EXISTS payload_json_jsonb jsonb; "
+                        // Convert each row in isolation: a bad/missing large object skips one row, not all.
+                        + "FOR r IN SELECT id, payload_json AS lo FROM ehr_resource "
+                        + "WHERE payload_json IS NOT NULL LOOP "
+                        + "BEGIN "
+                        + "UPDATE ehr_resource SET payload_json_jsonb = "
+                        + "convert_from(lo_get(r.lo), 'UTF8')::jsonb WHERE id = r.id; "
+                        + "converted := converted + 1; "
+                        + "EXCEPTION WHEN others THEN "
+                        + "skipped := skipped + 1; "
+                        + "RAISE WARNING 'ehr_resource.payload_json jsonb conversion skipped for id=% "
+                        + "(verbatim body remains in ehr_raw_payload): %', r.id, SQLERRM; "
+                        + "END; "
+                        + "END LOOP; "
+                        // Swap the staged column in for the legacy oid column.
+                        + "ALTER TABLE ehr_resource DROP COLUMN payload_json; "
+                        + "ALTER TABLE ehr_resource RENAME COLUMN payload_json_jsonb TO payload_json; "
+                        // One line in the boot log: how many payloads were kept vs. left NULL.
+                        + "RAISE NOTICE 'ehr_resource.payload_json oid->jsonb: % row(s) preserved, "
+                        + "% skipped (verbatim bodies remain in ehr_raw_payload)', converted, skipped; "
+                        + "END IF; END $$;"
+        );
+    }
+
+    /**
+     * Add the canonical {@code patient_id} to the interim mirror {@code ehr_resource}, additively
+     * (Team E standardization; EPIC Status.md §2 / Q1). This does not re-key the table: {@code user_id}
+     * stays the dedup / RBAC / index scope key and {@code patient_id} is a nullable, backfilled join
+     * column to the canonical layer.
+     * <p>
+     * Hibernate {@code ddl-auto=update} adds the column and the {@code (patient_id, source,
+     * resource_type)} index from the entity; this supplies what it will not and makes a pre-existing
+     * database consistent: the backfill from {@code patient.user_id}, and the foreign key (the entity
+     * stores a bare {@code Long}, matching {@code ehr_raw_payload}). Order matters — backfill before
+     * the FK so no row is left pointing at a non-existent patient. Idempotent: re-runs are no-ops.
+     */
+    private void applyEhrResourcePatientIdPatch() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL ehr_resource patient_id patch for non-PostgreSQL datasource");
+            return;
+        }
+        applyPatch(
+                "V2610041300a - ehr_resource.patient_id column",
+                "ALTER TABLE ehr_resource ADD COLUMN IF NOT EXISTS patient_id BIGINT"
+        );
+        applyPatch(
+                "V2610041300b - backfill ehr_resource.patient_id from patient.user_id",
+                "UPDATE ehr_resource er SET patient_id = p.id FROM patient p "
+                        + "WHERE p.user_id = er.user_id AND er.patient_id IS NULL"
+        );
+        applyPatch(
+                "V2610041300c - index ehr_resource(patient_id, source, resource_type)",
+                "CREATE INDEX IF NOT EXISTS idx_ehr_resource_patient_source_type "
+                        + "ON ehr_resource (patient_id, source, resource_type)"
+        );
+        applyRequiredPatch(
+                "V2610041300d - FK ehr_resource.patient_id -> patient.id",
+                foreignKeyIfMissing("fk_ehr_resource_patient", "ehr_resource",
+                        "patient_id", "patient", "id", " ON DELETE CASCADE")
+        );
+    }
+
+    /**
+     * Required unique indexes for the three Epic typed projection tables (Cononical_5_1 Step 6/Step 9;
+     * Team E brief S5). Each enforces one row per {@code (patient_id, source_id, external_*_id)} so a
+     * re-sync upserts rather than duplicates — the brief's non-negotiable rule, made an explicit
+     * invariant here rather than relying on {@code ddl-auto} alone (applyRequiredPatch, because a
+     * silently-missing unique key accumulates duplicates). {@code ddl-auto=update} creates each table
+     * with the matching {@code @UniqueConstraint} of the same name on first boot, so {@code IF NOT
+     * EXISTS} makes these a no-op there; they bite only on a database where the table exists without
+     * the constraint.
+     *
+     * <p>No automatic de-duplication runs first: an audit found that no target database holds
+     * duplicate rows. If one ever did, {@code CREATE UNIQUE INDEX} fails and boot aborts (fail-fast)
+     * rather than silently deleting clinical rows — such a database is reconciled explicitly, out of
+     * band, not during startup.
+     */
+    private void applyEhrTypedProjectionUniqueIndexes() {
+        if (!isPostgreSql()) {
+            log.info("Skipping PostgreSQL ehr typed-projection unique-index patches for non-PostgreSQL datasource");
+            return;
+        }
+        applyRequiredPatch(
+                "V2610151200a - unique ehr_medication_record(patient_id, source_id, external_medication_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_medication_record_source_external "
+                        + "ON ehr_medication_record (patient_id, source_id, external_medication_id)"
+        );
+        applyRequiredPatch(
+                "V2610151200b - unique ehr_condition_record(patient_id, source_id, external_condition_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_condition_record_source_external "
+                        + "ON ehr_condition_record (patient_id, source_id, external_condition_id)"
+        );
+        applyRequiredPatch(
+                "V2610151200c - unique ehr_observation_record(patient_id, source_id, external_observation_id)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_ehr_observation_record_source_external "
+                        + "ON ehr_observation_record (patient_id, source_id, external_observation_id)"
+        );
     }
 
     /**

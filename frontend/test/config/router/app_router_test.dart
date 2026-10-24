@@ -16,6 +16,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/config/router/app_router.dart';
+import 'package:care_connect_app/pages/epic_resource_detail_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
@@ -1445,6 +1446,81 @@ void main() {
       await tester.pump();
 
       expect(find.text('Redirecting...'), findsOneWidget);
+    });
+  });
+
+  group('/epic/:type/:id builder - widget tests (I3c)', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+
+    // UserProvider subscribes to the connectivity event stream; draining real
+    // async below makes that subscription fire, so the EventChannel is mocked
+    // too (the shared helper mocks only the connectivity MethodChannel).
+    const connectivityStatus =
+        EventChannel('dev.fluttercommunity.plus/connectivity_status');
+
+    setUp(() {
+      _setupPlatformChannels();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus,
+              MockStreamHandler.inline(onListen: (_, __) {}));
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus, null);
+      _tearDownPlatformChannels();
+    });
+
+    // Drives the real async (secure-storage read + mocked HTTP) to completion so
+    // the citation page's initState fetch settles and leaves no pending timers.
+    Future<void> drain(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+    }
+
+    testWidgets('TC-ROUTE-160: reads the patientUserId query param (I3c)',
+        (tester) async {
+      Uri? seen;
+      final client = MockClient((request) async {
+        seen = request.url;
+        return http.Response('x', 404);
+      });
+
+      await http.runWithClient(() async {
+        final router = _createFullTestRouter(
+            '/epic/Observation/obs-1?patientUserId=user-7');
+        await _pumpRouterApp(tester, router);
+        await drain(tester);
+      }, () => client);
+
+      expect(find.byType(EpicResourceDetailPage), findsOneWidget);
+      expect(seen, isNotNull);
+      expect(seen!.pathSegments, containsAll(<String>['Observation', 'obs-1']));
+      expect(seen!.queryParameters['patientUserId'], 'user-7');
+    });
+
+    testWidgets('TC-ROUTE-161: falls back to the legacy patientId param (I3c)',
+        (tester) async {
+      Uri? seen;
+      final client = MockClient((request) async {
+        seen = request.url;
+        return http.Response('x', 404);
+      });
+
+      await http.runWithClient(() async {
+        final router =
+            _createFullTestRouter('/epic/Observation/obs-1?patientId=legacy-5');
+        await _pumpRouterApp(tester, router);
+        await drain(tester);
+      }, () => client);
+
+      expect(find.byType(EpicResourceDetailPage), findsOneWidget);
+      expect(seen, isNotNull);
+      // The legacy ?patientId= is read and forwarded as patientUserId downstream.
+      expect(seen!.queryParameters['patientUserId'], 'legacy-5');
     });
   });
 
