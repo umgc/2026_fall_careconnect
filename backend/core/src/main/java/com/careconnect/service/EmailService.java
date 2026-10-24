@@ -13,6 +13,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.HtmlUtils;
 
 // SendGrid imports
 import com.sendgrid.*;
@@ -25,6 +26,9 @@ import com.sendgrid.helpers.mail.objects.Email;
 import com.sendgrid.helpers.mail.objects.Content;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -159,6 +163,43 @@ public class EmailService {
         String textContent = "Hello " + (firstName != null ? firstName : "") + ",\n\n" +
                 "You have been granted access to a new patient in CareConnect: " + patientName + ".\n\n" +
                 "You can now log in to view their information: " + loginLink + "\n\n" +
+                "Best regards,\nThe CareConnect Team";
+
+        sendEmail(recipientEmail, subject, htmlContent, textContent);
+    }
+
+    /**
+     * CR-2: tells a registered user that a patient shared their Medicare records with them.
+     * The email is only a notice with a sign-in link. It carries no health data: the recipient
+     * views the records read-only inside the app until the share expires.
+     */
+    public void sendMedicareShareNoticeEmail(String recipientEmail, String recipientName,
+                                             String patientName, Instant expiresAt) {
+        String loginLink = frontendBaseUrl + "/login";
+        String expiresOn = expiresAt == null ? "" : DateTimeFormatter
+                .ofPattern("MMMM d, yyyy").withZone(ZoneOffset.UTC).format(expiresAt);
+        String safeRecipient = recipientName != null ? HtmlUtils.htmlEscape(recipientName) : "";
+        String safePatient = patientName != null ? HtmlUtils.htmlEscape(patientName) : "A CareConnect patient";
+        String subject = "CareConnect - Medicare records shared with you";
+        String htmlContent = "<html><body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>" +
+                "<div style='max-width: 600px; margin: 0 auto; padding: 20px;'>" +
+                "<h2 style='color: #0b5cad;'>Medicare records shared with you</h2>" +
+                "<p>Hello " + safeRecipient + ",</p>" +
+                "<p>" + safePatient + " shared their Medicare records with you in CareConnect. " +
+                "You can view them, read-only" + (expiresOn.isEmpty() ? "" : ", until " + expiresOn) + ".</p>" +
+                "<div style='text-align: center; margin: 30px 0;'>" +
+                "<a href='" + loginLink + "' style='background-color: #0b5cad; color: white; padding: 12px 24px; " +
+                "text-decoration: none; border-radius: 5px;'>Sign in to CareConnect</a>" +
+                "</div>" +
+                "<p style='margin-top: 30px; font-size: 14px; color: #555;'>For privacy, this email does not include " +
+                "any health information. If you did not expect this, you can ignore it.</p>" +
+                "</div></body></html>";
+        String textContent = "Hello " + (recipientName != null ? recipientName : "") + ",\n\n" +
+                (patientName != null ? patientName : "A CareConnect patient") +
+                " shared their Medicare records with you in CareConnect. You can view them, read-only" +
+                (expiresOn.isEmpty() ? "" : ", until " + expiresOn) + ".\n\n" +
+                "Sign in to view them: " + loginLink + "\n\n" +
+                "For privacy, this email does not include any health information.\n\n" +
                 "Best regards,\nThe CareConnect Team";
 
         sendEmail(recipientEmail, subject, htmlContent, textContent);

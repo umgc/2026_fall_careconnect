@@ -78,4 +78,38 @@ public interface ConsentGrantRepository extends JpaRepository<ConsentGrant, Long
      */
     boolean existsByPatientUserIdAndGranteeUserIdAndScope(
             Long patientUserId, Long granteeUserId, String scope);
+
+    /**
+     * Active, non-expired, non-revoked grants a patient has issued for one scope, newest first.
+     * Used to list the patient's current CR-2 shares.
+     */
+    @Query(
+            "SELECT cg FROM ConsentGrant cg "
+                    + "WHERE cg.patientUserId = :patientUserId "
+                    + "AND cg.scope = :scope "
+                    + "AND cg.status = 'ACTIVE' "
+                    + "AND cg.revokedAt IS NULL "
+                    + "AND (cg.expiresAt IS NULL OR cg.expiresAt > :now) "
+                    + "ORDER BY cg.grantedAt DESC")
+    List<ConsentGrant> findActiveGrantsForPatient(
+            @Param("patientUserId") Long patientUserId,
+            @Param("scope") String scope,
+            @Param("now") Instant now);
+
+    /**
+     * Active, non-expired, non-revoked grants a user has received for one scope, newest first.
+     * Used for a CR-2 recipient's "Shared with me" list.
+     */
+    @Query(
+            "SELECT cg FROM ConsentGrant cg "
+                    + "WHERE cg.granteeUserId = :granteeUserId "
+                    + "AND cg.scope = :scope "
+                    + "AND cg.status = 'ACTIVE' "
+                    + "AND cg.revokedAt IS NULL "
+                    + "AND (cg.expiresAt IS NULL OR cg.expiresAt > :now) "
+                    + "ORDER BY cg.grantedAt DESC")
+    List<ConsentGrant> findActiveGrantsForGrantee(
+            @Param("granteeUserId") Long granteeUserId,
+            @Param("scope") String scope,
+            @Param("now") Instant now);
 }

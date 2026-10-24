@@ -54,6 +54,12 @@ public class ConsentGrant {
     public static final String SCOPE_EHR_IMPORT = "EHR_IMPORT";
 
     /**
+     * Grantee role recorded on a {@link #SCOPE_MEDICARE_VIEW} grant created by CR-2 record
+     * sharing: a registered user the patient shared with by email, read-only, for 90 days.
+     */
+    public static final String GRANTEE_ROLE_SHARE_RECIPIENT = "SHARE_RECIPIENT";
+
+    /**
      * Status set while a grant is in force.
      */
     public static final String STATUS_ACTIVE = "ACTIVE";

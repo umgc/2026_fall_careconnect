@@ -191,6 +191,24 @@ class EmailServiceTest {
                         "family@test.com", null, "John Doe"));
     }
 
+    // ---- sendMedicareShareNoticeEmail (CR-2) ----
+
+    @Test
+    @DisplayName("TC-CONSENT-060 CR-2: the Medicare share notice is sent through the configured provider")
+    void sendMedicareShareNoticeEmail_smtpProvider_sendsEmail() throws Exception {
+        emailService.sendMedicareShareNoticeEmail(
+                "friend@test.com", "Alice", "John Doe", java.time.Instant.parse("2027-01-18T12:00:00Z"));
+        verify(mailSender).send(any(MimeMessage.class));
+    }
+
+    @Test
+    @DisplayName("TC-CONSENT-061 CR-2: the share notice tolerates missing names and expiry")
+    void sendMedicareShareNoticeEmail_nullNamesAndExpiry_doesNotThrow() {
+        assertDoesNotThrow(
+                () -> emailService.sendMedicareShareNoticeEmail("friend@test.com", null, null, null));
+        verify(mailSender).send(any(MimeMessage.class));
+    }
+
     // ---- sendPasswordSetupEmailWithCredentials ----
 
     @Test
