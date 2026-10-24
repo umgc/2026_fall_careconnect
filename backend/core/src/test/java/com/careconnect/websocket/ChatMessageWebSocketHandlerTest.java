@@ -2,6 +2,7 @@ package com.careconnect.websocket;
 
 import com.careconnect.model.Message;
 import com.careconnect.repository.MessageRepository;
+import com.careconnect.service.MessagingPolicy;
 import com.careconnect.testsupport.fixtures.UserFixtures;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +25,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.atMost;
@@ -52,6 +54,8 @@ class ChatMessageWebSocketHandlerTest {
     @Mock
     private WebSocketJwtAuthenticator authenticator;
     @Mock
+    private MessagingPolicy messagingPolicy;
+    @Mock
     private WebSocketSession session;
     @Mock
     private WebSocketSession recipientSession;
@@ -60,7 +64,9 @@ class ChatMessageWebSocketHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new ChatMessageWebSocketHandler(messageRepository, authenticator);
+        handler = new ChatMessageWebSocketHandler(messageRepository, authenticator, messagingPolicy);
+        // Every pair may message unless a test says otherwise; the rule itself is MessagingPolicyTest's
+        lenient().when(messagingPolicy.canMessage(anyLong(), anyLong())).thenReturn(true);
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────
@@ -266,6 +272,42 @@ class ChatMessageWebSocketHandlerTest {
                 MAPPER.readValue(captor.getValue().getPayload(), new TypeReference<>() {
                 });
         assertThat(last.get("type")).isEqualTo("error");
+    }
+
+    @Test
+    void chatMessage_notAllowed_rejectsWithoutSavingOrDelivering() throws Exception {
+        authenticate(session, "s1", "1");
+        authenticate(recipientSession, "s2", "2");
+        when(recipientSession.isOpen()).thenReturn(true);
+        when(messagingPolicy.canMessage(1L, 2L)).thenReturn(false);
+
+        String json = MAPPER.writeValueAsString(
+                Map.of("type", "message", "recipientId", "2", "content", "hello", "messageId", "cli-9"));
+
+        handler.handleTextMessage(session, new TextMessage(json));
+
+        verify(messageRepository, never()).save(any(Message.class));
+        // The recipient got only its own auth confirmation
+        verify(recipientSession, atMost(1)).sendMessage(any(TextMessage.class));
+        Map<String, Object> payload = captureLastPayload(session);
+        assertThat(payload.get("type")).isEqualTo("message-rejected");
+        assertThat(payload.get("clientMessageId")).isEqualTo("cli-9");
+        assertThat(payload.get("message")).isEqualTo(ChatMessageWebSocketHandler.MESSAGING_NOT_ALLOWED);
+    }
+
+    @Test
+    void chatMessage_nonNumericRecipient_sendsErrorWithoutSaving() throws Exception {
+        authenticate(session, "s1", "1");
+
+        String json = MAPPER.writeValueAsString(
+                Map.of("type", "message", "recipientId", "not-a-user", "content", "hello"));
+
+        handler.handleTextMessage(session, new TextMessage(json));
+
+        verify(messageRepository, never()).save(any(Message.class));
+        Map<String, Object> payload = captureLastPayload(session);
+        assertThat(payload.get("type")).isEqualTo("error");
+        assertThat(payload.get("message")).isEqualTo("Invalid recipientId");
     }
 
     @Test
@@ -566,6 +608,26 @@ class ChatMessageWebSocketHandlerTest {
 
         handler.handleTextMessage(session, new TextMessage(json));
         // No exception; message is just not found
+    }
+
+    @Test
+    void readReceipt_fromSomeoneOtherThanTheReceiver_isIgnored() throws Exception {
+        // User 3 neither sent nor received message 10
+        authenticate(session, "s1", "3");
+        authenticate(recipientSession, "s2", "1");
+        when(recipientSession.isOpen()).thenReturn(true);
+
+        Message msg = savedMessage(10L, 1L, 2L, "content");
+        when(messageRepository.findById(10L)).thenReturn(Optional.of(msg));
+
+        String json = MAPPER.writeValueAsString(Map.of("type", "read-receipt", "messageId", "10"));
+
+        handler.handleTextMessage(session, new TextMessage(json));
+
+        assertThat(msg.isRead()).isFalse();
+        verify(messageRepository, never()).save(any(Message.class));
+        // The sender is not told the message was read
+        verify(recipientSession, atMost(1)).sendMessage(any(TextMessage.class));
     }
 
     @Test

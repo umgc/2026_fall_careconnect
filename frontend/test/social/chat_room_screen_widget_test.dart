@@ -243,19 +243,95 @@ void main() {
       expect(mockClient.sendMessageCalls, 1);
       expect(find.text('queued once'), findsOneWidget);
     });
+
+    testWidgets(
+        'drops a message the server refuses with 403 and does not retry it', (
+      tester,
+    ) async {
+      final userProvider = UserProvider()
+        ..setUser(UserSession(
+          id: 7,
+          email: 'patient@test.careconnect.dev',
+          role: 'PATIENT',
+          token: 't',
+        ));
+
+      final mockClient = _QueueThenOnlineClient()
+        ..queueOffline = false
+        ..refuse = true;
+      ApiService.debugSetHttpClient(mockClient);
+
+      const MethodChannel secureStorageChannel =
+          MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+        secureStorageChannel,
+        (MethodCall methodCall) async => null,
+      );
+
+      Future<List<dynamic>> loadConversation({
+        required int user1,
+        required int user2,
+      }) async {
+        return <dynamic>[];
+      }
+
+      Future<void> pumpChat(String key) async {
+        await tester.pumpWidget(
+          ChangeNotifierProvider<UserProvider>.value(
+            value: userProvider,
+            child: MaterialApp(
+              home: ChatRoomScreen(
+                key: ValueKey(key),
+                peerUserId: 21,
+                peerName: 'Peer User',
+                enableAutoSync: false,
+                conversationLoader: loadConversation,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      await pumpChat('chat-refused-0');
+      await tester.enterText(find.byType(TextField), 'not allowed');
+      await tester.tap(find.byIcon(Icons.send));
+      await tester.pumpAndSettle();
+
+      expect(mockClient.sendMessageCalls, 1);
+      expect(find.text('not allowed'), findsNothing);
+      expect(
+          find.text("You can't send messages to this user."), findsOneWidget);
+
+      // Reopening the chat does not resend it: it is no longer pending
+      await pumpChat('chat-refused-1');
+      expect(mockClient.sendMessageCalls, 1);
+      expect(find.text('not allowed'), findsNothing);
+    });
   });
 }
 
 class _QueueThenOnlineClient extends http.BaseClient {
   bool queueOffline = true;
+  bool refuse = false;
   int sendMessageCalls = 0;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final path = request.url.path;
 
-    if (request.method.toUpperCase() == 'POST' && path.contains('messages/send')) {
+    if (request.method.toUpperCase() == 'POST' &&
+        path.contains('messages/send')) {
       sendMessageCalls++;
+
+      if (refuse) {
+        return _jsonResponse(
+          403,
+          body: "You can't send messages to this user.",
+          headers: const {'content-type': 'text/plain'},
+        );
+      }
 
       if (queueOffline) {
         return _jsonResponse(
