@@ -39,6 +39,20 @@ class MessageTest {
     // ─── Setters / Getters ────────────────────────────────────────────────────
 
     @Test
+    void shareFields_defaultToNull_andRoundTrip() {
+        final Message msg = new Message(1L, 2L, "Shared my Medicare records");
+
+        assertThat(msg.getShareKind()).isNull();
+        assertThat(msg.getSharePatientId()).isNull();
+
+        msg.setShareKind(Message.ShareKind.MEDICARE);
+        msg.setSharePatientId(10L);
+
+        assertThat(msg.getShareKind()).isEqualTo(Message.ShareKind.MEDICARE);
+        assertThat(msg.getSharePatientId()).isEqualTo(10L);
+    }
+
+    @Test
     void settersAndGetters_updateFields() throws Exception {
         final Message msg = new Message();
         final LocalDateTime now = LocalDateTime.now();

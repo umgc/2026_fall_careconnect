@@ -13,6 +13,7 @@ import com.careconnect.repository.MessageRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.service.FileManagementService;
+import com.careconnect.service.MessageShareService;
 import com.careconnect.service.MessagingPolicy;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +57,10 @@ public class MessageController {
     @Autowired
     private MessagingPolicy messagingPolicy;
 
-    static final String NOT_ALLOWED = "You can't send messages to this user.";
+    @Autowired
+    private MessageShareService messageShareService;
+
+    static final String NOT_ALLOWED = MessagingPolicy.NOT_ALLOWED;
 
     private static String fullName(String first, String last) {
         String f = (first != null) ? first.trim() : "";
@@ -81,6 +85,30 @@ public class MessageController {
         Message message = new Message(request.getSenderId(), request.getReceiverId(), request.getContent());
         Message saved = messageRepo.save(message);
         return ResponseEntity.ok(saved);
+    }
+
+    /** Body of {@code POST /share}: who gets the card and what it opens, for example MEDICARE. */
+    public record ShareRequest(Long receiverId, String kind) {
+    }
+
+    /**
+     * A patient shares one kind of their data with a linked caregiver as a card in chat. The patient
+     * is the signed-in user; the card holds only what it opens, and the data's own access rule is
+     * checked when the caregiver opens it (see {@link MessageShareService}).
+     *
+     * @return {@code { message, receiverCanView }}. receiverCanView false means the caregiver cannot
+     *         open the card yet, because the patient has not given the consent.
+     */
+    @RequirePermission(Permission.SEND_MESSAGES)
+    @PostMapping("/share")
+    public ResponseEntity<Map<String, Object>> share(@RequestBody ShareRequest request) {
+        User currentUser = securityUtil.resolveCurrentUser();
+        MessageShareService.ShareResult result = messageShareService.share(
+                currentUser, request.receiverId(), request.kind());
+        return ResponseEntity.ok(Map.of(
+                "message", result.message(),
+                "receiverCanView", result.receiverCanView()
+        ));
     }
 
     // ✅ Fetch full conversation between two users

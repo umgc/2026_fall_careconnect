@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -240,6 +241,36 @@ class MedicareAccessPolicyTest {
                     .doesNotThrowAnyException();
             verify(consents).existsActiveGrant(
                     eq(PATIENT), eq(CAREGIVER), eq(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW), any(Instant.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("canAccess, the same rule as a yes or no")
+    class CanAccess {
+
+        @Test
+        @DisplayName("yes for an assigned caregiver holding the patient's MEDICARE_VIEW consent")
+        void consentedCaregiver() {
+            linked(PATIENT, true);
+            consented(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW, true);
+
+            assertThat(policy.canAccess(caregiverWithPermission(true), PATIENT_RECORD)).isTrue();
+        }
+
+        @Test
+        @DisplayName("no, without throwing, for an assigned caregiver without the consent")
+        void caregiverWithoutConsent() {
+            linked(PATIENT, true);
+            consented(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW, false);
+
+            assertThat(policy.canAccess(caregiverWithPermission(true), PATIENT_RECORD)).isFalse();
+        }
+
+        @Test
+        @DisplayName("no for no caller or no patient")
+        void nothingNamed() {
+            assertThat(policy.canAccess(null, PATIENT_RECORD)).isFalse();
+            assertThat(policy.canAccess(user(PATIENT, Role.PATIENT), null)).isFalse();
         }
     }
 }

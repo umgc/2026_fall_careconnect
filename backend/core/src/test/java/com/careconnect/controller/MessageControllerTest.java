@@ -14,6 +14,7 @@ import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.FileManagementService;
+import com.careconnect.service.MessageShareService;
 import com.careconnect.service.MessagingPolicy;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +56,8 @@ class MessageControllerTest {
     private UserRepository userRepo;
     @Mock
     private MessagingPolicy messagingPolicy;
+    @Mock
+    private MessageShareService messageShareService;
     @Mock
     private FileManagementService fileManagementService;
     @Mock
@@ -457,6 +460,25 @@ class MessageControllerTest {
 
         assertThat(response.getBody()).hasSize(1);
         assertThat(response.getBody().get(0).getPeerRole()).isEqualTo("UNKNOWN");
+    }
+
+    // ─── share ────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("share passes the signed-in user, never a client value, and returns the card and receiverCanView")
+    void share_returnsCardAndReceiverCanView() {
+        final User patient = makeUser(SENDER_ID, "Pat", "pat@test.com");
+        when(securityUtil.resolveCurrentUser()).thenReturn(patient);
+        final Message card = makeMessage(5L, SENDER_ID, RECEIVER_ID, "Shared my Medicare records");
+        card.setShareKind(Message.ShareKind.MEDICARE);
+        when(messageShareService.share(patient, RECEIVER_ID, "MEDICARE"))
+                .thenReturn(new MessageShareService.ShareResult(card, false));
+
+        final ResponseEntity<Map<String, Object>> response =
+                controller.share(new MessageController.ShareRequest(RECEIVER_ID, "MEDICARE"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).containsEntry("message", card).containsEntry("receiverCanView", false);
     }
 
     // ─── sendAttachment ──────────────────────────────────────────────────────

@@ -23,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MessagingPolicy {
 
+    /** What every refusal says, over REST and the chat socket alike. */
+    public static final String NOT_ALLOWED = "You can't send messages to this user.";
+
     private final CaregiverPatientLinkService linkService;
     private final FriendRequestRepository friendRequests;
 

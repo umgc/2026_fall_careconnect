@@ -610,6 +610,60 @@ class ChatMessageWebSocketHandlerTest {
         // No exception; message is just not found
     }
 
+    // ─── deliver() ────────────────────────────────────────────────────────────
+
+    @Test
+    void deliver_shareCard_pushesMessageReceivedWithShareFields() throws Exception {
+        authenticate(recipientSession, "s2", "2");
+        when(recipientSession.isOpen()).thenReturn(true);
+        Message card = savedMessage(11L, 1L, 2L, "Shared my Medicare records");
+        card.setShareKind(Message.ShareKind.MEDICARE);
+        card.setSharePatientId(10L);
+
+        assertThat(handler.deliver(card)).isTrue();
+
+        Map<String, Object> payload = captureLastPayload(recipientSession);
+        assertThat(payload.get("type")).isEqualTo("message-received");
+        assertThat(payload.get("messageId")).isEqualTo(11);
+        assertThat(payload.get("senderId")).isEqualTo("1");
+        assertThat(payload.get("content")).isEqualTo("Shared my Medicare records");
+        assertThat(payload.get("shareKind")).isEqualTo("MEDICARE");
+        assertThat(payload.get("sharePatientId")).isEqualTo(10);
+    }
+
+    @Test
+    void deliver_plainMessage_hasNoShareFields() throws Exception {
+        authenticate(recipientSession, "s2", "2");
+        when(recipientSession.isOpen()).thenReturn(true);
+
+        assertThat(handler.deliver(savedMessage(12L, 1L, 2L, "hi"))).isTrue();
+
+        Map<String, Object> payload = captureLastPayload(recipientSession);
+        assertThat(payload).doesNotContainKeys("shareKind", "sharePatientId");
+    }
+
+    @Test
+    void deliver_receiverNotConnected_returnsFalse() {
+        assertThat(handler.deliver(savedMessage(13L, 1L, 2L, "hi"))).isFalse();
+    }
+
+    @Test
+    void deliver_receiverSessionClosed_returnsFalse() throws Exception {
+        authenticate(recipientSession, "s2", "2");
+        when(recipientSession.isOpen()).thenReturn(false);
+
+        assertThat(handler.deliver(savedMessage(14L, 1L, 2L, "hi"))).isFalse();
+    }
+
+    @Test
+    void deliver_sendThrows_returnsFalseWithoutPropagating() throws Exception {
+        authenticate(recipientSession, "s2", "2");
+        when(recipientSession.isOpen()).thenReturn(true);
+        doThrow(new java.io.IOException("broken pipe")).when(recipientSession).sendMessage(any(TextMessage.class));
+
+        assertThat(handler.deliver(savedMessage(15L, 1L, 2L, "hi"))).isFalse();
+    }
+
     @Test
     void readReceipt_fromSomeoneOtherThanTheReceiver_isIgnored() throws Exception {
         // User 3 neither sent nor received message 10
