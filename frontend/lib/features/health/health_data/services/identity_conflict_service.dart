@@ -1,3 +1,9 @@
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../services/user_role_storage_service.dart';
 import '../models/identity_conflict.dart';
 
 class IdentityConflictService {
@@ -20,13 +26,31 @@ class IdentityConflictService {
     // return ((env['resources'] as List?) ?? [])
     //     .map((j) => IdentityConflict.fromJson(j as Map<String, dynamic>))
     //     .toList();
-    return const [];
+    // Until then, only the date-of-birth disagreements this device found
+    // between connected sources (see [reportDobDisagreement]) for the
+    // signed-in patient.
+    final owner = await _owner();
+    return List.unmodifiable(_found.values
+        .where((f) => f.owner == owner)
+        .map((f) => f.conflict));
   }
 
   Future<bool> resolve(int conflictId, {required bool accepted}) async {
     if (useMock) {
       await Future.delayed(const Duration(milliseconds: 400));
       return true;
+    }
+    // A disagreement this device found is saved on the device (FR-XSRC-10…15
+    // patient confirmation, frontend only): Health Data then shows the date
+    // the patient chose.
+    final found = _found[conflictId];
+    if (found != null) {
+      // Another patient's disagreement is never theirs to decide.
+      final owner = await _owner();
+      if (found.owner != owner) return false;
+      final saved = await _saveChoice(owner, found.conflict, accepted);
+      if (saved) _found.remove(conflictId);
+      return saved;
     }
     // TODO wire to backend when ready, e.g.:
     // await ApiClient.instance.postJson(
@@ -37,6 +61,129 @@ class IdentityConflictService {
     // "We couldn't save your choice. Nothing was changed." instead of a false
     // "Date of birth updated." Wire this together with fetchPending.
     return false;
+  }
+
+  // ---- Date-of-birth disagreements found between connected sources ----
+
+  /// Disagreements found on this device and not yet decided, by id, each
+  /// tagged with the patient it belongs to. Shared by every instance, so the
+  /// confirmation screen sees what Health Data found; cleared on logout
+  /// ([clearFound]).
+  static final Map<int, ({String owner, IdentityConflict conflict})> _found =
+      {};
+
+  /// Ids for found disagreements are negative, so they never collide with a
+  /// backend conflict id.
+  static int _nextId = -1;
+
+  static const _choicesKey = 'health_data.dob_choices';
+
+  /// The date of birth to show when [current] (the preferred source's) and
+  /// [incoming] (another source's) disagree: the patient's saved choice, or
+  /// null when they haven't chosen yet, in which case the disagreement is
+  /// queued for the confirmation screen and [current] stays shown.
+  static Future<DateTime?> reportDobDisagreement({
+    required DateTime current,
+    required String currentSource,
+    required DateTime incoming,
+    required String incomingSource,
+  }) async {
+    final owner = await _owner();
+    final key = _choiceKey(owner, current, incoming);
+    final choice = await _loadChoices().then((c) => c[key]);
+    if (choice == 'accepted') return incoming;
+    if (choice == 'rejected') return current;
+
+    final already = _found.values.any((f) =>
+        f.owner == owner &&
+        f.conflict.canonicalValueBefore == _format(current) &&
+        f.conflict.incomingValue == _format(incoming));
+    if (!already) {
+      final id = _nextId--;
+      _found[id] = (owner: owner, conflict: IdentityConflict(
+        id: id,
+        fieldName: 'date_of_birth',
+        canonicalValueBefore: _format(current),
+        incomingValue: _format(incoming),
+        canonicalSourceLabel: currentSource,
+        incomingSourceLabel: incomingSource,
+        status: ConflictStatus.pending,
+        detectedAt: DateTime.now(),
+      ));
+    }
+    return null;
+  }
+
+  /// Forgets every undecided disagreement. Called on logout so the next
+  /// account signed in during this app session never sees them.
+  static void clearFound() {
+    _found.clear();
+    _nextId = -1;
+  }
+
+  /// The signed-in patient the disagreements belong to: their patient id,
+  /// else their user id, else '' when nobody is signed in.
+  static Future<String> _owner() async {
+    try {
+      final storage = UserRoleStorageService.instance;
+      final patientId = await storage.getPatientId();
+      if (patientId != null) return 'patient:$patientId';
+      final userId = await storage.getUserId();
+      if (userId != null) return 'user:$userId';
+    } catch (_) {
+      // Storage unavailable: treat as signed out.
+    }
+    return '';
+  }
+
+  static Future<bool> _saveChoice(
+      String owner, IdentityConflict c, bool accepted) async {
+    try {
+      final current = _parse(c.canonicalValueBefore);
+      final incoming = _parse(c.incomingValue);
+      if (current == null || incoming == null) return false;
+      final prefs = await SharedPreferences.getInstance();
+      final all = await _loadChoices();
+      all[_choiceKey(owner, current, incoming)] = accepted ? 'accepted' : 'rejected';
+      return await prefs.setString(_choicesKey, jsonEncode(all));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, String>> _loadChoices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_choicesKey);
+      if (raw == null) return {};
+      final json = jsonDecode(raw);
+      return json is Map
+          ? json.map((k, v) => MapEntry(k.toString(), v.toString()))
+          : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Hashed, so no date of birth is stored on the device. Includes the
+  /// patient, so one patient's choice never decides another's date.
+  static String _choiceKey(String owner, DateTime current, DateTime incoming) =>
+      sha256
+          .convert(utf8.encode(
+              'dob|$owner|${_format(current)}|${_format(incoming)}'))
+          .toString();
+
+  /// MM/DD/YYYY, as the confirmation screen shows it.
+  static String _format(DateTime d) =>
+      '${d.month.toString().padLeft(2, '0')}/'
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.year.toString().padLeft(4, '0')}';
+
+  static DateTime? _parse(String v) {
+    final m = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(v);
+    if (m == null) return null;
+    return DateTime(
+        int.parse(m.group(3)!), int.parse(m.group(1)!), int.parse(m.group(2)!));
   }
 
   static final _mockPending = <IdentityConflict>[

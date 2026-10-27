@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import software.amazon.awssdk.core.SdkBytes;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
@@ -100,12 +101,15 @@ public class ChunkEmbeddingService {
      * or when {@link BedrockRuntimeClient} is unavailable (local/test without AWS).
      *
      * <p>Runs in its own transaction so {@code @Modifying} updates succeed when
-     * invoked from an after-commit callback (no ambient ingest TX).
+     * invoked from an after-commit callback. That needs {@code REQUIRES_NEW}: inside
+     * {@code afterCommit} the committed ingest transaction is still bound to the
+     * thread, so a plain {@code @Transactional} joins it and every update fails with
+     * "Executing an update/delete query", leaving all chunks to the backfill worker.
      *
      * @param chunks entities returned from {@code saveAll} (must have ids)
      * @return number of chunks successfully embedded
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int embedAndPersist(final List<RetrievalIndexChunk> chunks) {
         if (!enabled) {
             log.debug("Chunk embedding skipped — careconnect.embedding.enabled=false");

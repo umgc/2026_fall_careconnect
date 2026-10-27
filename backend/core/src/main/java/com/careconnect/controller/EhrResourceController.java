@@ -1,10 +1,17 @@
 package com.careconnect.controller;
 
+import com.careconnect.config.AthenaProperties;
 import com.careconnect.config.EpicProperties;
 import com.careconnect.dto.ehr.EhrResourceListItem;
+import com.careconnect.dto.ehr.EhrSourceView;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.model.ehr.MedicareProperties;
+import com.careconnect.repository.ConsentGrantRepository;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.repository.ehr.EhrSourceRepository;
+import com.careconnect.security.EpicAccessPolicy;
+import com.careconnect.security.MedicareAccessPolicy;
 import com.careconnect.service.ehr.EhrResourceCategory;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,9 +64,27 @@ public class EhrResourceController {
 
     private static final String PATIENT_TYPE = "Patient";
 
+    /** Token selecting all-sources (union) mode on the read surface (WBS 5.2.83). */
+    private static final String ALL_SOURCES = "ALL";
+
+    /**
+     * Precedence for the demographics primary-source rule (WBS 5.2.83): when {@code ?source=ALL}
+     * and more than one source mirrors a Patient row, the card shows the first source present in
+     * this order. EPIC is the richest/most-authoritative today; Oracle Health is last (newest,
+     * not yet live).
+     */
+    private static final List<String> SOURCE_PRECEDENCE = List.of(
+            EpicProperties.SOURCE_EPIC,
+            AthenaProperties.SOURCE_ATHENA,
+            MedicareProperties.SOURCE_MEDICARE,
+            "ORACLE_HEALTH");
+
     private final SecurityUtil securityUtil;
     private final EhrResourceRepository resourceRepo;
     private final ObjectMapper objectMapper;
+    private final EpicAccessPolicy epicAccessPolicy;
+    private final EhrSourceRepository ehrSourceRepository;
+    private final ConsentGrantRepository consentGrants;
 
     /**
      * List the caller's mirrored records, filterable by category / free text and sortable. All
@@ -103,17 +128,37 @@ public class EhrResourceController {
             @Parameter(description = "Sort order: latest | earliest | az | za.",
                     schema = @Schema(allowableValues = {"latest", "earliest", "az", "za"},
                             defaultValue = "latest"))
-            @RequestParam(value = "sort", required = false, defaultValue = "latest") final String sort) {
+            @RequestParam(value = "sort", required = false, defaultValue = "latest") final String sort,
+            @Parameter(description = "Patient whose records to read; defaults to the caller. A "
+                    + "caregiver may pass a patient's user id and reads it only with an active link "
+                    + "and the patient's EHR_VIEW consent (otherwise a uniform 404).")
+            @RequestParam(value = "patientUserId", required = false) final Long patientUserId) {
         final User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        final String src = normalizeSource(source);
+        final Long target = patientUserId != null ? patientUserId : me.getId();
+        epicAccessPolicy.requireEhrReadAccess(me, target);
+        // All-sources (union) mode when source=ALL; otherwise the single-source path (default EPIC).
+        final boolean allSources = isAllSources(source);
+        final String src = allSources ? null : normalizeSource(source);
         final String qLower = (q == null || q.isBlank()) ? null : q.toLowerCase(Locale.ROOT);
+        // Medicare data needs its own MEDICARE_VIEW consent; the EHR_VIEW check above does not imply
+        // it (the two are parallel, independent scopes). Drop MEDICARE-sourced rows for a caller who
+        // lacks it, rather than refusing the whole request, so the other sources still return.
+        final boolean maySeeMedicare = mayReadMedicare(me, target);
 
-        final List<EhrResourceListItem> items = resourceRepo.findByUserIdAndSource(me.getId(), src).stream()
+        final List<EhrResource> rows = (allSources
+                ? resourceRepo.findByUserId(target)
+                : resourceRepo.findByUserIdAndSource(target, src)).stream()
+                .filter(r -> maySeeMedicare
+                        || !MedicareProperties.SOURCE_MEDICARE.equalsIgnoreCase(r.getSource()))
+                .collect(Collectors.toList());
+        final List<EhrResourceListItem> items = rows.stream()
                 .filter(r -> !PATIENT_TYPE.equals(r.getResourceType()))
-                .map(r -> toItem(r, src))
+                // Stamp provenance from the row's own source in union mode so each item keeps its
+                // real source; the single-source path echoes the requested (normalized) source.
+                .map(r -> toItem(r, allSources ? r.getSource() : src))
                 .filter(it -> category == null || category.isBlank()
                         || category.equalsIgnoreCase(it.category()))
                 .filter(it -> qLower == null
@@ -123,7 +168,9 @@ public class EhrResourceController {
                 .sorted(comparatorFor(sort))
                 .collect(Collectors.toList());
 
-        final Instant maxSynced = resourceRepo.findMaxLastSyncedAt(me.getId(), src);
+        final Instant maxSynced = allSources
+                ? resourceRepo.findMaxLastSyncedAt(target)
+                : resourceRepo.findMaxLastSyncedAt(target, src);
         final ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
         if (maxSynced != null) {
             builder.header("X-Last-Synced-At", maxSynced.toString());
@@ -157,28 +204,111 @@ public class EhrResourceController {
     public ResponseEntity<Map<String, Object>> patient(
             @Parameter(description = "Source system; defaults to EPIC (the only live source). "
                     + "Case-insensitive — normalized to the stored casing.", example = "EPIC")
-            @RequestParam(value = "source", required = false) final String source) {
+            @RequestParam(value = "source", required = false) final String source,
+            @Parameter(description = "Patient whose demographics to read; defaults to the caller. A "
+                    + "caregiver may pass a patient's user id and reads it only with an active link "
+                    + "and the patient's EHR_VIEW consent (otherwise a uniform 404).")
+            @RequestParam(value = "patientUserId", required = false) final Long patientUserId) {
         final User me = securityUtil.resolveCurrentUser();
         if (me == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        final String src = normalizeSource(source);
-        final Optional<EhrResource> patientRow = resourceRepo.findByUserIdAndSource(me.getId(), src).stream()
-                .filter(r -> PATIENT_TYPE.equals(r.getResourceType()))
-                .findFirst();
+        final Long target = patientUserId != null ? patientUserId : me.getId();
+        epicAccessPolicy.requireEhrReadAccess(me, target);
+        // Medicare demographics also require MEDICARE_VIEW: exclude a MEDICARE Patient row from the
+        // primary-source pick (and from a direct single-source read) for a caller who lacks it.
+        final boolean maySeeMedicare = mayReadMedicare(me, target);
+        // All-sources mode applies the primary-source rule: when more than one source mirrors a
+        // Patient row, return the one highest in SOURCE_PRECEDENCE. Single-source mode is unchanged.
+        final boolean allSources = isAllSources(source);
+        final Optional<EhrResource> patientRow;
+        if (allSources) {
+            patientRow = resourceRepo.findByUserId(target).stream()
+                    .filter(r -> PATIENT_TYPE.equals(r.getResourceType()))
+                    .filter(r -> maySeeMedicare
+                            || !MedicareProperties.SOURCE_MEDICARE.equalsIgnoreCase(r.getSource()))
+                    .min(Comparator.comparingInt(r -> sourcePrecedence(r.getSource())));
+        } else {
+            final String src = normalizeSource(source);
+            patientRow = resourceRepo.findByUserIdAndSource(target, src).stream()
+                    .filter(r -> PATIENT_TYPE.equals(r.getResourceType()))
+                    .filter(r -> maySeeMedicare
+                            || !MedicareProperties.SOURCE_MEDICARE.equalsIgnoreCase(r.getSource()))
+                    .findFirst();
+        }
         if (patientRow.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        final JsonNode fhir = parsePayload(patientRow.get().getPayloadJson());
+        final EhrResource row = patientRow.get();
+        final JsonNode fhir = parsePayload(row.getPayloadJson());
         final Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", parseName(fhir));
         body.put("birthDate", textOf(fhir, "birthDate"));
         body.put("gender", textOf(fhir, "gender"));
-        body.put("source", src);
+        // Report the source actually chosen (the stored code), so the primary source is explicit.
+        body.put("source", row.getSource());
         return ResponseEntity.ok(body);
     }
 
+    /**
+     * EHR source catalog — the {@code ehr_source} registry the frontend maps stored
+     * {@code ehr_resource.source} codes against (WBS 5.2.82). Additive and source-neutral: it
+     * lets the client drive its {@code RecordSource} handling from the DB single source of truth
+     * instead of hardcoding tokens, so backend and frontend source codes cannot silently drift.
+     */
+    @GetMapping("/sources")
+    @Operation(
+            summary = "List the EHR source catalog",
+            description = "Returns the seeded ehr_source registry as {code, displayName, enabled}, "
+                    + "the canonical tokens the frontend maps ehr_resource.source values against.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Source catalog returned"),
+            @ApiResponse(responseCode = "401", description = "No authenticated caller", content = @Content)
+    })
+    public ResponseEntity<List<EhrSourceView>> sources() {
+        final User me = securityUtil.resolveCurrentUser();
+        if (me == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        final List<EhrSourceView> catalog = ehrSourceRepository.findAll().stream()
+                .map(s -> new EhrSourceView(
+                        s.getCode(),
+                        s.getDisplayName(),
+                        Boolean.TRUE.equals(s.getEnabled())))
+                .sorted(Comparator.comparing(EhrSourceView::code))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(catalog);
+    }
+
     // --- helpers ---
+
+    /** True when the caller explicitly requested the union across all sources ({@code source=ALL}). */
+    private static boolean isAllSources(final String source) {
+        return source != null && ALL_SOURCES.equalsIgnoreCase(source.trim());
+    }
+
+    /** Rank of a stored source code in {@link #SOURCE_PRECEDENCE}; unknown sources sort last. */
+    private static int sourcePrecedence(final String source) {
+        final int idx = SOURCE_PRECEDENCE.indexOf(source == null ? "" : source);
+        return idx < 0 ? Integer.MAX_VALUE : idx;
+    }
+
+    /**
+     * Whether {@code caller} may see the target patient's {@code MEDICARE}-sourced rows on this
+     * surface: true when the caller is the patient reading their own record, or a caregiver the
+     * patient has given an active {@code MEDICARE_VIEW} grant. {@code EHR_VIEW} (enforced separately
+     * by {@link EpicAccessPolicy}) does not imply Medicare access — the two are parallel, independent
+     * consent scopes (see {@link MedicareAccessPolicy}). {@code target} is a user id, so the grant is
+     * checked directly rather than via {@code MedicareAccessPolicy} (which keys on patient id and
+     * refuses the whole request); here we filter out Medicare rows so the other sources still return.
+     */
+    private boolean mayReadMedicare(final User caller, final Long target) {
+        if (caller.getId() != null && caller.getId().equals(target)) {
+            return true;
+        }
+        return consentGrants.existsActiveGrant(
+                target, caller.getId(), MedicareAccessPolicy.SCOPE_MEDICARE_VIEW, Instant.now());
+    }
 
     private EhrResourceListItem toItem(final EhrResource r, final String src) {
         return new EhrResourceListItem(

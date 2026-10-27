@@ -53,6 +53,9 @@ public interface EhrRawPayloadRepository extends JpaRepository<EhrRawPayload, Lo
     int deleteRetrievedBeforeForPatients(
             @Param("cutoff") OffsetDateTime cutoff, @Param("patientIds") List<Long> patientIds);
 
+    /** Delete the raw-payload history for one patient and source (disconnect cleanup). */
+    int deleteByPatientIdAndSourceId(Long patientId, Long sourceId);
+
     /**
      * Unlink (FR-MCR-11, Addendum A1-Q1): removes every row this source holds for this patient.
      * Called by {@code MedicareConnectionService.disconnect} inside its transaction.

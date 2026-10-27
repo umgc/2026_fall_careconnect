@@ -385,15 +385,34 @@ SELECT
     pm.patient_id,
     'MEDICATION',
     'medication-' || pm.id,
-    'Medication: ' || pm.medication_name
-        || CASE WHEN pm.dosage IS NOT NULL THEN ', Dosage: ' || pm.dosage ELSE '' END
-        || CASE WHEN pm.frequency IS NOT NULL THEN ', Frequency: ' || pm.frequency ELSE '' END
-        || CASE WHEN pm.route IS NOT NULL THEN ', Route: ' || pm.route ELSE '' END
-        || CASE WHEN pm.prescribed_by IS NOT NULL THEN ', Prescribed by: ' || pm.prescribed_by ELSE '' END
-        || CASE WHEN pm.start_date IS NOT NULL THEN ', Start date: ' || pm.start_date ELSE '' END
-        || CASE WHEN pm.end_date IS NOT NULL THEN ', End date: ' || pm.end_date ELSE '' END
-        || CASE WHEN pm.notes IS NOT NULL THEN '. Notes: ' || pm.notes ELSE '' END
-        || '. Status: ' || CASE WHEN pm.is_active THEN 'Active' ELSE 'Inactive' END,
+    -- Same one-fact-per-sentence wording as RetrievalIndexingService.buildMedicationText.
+    pm.medication_name
+        || CASE WHEN pm.dosage IS NOT NULL THEN ' ' || pm.dosage ELSE '' END
+        || CASE WHEN pm.is_active THEN ' is an active medication.' ELSE ' is an inactive medication.' END
+        || CASE WHEN pm.dosage IS NOT NULL THEN ' The ' || pm.medication_name || ' dose is ' || pm.dosage || '.' ELSE '' END
+        || CASE WHEN pm.dosage IS NOT NULL OR pm.route IS NOT NULL OR pm.frequency IS NOT NULL
+                THEN ' Take ' || pm.medication_name
+                     || CASE WHEN pm.dosage IS NOT NULL THEN ' ' || pm.dosage ELSE '' END
+                     || CASE WHEN pm.route IS NOT NULL THEN ' by the ' || pm.route || ' route' ELSE '' END
+                     || CASE WHEN pm.frequency IS NOT NULL THEN ' ' || pm.frequency ELSE '' END
+                     || '.'
+                ELSE '' END
+        || CASE WHEN pm.prescribed_by IS NOT NULL THEN ' ' || pm.medication_name || ' was prescribed by ' || pm.prescribed_by || '.' ELSE '' END
+        || CASE WHEN coalesce(trim(pm.start_date), '') <> ''
+                THEN ' ' || pm.medication_name || ' was started on '
+                     || CASE WHEN left(trim(pm.start_date), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                             THEN to_char(CAST(left(trim(pm.start_date), 10) AS date), 'FMDay, FMMonth FMDD, YYYY')
+                             ELSE trim(pm.start_date) END || '.'
+                ELSE '' END
+        || CASE WHEN coalesce(trim(pm.end_date), '') <> ''
+                THEN ' ' || pm.medication_name || ' ends on '
+                     || CASE WHEN left(trim(pm.end_date), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                             THEN to_char(CAST(left(trim(pm.end_date), 10) AS date), 'FMDay, FMMonth FMDD, YYYY')
+                             ELSE trim(pm.end_date) END || '.'
+                ELSE '' END
+        || CASE WHEN pm.notes IS NOT NULL THEN ' ' || pm.medication_name || ' notes: ' || trim(pm.notes)
+                || CASE WHEN right(trim(pm.notes), 1) IN ('.', '!', '?') THEN '' ELSE '.' END
+           ELSE '' END,
     'ACTIVE',
     now()
 FROM patient_medication pm
@@ -509,13 +528,24 @@ SELECT
     t.patient_id,
     'TASK',
     'task-' || t.id,
-    'Task: ' || t.name
-        || CASE WHEN t.task_type IS NOT NULL THEN ', Type: ' || t.task_type ELSE '' END
-        || CASE WHEN t.description IS NOT NULL THEN ', Description: ' || t.description ELSE '' END
-        || CASE WHEN t.date IS NOT NULL THEN ', Date: ' || t.date ELSE '' END
-        || CASE WHEN t.time_of_day IS NOT NULL THEN ', Time: ' || t.time_of_day ELSE '' END
-        || CASE WHEN t.frequency IS NOT NULL THEN ', Frequency: ' || t.frequency ELSE '' END
-        || ', Completed: ' || CASE WHEN t.is_completed THEN 'Yes' ELSE 'No' END,
+    -- Same one-fact-per-sentence wording as RetrievalIndexingService.buildTaskText.
+    t.name
+        || CASE WHEN coalesce(trim(t.task_type), '') = '' THEN ' is a task'
+                ELSE ' is ' || CASE WHEN upper(left(trim(t.task_type), 1)) IN ('A', 'E', 'I', 'O', 'U') THEN 'an' ELSE 'a' END
+                     || ' ' || trim(t.task_type) || ' task' END
+        || CASE WHEN coalesce(trim(t.date), '') <> ''
+                THEN ' scheduled for ' || CASE WHEN left(trim(t.date), 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+                                              THEN to_char(CAST(left(trim(t.date), 10) AS date), 'FMDay, FMMonth FMDD, YYYY')
+                                              ELSE trim(t.date) END
+                ELSE '' END
+        || CASE WHEN coalesce(trim(t.time_of_day), '') <> '' THEN ' at ' || trim(t.time_of_day) ELSE '' END
+        || '.'
+        || CASE WHEN lower(coalesce(trim(t.frequency), '')) NOT IN ('', 'once')
+                THEN ' ' || t.name || ' repeats ' || t.frequency || '.' ELSE '' END
+        || CASE WHEN coalesce(trim(t.description), '') <> '' THEN ' ' || t.name || ' details: ' || trim(t.description)
+                || CASE WHEN right(trim(t.description), 1) IN ('.', '!', '?') THEN '' ELSE '.' END
+           ELSE '' END
+        || ' ' || t.name || CASE WHEN t.is_completed THEN ' is completed.' ELSE ' is pending and not yet completed.' END,
     'ACTIVE',
     now()
 FROM tasks t;

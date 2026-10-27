@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../config/env_constant.dart';
 import '../features/emergency_passport/services/qr_code_store.dart';
+import '../features/health/health_data/services/identity_conflict_service.dart';
 import 'api_service.dart';
 import 'oauth_service.dart';
 import '../providers/user_provider.dart';
@@ -178,6 +179,13 @@ class AuthService {
 
     if (response.statusCode == 200) {
       final userSession = UserSession.fromJson(data);
+
+      // Email not verified yet: keep nothing in storage. Web storage is shared
+      // across tabs, so a stored session would let another tab open the app.
+      // The caller shows the verify-email prompt instead.
+      if (!userSession.emailVerified) {
+        return userSession;
+      }
 
       // Force update JWT token and session using the new token manager
       // This ensures fresh tokens are always used after login
@@ -479,6 +487,9 @@ class AuthService {
         headers: headers,
       );
     } finally {
+      // First, so no failing step below can leave this patient's
+      // date-of-birth conflicts for the next account signed in.
+      IdentityConflictService.clearFound();
       try {
         await EncryptedTranscriptOutbox.purgeDefault();
       } catch (_) {
@@ -572,6 +583,7 @@ class AuthService {
         await AuthTokenManager.clearAuthData();
         await UserRoleStorageService.instance.clearUserData();
         await QrCodeStore.clearAll(); // DEF-EMG-29
+        IdentityConflictService.clearFound();
         return null;
       }
     } catch (e) {
@@ -580,6 +592,7 @@ class AuthService {
       await AuthTokenManager.clearAuthData();
       await UserRoleStorageService.instance.clearUserData();
       await QrCodeStore.clearAll(); // DEF-EMG-29
+      IdentityConflictService.clearFound();
       return null;
     }
   }

@@ -16,7 +16,11 @@ param(
 
     # Omit to leave AiModel as whatever parameters/{env}-service.json already
     # has committed; pass a Bedrock model ID to override it for this deploy.
-    [string]$AiModel
+    [string]$AiModel,
+
+    # Skips building/pushing the condition-detection sidecar image and deploys
+    # with SidecarImageUri='' (voice screening off).
+    [switch]$SkipSidecar
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +50,7 @@ $RepoRoot = Split-Path -Parent $ScriptRoot
 $TemplateDir = Join-Path $ScriptRoot "templates"
 $ParameterDir = Join-Path $ScriptRoot "parameters"
 $BackendDir = Join-Path $RepoRoot "backend\core"
+$SidecarDir = Join-Path $RepoRoot "backend\condition-detection-sidecar"
 
 # Local, gitignored secret overrides — CARECONNECT_DATABASE_MASTER_PASSWORD and
 # CARECONNECT_JWT_SECRET, used below to override the committed parameter
@@ -654,10 +659,43 @@ Write-Step "Checking prerequisites"
         Pop-Location
     }
 
+    # Condition-detection sidecar image. Same tag, login and platform as the
+    # backend image; its repository comes from the platform stack. An empty
+    # SidecarImageUri leaves the sidecar container out (voice screening off).
+    $SidecarImageUri = ""
+    if ($SkipSidecar) {
+        Write-Host "Skipping sidecar build/push (-SkipSidecar); voice screening will be off." -ForegroundColor Yellow
+    }
+    else {
+        Write-Step "Reading sidecar ECR repository URI"
+        $script:CurrentOperation = "Reading sidecar ECR repository URI"
+        $SidecarRepositoryUri = (Get-CloudFormationOutput -StackName $PlatformStackName -OutputKey "ConditionSidecarRepositoryUri").Trim()
+        if (-not $SidecarRepositoryUri -or $SidecarRepositoryUri -eq "None") {
+            Write-Host "WARNING: Platform stack did not return ConditionSidecarRepositoryUri (stack predates the sidecar repo); deploying with SidecarImageUri='' (voice screening off)." -ForegroundColor Yellow
+        }
+        else {
+            $SidecarImageUri = "$SidecarRepositoryUri`:$ImageTag"
+            $SidecarLocalImageName = "careconnect-dam-sidecar-local:$ImageTag"
+
+            Write-Step "Building sidecar Docker image"
+            $script:CurrentOperation = "Building sidecar Docker image"
+            & docker build --platform linux/amd64 -t $SidecarLocalImageName $SidecarDir
+            Assert-LastExitCode "Sidecar Docker build"
+
+            Write-Step "Tagging and pushing sidecar Docker image to ECR"
+            $script:CurrentOperation = "Pushing sidecar Docker image to ECR"
+            & docker tag $SidecarLocalImageName $SidecarImageUri
+            Assert-LastExitCode "Sidecar Docker tag"
+            & docker push $SidecarImageUri
+            Assert-LastExitCode "Sidecar Docker push"
+        }
+    }
+
     # The service stack is deployed last because it needs the final image URI.
     Write-Step "Deploying service stack: $ServiceStackName"
     $ServiceOverrides = @{
         BackendImageUri = $ImageUri
+        SidecarImageUri = $SidecarImageUri
     }
     if ($AiEnabled) {
         $ServiceOverrides["CareConnectAiEnabled"] = $AiEnabled

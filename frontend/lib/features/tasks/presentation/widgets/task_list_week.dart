@@ -132,7 +132,7 @@ class TaskListWeek extends StatelessWidget {
                             ? const Icon(Icons.check, size: 14)
                             : const SizedBox.shrink(),
                         label: Text(
-                            task.isComplete
+                          task.isComplete
                               ? t.calendarCompleted
                               : t.calendarMarkComplete,
                           style: TextStyle(
@@ -159,7 +159,7 @@ class TaskListWeek extends StatelessWidget {
                       ),
                     ],
                   ),
-                    if (assignedName.isNotEmpty &&
+                  if (assignedName.isNotEmpty &&
                       assignedName != t.calendarUnassigned)
                     Text("👤 $assignedName"),
                 ],

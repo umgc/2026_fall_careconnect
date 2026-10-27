@@ -56,7 +56,8 @@ enum BloodType {
 class PassportAllergy {
   const PassportAllergy({required this.allergen, this.severity, this.reaction});
 
-  factory PassportAllergy.fromJson(Map<String, dynamic> json) => PassportAllergy(
+  factory PassportAllergy.fromJson(Map<String, dynamic> json) =>
+      PassportAllergy(
         allergen: json['allergen'] as String? ?? '',
         severity: json['severity'] as String?,
         reaction: json['reaction'] as String?,
@@ -88,7 +89,8 @@ class PassportMedication {
 class PassportContact {
   const PassportContact({this.name, this.relationship, this.phone});
 
-  factory PassportContact.fromJson(Map<String, dynamic> json) => PassportContact(
+  factory PassportContact.fromJson(Map<String, dynamic> json) =>
+      PassportContact(
         name: json['name'] as String?,
         relationship: json['relationship'] as String?,
         phone: json['phone'] as String?,
@@ -160,7 +162,8 @@ class MedicalPassport {
       ready: json['ready'] == true,
       lastUpdated: _instant(json['lastUpdated']),
       lastUpdatedBySection: {
-        for (final e in (json['lastUpdatedBySection'] as Map? ?? const {}).entries)
+        for (final e
+            in (json['lastUpdatedBySection'] as Map? ?? const {}).entries)
           if (PassportField.fromApi(e.key as String) case final field?)
             if (_instant(e.value) case final changed?) field: changed,
       },
@@ -240,10 +243,15 @@ class PassportProfileUpdate {
 
 /// Two letters from the first and last words of [name], upper-cased.
 String initialsOf(String? name) {
-  final words = (name ?? '').trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  final words = (name ?? '')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((w) => w.isNotEmpty)
+      .toList();
   if (words.isEmpty) return '?';
   if (words.length == 1) return words.first.substring(0, 1).toUpperCase();
-  return (words.first.substring(0, 1) + words.last.substring(0, 1)).toUpperCase();
+  return (words.first.substring(0, 1) + words.last.substring(0, 1))
+      .toUpperCase();
 }
 
 DateTime? _instant(Object? value) =>

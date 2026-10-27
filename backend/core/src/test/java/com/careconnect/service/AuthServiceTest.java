@@ -1032,6 +1032,31 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("loginV2_unverifiedEmail_shouldReturnNoTokenOrCookie")
+        void loginV2_unverifiedEmail_shouldReturnNoTokenOrCookie() throws Exception {
+            testUser.setIsVerified(false);
+
+            final LoginRequest req = new LoginRequest();
+            req.setEmail("test@test.com");
+            req.setPassword("password");
+            req.setRole("PATIENT");
+
+            when(users.findByEmailAndRole("test@test.com", Role.PATIENT))
+                    .thenReturn(Optional.of(testUser));
+            when(passwordEncoder.matches("password", "encodedPassword")).thenReturn(true);
+
+            final LoginResponse response = authService.loginV2(req, httpServletResponse);
+
+            assertEquals("test@test.com", response.email());
+            assertFalse(response.emailVerified());
+            assertNull(response.token());
+            verify(jwt, never()).createToken(any(), any());
+            verify(httpServletResponse, never()).addHeader(any(), any());
+            verify(gamificationService, never()).unlockAchievement(any(), any(), anyInt());
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("loginV2_userNotFound_shouldThrowAuthenticationException")
         void loginV2_userNotFound_shouldThrowAuthenticationException() throws Exception {
             final LoginRequest req = new LoginRequest();

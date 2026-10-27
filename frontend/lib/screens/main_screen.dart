@@ -47,6 +47,68 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Timer? _messageBadgeTimer;
 
   bool _initialized = false;
+  LocalHistoryEntry? _tabHistoryEntry;
+  bool _removingTabHistory = false;
+  int? _pageChangeTarget;
+
+  @override
+  void didUpdateWidget(covariant MainScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final index = widget.initialTabIndex ?? 0;
+    if (oldWidget.initialTabIndex != widget.initialTabIndex &&
+        index >= 0 &&
+        index < _navItems.length &&
+        index != _selectedIndex) {
+      _selectedIndex = index;
+      if (_navItems[index].routeName == 'messages') _unreadMessageCount = 0;
+      _pageChangeTarget = index;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _pageController.jumpToPage(index);
+        _updateTabHistory();
+        _refreshUnreadMessageBadge();
+      });
+    }
+  }
+
+  /// Tabs live inside one route. Give their AppBars/system Back a local
+  /// parent (Home) and publish tab changes so browser Back restores that tab.
+  void _updateTabHistory() {
+    if (_selectedIndex == 0) {
+      _removingTabHistory = true;
+      _tabHistoryEntry?.remove();
+      _tabHistoryEntry = null;
+      _removingTabHistory = false;
+    } else if (_tabHistoryEntry == null) {
+      _tabHistoryEntry = LocalHistoryEntry(
+        onRemove: () {
+          _tabHistoryEntry = null;
+          if (mounted && !_removingTabHistory) _onItemTapped(0);
+        },
+      );
+      ModalRoute.of(context)?.addLocalHistoryEntry(_tabHistoryEntry!);
+    }
+  }
+
+  void _publishTabLocation() {
+    final router = GoRouter.of(context);
+    final uri = router.routeInformationProvider.value.uri;
+    // Legacy/native callers may host MainScreen outside /dashboard.
+    if (uri.path != '/dashboard') return;
+    final parameters = Map<String, String>.from(uri.queryParameters);
+    if (_selectedIndex == 0) {
+      parameters.remove('tab');
+    } else {
+      parameters['tab'] = _navItems[_selectedIndex].routeName;
+    }
+    final location = Uri(
+      path: uri.path,
+      queryParameters: parameters.isEmpty ? null : parameters,
+      fragment: uri.hasFragment ? uri.fragment : null,
+    ).toString();
+    if (location != uri.toString()) router.go(location);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -63,11 +125,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       _initializeCallNotifications();
       _refreshUnreadMessageBadge();
       _startUnreadMessageBadgePolling();
+      _updateTabHistory();
     });
   }
 
   @override
   void dispose() {
+    _removingTabHistory = true;
+    _tabHistoryEntry?.remove();
     WidgetsBinding.instance.removeObserver(this);
     _observedUserProvider?.removeListener(_handleConnectivityTransition);
     _syncStartDelayTimer?.cancel();
@@ -384,6 +449,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     // Only change screen if there's an actual screen to navigate to
     if (navItem.screen != null) {
+      _pageChangeTarget = index == _selectedIndex ? null : index;
       setState(() {
         _selectedIndex = index;
         if (navItem.routeName == 'messages') {
@@ -391,6 +457,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         }
       });
       _refreshUnreadMessageBadge();
+
+      _updateTabHistory();
+      _publishTabLocation();
 
       if (_config.enablePageAnimation) {
         _pageController.animateToPage(
@@ -486,6 +555,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   void _onPageChanged(int index) {
+    // Animated jumps can cross intermediate pages. Only user swipes should
+    // publish a new location here; taps/route restoration already selected it.
+    if (_pageChangeTarget != null) {
+      if (index == _pageChangeTarget) _pageChangeTarget = null;
+      return;
+    }
     setState(() {
       _selectedIndex = index;
       if (_navItems[index].routeName == 'messages') {
@@ -493,6 +568,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       }
     });
     _refreshUnreadMessageBadge();
+    _updateTabHistory();
+    _publishTabLocation();
   }
 
   int? _toInt(dynamic value) {
@@ -1000,13 +1077,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
               // The actual tab content
               Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  onPageChanged: _onPageChanged,
-                  itemCount: _navItems.length,
-                  itemBuilder: (context, index) {
-                    return _navItems[index].screen;
+                child: NotificationListener<ScrollStartNotification>(
+                  onNotification: (notification) {
+                    if (notification.dragDetails != null)
+                      _pageChangeTarget = null;
+                    return false;
                   },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    onPageChanged: _onPageChanged,
+                    itemCount: _navItems.length,
+                    itemBuilder: (context, index) {
+                      return _navItems[index].screen;
+                    },
+                  ),
                 ),
               ),
             ],

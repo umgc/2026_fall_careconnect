@@ -166,6 +166,13 @@ void main() {
         return null;
       },
     );
+    // ...and listens for connection changes; without a stream handler that
+    // listen throws MissingPluginException against whichever test is running.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      const EventChannel('dev.fluttercommunity.plus/connectivity_status'),
+      MockStreamHandler.inline(onListen: (_, __) {}),
+    );
     _setSarahHttpMocks();
   });
 
@@ -179,6 +186,11 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
       const MethodChannel('dev.fluttercommunity.plus/connectivity'),
+      null,
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+      const EventChannel('dev.fluttercommunity.plus/connectivity_status'),
       null,
     );
   });
@@ -420,6 +432,71 @@ void main() {
     });
   });
 
+  // resolvePatientUserId picks the patient's login account id (users.id), which video calls
+  // and mood history are addressed by. The page's patientId is the patient record id
+  // (patient.id), a different number for every patient but the first seeded one.
+  group('resolvePatientUserId', () {
+    // Scenario: the caregiver link carries the account id; it wins over the other sources.
+    test('prefers the caregiver link patientUserId', () {
+      final id = resolvePatientUserId(
+        detailsPayload: {
+          'user': {'id': 8},
+        },
+        profilePayload: {
+          'user': {'id': 7},
+        },
+        caregiverData: {
+          'link': {'patientUserId': 9},
+        },
+      );
+
+      expect(id, 9);
+    });
+
+    // Scenario: without a link (patient viewing their own page) the details user is used.
+    test('falls back to the details payload user id', () {
+      final id = resolvePatientUserId(
+        detailsPayload: {
+          'user': {'id': '12'},
+        },
+        profilePayload: const {},
+        caregiverData: null,
+      );
+
+      expect(id, 12);
+    });
+
+    // Scenario: only the profile payload carries the user.
+    test('falls back to the profile payload user id', () {
+      final id = resolvePatientUserId(
+        detailsPayload: const {},
+        profilePayload: {
+          'user': {'id': 5},
+        },
+        caregiverData: const {'link': <String, dynamic>{}},
+      );
+
+      expect(id, 5);
+    });
+
+    // Scenario: patient2 (record id 2) is a different account from user 2 (caregiver@). With
+    // no account id loaded the result is 0, never the record id, so a call or mood lookup
+    // cannot silently target someone else's account.
+    test('returns 0 rather than any other id when no account id is loaded', () {
+      final id = resolvePatientUserId(
+        detailsPayload: {
+          'id': 2,
+          'user': {'id': 0},
+        },
+        profilePayload: {'id': 2},
+        caregiverData: {
+          'link': {'patientUserId': null},
+        },
+      );
+
+      expect(id, 0);
+    });
+  });
   // ───────────────────── Medicare tab (WBS 6.2.58) ─────────────────────
   group('PatientDetailsPage – Medicare tab', () {
     late HttpClientAdapter original;
@@ -1633,6 +1710,11 @@ void main() {
         'that returns to this page, which reloads and waits for the call\'s '
         'end', (t) async {
       routes({
+        // The page calls the patient's account id from the caregiver link
+        // (resolvePatientUserId), never the patient record id.
+        r'GET /caregivers/10/patients/42$': (_) => json({
+              'link': {'patientUserId': 42}
+            }),
         r'GET /caregivers/10/patients$': (_) => json([
               {
                 'link': {'patientUserId': 42}
@@ -1652,6 +1734,12 @@ void main() {
     testWidgets(
         'TC-PDP-051: a caregiver who may not call the patient is told so and '
         'no call starts', (t) async {
+      // The account id is known, but the caregiver isn't linked to it.
+      routes({
+        r'GET /caregivers/10/patients/42$': (_) => json({
+              'link': {'patientUserId': 42}
+            }),
+      });
       final q = await startCall(t, provider: caregiver(), isCaregiver: true);
       expect(q, isNull);
       expect(snack(t), 'You are not allowed to start this video call.');

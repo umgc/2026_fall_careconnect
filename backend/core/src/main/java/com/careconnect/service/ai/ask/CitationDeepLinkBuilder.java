@@ -79,7 +79,9 @@ final class CitationDeepLinkBuilder {
     }
 
     /**
-     * Epic detail route {@code /epic/{resourceType}/{id}?patientId=...}. Returns null (citation
+     * Epic detail route {@code /epic/{resourceType}/{id}?patientUserId=...}. The query param name
+     * matches the backend read endpoint ({@code GET /api/epic/resource/{type}/{id}?patientUserId=}),
+     * and {@code chunk.patientId()} is the connecting user id it expects. Returns null (citation
      * still renders, untappable) when the FHIR type/id are absent or non-path-safe.
      */
     private String epicLink(final RankedChunk chunk, final JsonNode metadata) {
@@ -88,7 +90,7 @@ final class CitationDeepLinkBuilder {
         if (type == null || id == null || chunk.patientId() == null || chunk.patientId() <= 0) {
             return null;
         }
-        return "/epic/" + type + "/" + id + "?patientId=" + chunk.patientId();
+        return "/epic/" + type + "/" + id + "?patientUserId=" + chunk.patientId();
     }
 
     private String summaryChildLink(final RankedChunk chunk, final JsonNode metadata) {

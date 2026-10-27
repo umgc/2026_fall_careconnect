@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -207,5 +209,17 @@ class ChunkEmbeddingServiceTest {
             list.add(value);
         }
         return objectMapper.writeValueAsString(java.util.Map.of("embedding", list));
+    }
+
+    @Test
+    void embedAndPersist_alwaysOpensItsOwnTransaction() throws Exception {
+        // Called from afterCommit callbacks, where the committed transaction is still
+        // bound; joining it makes every embedding update fail.
+        final Transactional tx = ChunkEmbeddingService.class
+                .getMethod("embedAndPersist", List.class)
+                .getAnnotation(Transactional.class);
+
+        assertThat(tx).isNotNull();
+        assertThat(tx.propagation()).isEqualTo(Propagation.REQUIRES_NEW);
     }
 }

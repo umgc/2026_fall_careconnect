@@ -84,12 +84,14 @@ class NewQrCode {
   final String url;
   final DateTime createdAt;
 
-  const NewQrCode({required this.token, required this.url, required this.createdAt});
+  const NewQrCode(
+      {required this.token, required this.url, required this.createdAt});
 
   factory NewQrCode.fromJson(Map<String, dynamic> json) => NewQrCode(
         token: (json['token'] ?? '').toString(),
         url: scanLink((json['url'] ?? '').toString()),
-        createdAt: DateTime.tryParse('${json['createdAt']}') ?? DateTime.now().toUtc(),
+        createdAt:
+            DateTime.tryParse('${json['createdAt']}') ?? DateTime.now().toUtc(),
       );
 }
 

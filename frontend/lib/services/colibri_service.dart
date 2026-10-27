@@ -33,7 +33,8 @@ class ColibriService {
     if (dosageRegex.hasMatch(lower)) return true;
 
     if (lower.contains('in half') || lower.contains('half of')) {
-      final halfAction = RegExp(r'\b(cut|split|halve|take|break|divide)\b', caseSensitive: false);
+      final halfAction = RegExp(r'\b(cut|split|halve|take|break|divide)\b',
+          caseSensitive: false);
       if (halfAction.hasMatch(lower)) return true;
     }
 
@@ -181,7 +182,8 @@ class ColibriService {
     if (shouldEscalateToCloud(question)) {
       return {
         'success': true,
-        'content': '$escalateToken This inquiry involves medication dosage changes, symptoms, or multi-campus facility information.',
+        'content':
+            '$escalateToken This inquiry involves medication dosage changes, symptoms, or multi-campus facility information.',
         'model': model,
         'escalateToCloud': true,
       };
@@ -189,7 +191,8 @@ class ColibriService {
 
     String contextBlock = '';
     if (localPatientData != null && localPatientData.isNotEmpty) {
-      contextBlock = '\n[LOCAL PATIENT CONTEXT]\n${jsonEncode(localPatientData)}\n';
+      contextBlock =
+          '\n[LOCAL PATIENT CONTEXT]\n${jsonEncode(localPatientData)}\n';
     }
 
     final systemPrompt =

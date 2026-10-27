@@ -20,6 +20,8 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/providers/locale_provider.dart';
 import 'package:care_connect_app/providers/theme_provider.dart';
 import 'package:care_connect_app/widgets/epic_connect_tile.dart';
+import 'package:care_connect_app/features/health/health_data/services/athena_connect_service.dart';
+import 'package:care_connect_app/features/health/health_data/widgets/athena_connect_tile.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 
 void main() {
@@ -65,10 +67,17 @@ void main() {
 
   // Tall surface so the whole ListView (Epic tile included) is laid out
   // without needing to scroll.
-  Widget wrap() {
+  Widget wrap({String? role}) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
+        ChangeNotifierProvider<UserProvider>(create: (_) {
+          final users = UserProvider();
+          if (role != null) {
+            users.setUser(UserSession(
+                id: 1, email: 'user@example.com', role: role, token: 't'));
+          }
+          return users;
+        }),
         ChangeNotifierProvider<LocaleProvider>(create: (_) => LocaleProvider()),
         ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
       ],
@@ -96,4 +105,55 @@ void main() {
     // Tile title is constant regardless of connected/loading state.
     expect(find.text('Epic (MyChart)'), findsOneWidget);
   });
+
+  group('athenahealth row', () {
+    late AthenaConnectService original;
+    setUp(() {
+      original = AthenaConnectService.instance;
+      AthenaConnectService.instance = _NotConnectedAthena();
+    });
+    tearDown(() => AthenaConnectService.instance = original);
+
+    Future<void> pumpAs(WidgetTester tester, String? role) async {
+      tester.view.physicalSize = const Size(800, 4000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(wrap(role: role));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('a patient sees it under Connected Services, styled like '
+        'the Epic row', (tester) async {
+      await pumpAs(tester, 'PATIENT');
+      final athena = find.byType(AthenaConnectTile);
+      expect(athena, findsOneWidget);
+      expect(tester.widget<AthenaConnectTile>(athena).compact, isTrue);
+      final row = find.descendant(of: athena, matching: find.byType(ListTile));
+      expect(row, findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text('athenahealth')),
+          findsOneWidget);
+      expect(find.descendant(of: athena, matching: find.byType(Card)),
+          findsOneWidget);
+      // Same building blocks as EpicConnectTile.
+      expect(
+          find.descendant(
+              of: find.byType(EpicConnectTile), matching: find.byType(ListTile)),
+          findsOneWidget);
+    });
+
+    testWidgets('other roles don\'t see it (the API accepts patients only)',
+        (tester) async {
+      await pumpAs(tester, 'CAREGIVER');
+      expect(find.byType(AthenaConnectTile), findsNothing);
+      expect(find.byType(EpicConnectTile), findsOneWidget);
+    });
+  });
+}
+
+class _NotConnectedAthena extends AthenaConnectService {
+  @override
+  Future<AthenaStatus?> status() async => const AthenaStatus(
+      connected: false, reason: AthenaNotConnectedReason.notConsented);
 }
