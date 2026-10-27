@@ -355,7 +355,7 @@ void main() {
     expect(find.text('5 events'), findsOneWidget);
     await t.enterText(find.byType(TextField), 'pneumonia');
     await t.pumpAndSettle();
-    expect(find.text('1 events'), findsOneWidget);
+    expect(find.text('1 event'), findsOneWidget);
     expect(find.text('Simple pneumonia and pleurisy with CC'), findsOneWidget);
     expect(find.text('Medicare Part A (Hospital Insurance)'), findsNothing);
     await t.tap(find.text('Clear filters'));

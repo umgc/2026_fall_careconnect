@@ -57,7 +57,7 @@
   "addPatient": "Agregar Paciente",
   "settings": "Configuración",
   "fallDetection": "Detección de caídas",
-   "informedDelivery": "Entrega informada",
+  "informedDelivery": "Entrega informada",
   "smartDevices": "Dispositivos inteligentes",
   "pleaseLogIn": "Inicia sesión",
   "loginRequiredMessage": "Debes iniciar sesión para acceder al menú",
@@ -67,13 +67,10 @@
   "save": "Guardar",
   "systemDefault": "Predeterminado del sistema",
   "fallbackUser": "Usuario",
-
   "roles_Patient": "Paciente",
   "roles_Caregiver": "Cuidador",
   "roles_Admin": "Admin",
-
   "dashboard": "Panel",
-
   "shortcut_dashboard": "Panel",
   "shortcut_invoices": "Facturas",
   "shortcut_calendar": "Calendario",
@@ -83,7 +80,6 @@
   "shortcut_wearables": "Dispositivos portátiles",
   "shortcut_files": "Archivos",
   "shortcut_gamification": "Gamificación",
-
   "navHome": "Inicio",
   "navSymptoms": "Síntomas",
   "navHealth": "Salud",
@@ -92,72 +88,67 @@
   "navPatientList": "Lista de pacientes",
   "navAnalytics": "Analítica",
   "navMore": "Más",
-
   "notetakerAssistant": "Asistente de toma de notas",
-
-"settingsTitle": "Configuración",
-"settingsAppearance": "Apariencia",
-"settingsNotifications": "Notificaciones",
-"settingsLoadingNotificationSettings": "Cargando ajustes de notificaciones...",
-"settingsUnableToLoadNotificationSettings": "No se puede cargar los ajustes de notificaciones",
-"settingsRefresh": "Actualizar",
-"settingsDarkMode": "Modo oscuro",
-"settingsToggleThemeDesc": "Alternar entre tema claro y oscuro",
-"settingsNotifEmergency": "Alertas de emergencia",
-"settingsNotifEmergencyDesc": "Alertas críticas de salud y emergencias",
-"settingsNotifVideoCall": "Notificaciones de videollamada",
-"settingsNotifVideoCallDesc": "Alertas de videollamadas entrantes",
-"settingsNotifAudioCall": "Notificaciones de llamada de audio",
-"settingsNotifAudioCallDesc": "Alertas de llamadas de audio entrantes",
-"settingsNotifSignificantVitals": "Signos vitales importantes",
-"settingsNotifSignificantVitalsDesc": "Cambios importantes en los signos vitales",
-"settingsNotifSMS": "Notificaciones SMS",
-"settingsNotifSMSDesc": "Alertas de mensajes de texto a tu teléfono",
-"settingsNotifGamification": "Gamificación",
-"settingsNotifGamificationDesc": "Notificaciones de logros y progreso",
-"settingsSnackUpdated": "Ajustes de notificaciones actualizados",
-"settingsSnackUpdateFailed": "Error al actualizar ajustes",
-"settingsCacheCleared": "Caché borrada con éxito",
-"settingsAIAssistant": "Asistente de IA",
-"settingsAIConfiguration": "Configuración de IA",
-"settingsAIConfigurationDesc": "Personaliza la configuración de tu asistente de IA",
-"settingsSubscription": "Suscripción",
-"settingsManageSubscription": "Administrar suscripción",
-"settingsManageSubscriptionDesc": "Ver o actualizar tu plan de suscripción",
-"settingsNotetakerAssistant": "Asistente de toma de notas",
-"settingsNotetakerConfiguration": "Configuración del asistente de notas",
-"settingsNotetakerConfigurationDesc": "Personaliza la configuración del asistente de notas",
-"settingsGeneral": "General",
-"settingsClearCache": "Borrar caché",
-"settingsClearCacheShortDesc": "Eliminar archivos temporales y datos de caché",
-"settingsClearCacheDesc": "Esto borrará todos los archivos temporales y datos de caché. La app puede demorar más en cargar contenido al inicio luego de borrar la caché.",
-"settingsSignOut": "Cerrar sesión",
-"settingsSignOutDesc": "Cerrar sesión de tu cuenta",
-"settingsSignOutConfirmMessage": "¿Estás seguro de que deseas cerrar sesión?",
-"settingsDeleteAccount": "Eliminar cuenta",
-"settingsDeleteAccountShortDesc": "Eliminar permanentemente tu cuenta",
-"settingsDeleteAccountDesc": "Esta acción no se puede deshacer. Todos tus datos serán eliminados permanentemente.",
-"settingsDeleteAccountRequested": "Solicitud de eliminación de cuenta enviada. Por favor contacta soporte.",
-"settingsDeleteAccountAction": "Eliminar cuenta",
-
-"settings_telemetryDefaultDialogTitle": "La telemetría está activada",
-"settings_telemetryDefaultDialogDescription": "CareConnect recopila, de forma predeterminada, datos de diagnóstico y métricas de rendimiento anónimos para ayudar a mejorar la fiabilidad.\nPuedes darte de baja en cualquier momento.",
-"settings_telemetryDefaultDialogKeepEnabled": "Mantener activado",
-"settings_telemetryDefaultDialogOptOut": "Darse de baja",
-"settings_telemetryOptOutDialogTitle": "¿Deseas desactivar la telemetría?",
-"settings_telemetryOptOutDialogDescription": "Si decides no participar, CareConnect dejará de recopilar datos de diagnóstico y métricas de rendimiento anónimos.",
-"settings_telemetryOptInDialogTitle": "¿Activar la telemetría?",
-"settings_telemetryOptInDialogDescription": "Esto permitirá a CareConnect recopilar datos de diagnóstico y métricas de rendimiento anónimos para mejorar la fiabilidad.",
-"settings_telemetryOptInDialogEnable": "Activar",
-"settings_privacySectionHeader": "Privacidad",
-"settings_privacySectionTelemetrySetting": "Telemetría",
-"settings_privacySectionTelemetrySettingDescription": "Diagnósticos anónimos y métricas de rendimiento",
-"settings_telemetryFailedToUpdate": "No se ha podido actualizar la configuración de telemetría.",
-"settings_generalSectionOfflinePersistenceSetting": "Persistencia sin Conexión",
-"settings_generalSectionOfflinePersistenceSettingEnabled": "Guardar los datos localmente y sincronizarlos cuando se vuelva a conectar",
-"settings_generalSectionOfflinePersistenceSettingDisabled": "Los nuevos datos no se almacenarán localmente para su uso sin conexión.",
-
-
+  "settingsTitle": "Configuración",
+  "settingsAppearance": "Apariencia",
+  "settingsNotifications": "Notificaciones",
+  "settingsLoadingNotificationSettings": "Cargando ajustes de notificaciones...",
+  "settingsUnableToLoadNotificationSettings": "No se puede cargar los ajustes de notificaciones",
+  "settingsRefresh": "Actualizar",
+  "settingsDarkMode": "Modo oscuro",
+  "settingsToggleThemeDesc": "Alternar entre tema claro y oscuro",
+  "settingsNotifEmergency": "Alertas de emergencia",
+  "settingsNotifEmergencyDesc": "Alertas críticas de salud y emergencias",
+  "settingsNotifVideoCall": "Notificaciones de videollamada",
+  "settingsNotifVideoCallDesc": "Alertas de videollamadas entrantes",
+  "settingsNotifAudioCall": "Notificaciones de llamada de audio",
+  "settingsNotifAudioCallDesc": "Alertas de llamadas de audio entrantes",
+  "settingsNotifSignificantVitals": "Signos vitales importantes",
+  "settingsNotifSignificantVitalsDesc": "Cambios importantes en los signos vitales",
+  "settingsNotifSMS": "Notificaciones SMS",
+  "settingsNotifSMSDesc": "Alertas de mensajes de texto a tu teléfono",
+  "settingsNotifGamification": "Gamificación",
+  "settingsNotifGamificationDesc": "Notificaciones de logros y progreso",
+  "settingsSnackUpdated": "Ajustes de notificaciones actualizados",
+  "settingsSnackUpdateFailed": "Error al actualizar ajustes",
+  "settingsCacheCleared": "Caché borrada con éxito",
+  "settingsAIAssistant": "Asistente de IA",
+  "settingsAIConfiguration": "Configuración de IA",
+  "settingsAIConfigurationDesc": "Personaliza la configuración de tu asistente de IA",
+  "settingsSubscription": "Suscripción",
+  "settingsManageSubscription": "Administrar suscripción",
+  "settingsManageSubscriptionDesc": "Ver o actualizar tu plan de suscripción",
+  "settingsNotetakerAssistant": "Asistente de toma de notas",
+  "settingsNotetakerConfiguration": "Configuración del asistente de notas",
+  "settingsNotetakerConfigurationDesc": "Personaliza la configuración del asistente de notas",
+  "settingsGeneral": "General",
+  "settingsClearCache": "Borrar caché",
+  "settingsClearCacheShortDesc": "Eliminar archivos temporales y datos de caché",
+  "settingsClearCacheDesc": "Esto borrará todos los archivos temporales y datos de caché. La app puede demorar más en cargar contenido al inicio luego de borrar la caché.",
+  "settingsSignOut": "Cerrar sesión",
+  "settingsSignOutDesc": "Cerrar sesión de tu cuenta",
+  "settingsSignOutConfirmMessage": "¿Estás seguro de que deseas cerrar sesión?",
+  "settingsDeleteAccount": "Eliminar cuenta",
+  "settingsDeleteAccountShortDesc": "Eliminar permanentemente tu cuenta",
+  "settingsDeleteAccountDesc": "Esta acción no se puede deshacer. Todos tus datos serán eliminados permanentemente.",
+  "settingsDeleteAccountRequested": "Solicitud de eliminación de cuenta enviada. Por favor contacta soporte.",
+  "settingsDeleteAccountAction": "Eliminar cuenta",
+  "settings_telemetryDefaultDialogTitle": "La telemetría está activada",
+  "settings_telemetryDefaultDialogDescription": "CareConnect recopila, de forma predeterminada, datos de diagnóstico y métricas de rendimiento anónimos para ayudar a mejorar la fiabilidad.\nPuedes darte de baja en cualquier momento.",
+  "settings_telemetryDefaultDialogKeepEnabled": "Mantener activado",
+  "settings_telemetryDefaultDialogOptOut": "Darse de baja",
+  "settings_telemetryOptOutDialogTitle": "¿Deseas desactivar la telemetría?",
+  "settings_telemetryOptOutDialogDescription": "Si decides no participar, CareConnect dejará de recopilar datos de diagnóstico y métricas de rendimiento anónimos.",
+  "settings_telemetryOptInDialogTitle": "¿Activar la telemetría?",
+  "settings_telemetryOptInDialogDescription": "Esto permitirá a CareConnect recopilar datos de diagnóstico y métricas de rendimiento anónimos para mejorar la fiabilidad.",
+  "settings_telemetryOptInDialogEnable": "Activar",
+  "settings_privacySectionHeader": "Privacidad",
+  "settings_privacySectionTelemetrySetting": "Telemetría",
+  "settings_privacySectionTelemetrySettingDescription": "Diagnósticos anónimos y métricas de rendimiento",
+  "settings_telemetryFailedToUpdate": "No se ha podido actualizar la configuración de telemetría.",
+  "settings_generalSectionOfflinePersistenceSetting": "Persistencia sin Conexión",
+  "settings_generalSectionOfflinePersistenceSettingEnabled": "Guardar los datos localmente y sincronizarlos cuando se vuelva a conectar",
+  "settings_generalSectionOfflinePersistenceSettingDisabled": "Los nuevos datos no se almacenarán localmente para su uso sin conexión.",
   "welcomeInitializingHealthcare": "Iniciando tu experiencia de salud…",
   "welcomeReadyToConnect": "¡Listo para conectar tu atención!",
   "welcomeBackendNotHealthyWarning": "El servicio de backend no está saludable. La aplicación tiene capacidades limitadas.",
@@ -168,7 +159,6 @@
   "welcome_subtitle": "Conectando el cuidado, empoderando la salud",
   "welcome_description": "Tu compañero de atención médica para",
   "welcome_tagline": "Mejor atención • Mejores resultados • Mejor vida",
-
   "login_tagline": "Conéctate con cuidado, haz seguimiento con confianza",
   "login_signInTitle": "Inicia sesión en tu cuenta",
   "login_signInSubtitle": "Ingresa tus credenciales para acceder a CareConnect",
@@ -186,7 +176,6 @@
   "login_e2eEncrypted": "Cifrado de extremo a extremo",
   "login_wcagAACompliant": "Cumple con WCAG AA",
   "login_loginFailedError": "Error al iniciar sesión",
-
   "voicecommand_wakeWordError": "Error de inicialización de la palabra de activación",
   "voicecommand_voiceCommandsUnavailable": "Reconocimiento de voz no disponible",
   "voicecommand_micPermissionsDenied": "Permiso de micrófono denegado",
@@ -230,14 +219,12 @@
   "voicecommand_timeoutGuidance": "Toque el micrófono para intentar de nuevo.",
   "voicecommand_noSpeechGuidance": "No se detectó voz. Toque el micrófono para intentar de nuevo.",
   "voicecommand_intentNotYetSupported": "Esta acción aún no está disponible. Use la navegación manual.",
-
   "appheaderwidget_invalidDOB": "Fecha de nacimiento no válida. No se puede generar el código QR de emergencia.",
   "appheaderwidget_missingPtData": "No hay datos del paciente disponibles para el código QR de emergencia",
   "appheaderwidget_medicalPassport": "Pasaporte médico",
   "appheaderwidget_welcomeBack": "Bienvenido de nuevo",
   "appheaderwidget_greetingPt": "¿Cómo te encuentras hoy?",
   "appheaderwidget_greetingNonPt": "Resumen de salud de tus pacientes",
-
   "mainscreen_voiceCommandsTooltip": "Comandos de voz",
   "mainscreen_loginFailed": "Por favor, vuelve a iniciar sesión",
   "mainscreen_cgCallEnabled": "Cuidador - llamadas del paciente habilitadas",
@@ -259,7 +246,6 @@
   "mainscreen_failRetry": "Error (se volverá a intentar)",
   "mainscreen_queued": "En cola",
   "mainscreen_retries": "reintentos",
-
   "resetpassword_failedSendReset": "No se ha podido enviar el enlace de restablecimiento. Inténtalo de nuevo.",
   "resetpassword_resetPasswordTitle": "Restablecer contraseña",
   "resetpassword_resetInstructions": "Introduce tu correo electrónico para recibir un enlace para restablecer la contraseña",
@@ -267,7 +253,6 @@
   "resetpassword_missingEmail": "Introduce tu correo electrónico",
   "resetpassword_invalidEmail": "Introduce una dirección de correo electrónico válida",
   "resetpassword_sendLinkButton": "Enviar enlace de restablecimiento",
-
   "authservice_oauthError": "Error de OAuth",
   "authservice_jwtTokenMissing": "No se ha recibido ningún token JWT del backend",
   "authservice_userDataMissing": "No se han recibido datos de usuario del backend",
@@ -295,7 +280,6 @@
   "authservice_alexaUnlinkedSuccess": "La cuenta de Alexa se ha desvinculado correctamente",
   "authservice_alexaUnlinkedFailed": "No se ha podido desvincular la cuenta de Alexa",
   "authservice_unexpectedError": "Se ha producido un error inesperado",
-
   "alexalogin_checkForAlexaOAuthParams": "Comprobación de los parámetros de OAuth de Alexa",
   "alexalogin_currentURI": "URI Actual",
   "alexalogin_queryParams": "Parámetros de Consulta",
@@ -328,7 +312,6 @@
   "alexalogin_emailAddress": "Dirección de correo electrónico",
   "alexalogin_enterEmailAddress": "Introduce tu correo electrónico",
   "alexalogin_debugLog": "Registro de Depuración",
-
   "signup_patient": "Paciente",
   "signup_caregiver": "Cuidador",
   "signup_patientDescription": "Como paciente, tendrás acceso para realizar un seguimiento de tu salud, comunicarte con los cuidadores, gestionar la medicación y controlar los síntomas.",
@@ -410,7 +393,6 @@
   "signup_nextButton": "Siguiente",
   "signup_step": "Paso",
   "signup_of": "de",
-
   "oauthcallback_initilizeAuth": "Procesando la autenticación",
   "oauthcallback_missingAuthData": "Faltan datos de autenticación. Intenta iniciar sesión de nuevo.",
   "oauthcallback_savingAuthData": "Guardando datos de autenticación",
@@ -422,14 +404,12 @@
   "oauthcallback_invalidRequest": "Solicitud no válida. Intenta iniciar sesión de nuevo.",
   "oauthcallback_serverError": "Se ha producido un error del servidor. Inténtalo de nuevo más tarde.",
   "oauthcallback_authError": "Error de autenticación",
-
   "passwordresetconfirm_missingPsw": "Introduce una nueva contraseña",
   "passwordresetconfirm_pswLengthShort": "La contraseña debe tener al menos 6 caracteres",
   "passwordresetconfirm_failedToResetPsw": "No se ha podido restablecer la contraseña",
   "passwordresetconfirm_setNewPassword": "Establecer Nueva Contraseña",
   "passwordresetconfirm_newPasswordDeco": "Nueva Contraseña",
   "passwordresetconfirm_confirmNewPasswordDeco": "Confirmar Nueva Contraseña",
-
   "passwordresetpage_failedToSetPassword": "No se ha podido establecer la contraseña",
   "passwordresetpage_setPasswordFirst": "Establece Tu Contraseña",
   "passwordresetpage_resetPasswordExisting": "Restablece Tu Contraseña",
@@ -437,19 +417,15 @@
   "passwordresetpage_resetPasswordDescription": "Introduzca su nueva contraseña a continuación.",
   "passwordresetpage_setPassword": "Establecer Contraseña",
   "passwordresetpage_missingPassword": "Introduzca una contraseña",
-
   "careteamperfmcard_careTeamPerfm": "Rendimiento del Equipo de Atención",
   "careteamperfmcard_overallPatSat": "Satisfacción General de los Pacientes",
   "careteamperfmcard_basedOnLast30": "Basado en los últimos 30 días",
   "careteamperfmcard_checkInCompRate": "Tasa de Finalización de Registros de Admisión",
-
   "ptstatcard_missedCheckInHeader": "# de Registros de Admisión no Realizados",
   "ptstatcard_activePtsHeader": "Pacientes Activos",
   "ptstatcard_missedCheckIn": "# de Registros de\n Admisión no Realizados",
   "ptstatcard_activePts": "Pacientes\nActivos",
-
   "recentptactivity_recentPtActivityTitle": "Actividad Reciente de los Pacientes",
-
   "upcomingcheckinwidget_missingCaregiverSession": "No se ha encontrado ninguna sesión de cuidador.",
   "upcomingcheckinwidget_failedToLoadVisits": "No se han podido cargar las visitas",
   "upcomingcheckinwidget_failedToLoadCheckIns": "No se han podido cargar los registros de asistencia pendientes.",
@@ -461,7 +437,6 @@
   "upcomingcheckinwidget_viewAllPatients": "Ver Todos los Pacientes",
   "upcomingcheckinwidget_startEVSession": "Iniciar Sesión de EV",
   "upcomingcheckinwidget_view": "Ver",
-
   "recentcheckinwidget_widgetTitle": "Registros Recientes",
   "recentcheckinwidget_openCheckInButton": "Abrir Registro",
   "recentcheckinwidget_janShort": "Ene",
@@ -482,7 +457,6 @@
   "recentcheckinwidget_moodHappy": "Feliz",
   "recentcheckinwidget_moodGreat": "Genial",
   "recentcheckinwidget_moodExcellent": "Excelente",
-
   "pcpwidget_pcpTitle": "Tu Médico de Cabecera",
   "pcpwidget_nextAppointment": "Próxima Cita",
   "pcpwidget_contactProvider": "Contactar con el Médico",
@@ -498,7 +472,6 @@
   "pcpwidget_octLong": "Octubre",
   "pcpwidget_novLong": "Noviembre",
   "pcpwidget_decLong": "Diciembre",
-
   "offlinenotiwidget_neverSynced": "Nunca se ha sincronizado",
   "offlinenotiwidget_minutesAgo": "minutos hace",
   "offlinenotiwidget_hoursAgo": "horas hace",
@@ -506,12 +479,10 @@
   "offlinenotiwidget_offlineMode": "Modo sin Conexión",
   "offlinenotiwidget_lastSynced": "Última sincronización",
   "offlinenotiwidget_syncOnReconnect": "Tus datos se sincronizarán cuando te vuelvas a conectar. La aplicación tendrá una funcionalidad limitada.",
-
   "notificationspanelwidget_notifications": "Notificaciones",
   "notificationspanelwidget_noNotifToShow": "No hay notificaciones que mostrar.",
   "notificationspanelwidget_hideButton": "Ocultar",
   "notificationspanelwidget_showButton": "Mostrar",
-
   "medicationreminderwidget_noMedReminders": "No hay recordatorios de medicación activos",
   "medicationreminderwidget_medRemindersTitle": "Recordatorios de Medicación",
   "medicationreminderwidget_taken": "Tomada",
@@ -522,7 +493,6 @@
   "medicationreminderwidget_moreMedications": "más medicamentos",
   "medicationreminderwidget_today": "Hoy",
   "medicationreminderwidget_tomorrow": "Mañana",
-
   "currentmoodwidget_title": "Estado de Ánimo Actual",
   "currentmoodwidget_rateCurrentMood": "Valora cómo te sientes ahora mismo:",
   "currentmoodwidget_saveMood": "Guardar Estado de Ánimo",
@@ -548,12 +518,10 @@
   "currentmoodwidget_moodTagMonitoring": "en seguimiento",
   "currentmoodwidget_noMoodTags": "no hay datos recientes sobre el estado de ánimo",
   "currentmoodwidget_yesterday": "Ayer",
-
   "alternotifwidget_alertImportant": "Importante",
   "alternotifwidget_alertReminder": "Recordatorio",
   "alternotifwidget_alertSuccess": "Éxito",
   "alternotifwidget_alertInfo": "Información",
-
   "ptmedreminderservice_doseNotSet": "Dosis no establecida",
   "ptmedreminderservice_frequencyNotSet": "Una vez al día",
   "ptmedreminderservice_twice": "dos veces",
@@ -565,7 +533,6 @@
   "ptmedreminderservice_month": "mes",
   "ptmedreminderservice_day": "día",
   "ptmedreminderservice_daily": "diario",
-
   "ptdashboard_userNotLoggedIn": "El usuario no ha iniciado sesión.",
   "ptdashboard_errorLoadDash": "Error al cargar el panel de control",
   "ptdashboard_videoCallDisabledWithoutCaregiver": "Las videollamadas no están disponibles hasta que se vincule un cuidador.",
@@ -612,20 +579,16 @@
   "ptdashboard_weekly": "Semanalmente",
   "ptdashboard_monthly": "Mensualmente",
   "ptdashboard_onceAtBed": "Una vez al día a la hora de acostarse",
-
   "sosscreen_sosSent": "SOS Enviado",
   "sosscreen_caregiverNotified": "Se ha avisado a tu cuidador.",
   "sosscreen_backButton": "Atrás",
-
   "mainscreen_emergencySOS": "SOS de Emergencia",
   "mainscreen_areYouSure": "¿Estás seguro de que quieres enviar una alerta a tu cuidador?\nSe le notificará tu ubicación.",
   "mainscreen_sendSOS": "Sí, Enviar SOS",
   "mainscreen_sosLoaded": "Se ha cargado la pantalla de emergencia",
   "mainscreen_sosAuto": "En esta pantalla aparecerá automáticamente el cuadro de diálogo SOS de Emergencia.",
-
   "cancelscreen_sosRequestCancel": "Solicitud de SOS cancelada",
   "cancelscreen_sosCancelConfirm": "No se ha avisado a tu cuidador.",
-
   "ptstatusscreen_noPtID": "No hay ningún ID de paciente disponible",
   "ptstatusscreen_failedToLoadProfile": "No se ha podido cargar el perfil del paciente. Estado",
   "ptstatusscreen_failedToLoadVitals": "No se ha podido cargar el resumen de constantes vitales. Estado",
@@ -662,14 +625,10 @@
   "ptstatusscreen_vitalSummary": "Resumen de Constantes Vitales (Últimos 7 Días)",
   "ptstatusscreen_noVitalsData": "No hay datos de constantes vitales disponibles para el resumen.",
   "ptstatusscreen_bpm": "lpm",
-
   "ptmednotes_medNotes": "Notas Médicas",
   "ptmednotes_ptID": "Identificación del Paciente",
   "ptmednotes_caregiverView": "Vista del Cuidador",
   "ptmednotes_ptView": "Vista del Paciente",
-
-  "mainscreen_voiceCommandsTooltip": "Comandos de voz",
-
   "languagepicker_English": "English (Inglés)",
   "languagepicker_Spanish": "Español",
   "languagepicker_Urdu": "اردو (Urdu)",
@@ -684,7 +643,6 @@
   "languagepicker_Bengali": "বাংলা (Bengalí)",
   "languagepicker_Russian": "Русский (Ruso)",
   "languagepicker_Japanese": "日本語 (Japonés)",
-
   "menupage_patientReportItem": "Informe del Paciente",
   "menupage_medicationTrackerItem": "Registro de medicación",
   "menupage_addPatientItem": "Añadir paciente",
@@ -728,13 +686,11 @@
   "ptfiles_yesterday": "Ayer",
   "ptfiles_daysAgo": "hace días",
   "ptfiles_structEntry": "Entrada estructurada",
-
   "subscriptionplans_basicDescription": "Plan de suscripción a los servicios de CareConnect.",
   "subscriptionplans_standardDescription": "Funcionalidades básicas para pacientes y cuidadores.",
   "subscriptionplans_premiumDescription": "Todas las funcionalidades, incluidas las videollamadas, el asistente de IA y la integración de dispositivos.",
   "subscriptionplans_yearly": "anual",
   "subscriptionplans_monthly": "mensual",
-
   "subscriptionmodels_yearly": "Anual",
   "subscriptionmodels_monthly": "Mensual",
   "subscriptionmodels_cancelOnPeriod": "Cancelación al final del periodo",
@@ -744,7 +700,6 @@
   "subscriptionmodels_unpaid": "Pendiente de pago",
   "subscriptionmodels_monthInterval": "/mes",
   "subscriptionmodels_yearInterval": "/año",
-
   "nativebilling_purchaseFailed": "Error en la compra",
   "nativebilling_purchaseError": "Error en la compra",
   "nativebilling_completeYourPurchase": "Finaliza tu compra",
@@ -758,7 +713,6 @@
   "nativebilling_orderSummary": "Resumen del Pedido",
   "nativebilling_taxes": "Impuestos",
   "nativebilling_total": "Total",
-
   "submangement_coreMonitorFeature": "Funciones básicas de monitorización",
   "submangement_emailSupportFeature": "Asistencia por correo electrónico",
   "submangement_unlimitedPtFeature": "Pacientes ilimitados",
@@ -800,7 +754,6 @@
   "submangement_finalConfirmation": "Confirmación Final",
   "submangement_finalWarning": "Esta acción no se puede deshacer. Tendrás que crear una nueva suscripción si quieres volver a utilizar la aplicación. ¿Deseas continuar con la cancelación?",
   "submangement_noGoBack": "NO, VOLVER ATRÁS",
-
   "submangement_yesFinal": "SÍ, CANCELAR MI SUSCRIPCIÓN",
   "submangement_subCanceledSuccess": "Suscripción cancelada correctamente. Cerrando sesión...",
   "submangement_subCanceledFailed": "No se ha podido cancelar la suscripción",
@@ -824,7 +777,6 @@
   "submangement_inactivePlan": "Plan Inactivo",
   "submangement_standardPlan": "Plan Estándar",
   "submangement_premiumPlan": "Plan Premium",
-
   "cancelpay_paymentCancel": "Pago Cancelado",
   "cancelpay_regNotComplete": "Tu registro no se completará sin el pago. Puedes volver a intentarlo o ponerte en contacto con el servicio de asistencia si necesitas ayuda.",
   "cancelpay_paymentCanceled": "Tu pago se ha cancelado. No se ha realizado ningún cargo en tu cuenta.",
@@ -832,11 +784,10 @@
   "cancelpay_returnDash": "Volver al Panel de Control",
   "cancelpay_skipGoLogin": "Omitir por Ahora (Ir a Iniciar Sesión)",
   "cancelpay_goHome": "Ir a la Página de Inicio",
-
   "paysuccess_redirectIn": "Redirigiendo en",
   "paysuccess_seconds": "segundos",
   "paysuccess_regComplete": "¡Registro completado!",
-  "paysuccess_paymentSuccess": "¡Pago Realizado con Éxito!", 
+  "paysuccess_paymentSuccess": "¡Pago Realizado con Éxito!",
   "paysuccess_thankForPayment": "¡Gracias por tu pago! Tu suscripción se ha actualizado correctamente.",
   "paysuccess_sessionId": "ID de Sesión",
   "paysuccess_continueLogin": "Continuar con el Inicio de Sesión",
@@ -845,7 +796,6 @@
   "paysuccess_redirectingAuto": "Redireccionamiento automático en 4 segundos...",
   "paysuccess_welcomeTo": "Bienvenido a CareConnect",
   "paysuccess_accountCreated": "Se ha creado tu cuenta y tu suscripción está activa. Ya puedes iniciar sesión para acceder a todas las funciones.",
-
   "subselection_choosePlan": "Elige tu Plan",
   "subselection_selectPlan": "Selecciona un Plan de Suscripción",
   "subselection_choosePlanDescr": "Elige el plan que mejor se adapte a tus necesidades",
@@ -868,7 +818,6 @@
   "subselection_confirmFree": "Confirmar el Plan Gratuito",
   "subselection_selectedFree": "Has seleccionado el Plan Gratuito. Puedes cambiar a un plan superior en cualquier momento.",
   "subselection_mostPopular": "Los Más Populares",
-
   "webpay_paymentFailed": "Error en el pago",
   "webpay_transaction": "Transacción",
   "webpay_errorLoadingQuote": "Error al cargar el presupuesto",
@@ -878,13 +827,11 @@
   "webpay_payGoogle": "Pagar con Google Pay",
   "webpay_taxState": "Estado Fiscal",
   "webpay_currency": "Moneda",
-
   "billservice_inAppUnavailable": "Las compras dentro de la aplicación no están disponibles",
   "billservice_productNotFound": "Producto no encontrado",
   "billservice_noOfferToken": "No se ha encontrado ningún token de oferta para",
   "billservice_verifyFailed": "Error en la verificación",
   "billservice_paymentProcessFailed": "Error en el procesamiento del pago",
-
   "filemanage_errorLoadingFiles": "Error al cargar los archivos",
   "filemanage_myFiles": "Mis Archivos",
   "filemanage_upload": "Subir",
@@ -936,7 +883,6 @@
   "filemanage_empContract": "Contrato de Trabajo",
   "filemanage_taxForm": "Formulario Fiscal (W-4)",
   "filemanage_workAuth": "Autorización de Trabajo (I-9)",
-
   "manualentrywidget_manualTextEntry": "Introducción Manual de Texto",
   "manualentrywidget_noCateAvail": "No hay categorías disponibles.",
   "manualentrywidget_noCateSelected": "Selecciona una categoría de archivo",
@@ -954,14 +900,12 @@
   "manualentrywidget_fileContentDescr": "Introduce el contenido del archivo",
   "manualentrywidget_fileContentEmpty": "El contenido del archivo no puede estar vacío",
   "manualentrywidget_saveToFile": "Guardar en Archivo",
-
   "speechtextwidget_speechToTextSaved": "Archivo de conversión de voz a texto guardado",
   "speechtextwidget_speechToText": "Conversión de Voz a Texto",
   "speechtextwidget_recoginizedText": "Texto Reconocido",
   "speechtextwidget_tapButtonToStart": "Pulsa el botón de abajo para iniciar la conversión de voz a texto",
   "speechtextwidget_stopListening": "Dejar de Escuchar",
   "speechtextwidget_startListening": "Empezar a Escuchar",
-
   "fileuploadwidget_uploadFile": "Subir Archivo",
   "fileuploadwidget_selectFile": "Seleccionar Archivo",
   "fileuploadwidget_fileSelected": "Archivo Seleccionado",
@@ -979,7 +923,6 @@
   "fileuploadwidget_quickFileUpload": "Carga Rápida de Archivos",
   "fileuploadwidget_profilePhoto": "Foto de Perfil",
   "fileuploadwidget_upload": "Subir",
-
   "homecarewidget_extractionFailed": "La extracción automática ha fallado. Introduce los campos manualmente.",
   "homecarewidget_extractionUnavailable": "La extracción automática no estaba disponible; se continúa con la introducción manual.",
   "homecarewidget_homeCareDigitization": "Digitalización de Documentos de Asistencia a Domicilio",
@@ -991,7 +934,6 @@
   "homecarewidget_clearSelectFile": "Borrar archivos seleccionados",
   "homecarewidget_digitizeReview": "Digitalizar y Revisar",
   "homecarewidget_enterManual": "Introducir manualmente",
-
   "hiringformfill_submitted": "Enviado",
   "hiringformfill_copySaved": "se ha guardado una copia en Mis archivos",
   "hiringformfill_confirmSub": "Confirmar envío",
@@ -1012,7 +954,6 @@
   "hiringformfill_required": "Obligatorio",
   "hiringformfill_selectDate": "Seleccionar fecha",
   "hiringformfill_attachDocument": "Adjunta este documento desde la pestaña «Subir» después de enviarlo.",
-
   "hiringformtab_noHiringForm": "No hay formularios de contratación disponibles.",
   "hiringformtab_requiredDocuments": "Documentos necesarios para la contratación y la incorporación",
   "hiringformtab_notReadableFile": "No se ha podido leer el archivo seleccionado",
@@ -1031,7 +972,6 @@
   "hiringformtab_by": "por",
   "hiringformtab_rules": "Normas",
   "hiringformtab_source": "Fuente",
-
   "homecarereview_review": "Revisar",
   "homecarereview_saving": "Guardando",
   "homecarereview_confirmSave": "Confirmar y Guardar",
@@ -1045,18 +985,21 @@
   "homecarereview_reviewed": "(revisado)",
   "homecarereview_savedForm": "Formulario digitalizado guardado",
   "homecarereview_failedToSave": "No se ha podido guardar el formulario digitalizado",
-
   "socialFeedInvalidUser": "ID de usuario no válido. Inicia sesión de nuevo.",
   "socialFeedLoadError": "Error: {message}",
   "@socialFeedLoadError": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "socialFeedComments": "{count, plural, =1{1 comentario} other{{count} comentarios}}",
   "@socialFeedComments": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "socialFeedTitle": "Mi feed",
@@ -1065,13 +1008,14 @@
   "socialFeedFriendRequests": "Solicitudes de amistad",
   "socialFeedMessages": "Mensajes",
   "socialFeedCreatePost": "Crear publicación",
-
   "gamificationTitle": "Logros",
   "gamificationHeading": "Gamificación",
   "gamificationLevel": "Nivel {level}",
   "@gamificationLevel": {
     "placeholders": {
-      "level": {"type": "int"}
+      "level": {
+        "type": "int"
+      }
     }
   },
   "gamificationAchievements": "Logros",
@@ -1082,7 +1026,6 @@
   "gamificationDailyMessage3": "Cree en ti y en todo lo que eres.",
   "gamificationDailyMessage4": "Progreso, no perfección.",
   "gamificationDailyMessage5": "Un día a la vez: ¡tú puedes!",
-
   "uspsTitle": "Resumen de correo de USPS",
   "uspsGmailIntegration": "Integración con Gmail",
   "uspsIntegrationDescription": "CareConnect lee los correos de USPS Informed Delivery en Gmail con acceso de solo lectura. Nunca enviamos, eliminamos ni modificamos tus correos.",
@@ -1106,33 +1049,45 @@
   "uspsFoundItems": "Se encontraron {count} elementos de correo que coinciden con \"{keyword}\"",
   "@uspsFoundItems": {
     "placeholders": {
-      "count": {"type": "int"},
-      "keyword": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "keyword": {
+        "type": "String"
+      }
     }
   },
   "uspsSearchFailed": "Error en la búsqueda: {message}",
   "@uspsSearchFailed": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "uspsNoMatches": "Ningún elemento de correo coincide con \"{keyword}\".",
   "@uspsNoMatches": {
     "placeholders": {
-      "keyword": {"type": "String"}
+      "keyword": {
+        "type": "String"
+      }
     }
   },
   "uspsShowTodayMail": "Mostrar el correo de hoy",
   "uspsShowingDate": "Mostrando el resumen del {date}",
   "@uspsShowingDate": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsItemCount": "{count, plural, =1{1 elemento} other{{count} elementos}}",
   "@uspsItemCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "uspsNoItems": "No hay elementos",
@@ -1145,25 +1100,33 @@
   "uspsFrom": "De: {sender}",
   "@uspsFrom": {
     "placeholders": {
-      "sender": {"type": "String"}
+      "sender": {
+        "type": "String"
+      }
     }
   },
   "uspsTracking": "Seguimiento: {trackingNumber}",
   "@uspsTracking": {
     "placeholders": {
-      "trackingNumber": {"type": "String"}
+      "trackingNumber": {
+        "type": "String"
+      }
     }
   },
   "uspsExpected": "Previsto: {date}",
   "@uspsExpected": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsDelivered": "Entregado: {date}",
   "@uspsDelivered": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsDetails": "Detalles",
@@ -1195,11 +1158,12 @@
   "uspsDigestNotFound": "No se encontró un resumen de USPS para {date}.",
   "@uspsDigestNotFound": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsUSPSPackage": "Paquete de USPS",
-
   "hhaTitle": "Enviar a HHAExchange",
   "hhaRefresh": "Actualizar",
   "hhaInfo": "Selecciona las visitas APROBADAS para enviarlas al agregador HHAExchange de Virginia (https://implementation.hhaexchange.com/api/v2/visits). Solo se envían registros del estado de Virginia.",
@@ -1207,39 +1171,51 @@
   "hhaSelectAll": "Seleccionar todo ({count})",
   "@hhaSelectAll": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaSelectedCount": "{count} seleccionados",
   "@hhaSelectedCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaSubmitting": "Enviando…",
   "hhaSubmitVisits": "Enviar {count} visita(s)",
   "@hhaSubmitVisits": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaErrorLoading": "Error al cargar los registros: {message}",
   "@hhaErrorLoading": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaDownloading": "Descargando los datos de HHAExchange...",
   "hhaDownloadedAs": "Datos descargados como {filename}",
   "@hhaDownloadedAs": {
     "placeholders": {
-      "filename": {"type": "String"}
+      "filename": {
+        "type": "String"
+      }
     }
   },
   "hhaDownloadFailed": "No se pudieron descargar los datos: {message}",
   "@hhaDownloadFailed": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaFetchingPayload": "Obteniendo los datos para descargar...",
@@ -1247,19 +1223,25 @@
   "hhaPayloadDownloadWarning": "Aviso: no se pudieron descargar los datos ({message}). Se continuará con el envío...",
   "@hhaPayloadDownloadWarning": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaSubmittedCount": "{count} visita(s) enviadas correctamente a HHAExchange.",
   "@hhaSubmittedCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaSubmissionFailed": "Error al enviar: {message}",
   "@hhaSubmissionFailed": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaNoEligibleVisits": "No hay visitas aptas",
@@ -1268,23 +1250,28 @@
   "hhaCheckIn": "Entrada: {time}",
   "@hhaCheckIn": {
     "placeholders": {
-      "time": {"type": "String"}
+      "time": {
+        "type": "String"
+      }
     }
   },
   "hhaCheckOut": "Salida: {time}",
   "@hhaCheckOut": {
     "placeholders": {
-      "time": {"type": "String"}
+      "time": {
+        "type": "String"
+      }
     }
   },
   "hhaState": "Estado: {state}",
   "@hhaState": {
     "placeholders": {
-      "state": {"type": "String"}
+      "state": {
+        "type": "String"
+      }
     }
   },
   "hhaStatusApproved": "APROBADA",
-
   "shiftTitle": "Programación de turnos del cuidador",
   "shiftRecurring": "Turno recurrente",
   "shiftStartTime": "Hora de inicio",
@@ -1302,7 +1289,9 @@
   "shiftVisitSaved": "Visita guardada: {patient}",
   "@shiftVisitSaved": {
     "placeholders": {
-      "patient": {"type": "String"}
+      "patient": {
+        "type": "String"
+      }
     }
   },
   "healthEventDetailsTitle": "Detalles del evento de salud",
@@ -1315,6 +1304,47 @@
   "healthDataRecordTypeClinicalRecord": "Registro clínico",
   "healthDataRecordTypeClaimService": "Reclamación / Servicio",
   "healthDataRecordTypeRecord": "Registro",
+  "healthDataTitle": "Datos de salud",
+  "healthDataLoading": "Cargando tus datos de salud…",
+  "healthDataOracleUnavailable": "No pudimos cargar los registros de Oracle Health. Mostramos los que pudimos recuperar.",
+  "healthDataOracleConnected": "Conectado a Oracle Health. Tus registros de Oracle Health están incluidos en tu historial de salud.",
+  "healthDataHistoryDescription": "Un historial de salud consultable de todos tus proveedores de atención médica conectados.",
+  "healthDataSearchHistory": "Buscar en tu historial de salud",
+  "healthDataClearFilters": "Borrar filtros",
+  "healthDataYourHistory": "Tu historial de salud",
+  "healthDataEventCount": "{count, plural, =0 {0 eventos} =1 {1 evento} other {{count} eventos}}",
+  "@healthDataEventCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "healthDataInformation": "Información de salud",
+  "healthDataFilterAll": "Todos",
+  "healthDataFilterMedications": "Medicamentos",
+  "healthDataFilterConditions": "Afecciones",
+  "healthDataFilterAllergies": "Alergias",
+  "healthDataFilterVisits": "Visitas",
+  "healthDataFilterClinicalRecords": "Registros clínicos",
+  "healthDataFilterClaims": "Reclamaciones",
+  "healthDataNoRecords": "No se encontraron registros de salud",
+  "healthDataChangeSearchFilters": "Intenta cambiar la búsqueda o los filtros.",
+  "healthDataNoDate": "Información de salud sin fecha",
+  "healthDataViewDetails": "Ver detalles",
+  "healthDataStatusActive": "Activo",
+  "healthDataPatientInformation": "Información del paciente",
+  "healthDataName": "Nombre",
+  "healthDataDateOfBirth": "Fecha de nacimiento",
+  "healthDataGender": "Género",
+  "healthDataGenderFemale": "Femenino",
+  "healthDataGenderMale": "Masculino",
+  "healthDataNotAvailable": "No disponible",
+  "healthDataMedicareNotConnected": "Medicare aún no está conectado.",
+  "healthDataMedicareExpired": "Tu conexión de Medicare ha caducado. Vuelve a conectarte para ver los registros actuales.",
+  "healthDataMedicareUpdateUnavailable": "Mostramos tus registros guardados. No pudimos comprobar si hay actualizaciones de Medicare.",
+  "healthDataMedicareNoRecords": "No se encontraron registros de Medicare.",
+  "healthDataMedicareConnect": "Conectar cuenta de Medicare",
   "analyticsPatientAnalytics": "Análisis del paciente",
   "analyticsRetry": "Reintentar",
   "analyticsAskAiTooltip": "Preguntar a la IA sobre los análisis",
@@ -1328,6 +1358,364 @@
   "analyticsLastDaysOverview": "Resumen de los últimos {days} días",
   "analyticsDetailedCharts": "Gráficos detallados",
   "analyticsLoadingData": "Cargando datos de análisis...",
+  "wearablesTitle": "Dispositivos portátiles",
+  "wearablesNoConnected": "No hay dispositivos portátiles conectados",
+  "wearablesConnectDescription": "Conecta dispositivos portátiles para realizar un seguimiento de los datos de salud de tu paciente en tiempo real.",
+  "wearablesAddFirstDevice": "Añade tu primer dispositivo",
+  "wearablesSupportedDevices": "Dispositivos compatibles",
+  "wearablesLatestHealthData": "Datos de salud más recientes",
+  "wearablesSynchronizationFailed": "Error de sincronización",
+  "wearablesSynchronizationFailedDescription": "No pudimos sincronizar las lecturas del dispositivo portátil.",
+  "wearablesNoSyncedDataYet": "Aún no hay datos sincronizados",
+  "wearablesNoSyncedDataDescription": "Conecta un dispositivo portátil y ejecuta la sincronización para ver los signos vitales guardados.",
+  "wearablesYourDevices": "Tus dispositivos",
+  "wearablesConnectedDevices": "Dispositivos conectados",
+  "wearablesAddDevice": "Añadir dispositivo",
+  "wearablesDevicesConnected": "{count, plural, =0{No hay dispositivos conectados} =1{1 dispositivo conectado} other{{count} dispositivos conectados}}",
+  "wearablesSemesterMetricScope": "Alcance de métricas del semestre",
+  "wearablesPersisted": "Guardado",
+  "wearablesPlaceholder": "Marcador de posición",
+  "wearablesMetricScopeDescription": "Guardado = asignado a entidades del backend. Marcador de posición = demostración solo de interfaz o no implementado este semestre.",
+  "wearablesHealthMetrics": "Métricas de salud",
+  "wearablesUpdated": "Actualizado: {date}",
+  "wearablesConnectedOn": "Conectado el {date}",
+  "wearablesPermissionsGranted": "{count, plural, =0{No se concedieron permisos} =1{1 permiso concedido} other{{count} permisos concedidos}}",
+  "wearablesActive": "Activo",
+  "wearablesDaysAgo": "{count, plural, =1{Hace 1 día} other{Hace {count} días}}",
+  "wearablesHoursAgo": "{count, plural, =1{Hace 1 hora} other{Hace {count} horas}}",
+  "wearablesMinutesAgo": "{count, plural, =1{Hace 1 minuto} other{Hace {count} minutos}}",
+  "wearablesJustNow": "Ahora mismo",
+  "wearablesRemoveDevice": "Eliminar dispositivo",
+  "wearablesConfirmRemoveDevice": "¿Estás seguro de que deseas eliminar {deviceName}?",
+  "wearablesRemove": "Eliminar",
+  "wearablesDeviceRemoved": "{deviceName} ha sido eliminado",
+  "wearablesFailedToRemoveDevice": "No se pudo eliminar el dispositivo",
+  "wearablesSelectPatientFirst": "Selecciona primero un paciente (menú desplegable de pacientes de Analytics) y luego pulsa actualizar.",
+  "wearablesNoAppleHealthSamples": "No se recopilaron muestras de Apple Health en los últimos 7 días. Depuración: recopiladas={collected} aceptadas={accepted} rechazadas={rejected}",
+  "wearablesSyncFailedWithError": "No se pudieron sincronizar los datos del dispositivo portátil: {error}",
+  "wearablesNoPersistedVitals": "No hay signos vitales guardados del dispositivo portátil disponibles en este intervalo. Depuración: recopilados={collected} aceptados={accepted} rechazados={rejected}",
+  "fallAlertTitle": "Alerta de caída",
+  "fallAlertPatientMayNeedHelp": "El paciente puede necesitar ayuda.",
+  "fallAlertViewDetails": "Ver detalles",
+  "fallAlertNoResponseFromPatient": "Sin respuesta del paciente",
+  "fallAlertFallPlayback": "Reproducción de la caída",
+  "fallAlertPlaybackUnavailable": "Reproducción no disponible",
+  "fallAlertCallPatient": "Llamar al paciente",
+  "fallAlertSendMessage": "Enviar mensaje",
+  "fallAlertContactEmergencyServices": "Contactar con los servicios de emergencia",
+  "fallAlertDetails": "Detalles",
+  "fallAlertDetectedAt": "Detectado a las",
+  "fallAlertSource": "Fuente",
+  "fallAlertPatientPhone": "Teléfono del paciente",
+  "fallAlertPlayback": "Reproducción",
+  "fallAlertAvailable": "Disponible",
+  "fallAlertNotAvailable": "No disponible",
+  "fallAlertNoPhoneNumberAvailable": "No hay ningún número de teléfono disponible",
+  "fallAlertCallFailedToStart": "No se pudo iniciar la llamada",
+  "fallAlertSmsMessage": "Recibí una alerta indicando que podrías haberte caído. ¿Estás bien? Responde o llámame si necesitas ayuda.",
+  "fallAlertMessageFailedToStart": "No se pudo iniciar el mensaje",
+  "fallAlertPatientIdNotAvailable": "El ID del paciente no está disponible",
+  "fallAlertEmergencyContact": "Contacto de emergencia",
+  "fallAlertEmergencyActions": "Acciones de emergencia",
+  "fallAlertChooseHowToEscalate": "Elige cómo deseas escalar la situación",
+  "fallAlertCall911": "Llamar al 911",
+  "fallAlertConnectLocalEmergencyServices": "Conectar con los servicios de emergencia locales",
+  "fallAlertCouldNotStartCall911": "No se pudo iniciar la llamada al 911",
+  "fallAlertCallContact": "Llamar a {contactName}",
+  "@fallAlertCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertNoPhoneOnFile": "No hay ningún teléfono registrado",
+  "fallAlertCouldNotStartCallContact": "No se pudo iniciar la llamada a {contactName}",
+  "@fallAlertCouldNotStartCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertEmergencyInstruction": "Si no puedes comunicarte con el paciente, contacta inmediatamente con los servicios de emergencia.",
+  "fallAlertDetected": "Caída detectada",
+  "fallAlertAreYouOkay": "¿Estás bien?",
+  "fallAlertMayHaveFallen": "Parece que podrías haberte caído. ¿Necesitas ayuda?",
+  "fallAlertImOkay": "Estoy bien",
+  "fallAlertCallForHelp": "Pedir ayuda",
+  "fallAlertNoResponseAutoCall": "Si no respondes en {seconds} segundos, se contactará automáticamente con los servicios de emergencia.",
+  "@fallAlertNoResponseAutoCall": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertAutoCallingIn": "Llamada automática en {seconds} segundos...",
+  "@fallAlertAutoCallingIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertGladYouAreOkay": "Nos alegra que estés bien. Descartaremos esta alerta.",
+  "fallAlertCouldNotStartCall": "No se pudo iniciar la llamada.",
+  "fallAlertAutoCallFailed": "No se pudo iniciar la llamada automática.",
+  "fallAlertCallEmergencyNumber": "Llamar al {number}",
+  "@fallAlertCallEmergencyNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertMockAlerts": "Alertas de caída simuladas",
+  "fallAlertStart": "Iniciar",
+  "fallAlertStop": "Detener",
+  "fallAlertTrigger": "Activar",
+  "fallAlertStatusRunning": "Estado: en ejecución (emite cada ~3 s)",
+  "fallAlertStatusStopped": "Estado: detenido",
+  "fallAlertMockAlertEmitted": "Alerta de caída simulada emitida",
+  "fallAlertNoAlertsYet": "Aún no hay alertas. Pulsa \"Activar\" para emitir una o iniciar la emisión periódica.",
+  "fallAlertSourceWithTime": "Fuente: {source} • {time}",
+  "@fallAlertSourceWithTime": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertCamera": "Cámara",
+  "fallAlertSecondsAgo": "hace {count} s",
+  "@fallAlertSecondsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertMinutesAgo": "hace {count} min",
+  "@fallAlertMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertHoursAgo": "hace {count} h",
+  "@fallAlertHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertDaysAgo": "hace {count} d",
+  "@fallAlertDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addDevicesHealthConnectDescription": "Conéctate a Health Connect para monitorear tu salud",
+  "addDevicesConnected": "Conectado",
+  "addDevicesConnectToPlatform": "Conectar a la plataforma",
+  "addDevicesAuthorizationPrompt": "Completa la autorización en el cuadro de permisos",
+  "addDevicesAddedToConnectedDevices": "El dispositivo se ha añadido a tus dispositivos conectados",
+  "addDevicesConnectionFailed": "Error de conexión",
+  "addDevicesTryAgain": "Intentar de nuevo",
+  "addDevicesSuccessfullyConnected": "¡Conectado correctamente!",
+  "addDevicesHealthMonitoringActive": "Monitoreo de salud activo",
+  "addDevicesBackToDashboard": "Volver al panel principal",
+  "addDevicesAddAnotherPlatform": "Agregar otra plataforma",
+  "addDevicesContinue": "Continuar",
+  "addDevicesConnectingTo": "Conectando a {platform}...",
+  "@addDevicesConnectingTo": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectedTo": "¡Conectado a {platform}!",
+  "@addDevicesConnectedTo": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesPlatformAdded": "{platform} se ha conectado y añadido a tus dispositivos.",
+  "@addDevicesPlatformAdded": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesNowTracking": "Monitoreando ahora: {metrics}",
+  "@addDevicesNowTracking": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "metrics": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectionFailedRetry": "No se pudo conectar a {platform}. Inténtalo de nuevo.",
+  "@addDevicesConnectionFailedRetry": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesAlreadyConnected": "{platform} ya está conectado a esta cuenta.",
+  "@addDevicesAlreadyConnected": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesFailedToConnectWithError": "No se pudo conectar a {platform}: {error}",
+  "@addDevicesFailedToConnectWithError": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectionFailedWithError": "Error de conexión: {error}",
+  "@addDevicesConnectionFailedWithError": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesFailedToConnectError": "No se pudo conectar: {error}",
+  "@addDevicesFailedToConnectError": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectedWithPermissions": "¡{platform} se conectó correctamente con {count} permisos!",
+  "@addDevicesConnectedWithPermissions": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+"smartDevicesProfileUnavailable": "No se pudo cargar el perfil del usuario.",
+  "smartDevicesErrorOccurred": "Se produjo un error: {error}",
+  "@smartDevicesErrorOccurred": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesUnlinkError": "Error al desvincular Alexa: {error}",
+  "@smartDevicesUnlinkError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesIntegrationTitle": "Integración de dispositivos inteligentes",
+  "smartDevicesIntro": "Conecta dispositivos inteligentes compatibles con Alexa o Google Nest para ayudar a supervisar y facilitar las actividades diarias.",
+  "smartDevicesPrivacyPolicy": "Política de privacidad",
+  "smartDevicesPrivacyOpenFailed": "No se pudo abrir la Política de privacidad",
+  "smartDevicesEchoDevices": "Dispositivos Echo",
+  "smartDevicesSmartLights": "Luces inteligentes",
+  "smartDevicesThermostats": "Termostatos",
+  "smartDevicesSmartLocks": "Cerraduras inteligentes",
+  "smartDevicesSmartPlugs": "Enchufes inteligentes",
+  "smartDevicesSensors": "Sensores",
+  "smartDevicesAlexaLinked": "¡Tu cuenta de Alexa está vinculada!",
+  "smartDevicesAlexaNotLinked": "Alexa aún no está vinculada.",
+  "smartDevicesAlexaPatientOnly": "La integración con Alexa está disponible actualmente solo para pacientes. ¡Estamos trabajando para ofrecerla pronto a los cuidadores!",
+  "smartDevicesDisableAlexa": "Desactivar la skill de Alexa",
+  "smartDevicesEnableAlexa": "Activar la skill de Alexa",
+  "smartDevicesCaregiversComingSoon": "Próximamente para cuidadores",
+  "smartDevicesNestHubs": "Dispositivos Nest Hub",
+  "smartDevicesGoogleHome": "Google Home",
+  "smartDevicesNestThermostat": "Termostato Nest",
+  "smartDevicesNestDoorbell": "Timbre Nest",
+  "smartDevicesNestCameras": "Cámaras Nest",
+  "smartDevicesGoogleUnderDevelopment": "La integración con Google Home está en desarrollo. ¡Pronto habrá novedades!",
+  "smartDevicesGooglePatientOnly": "La integración con Google Home está disponible actualmente solo para pacientes. ¡Estamos trabajando para ofrecerla pronto a los cuidadores!",
+  "smartDevicesEnableGoogleComingSoon": "Activar la acción de Google (próximamente)",
+  "smartDevicesComingSoon": "Próximamente",
+  "smartDevicesEnablePlatform": "Activar {platform} {skillType}",
+  "@smartDevicesEnablePlatform": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "skillType": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesOpenStoreInstruction": "Pulsa el botón de abajo para abrir la tienda de {platform} {skillType} y activar CareConnect.",
+  "@smartDevicesOpenStoreInstruction": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "skillType": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesSampleUrlNote": "Nota: Actualmente se utiliza una URL de ejemplo para la demostración.",
+  "smartDevicesOpeningStore": "Abriendo la tienda de {platform} {skillType}...",
+  "@smartDevicesOpeningStore": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "skillType": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesStoreOpenFailed": "No se pudo abrir la URL de la tienda",
+  "smartDevicesOpenPlatformStore": "Abrir tienda de {platform}",
+  "@smartDevicesOpenPlatformStore": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
   "evvDashTitle": "Panel de EVV",
   "evvDashOfflineSync": "Sincronización sin conexión",
   "evvDashStartVisit": "Iniciar visita",

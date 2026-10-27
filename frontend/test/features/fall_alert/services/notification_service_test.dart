@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 // Tests for NotificationService.
 //
 // NOTE: This is a Dart/Flutter project. The equivalent of JUnit here is the
@@ -22,8 +23,7 @@ import 'package:care_connect_app/features/fall_alert/services/notification_servi
 // ─── constants ────────────────────────────────────────────────────────────────
 
 // The MethodChannel name used internally by flutter_local_notifications.
-const _kChannel =
-    MethodChannel('dexterous.com/flutter/local_notifications');
+const _kChannel = MethodChannel('dexterous.com/flutter/local_notifications');
 
 // ─── test-wide state ──────────────────────────────────────────────────────────
 
@@ -123,6 +123,10 @@ Map<String, String> _parseQueryString(String s) {
 // ─── test entry point ─────────────────────────────────────────────────────────
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
   // Required so that MethodChannel / TestDefaultBinaryMessengerBinding are
   // available in the Dart-only test environment.
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -236,8 +240,7 @@ void main() {
       // that carried no data (e.g. a plain informational banner).
       final resp = NotificationResponse(
         id: 1,
-        notificationResponseType:
-            NotificationResponseType.selectedNotification,
+        notificationResponseType: NotificationResponseType.selectedNotification,
         payload: null,
       );
       expect(
@@ -246,13 +249,11 @@ void main() {
       );
     });
 
-    test('does not throw when payload is a valid URL-encoded query string',
-        () {
+    test('does not throw when payload is a valid URL-encoded query string', () {
       // A real payload produced by _serialize() must be accepted silently.
       final resp = NotificationResponse(
         id: 2,
-        notificationResponseType:
-            NotificationResponseType.selectedNotification,
+        notificationResponseType: NotificationResponseType.selectedNotification,
         payload: 'id=alert-001&patientName=John%20Carter&source=camera',
       );
       expect(
@@ -265,8 +266,7 @@ void main() {
       // An empty string is a degenerate but reachable payload value.
       final resp = NotificationResponse(
         id: 3,
-        notificationResponseType:
-            NotificationResponseType.selectedNotification,
+        notificationResponseType: NotificationResponseType.selectedNotification,
         payload: '',
       );
       expect(
@@ -347,9 +347,8 @@ void main() {
           _capturedCalls.where((c) => c.method == 'show').toList();
       if (showCalls.isEmpty) return;
 
-      final title =
-          (showCalls.first.arguments as Map)['title'] as String?;
-      expect(title, startsWith('Fall detected:'));
+      final title = (showCalls.first.arguments as Map)['title'] as String?;
+      expect(title, startsWith('Fall Detected:'));
     });
 
     test('notification body contains the alert source', () async {
@@ -362,8 +361,7 @@ void main() {
           _capturedCalls.where((c) => c.method == 'show').toList();
       if (showCalls.isEmpty) return;
 
-      final body =
-          (showCalls.first.arguments as Map)['body'] as String?;
+      final body = (showCalls.first.arguments as Map)['body'] as String?;
       expect(body, isNotNull);
       expect(body, contains(alert.source));
     });
@@ -391,8 +389,7 @@ void main() {
           _capturedCalls.where((c) => c.method == 'show').toList();
       if (showCalls.isEmpty) return;
 
-      final payload =
-          (showCalls.first.arguments as Map)['payload'] as String?;
+      final payload = (showCalls.first.arguments as Map)['payload'] as String?;
       expect(payload, isNotNull);
       expect(payload, isNotEmpty);
     });
@@ -479,8 +476,7 @@ void main() {
     test('encoded string uses "&" as the separator between pairs', () {
       // The _serialize format is key=value&key=value. Verifying the separator
       // ensures _deserialize (which splits on "&") can parse it correctly.
-      final encoded =
-          _encodeQueryString({'a': '1', 'b': '2', 'c': '3'});
+      final encoded = _encodeQueryString({'a': '1', 'b': '2', 'c': '3'});
       final parts = encoded.split('&');
       expect(parts, hasLength(3));
       for (final part in parts) {
