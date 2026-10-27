@@ -117,6 +117,15 @@ class _MenuPageState extends State<MenuPage> {
                   title: 'Patient Reports',
                     builder: (context) => const PatientReportsTab()));
           }),
+      // Unified Health Data: the patient's records from every connected
+      // source, and Manage Medicare connection. Before this the only way in
+      // was Health (bottom bar) > Unified Health Data, or typing the URL.
+      _MenuItem(
+        icon: Icons.health_and_safety,
+        label: 'Health Data',
+        route: '/health-data',
+        visibleFor: const {'PATIENT'},
+      ),
       _MenuItem(
         icon: Icons.verified_user,
         label: local.evv,

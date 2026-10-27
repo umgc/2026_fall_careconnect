@@ -50,6 +50,11 @@ Widget _buildApp({
       GoRoute(path: '/profile', builder: (_, __) => const SizedBox()),
       GoRoute(path: '/subscription', builder: (_, __) => const SizedBox()),
       GoRoute(
+        path: '/health-data',
+        builder: (_, __) =>
+            const Scaffold(body: Text('Health Data Entry Route')),
+      ),
+      GoRoute(
         path: '/voice',
         builder: (_, __) =>
             const Scaffold(body: Text('Voice Commands Entry Route')),
@@ -273,5 +278,40 @@ void main() {
 
       expect(find.text('Voice Commands Entry Route'), findsOneWidget);
     });
+  });
+
+  // Patients reach Unified Health Data from the More menu (M4).
+  group('MenuPage – Health Data', () {
+    UserSession session(String role) => UserSession(
+          id: 1,
+          email: 'user@example.com',
+          role: role,
+          token: 'test-token',
+          name: 'Test User',
+        );
+
+    testWidgets('TC-HDATA-051: a patient sees Health Data in the More menu, '
+        'and tapping it opens /health-data', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(_buildApp(session: session('PATIENT')));
+      await tester.pumpAndSettle();
+      await _scrollUntilTextVisible(tester, 'Health Data');
+      expect(find.text('Health Data'), findsOneWidget);
+      await tester.tap(find.text('Health Data'));
+      await tester.pumpAndSettle();
+      expect(find.text('Health Data Entry Route'), findsOneWidget);
+    });
+
+    for (final role in ['CAREGIVER', 'ADMIN', 'FAMILY_LINK']) {
+      testWidgets('TC-HDATA-052: a $role does not see Health Data in the More '
+          'menu', (tester) async {
+        await tester.pumpWidget(_buildApp(session: session(role)));
+        await tester.pumpAndSettle();
+        expect(find.text('Health Data', skipOffstage: false), findsNothing);
+      });
+    }
   });
 }
