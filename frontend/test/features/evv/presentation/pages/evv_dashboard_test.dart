@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for EvvDashboard
 // (lib/features/evv/presentation/pages/evv_dashboard.dart).
 //
@@ -15,15 +16,53 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/evv_dashboard.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/services/evv_service.dart';
 
 import '../../../../mock_user_provider.dart';
 
-Widget _wrap({String role = 'CAREGIVER'}) {
+class _PopulatedEvvService extends EvvService {
+  final DateTime date = DateTime(2026, 10, 26);
+
+  EvvRecord _record() => EvvRecord(
+    id: 1, serviceType: 'Personal Care', individualName: 'Test',
+    caregiverId: 1, dateOfService: date, timeIn: date, timeOut: date,
+    status: 'PENDING', stateCode: 'MD', isOffline: false,
+    eorApprovalRequired: true, isCorrected: false,
+    createdAt: date, updatedAt: date,
+  );
+
+  @override
+  Future<List<EvvRecord>> getPendingEorApprovals() async => [_record()];
+
+  @override
+  Future<List<EvvCorrection>> getPendingCorrections() async => [
+    EvvCorrection(
+      id: 1, originalRecord: _record(), correctedRecord: _record(),
+      reasonCode: 'TIME_ERROR', explanation: 'Time corrected', correctedBy: 1,
+      correctedAt: date, approvalRequired: true,
+      originalValues: {}, correctedValues: {},
+    ),
+  ];
+
+  @override
+  Future<List<EvvOfflineQueue>> getOfflineQueue() async => [
+    EvvOfflineQueue(
+      id: 1, recordId: 1, operationType: 'CREATE', caregiverId: 1,
+      queuedAt: date, syncAttempts: 0, syncStatus: 'PENDING', priority: 1,
+      recordData: {},
+    ),
+  ];
+}
+
+Widget _wrap({String role = 'CAREGIVER', Locale locale = const Locale('en'), EvvService? service}) {
   final provider = MockUserProvider(mockUser: MockUser(id: 1, role: role));
   return MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
-      child: const EvvDashboard(),
+      child: EvvDashboard(service: service),
     ),
   );
 }
@@ -77,6 +116,40 @@ void main() {
       const MethodChannel('dev.fluttercommunity.plus/connectivity'),
       null,
     );
+  });
+
+  testWidgets('Spanish dashboard displays localized caregiver actions', (tester) async {
+    await tester.pumpWidget(_wrap(locale: const Locale('es')));
+    await _pumpUntilLoaded(tester);
+    expect(find.text('Panel de EVV'), findsOneWidget);
+    expect(find.text('Estadísticas rápidas'), findsOneWidget);
+    expect(find.text('Acciones principales'), findsOneWidget);
+    expect(find.text('Iniciar visita'), findsWidgets);
+    expect(find.text('Revisar registros'), findsOneWidget);
+    expect(find.text('Quick Stats'), findsNothing);
+  });
+
+  testWidgets('Spanish admin sees pending items and offline queue', (tester) async {
+    await tester.pumpWidget(_wrap(role: 'ADMIN', locale: const Locale('es'), service: _PopulatedEvvService()));
+    await _pumpUntilLoaded(tester);
+    expect(find.text('Aprobaciones de EOR'), findsOneWidget);
+    expect(find.text('Correcciones'), findsOneWidget);
+    expect(find.text('1 pendientes'), findsNWidgets(2));
+    expect(find.text('Cola sin conexión'), findsOneWidget);
+    expect(find.text('1 registros en espera de sincronización'), findsOneWidget);
+    expect(find.text('Sincronizar ahora'), findsOneWidget);
+    expect(find.byTooltip('Sincronización sin conexión'), findsOneWidget);
+  });
+
+  testWidgets('English admin sees pending items and offline queue', (tester) async {
+    await tester.pumpWidget(_wrap(role: 'ADMIN', service: _PopulatedEvvService()));
+    await _pumpUntilLoaded(tester);
+    expect(find.text('EOR Approvals'), findsOneWidget);
+    expect(find.text('Corrections'), findsOneWidget);
+    expect(find.text('1 pending'), findsNWidgets(2));
+    expect(find.text('Offline Queue'), findsOneWidget);
+    expect(find.text('1 records waiting to sync'), findsOneWidget);
+    expect(find.text('Sync Now'), findsOneWidget);
   });
 
   group('EvvDashboard – initial loading state', () {
