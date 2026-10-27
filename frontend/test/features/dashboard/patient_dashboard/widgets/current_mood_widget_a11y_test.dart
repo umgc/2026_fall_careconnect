@@ -53,7 +53,7 @@ void main() {
     }
 
     collect(tester.getSemantics(find.byType(Slider)));
-    expect(labels, contains('Rate how you feel right now:'),
+    expect(labels, contains(startsWith('Rate how you feel right now:')),
         reason: 'WCAG 4.1.2: the slider needs a name');
     expect(values, contains('7 / 10'));
     handle.dispose();

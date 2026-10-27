@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/testing.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
@@ -92,4 +94,31 @@ void main() {
     }
     handle.dispose();
   });
+
+  testWidgets('a signed-in user\'s notification switches read their titles',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final handle = tester.ensureSemantics();
+    // Notification settings come from the backend for a signed-in user.
+    await http.runWithClient(() async {
+      await tester.pumpWidget(_buildApp(
+          provider: MockUserProvider(mockUser: MockUser(id: 1, role: 'PATIENT'))));
+      await _pumpReady(tester);
+    },
+        () => MockClient((_) async => http.Response(
+            '{"id": 1, "userId": 1, "gamification": true, "emergency": true}',
+            200)));
+
+    final emergency = find.ancestor(
+        of: find.text('Emergency Alerts'), matching: find.byType(ListTile));
+    expect(emergency, findsOneWidget);
+    final data = tester
+        .getSemantics(find.descendant(of: emergency, matching: find.byType(Switch)))
+        .getSemanticsData();
+    expect(data.label, contains('Emergency Alerts'));
+    handle.dispose();
+  });
 }
+

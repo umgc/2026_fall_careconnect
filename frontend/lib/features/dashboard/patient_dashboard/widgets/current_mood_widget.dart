@@ -355,7 +355,8 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                           LinearGradient(colors: [Colors.blue, Colors.yellow]),
                     ),
                   ),
-                  child: Semantics(
+                  // Merged so the browser puts the name on the slider itself.
+                  child: MergeSemantics(child: Semantics(
                     label: t.currentmoodwidget_rateCurrentMood,
                     child: Slider(
                     value: currentMoodScore.toDouble(),
@@ -371,7 +372,7 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                       });
                     },
                   ),
-                  ),
+                  )),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
