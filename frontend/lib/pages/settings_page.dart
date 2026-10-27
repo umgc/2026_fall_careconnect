@@ -371,7 +371,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      // One screen-reader node: the switch reads the card title and state.
+      child: MergeSemantics(child: ListTile(
         leading: Icon(
           icon,
           color: iconColor ?? Theme.of(context).colorScheme.primary,
@@ -389,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
           onChanged: onChanged,
           activeThumbColor: Theme.of(context).colorScheme.primary,
         ),
-      ),
+      )),
     );
   }
 
@@ -405,7 +406,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      // One screen-reader node: the switch reads the card title and state.
+      child: MergeSemantics(child: ListTile(
         leading: Icon(
           icon,
           color: iconColor ?? Theme.of(context).colorScheme.primary,
@@ -429,7 +431,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: onChanged,
                 activeThumbColor: Theme.of(context).colorScheme.primary,
               ),
-      ),
+      )),
     );
   }
 
@@ -437,7 +439,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final t = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      // One screen-reader node: the switch reads the card title and state.
+      child: MergeSemantics(child: ListTile(
         leading: Icon(
           Icons.brightness_6,
           color: Theme.of(context).colorScheme.primary,
@@ -454,7 +457,7 @@ class _SettingsPageState extends State<SettingsPage> {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         trailing: const ThemeToggleSwitch(showIcon: false, showLabel: false),
-      ),
+      )),
     );
   }
 

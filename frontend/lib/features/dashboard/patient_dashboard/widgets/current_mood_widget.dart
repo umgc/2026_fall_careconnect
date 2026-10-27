@@ -355,18 +355,22 @@ class _CurrentMoodWidgetState extends State<CurrentMoodWidget> {
                           LinearGradient(colors: [Colors.blue, Colors.yellow]),
                     ),
                   ),
-                  child: Slider(
+                  child: Semantics(
+                    label: t.currentmoodwidget_rateCurrentMood,
+                    child: Slider(
                     value: currentMoodScore.toDouble(),
                     min: 0,
                     max: 10,
                     divisions: 10,
                     label: '$currentMoodScore',
+                    semanticFormatterCallback: (value) => '${value.round()} / 10',
                     onChanged: (double newValue) {
                       setState(() {
                         currentMoodScore = newValue.round();
                         currentMoodLabel = _getMoodLabel(currentMoodScore);
                       });
                     },
+                  ),
                   ),
                 ),
                 Align(
