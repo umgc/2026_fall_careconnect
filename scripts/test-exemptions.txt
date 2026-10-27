@@ -30,3 +30,8 @@ backend/core/src/main/java/*/repository/*
 # test/features/help/data/help_content_ids_test.dart and help_home_config_test.dart.
 frontend/lib/features/help/data/help_content_ids.dart
 frontend/lib/features/help/data/help_home_config.dart
+
+# Web-only: imports package:web, which `flutter test` (the Dart VM) can't load,
+# so no unit test can run it. Checked by hand in the browser; the 10/28 VPAT
+# test pass confirms pinch-zoom (1.4.4) on the web build.
+frontend/lib/config/utils/web_utils_web.dart
