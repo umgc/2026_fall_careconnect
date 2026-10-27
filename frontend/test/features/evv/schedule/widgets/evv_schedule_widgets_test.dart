@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for EVV schedule view widgets:
 //   EVVDayScheduleView, EVVWeekCalendarView, EVVMonthCalendarView.
 // (lib/features/evv/schedule/widgets/)
@@ -36,11 +37,15 @@ ScheduledVisit _makeVisit({
 }
 
 Widget _wrapDay({
+  Locale locale = const Locale('en'),
   List<ScheduledVisit> visits = const [],
   DateTime? selectedDate,
   Function(DateTime)? onDateSelected,
 }) {
   return MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: EVVDayScheduleView(
         visits: visits,
@@ -52,11 +57,15 @@ Widget _wrapDay({
 }
 
 Widget _wrapWeek({
+  Locale locale = const Locale('en'),
   List<ScheduledVisit> visits = const [],
   DateTime? selectedDate,
   Function(DateTime)? onDateSelected,
 }) {
   return MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: EVVWeekCalendarView(
         visits: visits,
@@ -68,12 +77,16 @@ Widget _wrapWeek({
 }
 
 Widget _wrapMonth({
+  Locale locale = const Locale('en'),
   List<ScheduledVisit> visits = const [],
   DateTime? selectedDate,
   Function(DateTime)? onDateSelected,
   Function()? onScheduleNew,
 }) {
   return MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: EVVMonthCalendarView(
         visits: visits,
@@ -88,6 +101,34 @@ Widget _wrapMonth({
 // ─── EVVDayScheduleView Tests ───────────────────────────────────────────────
 
 void main() {
+  testWidgets('day calendar shows Spanish month and weekday', (tester) async {
+    await tester.pumpWidget(_wrapDay(locale: const Locale('es')));
+    expect(find.textContaining('marzo'), findsOneWidget);
+  });
+
+  testWidgets('week calendar translates its empty state', (tester) async {
+    await tester.pumpWidget(_wrapWeek(locale: const Locale('es')));
+    expect(find.text('No hay visitas'), findsWidgets);
+  });
+
+  testWidgets('month calendar translates month and empty state', (tester) async {
+    await tester.pumpWidget(_wrapMonth(locale: const Locale('es')));
+    expect(find.textContaining('marzo'), findsOneWidget);
+    expect(find.text('No hay visitas programadas'), findsOneWidget);
+  });
+
+  testWidgets('month starts Monday June 1 in the Monday column', (tester) async {
+    await tester.pumpWidget(_wrapMonth(selectedDate: DateTime(2026, 6, 1)));
+    final mondayX = tester.getCenter(find.text('Mon')).dx;
+    final firstDayX = tester.getCenter(find.text('1')).dx;
+    final tuesdayX = tester.getCenter(find.text('Tue')).dx;
+    final halfColumn = (tuesdayX - mondayX) / 2;
+    expect(firstDayX, inInclusiveRange(
+      mondayX - halfColumn,
+      mondayX + halfColumn,
+    ));
+  });
+
   group('EVVDayScheduleView', () {
     testWidgets('renders without crashing', (tester) async {
       await tester.pumpWidget(_wrapDay());

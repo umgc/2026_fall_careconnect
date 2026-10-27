@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for PatientSelectionPage
 // (lib/features/evv/presentation/pages/patient_selection_page.dart)
 //
@@ -68,7 +69,7 @@ Map<String, dynamic> _patient(int id, String first, String last) => {
 String _patientsJson() =>
     jsonEncode([_patient(42, 'Mary', 'Johnson'), _patient(43, 'John', 'Doe')]);
 
-Widget _host({UserSession? user}) {
+Widget _host({UserSession? user, Locale locale = const Locale('en')}) {
   final provider = UserProvider();
   if (user != null) provider.setUser(user);
   final router = GoRouter(
@@ -89,7 +90,12 @@ Widget _host({UserSession? user}) {
   );
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(
+      routerConfig: router,
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+    ),
   );
 }
 
@@ -104,6 +110,40 @@ void main() {
   tearDown(() {
     _teardownStubs();
     ApiService.debugResetHttpClient();
+  });
+
+  testWidgets('Spanish patient list localizes labels and keeps patient names', (tester) async {
+    ApiService.debugSetHttpClient(MockClient((_) async => http.Response(_patientsJson(), 200)));
+    await tester.pumpWidget(_host(user: _caregiver(), locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(AppBar, 'Seleccionar paciente'), findsOneWidget);
+    expect(find.text('Cancelar'), findsOneWidget);
+    expect(find.text('Mary Johnson'), findsOneWidget);
+    expect(find.text('Dirección no disponible'), findsWidgets);
+  });
+
+  testWidgets('Spanish empty patient state is localized', (tester) async {
+    ApiService.debugSetHttpClient(MockClient((_) async => http.Response('[]', 200)));
+    await tester.pumpWidget(_host(user: _caregiver(), locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('No se encontraron pacientes'), findsOneWidget);
+    expect(find.text('Aún no tienes pacientes asignados.'), findsOneWidget);
+    expect(find.text('Agregar paciente'), findsOneWidget);
+  });
+
+  testWidgets('Spanish API failure displays localized message and status', (tester) async {
+    ApiService.debugSetHttpClient(MockClient((_) async => http.Response('server error', 500)));
+    await tester.pumpWidget(_host(user: _caregiver(), locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('Error al cargar pacientes'), findsOneWidget);
+    expect(find.text('No se pudieron cargar los pacientes: 500'), findsOneWidget);
+    expect(find.text('Intentar de nuevo'), findsOneWidget);
+  });
+
+  testWidgets('Spanish unauthenticated state is localized', (tester) async {
+    await tester.pumpWidget(_host(locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('Usuario no autenticado'), findsOneWidget);
   });
 
   testWidgets('shows a loading indicator while patients load', (tester) async {

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/features/evv/schedule/pages/schedule_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -13,7 +14,9 @@ import 'evv_offline_sync.dart';
 import 'patient_selection_page.dart';
 
 class EvvDashboard extends StatefulWidget {
-  const EvvDashboard({super.key});
+  const EvvDashboard({super.key, this.service});
+
+  final EvvService? service;
 
   @override
   State<EvvDashboard> createState() => _EvvDashboardState();
@@ -21,7 +24,7 @@ class EvvDashboard extends StatefulWidget {
 
 class _EvvDashboardState extends State<EvvDashboard>
     with TickerProviderStateMixin {
-  final EvvService _evvService = EvvService();
+  late final EvvService _evvService = widget.service ?? EvvService();
   bool _isLoading = true;
   List<EvvOfflineQueue> _offlineQueue = [];
   int _pendingApprovals = 0;
@@ -58,7 +61,7 @@ class _EvvDashboardState extends State<EvvDashboard>
         _isLoading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading dashboard: $e')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.evvDashLoadError(e.toString()))),
       );
     }
   }
@@ -75,7 +78,7 @@ class _EvvDashboardState extends State<EvvDashboard>
     if (_isLoading) {
       return Scaffold(
         drawer: const CommonDrawer(currentRoute: '/evv/dashboard'),
-        appBar: AppBarHelper.createAppBar(context, title: 'EVV Dashboard'),
+        appBar: AppBarHelper.createAppBar(context, title: AppLocalizations.of(context)!.evvDashTitle),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -84,7 +87,7 @@ class _EvvDashboardState extends State<EvvDashboard>
       drawer: const CommonDrawer(currentRoute: '/evv/dashboard'),
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'EVV Dashboard',
+        title: AppLocalizations.of(context)!.evvDashTitle,
         additionalActions: [
           if (_offlineQueue.isNotEmpty)
             IconButton(
@@ -99,7 +102,7 @@ class _EvvDashboardState extends State<EvvDashboard>
                       builder: (context) => const EvvOfflineSyncPage()),
                 );
               },
-              tooltip: 'Offline Sync',
+              tooltip: AppLocalizations.of(context)!.evvDashOfflineSync,
             ),
         ],
       ),
@@ -168,7 +171,7 @@ class _EvvDashboardState extends State<EvvDashboard>
                 );
               },
               icon: const Icon(Icons.play_circle),
-              label: const Text('Start Visit'),
+              label: Text(AppLocalizations.of(context)!.evvDashStartVisit),
             )
           : null,
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -202,7 +205,7 @@ class _QuickStats extends StatelessWidget {
 
     final items = <_StatSpec>[
       _StatSpec(
-        title: 'Offline Records',
+        title: AppLocalizations.of(context)!.evvDashOfflineRecords,
         value: '$offlineCount',
         icon: Icons.cloud_off,
         tone: _Tone
@@ -210,14 +213,14 @@ class _QuickStats extends StatelessWidget {
       ),
       if (pendingApprovals != null)
         _StatSpec(
-          title: 'Pending Approvals',
+          title: AppLocalizations.of(context)!.evvDashPendingApprovals,
           value: '${pendingApprovals!}',
           icon: Icons.approval,
           tone: _Tone.info, // maps to scheme.primary
         ),
       if (pendingCorrections != null)
         _StatSpec(
-          title: 'Pending Corrections',
+          title: AppLocalizations.of(context)!.evvDashPendingCorrections,
           value: '${pendingCorrections!}',
           icon: Icons.edit,
           tone: _Tone.error, // maps to scheme.error
@@ -231,7 +234,7 @@ class _QuickStats extends StatelessWidget {
         child: Column(
           children: [
             _SectionHeader(
-                title: 'Quick Stats', icon: Icons.dashboard_outlined),
+                title: AppLocalizations.of(context)!.evvDashQuickStats, icon: Icons.dashboard_outlined),
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -368,7 +371,7 @@ class _MainActions extends StatelessWidget {
     final actions = <_ActionSpec>[
       if (isCaregiver)
         _ActionSpec(
-          title: 'Start Visit',
+          title: AppLocalizations.of(context)!.evvDashStartVisit,
           icon: Icons.play_circle,
           onTap: () => Navigator.push(
             context,
@@ -377,7 +380,7 @@ class _MainActions extends StatelessWidget {
         ),
       if (isCaregiver)
         _ActionSpec(
-          title: 'Review Records',
+          title: AppLocalizations.of(context)!.evvDashReviewRecords,
           icon: Icons.rate_review,
           onTap: () => Navigator.push(
             context,
@@ -386,7 +389,7 @@ class _MainActions extends StatelessWidget {
         ),
       if (isCaregiver || isSupervisor || isAdmin)
         _ActionSpec(
-          title: 'Submit to HHAExchange',
+          title: AppLocalizations.of(context)!.evvDashSubmitHha,
           icon: Icons.upload_rounded,
           onTap: () => Navigator.push(
             context,
@@ -395,7 +398,7 @@ class _MainActions extends StatelessWidget {
         ),
       if (isAdmin || isSupervisor || isPatient)
         _ActionSpec(
-          title: 'Visit History',
+          title: AppLocalizations.of(context)!.evvDashVisitHistory,
           icon: Icons.history,
           onTap: () => Navigator.push(
             context,
@@ -404,7 +407,7 @@ class _MainActions extends StatelessWidget {
         ),
       if (isAdmin || isSupervisor)
         _ActionSpec(
-          title: 'Manage Corrections',
+          title: AppLocalizations.of(context)!.evvDashManageCorrections,
           icon: Icons.edit_note,
           onTap: () => Navigator.push(
             context,
@@ -413,7 +416,7 @@ class _MainActions extends StatelessWidget {
         ),
       if (isAdmin || isSupervisor || isCaregiver || isPatient)
         _ActionSpec(
-          title: 'Visit Schedules',
+          title: AppLocalizations.of(context)!.evvDashVisitSchedules,
           icon: Icons.schedule,
           onTap: () => Navigator.push(
             context,
@@ -421,7 +424,7 @@ class _MainActions extends StatelessWidget {
           ),
         ),
       _ActionSpec(
-        title: 'Offline Sync',
+        title: AppLocalizations.of(context)!.evvDashOfflineSync,
         icon: Icons.sync,
         onTap: () => Navigator.push(
           context,
@@ -437,7 +440,7 @@ class _MainActions extends StatelessWidget {
         child: Column(
           children: [
             _SectionHeader(
-                title: 'Main Actions', icon: Icons.grid_view_rounded),
+                title: AppLocalizations.of(context)!.evvDashMainActions, icon: Icons.grid_view_rounded),
             const SizedBox(height: 12),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -508,11 +511,14 @@ class _ActionCard extends StatelessWidget {
             children: [
               Icon(spec.icon, color: scheme.primary),
               const SizedBox(width: 8),
-              Text(
-                spec.title,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  spec.title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -547,7 +553,7 @@ class _PendingItems extends StatelessWidget {
         child: Column(
           children: [
             _SectionHeader(
-                title: 'Pending Items', icon: Icons.pending_actions_outlined),
+                title: AppLocalizations.of(context)!.evvDashPendingItems, icon: Icons.pending_actions_outlined),
             const SizedBox(height: 8),
             if (pendingApprovals > 0)
               ListTile(
@@ -555,8 +561,8 @@ class _PendingItems extends StatelessWidget {
                   backgroundColor: scheme.primaryContainer,
                   child: Icon(Icons.approval, color: scheme.onPrimaryContainer),
                 ),
-                title: const Text('EOR Approvals'),
-                subtitle: Text('$pendingApprovals pending'),
+                title: Text(AppLocalizations.of(context)!.evvDashEorApprovals),
+                subtitle: Text(AppLocalizations.of(context)!.evvDashPendingCount(pendingApprovals)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
                   // Implement navigation when approvals screen exists
@@ -568,8 +574,8 @@ class _PendingItems extends StatelessWidget {
                   backgroundColor: scheme.errorContainer,
                   child: Icon(Icons.edit, color: scheme.onErrorContainer),
                 ),
-                title: const Text('Corrections'),
-                subtitle: Text('$pendingCorrections pending'),
+                title: Text(AppLocalizations.of(context)!.evvDashCorrections),
+                subtitle: Text(AppLocalizations.of(context)!.evvDashPendingCount(pendingCorrections)),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: onOpenCorrections,
               ),
@@ -577,7 +583,7 @@ class _PendingItems extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  'No pending items',
+                  AppLocalizations.of(context)!.evvDashNoPendingItems,
                   style: TextStyle(color: scheme.onSurfaceVariant),
                 ),
               ),
@@ -606,20 +612,20 @@ class _OfflineQueueStatus extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _SectionHeader(title: 'Offline Queue', icon: Icons.cloud_off),
+            _SectionHeader(title: AppLocalizations.of(context)!.evvDashOfflineQueue, icon: Icons.cloud_off),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: Text(
-                    '$count records waiting to sync',
+                    AppLocalizations.of(context)!.evvDashWaitingCount(count),
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: onSync,
                   icon: const Icon(Icons.sync),
-                  label: const Text('Sync Now'),
+                  label: Text(AppLocalizations.of(context)!.evvDashSyncNow),
                 ),
               ],
             ),
@@ -644,13 +650,13 @@ class _RecentActivity extends StatelessWidget {
         child: Column(
           children: [
             _SectionHeader(
-                title: 'Recent Activities',
+                title: AppLocalizations.of(context)!.evvDashRecentActivities,
                 icon: Icons.auto_awesome_motion_outlined),
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                'No recent activity',
+                AppLocalizations.of(context)!.evvDashNoRecentActivity,
                 style: TextStyle(color: scheme.onSurfaceVariant),
               ),
             ),

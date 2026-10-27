@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for EvvOfflineSyncPage
 // (lib/features/evv/presentation/pages/evv_offline_sync.dart)
 //
@@ -49,6 +50,7 @@ Map<String, dynamic> _queueItem(
   String status = 'PENDING',
   int attempts = 0,
   String? lastError,
+  int priority = 1,
 }) =>
     {
       'id': id,
@@ -60,7 +62,7 @@ Map<String, dynamic> _queueItem(
       if (lastError != null) 'lastError': lastError,
       if (attempts > 0) 'lastSyncAttempt': '2026-08-01T09:05:00.000',
       'syncStatus': status,
-      'priority': 1,
+      'priority': priority,
       'recordData': {'serviceType': 'Personal Care'},
     };
 
@@ -73,14 +75,19 @@ void _wireEvvClient({
 }) {
   ApiServiceOffline.debugOverrideHttpClient(MockClient((req) async {
     final url = req.url.toString();
-    if (url.contains('/offline/queue')) return http.Response(queue, queueStatus);
+    if (url.contains('/offline/queue'))
+      return http.Response(queue, queueStatus);
     if (url.contains('/offline/status')) return http.Response(status, 200);
     if (url.contains('/offline/sync')) return http.Response('ok', syncStatus);
     return http.Response('[]', 200);
   }));
 }
 
-Widget _host() => const MaterialApp(home: EvvOfflineSyncPage());
+Widget _host({Locale locale = const Locale('en')}) => MaterialApp(
+    locale: locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: const EvvOfflineSyncPage());
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -93,6 +100,31 @@ void main() {
   tearDown(() {
     _teardownStubs();
     ApiServiceOffline.debugOverrideHttpClient(null);
+  });
+
+  testWidgets('shows the offline sync empty state in Spanish', (tester) async {
+    _wireEvvClient(queue: '[]', status: '[]');
+    await tester.pumpWidget(_host(locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sincronización sin conexión'), findsOneWidget);
+    expect(find.text('Estado de sincronización'), findsOneWidget);
+    expect(
+        find.text('Sincronizar todos los datos sin conexión'), findsOneWidget);
+    expect(find.text('Todos los datos están sincronizados'), findsOneWidget);
+    expect(find.text('No hay registros sin conexión para sincronizar'),
+        findsOneWidget);
+  });
+
+  testWidgets('shows a failed record in Spanish', (tester) async {
+    _wireEvvClient(
+        queue: jsonEncode([
+          _queueItem(2, status: 'FAILED', attempts: 3, lastError: 'timeout')
+        ]),
+        status: '[]');
+    await tester.pumpWidget(_host(locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Intentos: 3'), findsWidgets);
+    expect(find.textContaining('Error: timeout'), findsWidgets);
   });
 
   testWidgets('shows a loading indicator on the first frame', (tester) async {
@@ -166,5 +198,70 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Sync All Offline Data'),
         findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens localized details for a failed offline record',
+      (tester) async {
+    _wireEvvClient(
+      queue: jsonEncode([
+        _queueItem(
+          2,
+          status: 'FAILED',
+          attempts: 3,
+          lastError: 'timeout',
+          priority: 2,
+        ),
+      ]),
+      status: '[]',
+    );
+
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Details'), findsWidgets);
+
+    await tester.tap(find.text('Details').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('102'), findsWidgets);
+    expect(find.text('High'), findsWidgets);
+    expect(find.text('timeout'), findsWidgets);
+
+    await tester.tap(find.text('Close').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('retry action shows localized notification', (tester) async {
+    _wireEvvClient(
+      queue: jsonEncode([
+        _queueItem(
+          3,
+          status: 'FAILED',
+          attempts: 2,
+          lastError: 'network timeout',
+          priority: 3,
+        ),
+      ]),
+      status: '[]',
+    );
+
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(PopupMenuButton<String>).first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Retry'), findsWidgets);
+
+    await tester.tap(find.text('Retry').last);
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsOneWidget);
   });
 }
