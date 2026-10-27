@@ -1,26 +1,173 @@
-// IdentityConflictService: until the backend endpoint exists it must never
-// report a save that didn't happen, and the sample conflict is opt-in only.
-// Test IDs TC-EHR-REC-065..069 are permanent. Never renumber, never reuse.
+// IdentityConflictService: it never reports a save that didn't happen, and
+// the sample conflict is opt-in only. Since the backend endpoint (#432) it
+// loads and saves through GET/POST /v1/api/ehr/identity-conflicts.
+// Test IDs TC-EHR-REC-065..069 and 094..100 are permanent. Never renumber,
+// never reuse.
+
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:care_connect_app/features/health/health_data/models/identity_conflict.dart';
 import 'package:care_connect_app/features/health/health_data/services/identity_conflict_service.dart';
+import 'package:care_connect_app/services/api_client.dart';
 import 'package:care_connect_app/services/auth_service.dart';
 import 'package:care_connect_app/services/user_role_storage_service.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  // Every test talks to this fake backend: by default it has no pending
+  // conflicts and refuses every save (400).
+  late _FakeBackend backend;
+  late HttpClientAdapter original;
+  setUp(() {
+    original = ApiClient.instance.debugHttpClientAdapter;
+    backend = _FakeBackend();
+    ApiClient.instance.debugSetHttpClientAdapter(backend);
+  });
+  tearDown(() => ApiClient.instance.debugSetHttpClientAdapter(original));
+
   group('with the demo data off (the default)', () {
     final service = IdentityConflictService(useMock: false);
 
-    test('TC-EHR-REC-065: there is nothing pending', () async {
+    test('TC-EHR-REC-065: with nothing pending on the backend, there is '
+        'nothing pending', () async {
       expect(await service.fetchPending(), isEmpty);
     });
 
-    test('TC-EHR-REC-066: a choice is never reported as saved, because nothing is saved yet', () async {
+    test('TC-EHR-REC-066: a choice the backend does not save is never '
+        'reported as saved', () async {
+      backend.postStatus = 500;
       expect(await service.resolve(1, accepted: true), isFalse);
       expect(await service.resolve(1, accepted: false), isFalse);
     });
+  });
+
+  group('the backend endpoint (#432)', () {
+    final service = IdentityConflictService(useMock: false);
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      IdentityConflictService.clearFound();
+    });
+
+    Map<String, dynamic> dob(int id,
+            {String before = '1980-05-14',
+            String incoming = '1985-05-14',
+            String field = 'date_of_birth',
+            String status = 'PENDING'}) =>
+        {
+          'id': id,
+          'fieldName': field,
+          'canonicalValueBefore': before,
+          'incomingValue': incoming,
+          'canonicalSourceLabel': 'Epic',
+          'incomingSourceLabel': 'Oracle Health',
+          'status': status,
+          'detectedAt': '2026-10-25T12:00:00Z',
+          'identityCheck': {'type': 'PHONE', 'value': '4821'},
+        };
+
+    test('TC-EHR-REC-094: pending conflicts are loaded from the backend, '
+        'with their sources and identity check, dates shown MM/DD/YYYY',
+        () async {
+      backend.conflicts = [dob(7)];
+      final c = (await service.fetchPending()).single;
+      expect(backend.gets.single.path, endsWith('/v1/api/ehr/identity-conflicts'));
+      expect(backend.gets.single.queryParameters['status'], 'PENDING');
+      expect(c.id, 7);
+      expect(c.canonicalValueBefore, '05/14/1980');
+      expect(c.incomingValue, '05/14/1985');
+      expect(c.canonicalSourceLabel, 'Epic');
+      expect(c.incomingSourceLabel, 'Oracle Health');
+      expect(c.identityCheck?.type, IdentityCheckType.phone);
+      expect(c.identityCheck?.value, '4821');
+    });
+
+    test('TC-EHR-REC-095: only pending date-of-birth conflicts with a '
+        'backend id are offered', () async {
+      backend.conflicts = [
+        dob(1),
+        dob(2, field: 'phone'),
+        dob(3, status: 'REJECTED'),
+        dob(0),
+      ];
+      expect((await service.fetchPending()).map((c) => c.id), [1]);
+    });
+
+    test('TC-EHR-REC-096: a date pair the backend already has and this '
+        'device also found is shown once, as the backend\'s', () async {
+      backend.conflicts = [dob(5, before: '1980-05-14', incoming: '1980-05-15')];
+      await IdentityConflictService.reportDobDisagreement(
+          current: DateTime(1980, 5, 14),
+          currentSource: 'Epic',
+          incoming: DateTime(1980, 5, 15),
+          incomingSource: 'athenahealth');
+      await IdentityConflictService.reportDobDisagreement(
+          current: DateTime(1980, 5, 14),
+          currentSource: 'Epic',
+          incoming: DateTime(1990, 1, 1),
+          incomingSource: 'athenahealth');
+      final pending = await service.fetchPending();
+      expect(pending.map((c) => c.id).first, 5);
+      expect(pending, hasLength(2));
+      expect(pending.last.id, isNegative);
+      expect(pending.last.incomingValue, '01/01/1990');
+    });
+
+    for (final status in [400, 403, 404, 409]) {
+      test('TC-EHR-REC-097: a $status from the backend means nothing to '
+          'confirm there, and what this device found is still offered',
+          () async {
+        backend.getStatus = status;
+        expect(await service.fetchPending(), isEmpty);
+        await IdentityConflictService.reportDobDisagreement(
+            current: DateTime(1980, 5, 14),
+            currentSource: 'Epic',
+            incoming: DateTime(1980, 5, 15),
+            incomingSource: 'athenahealth');
+        expect(await service.fetchPending(), hasLength(1));
+      });
+    }
+
+    for (final failure in ['500', 'no connection']) {
+      test('TC-EHR-REC-098: when the backend cannot be checked ($failure) '
+          'loading fails, so the screen never says "all caught up"',
+          () async {
+        if (failure == '500') {
+          backend.getStatus = 500;
+        } else {
+          backend.offline = true;
+        }
+        await expectLater(service.fetchPending(), throwsA(anything));
+      });
+    }
+
+    for (final accepted in [true, false]) {
+      test('TC-EHR-REC-099: ${accepted ? 'Use new date' : 'Keep current'} '
+          'is saved through the backend and reported as saved', () async {
+        backend.postStatus = 200;
+        expect(await service.resolve(12, accepted: accepted), isTrue);
+        final post = backend.posts.single;
+        expect(post.path, endsWith('/v1/api/ehr/identity-conflicts/12/resolve'));
+        expect(jsonDecode(jsonEncode(post.data)), {
+          'status': accepted ? 'ACCEPTED' : 'REJECTED',
+          'resolvedBy': 'PATIENT',
+        });
+      });
+    }
+
+    for (final failure in ['409', '500', 'no connection']) {
+      test('TC-EHR-REC-100: a save that fails ($failure) is never reported '
+          'as saved', () async {
+        if (failure == 'no connection') {
+          backend.offline = true;
+        } else {
+          backend.postStatus = int.parse(failure);
+        }
+        expect(await service.resolve(12, accepted: true), isFalse);
+      });
+    }
   });
 
   test('TC-EHR-REC-067: the default build has the demo data off', () {
@@ -184,4 +331,44 @@ void main() {
       expect(await service.fetchPending(), isEmpty);
     });
   });
+}
+
+/// A fake identity-conflicts backend for [ApiClient].
+class _FakeBackend implements HttpClientAdapter {
+  List<Map<String, dynamic>> conflicts = [];
+  int getStatus = 200;
+  int postStatus = 400;
+  bool offline = false;
+  final gets = <RequestOptions>[];
+  final posts = <RequestOptions>[];
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    if (offline) {
+      throw DioException(
+          requestOptions: options,
+          type: DioExceptionType.connectionError,
+          message: 'offline');
+    }
+    final json = {
+      Headers.contentTypeHeader: [Headers.jsonContentType]
+    };
+    if (options.method == 'GET') {
+      gets.add(options);
+      return getStatus == 200
+          ? ResponseBody.fromString(
+              jsonEncode({'resources': conflicts}), 200,
+              headers: json)
+          : ResponseBody.fromString('{"error":"x"}', getStatus, headers: json);
+    }
+    posts.add(options);
+    return ResponseBody.fromString(
+        postStatus == 200 ? '{"outcome":"applied"}' : '{"error":"x"}',
+        postStatus,
+        headers: json);
+  }
+
+  @override
+  void close({bool force = false}) {}
 }

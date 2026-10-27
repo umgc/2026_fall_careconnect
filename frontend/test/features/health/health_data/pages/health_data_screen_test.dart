@@ -1239,6 +1239,8 @@ void main() {
             '/v1/api/medicare/visits': envelope(const []),
             '/v1/api/medicare/coverage': envelope(const []),
             '/api/ehr/resources': '[]',
+            // The DOB screen's backend (#432): nothing pending there.
+            '/v1/api/ehr/identity-conflicts': '{"resources":[]}',
           }),
         );
 
@@ -1256,7 +1258,9 @@ void main() {
       expect(find.text('May 14, 1980'), findsOneWidget);
       expect(find.text('Needs your confirmation'), findsOneWidget);
 
-      final pending = await IdentityConflictService(useMock: false).fetchPending();
+      // Dio runs on real time, outside the fake clock.
+      final pending = (await t.runAsync(
+          IdentityConflictService(useMock: false).fetchPending))!;
       expect(pending.single.canonicalValueBefore, '05/14/1980');
       expect(pending.single.incomingValue, '05/15/1980');
     });
@@ -1287,7 +1291,9 @@ void main() {
       await settle(t);
       expect(find.text('May 14, 1980'), findsOneWidget);
       expect(find.textContaining('different dates of birth'), findsNothing);
-      expect(await IdentityConflictService(useMock: false).fetchPending(),
+      expect(
+          await t.runAsync(
+              IdentityConflictService(useMock: false).fetchPending),
           isEmpty);
     });
   });
