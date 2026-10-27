@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../pages/epic_webview_login_page.dart';
@@ -69,7 +70,8 @@ class _EpicConnectTileState extends State<EpicConnectTile>
         final authUrl = await EpicService.authorizeUrl();
         if (!mounted) return;
         final connected = await Navigator.of(context).push<bool>(
-          MaterialPageRoute(
+          TitledMaterialPageRoute(
+            title: 'Connect Epic',
             builder: (_) => EpicWebViewLoginPage(authUrl: authUrl),
           ),
         );

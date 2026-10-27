@@ -40,7 +40,8 @@ void main() {
 
     testWidgets('renders subtitle for ADL card', (tester) async {
       await tester.pumpWidget(buildScreen());
-      expect(find.text('Log and manage Activities of Daily Living'), findsOneWidget);
+      expect(find.text('Log and manage Activities of Daily Living'),
+          findsOneWidget);
     });
 
     testWidgets('renders subtitle for IADL card', (tester) async {
@@ -77,8 +78,10 @@ void main() {
       expect(find.byIcon(Icons.history), findsOneWidget);
     });
 
-    testWidgets('different clientId and clientName render correctly', (tester) async {
-      await tester.pumpWidget(buildScreen(clientId: 99, clientName: 'Carol White'));
+    testWidgets('different clientId and clientName render correctly',
+        (tester) async {
+      await tester
+          .pumpWidget(buildScreen(clientId: 99, clientName: 'Carol White'));
       expect(find.text('Carol White'), findsOneWidget);
       expect(find.text('ADL & IADL Management'), findsOneWidget);
     });

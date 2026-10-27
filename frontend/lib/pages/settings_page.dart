@@ -132,6 +132,9 @@ class _SettingsPageState extends State<SettingsPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
+          semanticLabel:
+              AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ??
+                  'Telemetry is enabled',
           title: Text(
               AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ??
                   'Telemetry is enabled'),
@@ -245,6 +248,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        semanticLabel:
+            AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ??
+                'Opt out of telemetry?',
         title: Text(
             AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ??
                 'Opt out of telemetry?'),
@@ -276,6 +282,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        semanticLabel:
+            AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ??
+                'Enable telemetry?',
         title: Text(
             AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ??
                 'Enable telemetry?'),
@@ -304,12 +313,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+      child: Semantics(
+        headingLevel: 2,
+        child: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+        ),
       ),
     );
   }
@@ -451,6 +463,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        semanticLabel: t.settingsClearCache,
         title: Text(t.settingsClearCache),
         content: Text(t.settingsClearCacheDesc),
         actions: [
@@ -480,6 +493,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        semanticLabel: t.settingsSignOut,
         title: Text(t.settingsSignOut),
         content: Text(t.settingsSignOutConfirmMessage),
         actions: [
@@ -510,6 +524,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        semanticLabel: t.settingsDeleteAccount,
         title: Text(
           t.settingsDeleteAccount,
           style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -555,7 +570,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.settings), // use existing "Settings" key
+        title: Semantics(headingLevel: 1, child: Text(t.settings)),
         // BackButton, not a bare IconButton: it carries the "Back" tooltip
         // that screen readers announce (#259, TC-HELP-058/059).
         leading: BackButton(

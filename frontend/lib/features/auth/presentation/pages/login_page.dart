@@ -124,6 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.asset(
                           'assets/images/CareConnectLogo.png',
+                          semanticLabel: 'CareConnect',
                           width: isMobile ? 150 : 170,
                           height: isMobile ? 150 : 170,
                           fit: BoxFit.contain,
@@ -182,12 +183,15 @@ class _LoginPageState extends State<LoginPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Form title
-                        Text(
-                          t.login_signInTitle,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
+                        Semantics(
+                          headingLevel: 1,
+                          child: Text(
+                            t.login_signInTitle,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                            ),
                           ),
                         ),
 
@@ -297,6 +301,9 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                                 suffixIcon: IconButton(
+                                  tooltip: _showPassword
+                                      ? 'Hide password'
+                                      : 'Show password',
                                   icon: Icon(
                                     _showPassword
                                         ? Icons.visibility_off_outlined

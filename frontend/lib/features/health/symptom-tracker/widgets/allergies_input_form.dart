@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/features/health/Shared/Data/health_api.dart';
 import 'package:flutter/material.dart';
@@ -228,7 +229,8 @@ class _AllergyInputFormState extends State<AllergyInputForm> {
 
                     // Record voice to text
                     final transcript = await Navigator.of(context).push<String>(
-                      MaterialPageRoute(
+                      TitledMaterialPageRoute(
+                        title: 'Voice Assistant',
                         builder: (_) => const VoiceCommandAI(singleShot: true),
                         fullscreenDialog: true,
                       ),

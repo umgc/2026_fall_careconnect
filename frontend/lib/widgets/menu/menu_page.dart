@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
@@ -98,7 +99,9 @@ class _MenuPageState extends State<MenuPage> {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const InvoiceTabbedPage()),
+            TitledMaterialPageRoute(
+              title: 'Invoice Assistant',
+              builder: (context) => const InvoiceTabbedPage()),
           );
         },
       ),
@@ -110,7 +113,8 @@ class _MenuPageState extends State<MenuPage> {
           onTap: () {
             Navigator.push(
                 context,
-                MaterialPageRoute(
+                TitledMaterialPageRoute(
+                  title: 'Patient Reports',
                     builder: (context) => const PatientReportsTab()));
           }),
       _MenuItem(
@@ -130,7 +134,8 @@ class _MenuPageState extends State<MenuPage> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
+              TitledMaterialPageRoute(
+                title: 'Medication Tracker',
                   builder: (context) => const MedicationsTrackerPage()),
             );
           },

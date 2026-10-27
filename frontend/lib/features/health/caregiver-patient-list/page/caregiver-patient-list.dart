@@ -1,3 +1,5 @@
+import 'package:care_connect_app/widgets/page_title.dart';
+import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'dart:convert';
 
 import 'package:care_connect_app/features/auth/presentation/pages/sign_up_screen.dart';
@@ -549,6 +551,10 @@ class _CaregiverPatientList extends State<CaregiverPatientList> {
         onRefresh: _loadPatients,
         child: Column(
           children: [
+            Semantics(
+              headingLevel: 1,
+              child: Text('Patient List', style: theme.textTheme.headlineSmall),
+            ),
             // Stats Cards
             Padding(
               padding: const EdgeInsets.all(16),
@@ -637,7 +643,7 @@ class _CaregiverPatientList extends State<CaregiverPatientList> {
                     label: const Text('Register'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: theme.colorScheme.secondary,
-                      foregroundColor: theme.colorScheme.onSecondary,
+                      foregroundColor: AppTheme.textPrimary,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 12,
@@ -701,7 +707,8 @@ class _CaregiverPatientList extends State<CaregiverPatientList> {
                                 }
 
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(
+                                  TitledMaterialPageRoute(
+                                    title: 'Conversation',
                                     builder: (_) => ChatRoomScreen(
                                       peerUserId: peerUserId,
                                       peerName: patient.fullName,
@@ -711,7 +718,8 @@ class _CaregiverPatientList extends State<CaregiverPatientList> {
                               },
                               onTap: () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(
+                                  TitledMaterialPageRoute(
+                                    title: 'Patient Details',
                                     builder: (_) => PatientDetailsPage(
                                       patientId: patient.id,
                                       isCaregiver: true, // or patient: patient

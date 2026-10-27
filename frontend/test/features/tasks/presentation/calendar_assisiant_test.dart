@@ -302,6 +302,34 @@ void main() {
   // =====================
   // Patient with mock HTTP - tasks loaded
   // =====================
+  testWidgets('Tab reaches the month region and arrows change its page',
+      (tester) async {
+    await tester.pumpWidget(_wrapWithProvider(_NullUserProvider()));
+    await tester.pumpAndSettle();
+    final pageView = find.byType(PageView).first;
+    final controller = tester.widget<PageView>(pageView).controller!;
+    for (var i = 0; i < 25; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      if (FocusManager.instance.primaryFocus?.context
+              ?.findAncestorWidgetOfExactType<PageView>() != null) {
+        break;
+      }
+    }
+    expect(FocusManager.instance.primaryFocus?.debugLabel,
+        'Calendar scroll region');
+    expect(FocusManager.instance.primaryFocus?.context
+        ?.findAncestorWidgetOfExactType<PageView>(), isNotNull);
+    final before = controller.page!;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(controller.page, before + 1);
+    final region = FocusManager.instance.primaryFocus;
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(FocusManager.instance.primaryFocus, isNot(same(region)));
+  });
+
   group('CalendarAssistantScreen - patient with tasks', () {
     testWidgets('loads and displays calendar with tasks for patient user',
         (tester) async {

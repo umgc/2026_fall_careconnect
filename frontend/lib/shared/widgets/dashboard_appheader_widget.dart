@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:go_router/go_router.dart';
@@ -6,45 +7,88 @@ import 'package:flutter/material.dart';
 /// Dashboard App header
 class DashboardAppHeader extends StatelessWidget
     implements PreferredSizeWidget {
+  @override
+  final Size preferredSize;
   final String userName;
   final String? timezone;
   final String? profileImageUrl;
   final String role;
 
-  const DashboardAppHeader({
+  DashboardAppHeader({
     super.key,
+    required BuildContext context,
     required this.userName,
     required this.role,
     this.timezone,
     this.profileImageUrl = "",
-  });
+  }) : preferredSize = _sizeFor(context, userName, role);
 
-  @override
-  Size get preferredSize {
-    // Calculate the height based on content
-    return const Size.fromHeight(210); // This will be overridden
+  static String get _formattedTime {
+    final time = DateTime.now();
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    return '${twoDigits(time.month)}/${twoDigits(time.day)}/${time.year} '
+        '${twoDigits(time.hour)}:${twoDigits(time.minute)} ${time.timeZoneName}';
+  }
+
+  static String _greeting(AppLocalizations t, String role) => role == 'PATIENT'
+      ? t.appheaderwidget_greetingPt
+      : t.appheaderwidget_greetingNonPt;
+
+  static Size _sizeFor(BuildContext context, String userName, String role) {
+    // Scaffold needs the same text metrics as the header before laying out its
+    // body. Include wrapping, rather than multiplying a fixed height by scale.
+    final t = AppLocalizations.of(context)!;
+    final media = MediaQuery.of(context);
+    final width = (media.size.width - media.padding.horizontal - 40 - 65)
+        .clamp(1.0, double.infinity);
+    // Measure with the style the header text inherits inside the AppBar's
+    // Material (the theme's bodyMedium, including its line height), not the
+    // DefaultTextStyle around the Scaffold, which may lack that height.
+    final baseStyle = Theme.of(context).textTheme.bodyMedium ??
+        DefaultTextStyle.of(context).style;
+    double textHeight(String text, double size, {FontWeight? weight}) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: baseStyle.merge(
+            TextStyle(fontSize: size, fontWeight: weight),
+          ),
+        ),
+        textDirection: Directionality.of(context),
+        textScaler: media.textScaler,
+        locale: Localizations.localeOf(context),
+      )..layout(maxWidth: width);
+      final height = painter.height;
+      painter.dispose();
+      return height;
+    }
+
+    final welcomeHeight = textHeight(
+          '${t.appheaderwidget_welcomeBack} $userName',
+          22,
+          weight: FontWeight.w600,
+        ) +
+        3 +
+        textHeight(_formattedTime, 13) +
+        2 +
+        textHeight(_greeting(t, role), 13);
+    return Size.fromHeight(
+      (30 + 50 + 10 + welcomeHeight.clamp(50.0, double.infinity))
+          .clamp(210.0, double.infinity),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final DateTime time = DateTime.now();
-    final String timeZone = time.timeZoneName;
-    // Helper function to ensure two-digit formatting
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-
-    // Format the datetime manually
-    String formattedTime =
-        '${twoDigits(time.month)}/${twoDigits(time.day)}/${time.year} ${twoDigits(time.hour)}:${twoDigits(time.minute)}';
-
     return AppBar(
+      excludeHeaderSemantics: true,
       backgroundColor: Colors.transparent,
       elevation: 0,
       automaticallyImplyLeading: false,
       toolbarHeight: preferredSize.height,
       flexibleSpace: Container(
-        height: preferredSize.height,
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
           borderRadius: const BorderRadius.only(
@@ -91,7 +135,8 @@ class DashboardAppHeader extends StatelessWidget
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
+                            Flexible(
+                                child: Text(
                               "CARECONNECT",
                               style: TextStyle(
                                 fontSize: 11,
@@ -99,7 +144,7 @@ class DashboardAppHeader extends StatelessWidget
                                 color: theme.colorScheme.primary,
                                 letterSpacing: 1.0,
                               ),
-                            ),
+                            )),
                           ],
                         ),
                       ),
@@ -143,10 +188,12 @@ class DashboardAppHeader extends StatelessWidget
                             height: 40,
                             child: IconButton(
                               padding: EdgeInsets.zero,
+                              tooltip: t.settings,
                               onPressed: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  TitledMaterialPageRoute(
+                                    title: 'Settings',
                                     builder: (context) => const SettingsPage(),
                                   ),
                                 );
@@ -217,17 +264,20 @@ class DashboardAppHeader extends StatelessWidget
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            "${t.appheaderwidget_welcomeBack} $userName",
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                              color: theme.colorScheme.primary,
+                          Semantics(
+                            headingLevel: 1,
+                            child: Text(
+                              "${t.appheaderwidget_welcomeBack} $userName",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.primary,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            "$formattedTime $timeZone",
+                            _formattedTime,
                             style: TextStyle(
                               fontSize: 13,
                               color: theme.colorScheme.onSurface.withValues(
@@ -237,9 +287,7 @@ class DashboardAppHeader extends StatelessWidget
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            role == "PATIENT"
-                                ? t.appheaderwidget_greetingPt
-                                : t.appheaderwidget_greetingNonPt,
+                            _greeting(t, role),
                             style: TextStyle(
                               fontSize: 13,
                               color: theme.colorScheme.onSurface.withValues(

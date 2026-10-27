@@ -67,7 +67,10 @@ class _PreDefinedTaskScreenState extends State<PreDefinedTaskScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Predefined Task Scheduling'),
+        title: Semantics(
+          headingLevel: 1,
+          child: const Text('Predefined Task Scheduling'),
+        ),
         centerTitle: true,
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,

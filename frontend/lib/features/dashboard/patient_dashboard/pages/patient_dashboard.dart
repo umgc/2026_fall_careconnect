@@ -1155,6 +1155,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: DashboardAppHeader(
+        context: context,
         userName: user?.name ?? '',
         role: user?.role ?? '',
       ),
