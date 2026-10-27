@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../../providers/user_provider.dart';
+import '../../../../services/epic_service.dart';
+import '../../../../services/oracle_health_service.dart';
 import '../models/health_record.dart';
 import '../models/patient_demographics.dart';
 import '../services/medicare_data_service.dart';
@@ -13,6 +15,7 @@ import '../services/record_choice_store.dart';
 import '../services/record_reconciler.dart';
 import '../widgets/athena_connect_tile.dart';
 import '../widgets/record_conflict_dialog.dart';
+import '../../../../widgets/epic_connect_tile.dart';
 
 import 'health_event_details_screen.dart';
 
@@ -37,9 +40,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   // Darker green for text on the tinted status chip: 4.22:1 -> 5.89:1.
   static const _greenText = Color(0xFF065F46);
   static const _warning = Color(0xFFF59E0B);
-  // Hidden until these sections are backed by real patient data.
+  // Confirmation remains hidden until it is backed by real patient data.
   static const bool _showConfirmationSection = false;
-  static const bool _showConnectedProvidersSection = false;
+  static const bool _showConnectedProvidersSection = true;
 
   // The app's light-theme primary (00A7C8) is 2.85:1 as text on white, so text
   // that would use it uses _teal instead; the dark theme's primary is fine.
@@ -62,6 +65,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   bool _loading = true;
   bool _synthetic = false;
   bool _medicareUnreachable = false;
+  bool? _epicConnected;
+  bool? _oracleHealthConnected;
   MedicareReadProblem? _medicareProblem;
   bool _ehrUnavailable = false;
   bool _medicareEmpty = false;
@@ -142,6 +147,17 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
   Future<void> _load() async {
     // Each source loads on its own, so one failing never hides the others.
     final ehrService = EhrDataService();
+
+    bool? epicConnected;
+    try {
+      final epicStatus = await EpicService.status();
+      epicConnected = epicStatus['connected'] == true;
+    } catch (_) {}
+    bool? oracleHealthConnected;
+    try {
+      final oracleStatus = await OracleHealthService.status();
+      oracleHealthConnected = oracleStatus.connected;
+    } catch (_) {}
     List<HealthRecord>? ehrRecords;
     try {
       ehrRecords = await ehrService.tryFetchRecords(
@@ -176,8 +192,20 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     if (!mounted) return;
     setState(() {
+      _epicConnected = epicConnected;
+      _oracleHealthConnected = oracleHealthConnected;
       _choices = choices;
-      _ehr = ehrRecords ?? [];
+      _ehr = (ehrRecords ?? []).where((record) {
+        if (athena.complete &&
+            record.sources.contains(RecordSource.athena)) {
+          return false;
+        }
+        if (medicare.complete &&
+            record.sources.contains(RecordSource.medicare)) {
+          return false;
+        }
+        return true;
+      }).toList();
       _ehrUnavailable = ehrRecords == null;
       _medicareProblem = medicare.problem;
       _medicare = medicare.records;
@@ -424,48 +452,68 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     // SRS ERR-MCR-05 (FR-MCR-09, AC-MCR-09-1), exact wording.
                     'Your Medicare connection has expired. Connect again to see current records.',
                     action: _connectMedicareButton(),
-                  )
-                else if (_medicareProblem == MedicareReadProblem.notLinked)
-                  _noticeBanner(
-                    Icons.link_off,
-                    'Medicare isn\'t connected yet.',
-                    action: _connectMedicareButton(),
-                  )
-                else if (_medicareUnreachable)
+                  ),
+                // Normal not-connected status is now shown in Connected Sources.
+                // Keep this banner available in case UI/UX decides to restore it.
+                // else if (_medicareProblem == MedicareReadProblem.notLinked)
+                //   _noticeBanner(
+                //     Icons.link_off,
+                //     'Medicare isn\'t connected yet.',
+                //     action: _connectMedicareButton(),
+                //   )
+                if (_medicareUnreachable &&
+                    _medicareProblem != MedicareReadProblem.notLinked &&
+                    _medicareProblem != MedicareReadProblem.linkExpired)
                   _noticeBanner(
                     Icons.cloud_off_outlined,
                     // SRS ERR-MCR-03 (FR-MCR-24, AC-MCR-24-2), exact wording.
                     'Showing your saved records. We couldn\'t check Medicare for updates.',
+                    warning: true,
                   ),
-                if (_athenaProblem == AthenaReadProblem.notConnected &&
-                    _mayConnectAthena())
-                  _noticeBanner(
-                    Icons.link_off,
-                    'athenahealth isn\'t connected yet.',
-                    // Consent and connect happen right here, then the screen
-                    // reloads with the new records.
-                    action: AthenaConnectTile(
-                      buttonOnly: true,
-                      onChanged: () {
-                        if (mounted) _load();
-                      },
-                    ),
-                  ),
+                // Normal athenahealth not-connected status is now shown in Connected Sources.
+                // Keep this banner available in case UI/UX decides to restore it.
+                // if (_athenaProblem == AthenaReadProblem.notConnected &&
+                //     _mayConnectAthena())
+                //   _noticeBanner(
+                //     Icons.link_off,
+                //     'athenahealth isn\'t connected yet.',
+                //     // Consent and connect happen right here, then the screen
+                //     // reloads with the new records.
+                //     action: AthenaConnectTile(
+                //       buttonOnly: true,
+                //       onChanged: () {
+                //         if (mounted) _load();
+                //       },
+                //     ),
+                //   ),
                 if (_athenaProblem == AthenaReadProblem.unreachable)
                   _noticeBanner(
                     Icons.cloud_off_outlined,
                     'We couldn\'t load records from your other providers. Showing what we could.',
+                    warning: true,
                   ),
                 if (_ehrUnavailable)
                   _noticeBanner(
                     Icons.cloud_off_outlined,
-                    'We couldn\'t load records from Oracle Health. Showing what we could.',
-                  )
-                else
-                  _noticeBanner(
-                    Icons.check_circle_outline,
-                    'Connected to Oracle Health. Your Oracle Health records are included in your health history.',
+                    'We couldn\'t load records from your connected health sources. Showing what we could.',
+                    warning: true,
                   ),
+
+                // Normal connected status is now shown in Connected Sources.
+                // Keep this banner available in case UI/UX decides to restore it.
+                // else
+                //   _noticeBanner(
+                //     Icons.check_circle_outline,
+                //     'Connected to Oracle Health. Your Oracle Health records are included in your health history.',
+                //   ),
+
+                // Normal connected status is now shown in Connected Sources.
+                // Keep this banner available in case UI/UX decides to restore it.
+                // else
+                //   _noticeBanner(
+                //     Icons.check_circle_outline,
+                //     'Connected to Oracle Health. Your Oracle Health records are included in your health history.',
+                //   ),
                 if (_dobNeedsConfirmation)
                   _noticeBanner(
                     Icons.cake_outlined,
@@ -474,8 +522,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     action: TextButton(
                       onPressed: _confirmDob,
                       style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF006B80),
-                          minimumSize: const Size(48, 48)),
+                        foregroundColor: _accent(context),
+                        minimumSize: const Size(48, 48),
+                      ),
                       child: const Text('Confirm'),
                     ),
                   ),
@@ -486,8 +535,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     action: TextButton(
                       onPressed: () => _reviewConflicts(),
                       style: TextButton.styleFrom(
-                          foregroundColor: const Color(0xFF006B80),
-                          minimumSize: const Size(48, 48)),
+                        foregroundColor: _teal,
+                        minimumSize: const Size(48, 48),
+                      ),
                       child: const Text('Review'),
                     ),
                   ),
@@ -751,6 +801,10 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                   const SizedBox(width: 8),
                                   TextButton(
                                     onPressed: () {},
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: _accent(context),
+                                      minimumSize: const Size(48, 48),
+                                    ),
                                     child: const Text('Review'),
                                   ),
                                 ],
@@ -768,7 +822,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Connected Providers',
+                                    'Connected Sources',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium
@@ -777,23 +831,166 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                         ),
                                   ),
                                   const SizedBox(height: 16),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {},
-                                      icon: const Icon(Icons.add),
-                                      label: const Text('Add a Provider'),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
                                   _providerCard(
-                                    name: 'Mercy Medical Center',
-                                    location: 'Baltimore, MD',
+                                    name: 'Epic (MyChart)',
+                                    status: _epicConnected == null
+                                        ? 'Status unavailable'
+                                        : _epicConnected!
+                                            ? 'Connected'
+                                            : 'Not connected',
+                                    connected: _epicConnected == true,
+                                    action: _epicConnected == null
+                                        ? TextButton(
+                                            onPressed: _load,
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: _accent(context),
+                                              minimumSize: const Size(48, 48),
+                                            ),
+                                            child: const Text('Retry'),
+                                          )
+                                        : _epicConnected == false
+                                            ? EpicConnectTile(
+                                                buttonOnly: true,
+                                                onChanged: () {
+                                                  if (mounted) _load();
+                                                },
+                                              )
+                                            : null,
                                   ),
-                                  const SizedBox(height: 10),
+                                  const Divider(height: 1),
                                   _providerCard(
-                                    name: 'Main Street Primary Care',
-                                    location: 'Baltimore, MD',
+                                    name: 'Oracle Health',
+                                    status: _oracleHealthConnected == null
+                                        ? 'Status unavailable'
+                                        : _oracleHealthConnected!
+                                            ? 'Connected'
+                                            : 'Not connected',
+                                    connected: _oracleHealthConnected == true,
+                                    action: _oracleHealthConnected == null
+                                        ? TextButton(
+                                            onPressed: _load,
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: _accent(context),
+                                              minimumSize: const Size(48, 48),
+                                            ),
+                                            child: const Text('Retry'),
+                                          )
+                                        : _oracleHealthConnected == false
+                                            ? TextButton(
+                                                onPressed: () async {
+                                                  try {
+                                                    await OracleHealthService
+                                                        .connect();
+                                                    if (mounted) {
+                                                      await _load();
+                                                    }
+                                                  } catch (_) {
+                                                    if (!context.mounted) {
+                                                      return;
+                                                    }
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Unable to start Oracle Health connection.',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor:
+                                                      _accent(context),
+                                                  minimumSize:
+                                                      const Size(48, 48),
+                                                ),
+                                                child: const Text('Connect'),
+                                              )
+                                            : null,
+                                  ),
+                                  const Divider(height: 1),
+                                  _providerCard(
+                                    name: 'Athena Health',
+                                    status: _athenaProblem ==
+                                            AthenaReadProblem.notConnected
+                                        ? 'Not connected'
+                                        : _athenaProblem ==
+                                                AthenaReadProblem.unreachable
+                                            ? 'Status unavailable'
+                                            : _athenaProblem ==
+                                                    AthenaReadProblem.hidden
+                                                ? 'Unavailable'
+                                                : 'Connected',
+                                    connected: _athenaProblem == null,
+                                    action: _athenaProblem ==
+                                            AthenaReadProblem.unreachable
+                                        ? TextButton(
+                                            onPressed: _load,
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: _accent(context),
+                                              minimumSize: const Size(48, 48),
+                                            ),
+                                            child: const Text('Retry'),
+                                          )
+                                        : _athenaProblem ==
+                                                    AthenaReadProblem
+                                                        .notConnected &&
+                                                _mayConnectAthena()
+                                            ? AthenaConnectTile(
+                                                buttonOnly: true,
+                                                onChanged: () {
+                                                  if (mounted) _load();
+                                                },
+                                              )
+                                            : null,
+                                  ),
+                                  const Divider(height: 1),
+                                  _providerCard(
+                                    name: 'Medicare',
+                                    status: _medicareProblem ==
+                                            MedicareReadProblem.notLinked
+                                        ? 'Not connected'
+                                        : _medicareProblem ==
+                                                MedicareReadProblem.linkExpired
+                                            ? 'Connection expired'
+                                            : _medicareUnreachable
+                                                ? 'Status unavailable'
+                                                : 'Connected',
+                                    connected: _medicareProblem == null &&
+                                        !_medicareUnreachable,
+                                    action: _medicareUnreachable &&
+                                            _medicareProblem !=
+                                                MedicareReadProblem.notLinked &&
+                                            _medicareProblem !=
+                                                MedicareReadProblem.linkExpired
+                                        ? TextButton(
+                                            onPressed: _load,
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: _accent(context),
+                                              minimumSize: const Size(48, 48),
+                                            ),
+                                            child: const Text('Retry'),
+                                          )
+                                        : _medicareProblem ==
+                                                MedicareReadProblem.linkExpired
+                                            ? TextButton(
+                                                onPressed: () =>
+                                                    GoRouter.of(context).push(
+                                                        '/medicare-connect'),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor:
+                                                      _accent(context),
+                                                  minimumSize:
+                                                      const Size(48, 48),
+                                                ),
+                                                child: const Text('Reconnect'),
+                                              )
+                                            : _medicareProblem ==
+                                                    MedicareReadProblem
+                                                        .notLinked
+                                                ? _connectMedicareButton()
+                                                : null,
                                   ),
                                 ],
                               ),
@@ -982,24 +1179,21 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   Widget _providerCard({
     required String name,
-    required String location,
+    required String status,
+    required bool connected,
+    Widget? action,
   }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
-            Icons.check_circle_outline,
+            connected ? Icons.check_circle_outline : Icons.link_off,
             size: 20,
-            color: Theme.of(context).colorScheme.primary,
+            color: connected
+                ? _greenText
+                : Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1014,7 +1208,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  location,
+                  status,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -1022,6 +1216,10 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               ],
             ),
           ),
+          if (action != null) ...[
+            const SizedBox(width: 8),
+            action,
+          ],
         ],
       ),
     );
@@ -1031,9 +1229,10 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return TextButton(
       onPressed: () => GoRouter.of(context).push('/medicare-connect'),
       style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF006B80),
-          minimumSize: const Size(48, 48)),
-      child: const Text('Connect Medicare Account'),
+        foregroundColor: _accent(context),
+        minimumSize: const Size(48, 48),
+      ),
+      child: const Text('Connect'),
     );
   }
 
@@ -1049,28 +1248,50 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     }
   }
 
-  Widget _noticeBanner(IconData icon, String text, {Widget? action}) {
+  Widget _noticeBanner(
+    IconData icon,
+    String text, {
+    Widget? action,
+    bool warning = false,
+  }) {
     return Semantics(
       liveRegion: true,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: warning ? const Color(0xFFFFFBEB) : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFFD1D5DB)),
+          border: Border.all(
+            color: warning ? const Color(0xFFD97706) : const Color(0xFFD1D5DB),
+            width: warning ? 1.5 : 1,
+          ),
         ),
         child: Row(
           children: [
             ExcludeSemantics(
-                child: Icon(icon, size: 20, color: const Color(0xFF4B5563))),
+              child: Icon(
+                icon,
+                size: 20,
+                color:
+                    warning ? const Color(0xFF92400E) : const Color(0xFF4B5563),
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(text,
-                  style: const TextStyle(
-                      fontSize: 14, color: Color(0xFF0F172A), height: 1.4)),
+              child: Text(
+                text,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF0F172A),
+                  height: 1.4,
+                ),
+              ),
             ),
-            if (action != null) ...[const SizedBox(width: 8), action],
+            if (action != null) ...[
+              const SizedBox(width: 8),
+              action,
+            ],
           ],
         ),
       ),

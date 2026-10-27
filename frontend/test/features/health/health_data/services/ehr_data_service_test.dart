@@ -26,6 +26,20 @@ void main() {
 
   tearDown(() => ApiClient.instance.debugSetHttpClientAdapter(original));
 
+  test('unified EHR resources request all available sources', () async {
+    final adapter = RouteAdapter({
+      '/api/ehr/resources': '[]',
+    });
+    ApiClient.instance.debugSetHttpClientAdapter(adapter);
+
+    await EhrDataService().fetchRecords();
+
+    final request = adapter.uris.singleWhere(
+      (uri) => uri.path.endsWith('/api/ehr/resources'),
+    );
+    expect(request.queryParameters['source'], 'ALL');
+  });
+
   test(
       'TC-HDATA-022: a record from a source the app does not know is never '
       'shown as coming from Epic (DEF-MCR-22)', () async {
@@ -204,7 +218,8 @@ void main() {
     expect(records.single.sources, [RecordSource.epic]);
   });
 
-  test('rows stored by athenahealth (ATHENAHEALTH) are shown as athena '
+  test(
+      'rows stored by athenahealth (ATHENAHEALTH) are shown as athena '
       'records, with their resource type', () async {
     ApiClient.instance.debugSetHttpClientAdapter(RouteAdapter({
       '/api/ehr/resources': '[{"resourceType":"Condition","resourceId":"a-2",'
@@ -220,15 +235,19 @@ void main() {
       () async {
     final epic = EhrResourceMapper.toHealthRecord(
         {'source': 'EPIC', 'resourceId': 'e', 'category': 'Conditions'})!;
-    final athena = EhrResourceMapper.toHealthRecord(
-        {'source': 'ATHENAHEALTH', 'resourceId': 'a', 'category': 'Conditions'})!;
+    final athena = EhrResourceMapper.toHealthRecord({
+      'source': 'ATHENAHEALTH',
+      'resourceId': 'a',
+      'category': 'Conditions'
+    })!;
     expect(epic.details.map((d) => '${d.label}: ${d.value}'),
         ['Category: Conditions']);
     expect(athena.details.map((d) => '${d.label}: ${d.value}'),
         epic.details.map((d) => '${d.label}: ${d.value}'));
   });
 
-  test('record types come from the FHIR resource type first, then the '
+  test(
+      'record types come from the FHIR resource type first, then the '
       'category', () async {
     String row(String type, String category) =>
         '{"resourceType":"$type","resourceId":"$type","source":"EPIC",'
@@ -275,8 +294,7 @@ void main() {
       return EhrDataService().fetchPatientDemographics();
     }
 
-    test('Epic wins every field it has; athenahealth fills the rest',
-        () async {
+    test('Epic wins every field it has; athenahealth fills the rest', () async {
       final d = await demographics({
         'EPIC': '{"name":"Epic Name","birthDate":"1980-05-14","gender":" "}',
         'ATHENAHEALTH':

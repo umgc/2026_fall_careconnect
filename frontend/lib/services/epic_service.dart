@@ -58,8 +58,11 @@ class EpicService {
     final headers = await ApiService.getAuthHeaders();
     final resp = await http.get(Uri.parse('$_base/status'), headers: headers);
     if (resp.statusCode != 200) {
-      return {'connected': false};
+      throw Exception(
+        'Epic connection status unavailable (${resp.statusCode})',
+      );
     }
+
     return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
   }
 
@@ -70,8 +73,7 @@ class EpicService {
   /// backend defaults to the caller's own records. Either way the server enforces EHR_VIEW access
   /// (EpicAccessPolicy) — a caregiver with no active link and consent still gets null (uniform 404).
   /// Returns null on 404 / error.
-  static Future<Map<String, dynamic>?> getResource(
-      String type, String id,
+  static Future<Map<String, dynamic>?> getResource(String type, String id,
       {String? patientUserId}) async {
     final headers = await ApiService.getAuthHeaders();
     final uri = Uri.parse(

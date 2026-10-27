@@ -55,6 +55,7 @@ public class EpicResourceChunker {
             case "FamilyMemberHistory" -> Optional.of(RetrievalRecordType.EPIC_FAMILY_HISTORY);
             case "Coverage" -> Optional.of(RetrievalRecordType.EPIC_COVERAGE);
             case "Device" -> Optional.of(RetrievalRecordType.EPIC_DEVICE);
+            case "Appointment" -> Optional.of(RetrievalRecordType.EPIC_APPOINTMENT);
             default -> Optional.empty();
         };
     }
@@ -117,10 +118,13 @@ public class EpicResourceChunker {
             appendIfPresent(sb, "Relationship", codeText(node.get("relationship")));
             appendIfPresent(sb, "Payor", referenceDisplay(node.get("payor")));
             appendIfPresent(sb, "Manufacturer", stringText(node.get("manufacturer")));
+            // Appointment: appointmentType / serviceType (CodeableConcept[]); start/end are top-level instants.
+            appendIfPresent(sb, "Appointment type", codeText(node.get("appointmentType")));
+            appendIfPresent(sb, "Service", codeText(node.get("serviceType")));
             appendIfPresent(sb, "Period", periodText(node.get("period")));
             appendIfPresent(sb, "Date", firstText(node,
                     "effectiveDateTime", "onsetDateTime", "authoredOn", "recordedDate", "date",
-                    "startDate", "created"));
+                    "startDate", "start", "created"));
         }
         String text = sb.toString().trim();
         if (text.length() > MAX_CHUNK_CHARS) {

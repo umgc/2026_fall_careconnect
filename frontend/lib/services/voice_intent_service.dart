@@ -45,10 +45,10 @@ class VoiceIntentResult {
 class VoiceIntentService {
   static String get _baseUrl => '${getBackendBaseUrl()}/api/voice';
 
-  static const Duration _defaultRequestTimeout = Duration(seconds: 3);
+  static const Duration _defaultRequestTimeout = Duration(seconds: 8);
 
   /// Allows focused service tests to exercise the timeout path without
-  /// introducing a three-second delay into every test run.
+  /// waiting for the full request timeout in every test run.
   @visibleForTesting
   static Duration requestTimeout = _defaultRequestTimeout;
 

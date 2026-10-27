@@ -46,7 +46,8 @@ public enum RetrievalRecordType {
     EPIC_CARE_TEAM,
     EPIC_FAMILY_HISTORY,
     EPIC_COVERAGE,
-    EPIC_DEVICE;
+    EPIC_DEVICE,
+    EPIC_APPOINTMENT;
 
     /** Epic-sourced record types (Findings R2; discriminated by chunk source_kind='epic'). */
     public static final Set<RetrievalRecordType> EPIC_TYPES = Collections.unmodifiableSet(EnumSet.of(
@@ -64,7 +65,8 @@ public enum RetrievalRecordType {
             EPIC_CARE_TEAM,
             EPIC_FAMILY_HISTORY,
             EPIC_COVERAGE,
-            EPIC_DEVICE));
+            EPIC_DEVICE,
+            EPIC_APPOINTMENT));
 
     private static final Set<RetrievalRecordType> ALL = Collections.unmodifiableSet(EnumSet.allOf(RetrievalRecordType.class));
 
@@ -124,7 +126,8 @@ public enum RetrievalRecordType {
                 EPIC_CARE_TEAM,
                 EPIC_FAMILY_HISTORY,
                 EPIC_COVERAGE,
-                EPIC_DEVICE
+                EPIC_DEVICE,
+                EPIC_APPOINTMENT
         ));
     }
 

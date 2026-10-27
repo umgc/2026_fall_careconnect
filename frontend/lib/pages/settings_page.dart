@@ -10,12 +10,12 @@ import '../services/notification_settings_service.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/language/language_picker.dart';
 import '../widgets/epic_connect_tile.dart';
-import '../features/health/health_data/widgets/athena_connect_tile.dart';
 import '../widgets/oracle_health_connect_tile.dart';
 import '../utils/responsive_utils.dart';
 
 import '../features/telemetry/telemetry.dart';
 import '../features/telemetry/telemetry_settings.dart';
+import '../features/health/health_data/widgets/athena_connect_tile.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -721,6 +721,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
 
                   const SizedBox(height: 24),
+
+                  const OracleHealthConnectTile(),
 
                   // Connected Services
                   _buildSectionHeader(context, 'Connected Services'),

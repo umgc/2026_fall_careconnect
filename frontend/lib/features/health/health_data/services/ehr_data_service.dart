@@ -25,14 +25,13 @@ class EhrDataService {
 
     final unifiedResources = await _tryFetchList(
       '/api/ehr/resources',
+      query: {'source': 'ALL'},
       headers: headers,
     );
 
     if (unifiedResources != null) {
       requestSucceeded = true;
 
-      // A resource whose source the app does not know is dropped, never
-      // relabelled as another source (see EhrResourceMapper.sourceFrom).
       records.addAll(
         unifiedResources
             .map(EhrResourceMapper.toHealthRecord)
@@ -87,11 +86,13 @@ class EhrDataService {
 
   Future<List<Map<String, dynamic>>?> _tryFetchList(
     String path, {
+    Map<String, dynamic>? query,
     required Map<String, String> headers,
   }) async {
     try {
       final values = await ApiClient.instance.getJson<List<dynamic>>(
         path,
+        query: query,
         headers: headers,
         parser: (json) => json is List ? json : <dynamic>[],
       );
@@ -193,17 +194,16 @@ class EhrDataService {
       return null;
     }
   }
-
   HealthRecord _toCernerAllergy(Map<String, dynamic> allergy) {
     return HealthRecord.single(
       id: (allergy['sourceRecordId'] ?? '').toString(),
       source: RecordSource.cerner,
       type: RecordType.allergy,
-      title: EhrResourceMapper.stringOrNull(allergy['substanceText']) ??
-          EhrResourceMapper.stringOrNull(allergy['substanceCode']) ??
+      title: _stringOrNull(allergy['substanceText']) ??
+          _stringOrNull(allergy['substanceCode']) ??
           'Allergy',
-      date: EhrResourceMapper.parseDate(allergy['recordedDate']),
-      status: EhrResourceMapper.stringOrNull(allergy['clinicalStatus']),
+      date: _parseDate(allergy['recordedDate']),
+      status: _stringOrNull(allergy['clinicalStatus']),
     );
   }
 
@@ -212,12 +212,12 @@ class EhrDataService {
       id: (condition['sourceRecordId'] ?? '').toString(),
       source: RecordSource.cerner,
       type: RecordType.condition,
-      title: EhrResourceMapper.stringOrNull(condition['conditionText']) ??
+      title: _stringOrNull(condition['conditionText']) ??
           _firstCodeLabel(condition['conditionCodes']) ??
           'Condition',
-      date: EhrResourceMapper.parseDate(condition['onsetValue']) ??
-          EhrResourceMapper.parseDate(condition['recordedDate']),
-      status: EhrResourceMapper.stringOrNull(condition['clinicalStatus']),
+      date: _parseDate(condition['onsetValue']) ??
+          _parseDate(condition['recordedDate']),
+      status: _stringOrNull(condition['clinicalStatus']),
     );
   }
 
@@ -227,10 +227,10 @@ class EhrDataService {
       source: RecordSource.cerner,
       type: RecordType.appointment,
       title: _firstCodeLabel(encounter['encounterTypes']) ??
-          EhrResourceMapper.stringOrNull(encounter['classDisplay']) ??
+          _stringOrNull(encounter['classDisplay']) ??
           'Clinical encounter',
-      date: EhrResourceMapper.parseDate(encounter['periodStart']),
-      status: EhrResourceMapper.stringOrNull(encounter['status']),
+      date: _parseDate(encounter['periodStart']),
+      status: _stringOrNull(encounter['status']),
     );
   }
 
@@ -244,12 +244,12 @@ class EhrDataService {
         continue;
       }
 
-      final display = EhrResourceMapper.stringOrNull(value['display']);
+      final display = _stringOrNull(value['display']);
       if (display != null) {
         return display;
       }
 
-      final code = EhrResourceMapper.stringOrNull(value['code']);
+      final code = _stringOrNull(value['code']);
       if (code != null) {
         return code;
       }
@@ -257,4 +257,22 @@ class EhrDataService {
 
     return null;
   }
+
+  String? _stringOrNull(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  DateTime? _parseDate(dynamic value) {
+    if (value is! String || value.isEmpty) {
+      return null;
+    }
+
+    return DateTime.tryParse(value);
+  }
+
 }

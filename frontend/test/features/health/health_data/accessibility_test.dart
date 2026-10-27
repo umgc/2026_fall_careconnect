@@ -82,8 +82,8 @@ Future<void> _settle(WidgetTester t) async {
   for (var i = 0;
       i < 40 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
       i++) {
-    await t.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await t.pump(const Duration(milliseconds: 50));
   }
   await t.pumpAndSettle();
@@ -185,7 +185,8 @@ void main() {
   // ---------------------------------------------------------------------
   group('Health Data screen', () {
     for (final e in _themes.entries) {
-      testWidgets('meets the tap-target, label and contrast guidelines '
+      testWidgets(
+          'meets the tap-target, label and contrast guidelines '
           '(${e.key} theme)', (t) async {
         final h = t.ensureSemantics();
         await pumpScreen(t, theme: e.value);
@@ -194,8 +195,7 @@ void main() {
       });
     }
 
-    testWidgets('lays out at 200% text without overflow (SC 1.4.4)',
-        (t) async {
+    testWidgets('lays out at 200% text without overflow (SC 1.4.4)', (t) async {
       await pumpScreen(t, scale: 2);
       expect(t.takeException(), isNull);
       expect(find.text('Type 2 diabetes'), findsOneWidget);
@@ -203,8 +203,7 @@ void main() {
 
     testWidgets('reflows on a 320px-wide screen at 200% text (SC 1.4.10)',
         (t) async {
-      await pumpScreen(t,
-          scale: 2, width: 320, surface: const Size(320, 6000));
+      await pumpScreen(t, scale: 2, width: 320, surface: const Size(320, 6000));
       expect(t.takeException(), isNull);
       expect(find.text('Health Data'), findsOneWidget);
     });
@@ -219,7 +218,8 @@ void main() {
       expect(banner, findsOneWidget);
     });
 
-    testWidgets('the loading state has a text alternative, not just a '
+    testWidgets(
+        'the loading state has a text alternative, not just a '
         'spinner (SC 1.1.1)', (t) async {
       final gate = Completer<void>();
       ApiClient.instance.debugSetHttpClientAdapter(_sources(gate: gate));
@@ -231,7 +231,8 @@ void main() {
       await _settle(t);
     });
 
-    testWidgets('the banner\'s Review button works from the keyboard '
+    testWidgets(
+        'the banner\'s Review button works from the keyboard '
         '(SC 2.1.1)', (t) async {
       await pumpScreen(t);
       await _tabTo(t, find.widgetWithText(TextButton, 'Review'));
@@ -242,8 +243,8 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
-  group('athenahealth "not connected" banner', () {
-    Future<_FakeAthena> pumpBanner(WidgetTester t,
+  group('Athena Health connected source', () {
+    Future<_FakeAthena> pumpAthenaSource(WidgetTester t,
         {_Theme theme = _Theme.light, double scale = 1}) async {
       final athena = _FakeAthena(_notConnected,
           connectResult: const AthenaStatus(connected: true));
@@ -268,31 +269,37 @@ void main() {
       return athena;
     }
 
+    Finder athenaConnectButton() => find.descendant(
+          of: find.byType(AthenaConnectTile),
+          matching: find.widgetWithText(TextButton, 'Connect'),
+        );
     for (final e in _themes.entries) {
-      testWidgets('the banner and its consent dialog meet the guidelines '
+      testWidgets(
+          'the connect action and its consent dialog meet the guidelines '
           '(${e.key} theme)', (t) async {
         final h = t.ensureSemantics();
-        await pumpBanner(t, theme: e.value);
-        expect(find.text('Connect athenahealth'), findsOneWidget);
+        await pumpAthenaSource(t, theme: e.value);
+        expect(athenaConnectButton(), findsOneWidget);
         await _meetsGuidelines(t);
-        await t.tap(find.text('Connect athenahealth'));
+        await t.tap(athenaConnectButton());
         await t.pumpAndSettle();
         await _meetsGuidelines(t);
         h.dispose();
       });
     }
 
-    testWidgets('the banner and dialog lay out at 200% text', (t) async {
-      await pumpBanner(t, scale: 2);
+    testWidgets('the connect action and dialog lay out at 200% text',
+        (t) async {
+      await pumpAthenaSource(t, scale: 2);
       expect(t.takeException(), isNull);
-      await t.tap(find.text('Connect athenahealth'));
+      await t.tap(athenaConnectButton());
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
     });
 
     testWidgets('consent and connect work from the keyboard alone', (t) async {
-      final athena = await pumpBanner(t);
-      await _tabTo(t, find.widgetWithText(TextButton, 'Connect athenahealth'));
+      final athena = await pumpAthenaSource(t);
+      await _tabTo(t, athenaConnectButton());
       await t.sendKeyEvent(LogicalKeyboardKey.enter);
       await t.pumpAndSettle();
       await _tabTo(t, find.byType(CheckboxListTile));
@@ -324,7 +331,8 @@ void main() {
       });
     }
 
-    testWidgets('a changed field is named "Different", not shown by colour '
+    testWidgets(
+        'a changed field is named "Different", not shown by colour '
         'alone (SC 1.4.1)', (t) async {
       final h = t.ensureSemantics();
       await pumpScreen(t, conflict: true);
@@ -368,9 +376,9 @@ void main() {
         {_Theme theme = _Theme.light, double scale = 1}) async {
       await t.pumpWidget(MaterialApp(
         theme: _theme(theme),
-        builder: (_, child) => _sized(child!, scale: scale),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
+        builder: (_, child) => _sized(child!, scale: scale),
         home: HealthEventDetailsScreen(record: record),
       ));
       await t.pumpAndSettle();
@@ -440,7 +448,8 @@ void main() {
     }
 
     for (final e in _themes.entries) {
-      testWidgets('/athena-connect meets the guidelines and 4.5:1 contrast '
+      testWidgets(
+          '/athena-connect meets the guidelines and 4.5:1 contrast '
           '(${e.key} theme)', (t) async {
         final h = t.ensureSemantics();
         await pumpPage(t, theme: e.value);

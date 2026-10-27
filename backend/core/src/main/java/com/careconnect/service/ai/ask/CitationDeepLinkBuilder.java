@@ -73,7 +73,7 @@ final class CitationDeepLinkBuilder {
                     EPIC_DIAGNOSTIC_REPORT, EPIC_IMMUNIZATION, EPIC_PROCEDURE,
                     EPIC_DOCUMENT, EPIC_ENCOUNTER, EPIC_CARE_PLAN, EPIC_GOAL,
                     EPIC_CARE_TEAM, EPIC_FAMILY_HISTORY, EPIC_COVERAGE,
-                    EPIC_DEVICE -> epicLink(chunk, metadata);
+                    EPIC_DEVICE, EPIC_APPOINTMENT -> epicLink(chunk, metadata);
             default -> null;
         };
     }

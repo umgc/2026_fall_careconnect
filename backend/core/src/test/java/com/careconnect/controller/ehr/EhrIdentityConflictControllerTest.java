@@ -1,14 +1,22 @@
 package com.careconnect.controller.ehr;
 
+import com.careconnect.dto.ehr.EhrIdentityCheckView;
 import com.careconnect.dto.ehr.EhrIdentityConflictResolveRequest;
+import com.careconnect.dto.ehr.EhrIdentityConflictView;
 import com.careconnect.ehr.reconciliation.IdentityReconciler;
 import com.careconnect.ehr.reconciliation.ReconciliationOutcome;
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrConflictStatus;
 import com.careconnect.model.ehr.EhrIdentityConflict;
+import com.careconnect.model.ehr.EhrIdentityFieldProvenance;
+import com.careconnect.model.ehr.EhrSource;
+import com.careconnect.model.ehr.EhrSourceIdentity;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.ehr.EhrIdentityConflictRepository;
+import com.careconnect.repository.ehr.EhrIdentityFieldProvenanceRepository;
+import com.careconnect.repository.ehr.EhrSourceIdentityRepository;
+import com.careconnect.repository.ehr.EhrSourceRepository;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -30,7 +38,8 @@ import static org.mockito.Mockito.when;
  * source-generic DOB identity-conflict surface that replaces the retired Epic endpoint. Collaborators
  * are mocked and the controller is driven directly (no Spring context). Covers the migrated DOB cases
  * (auth gating, accept/reject outcome, no-pending 409) plus the new by-id contract: list envelope,
- * not-owned 404, and non-pending / non-DOB 409.
+ * full field mapping, not-owned 404, non-DOB 400, already-resolved-DOB 409, derived source labels,
+ * and the masked identityCheck hint (phone/email/ZIP, PR #378 parity).
  */
 class EhrIdentityConflictControllerTest {
 
@@ -39,10 +48,29 @@ class EhrIdentityConflictControllerTest {
     private final EhrIdentityConflictRepository conflictRepo =
             mock(EhrIdentityConflictRepository.class);
     private final IdentityReconciler identityReconciler = mock(IdentityReconciler.class);
+    private final EhrSourceRepository sourceRepo = mock(EhrSourceRepository.class);
+    private final EhrIdentityFieldProvenanceRepository provenanceRepo =
+            mock(EhrIdentityFieldProvenanceRepository.class);
+    private final EhrSourceIdentityRepository sourceIdentityRepo =
+            mock(EhrSourceIdentityRepository.class);
 
     private EhrIdentityConflictController newController() {
         return new EhrIdentityConflictController(
-                securityUtil, patientRepository, conflictRepo, identityReconciler);
+                securityUtil, patientRepository, conflictRepo, identityReconciler,
+                sourceRepo, provenanceRepo, sourceIdentityRepo);
+    }
+
+    private EhrSourceIdentity sourceIdentity(String phone, String email, String postal) {
+        EhrSourceIdentity row = mock(EhrSourceIdentity.class);
+        when(row.getPhone()).thenReturn(phone);
+        when(row.getEmail()).thenReturn(email);
+        when(row.getPostalCode()).thenReturn(postal);
+        return row;
+    }
+
+    @SuppressWarnings("unchecked")
+    private EhrIdentityConflictView firstRow(ResponseEntity<Map<String, Object>> resp) {
+        return ((List<EhrIdentityConflictView>) resp.getBody().get("resources")).get(0);
     }
 
     private User nonPatient(long id) {
@@ -105,10 +133,11 @@ class EhrIdentityConflictControllerTest {
     }
 
     @Test
-    void list_returnsResourcesEnvelope_withMappedRows() {
+    void list_returnsResourcesEnvelope_mapsEveryField_andOmitsEnrichmentWhenAbsent() {
         asPatient(7L, 100L);
         when(conflictRepo.findByPatientIdAndStatus(100L, EhrConflictStatus.PENDING))
                 .thenReturn(List.of(conflict(5L, 100L, "date_of_birth", EhrConflictStatus.PENDING)));
+        // sourceRepo / provenanceRepo / sourceIdentityRepo left unstubbed -> empty Optionals.
 
         ResponseEntity<Map<String, Object>> resp = newController().list("PENDING");
 
@@ -116,6 +145,117 @@ class EhrIdentityConflictControllerTest {
         Object resources = resp.getBody().get("resources");
         assertThat(resources).isInstanceOf(List.class);
         assertThat((List<?>) resources).hasSize(1);
+
+        EhrIdentityConflictView v = firstRow(resp);
+        assertThat(v.id()).isEqualTo(5L);
+        assertThat(v.fieldName()).isEqualTo("date_of_birth");
+        assertThat(v.canonicalValueBefore()).isEqualTo("1980-01-01");
+        assertThat(v.incomingValue()).isEqualTo("1985-05-14");
+        assertThat(v.status()).isEqualTo("PENDING");
+        assertThat(v.detectedAt()).isEqualTo("2026-09-26T00:00:00Z");
+        // No source rows / provenance -> enrichment is null, never fabricated.
+        assertThat(v.canonicalSourceLabel()).isNull();
+        assertThat(v.incomingSourceLabel()).isNull();
+        assertThat(v.identityCheck()).isNull();
+    }
+
+    @Test
+    void list_derivesSourceLabels() {
+        asPatient(7L, 100L);
+        // conflict(...) uses sourceId == 1L as the incoming source.
+        when(conflictRepo.findByPatientIdAndStatus(100L, EhrConflictStatus.PENDING))
+                .thenReturn(List.of(conflict(5L, 100L, "date_of_birth", EhrConflictStatus.PENDING)));
+        EhrSource epic = mock(EhrSource.class);
+        when(epic.getDisplayName()).thenReturn("Epic");
+        when(sourceRepo.findById(1L)).thenReturn(Optional.of(epic));
+        // Canonical DOB currently owned by source 2 -> "CareConnect".
+        EhrIdentityFieldProvenance prov = mock(EhrIdentityFieldProvenance.class);
+        when(prov.getSourceId()).thenReturn(2L);
+        when(provenanceRepo.findByPatientIdAndFieldName(100L, "date_of_birth"))
+                .thenReturn(Optional.of(prov));
+        EhrSource careConnect = mock(EhrSource.class);
+        when(careConnect.getDisplayName()).thenReturn("CareConnect");
+        when(sourceRepo.findById(2L)).thenReturn(Optional.of(careConnect));
+
+        ResponseEntity<Map<String, Object>> resp = newController().list("PENDING");
+
+        @SuppressWarnings("unchecked")
+        List<EhrIdentityConflictView> rows =
+                (List<EhrIdentityConflictView>) resp.getBody().get("resources");
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).incomingSourceLabel()).isEqualTo("Epic");
+        assertThat(rows.get(0).canonicalSourceLabel()).isEqualTo("CareConnect");
+    }
+
+    private void onePendingDobConflict() {
+        asPatient(7L, 100L);
+        when(conflictRepo.findByPatientIdAndStatus(100L, EhrConflictStatus.PENDING))
+                .thenReturn(List.of(conflict(5L, 100L, "date_of_birth", EhrConflictStatus.PENDING)));
+    }
+
+    @Test
+    void list_identityCheck_prefersPhone_maskedToLast4() {
+        onePendingDobConflict();
+        EhrSourceIdentity row = sourceIdentity("+1 (555) 010-4821", "jane.doe@gmail.com", "21201");
+        when(sourceIdentityRepo.findByPatientIdAndSourceId(100L, 1L)).thenReturn(Optional.of(row));
+
+        EhrIdentityCheckView ic = firstRow(newController().list("PENDING")).identityCheck();
+        assertThat(ic).isNotNull();
+        assertThat(ic.type()).isEqualTo("PHONE");
+        assertThat(ic.value()).isEqualTo("4821");
+        // PHI-safety: only the last 4 digits ever leave the backend.
+        assertThat(ic.value()).doesNotContain("555").doesNotContain("010");
+    }
+
+    @Test
+    void list_identityCheck_fallsBackToEmail_whenNoUsablePhone() {
+        onePendingDobConflict();
+        EhrSourceIdentity row = sourceIdentity("12-3", "jane.doe@gmail.com", "21201");
+        when(sourceIdentityRepo.findByPatientIdAndSourceId(100L, 1L)).thenReturn(Optional.of(row));
+
+        EhrIdentityCheckView ic = firstRow(newController().list("PENDING")).identityCheck();
+        assertThat(ic.type()).isEqualTo("EMAIL");
+        assertThat(ic.value()).isEqualTo("j•••@gmail.com");
+        assertThat(ic.value()).doesNotContain("jane.doe");
+    }
+
+    @Test
+    void list_identityCheck_fallsBackToZip_asIs() {
+        onePendingDobConflict();
+        EhrSourceIdentity row = sourceIdentity(null, null, "21201-1234");
+        when(sourceIdentityRepo.findByPatientIdAndSourceId(100L, 1L)).thenReturn(Optional.of(row));
+
+        EhrIdentityCheckView ic = firstRow(newController().list("PENDING")).identityCheck();
+        assertThat(ic.type()).isEqualTo("ZIP");
+        assertThat(ic.value()).isEqualTo("21201-1234");
+    }
+
+    @Test
+    void list_identityCheck_omittedWhenNoneUsable() {
+        onePendingDobConflict();
+        EhrSourceIdentity row = sourceIdentity("12-3", "not-an-email", "   ");
+        when(sourceIdentityRepo.findByPatientIdAndSourceId(100L, 1L)).thenReturn(Optional.of(row));
+
+        assertThat(firstRow(newController().list("PENDING")).identityCheck()).isNull();
+    }
+
+    @Test
+    void list_identityCheck_omittedWhenNoIdentityRow() {
+        onePendingDobConflict();
+        when(sourceIdentityRepo.findByPatientIdAndSourceId(100L, 1L)).thenReturn(Optional.empty());
+
+        assertThat(firstRow(newController().list("PENDING")).identityCheck()).isNull();
+    }
+
+    @Test
+    void list_identityCheck_phoneExtension_usesNumberNotExtension() {
+        onePendingDobConflict();
+        EhrSourceIdentity row = sourceIdentity("410-555-0123 ext 45", null, null);
+        when(sourceIdentityRepo.findByPatientIdAndSourceId(100L, 1L)).thenReturn(Optional.of(row));
+
+        EhrIdentityCheckView ic = firstRow(newController().list("PENDING")).identityCheck();
+        assertThat(ic.type()).isEqualTo("PHONE");
+        assertThat(ic.value()).isEqualTo("0123");
     }
 
     @Test
@@ -184,15 +324,22 @@ class EhrIdentityConflictControllerTest {
     }
 
     @Test
-    void resolve_returnsConflict_whenNotPendingOrNotDob() {
+    void resolve_returnsBadRequest_whenNonDobField() {
         asPatient(7L, 100L);
-        // non-DOB field, still PENDING
+        // non-DOB field, still PENDING -> 400 (only date_of_birth is patient-resolvable)
         when(conflictRepo.findById(5L))
                 .thenReturn(Optional.of(conflict(5L, 100L, "phone", EhrConflictStatus.PENDING)));
         assertThat(newController()
                 .resolve(5L, new EhrIdentityConflictResolveRequest("ACCEPTED", "PATIENT"))
-                .getStatusCode().value()).isEqualTo(HttpStatus.CONFLICT.value());
-        // DOB field, already resolved
+                .getStatusCode().value()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        verify(identityReconciler, never()).finalizePendingDateOfBirth(
+                org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void resolve_returnsConflict_whenDobAlreadyResolved() {
+        asPatient(7L, 100L);
+        // DOB field, already resolved -> 409
         when(conflictRepo.findById(6L))
                 .thenReturn(Optional.of(conflict(6L, 100L, "date_of_birth", EhrConflictStatus.ACCEPTED)));
         assertThat(newController()
