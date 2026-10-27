@@ -29,8 +29,11 @@ class IdentityConflictService {
     // of dates the backend already has is shown once, as the backend's.
     // Throws when the backend can't be checked, so the screen says so
     // instead of "all caught up".
-    final server = await _fetchServer();
     final owner = await _owner();
+    final server = await _fetchServer();
+    _shown
+      ..clear()
+      ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
     final local = _found.values
         .where((f) => f.owner == owner)
         .map((f) => f.conflict)
@@ -101,10 +104,22 @@ class IdentityConflictService {
           'resolvedBy': 'PATIENT',
         },
       );
-      return true;
     } catch (_) {
       return false;
     }
+    await _rememberServerChoice(conflictId, accepted);
+    return true;
+  }
+
+  /// Once the backend has saved [conflictId], the same choice is kept on the
+  /// device for that pair of dates, and a matching disagreement this device
+  /// found is dropped, so neither this screen nor Health Data asks again.
+  static Future<void> _rememberServerChoice(int id, bool accepted) async {
+    final shown = _shown.remove(id);
+    if (shown == null || shown.owner != await _owner()) return;
+    await _saveChoice(shown.owner, shown.conflict, accepted);
+    _found.removeWhere((_, f) =>
+        f.owner == shown.owner && _sameDates(shown.conflict, f.conflict));
   }
 
   /// The backend sends dates as ISO (1980-05-14); the screen and the
@@ -160,6 +175,12 @@ class IdentityConflictService {
   /// backend conflict id.
   static int _nextId = -1;
 
+  /// The backend conflicts [fetchPending] last returned, by id, each tagged
+  /// with the patient it was loaded for. [resolve] uses them to keep a saved
+  /// choice on the device too.
+  static final Map<int, ({String owner, IdentityConflict conflict})> _shown =
+      {};
+
   static const _choicesKey = 'health_data.dob_choices';
 
   /// The date of birth to show when [current] (the preferred source's) and
@@ -198,10 +219,12 @@ class IdentityConflictService {
     return null;
   }
 
-  /// Forgets every undecided disagreement. Called on logout so the next
+  /// Forgets every undecided disagreement and the backend conflicts last
+  /// shown. Called on logout so the next
   /// account signed in during this app session never sees them.
   static void clearFound() {
     _found.clear();
+    _shown.clear();
     _nextId = -1;
   }
 

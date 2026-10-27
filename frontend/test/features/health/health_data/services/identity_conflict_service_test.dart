@@ -1,7 +1,7 @@
 // IdentityConflictService: it never reports a save that didn't happen, and
 // the sample conflict is opt-in only. Since the backend endpoint (#432) it
 // loads and saves through GET/POST /v1/api/ehr/identity-conflicts.
-// Test IDs TC-EHR-REC-065..069 and 094..100 are permanent. Never renumber,
+// Test IDs TC-EHR-REC-065..069 and 094..101 are permanent. Never renumber,
 // never reuse.
 
 import 'dart:convert';
@@ -114,6 +114,31 @@ void main() {
       expect(pending.last.id, isNegative);
       expect(pending.last.incomingValue, '01/01/1990');
     });
+
+    for (final accepted in [true, false]) {
+      test('TC-EHR-REC-101: once the backend saves '
+          '${accepted ? 'Use new date' : 'Keep current'}, the same dates '
+          'found on this device are not asked again, and Health Data shows '
+          'the chosen date', () async {
+        Future<DateTime?> report() =>
+            IdentityConflictService.reportDobDisagreement(
+                current: DateTime(1980, 5, 14),
+                currentSource: 'Epic',
+                incoming: DateTime(1980, 5, 15),
+                incomingSource: 'athenahealth');
+        backend.conflicts = [dob(5, before: '1980-05-14', incoming: '1980-05-15')];
+        expect(await report(), isNull);
+        expect((await service.fetchPending()).single.id, 5);
+
+        backend.postStatus = 200;
+        expect(await service.resolve(5, accepted: accepted), isTrue);
+        backend.conflicts = [];
+
+        expect(await service.fetchPending(), isEmpty);
+        expect(await report(),
+            accepted ? DateTime(1980, 5, 15) : DateTime(1980, 5, 14));
+      });
+    }
 
     for (final status in [400, 403, 404, 409]) {
       test('TC-EHR-REC-097: a $status from the backend means nothing to '
