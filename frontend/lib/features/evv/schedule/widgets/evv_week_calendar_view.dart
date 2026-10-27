@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../pages/schedule_page.dart';
@@ -63,7 +64,7 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                   },
                 ),
                 Text(
-                  '${DateFormat('MMM d').format(_weekStart)} - ${DateFormat('MMM d, yyyy').format(weekEnd)}',
+                  '${DateFormat('MMM d', Localizations.localeOf(context).toString()).format(_weekStart)} - ${DateFormat('MMM d, yyyy', Localizations.localeOf(context).toString()).format(weekEnd)}',
                   style: theme.textTheme.headlineSmall,
                 ),
                 IconButton(
@@ -112,7 +113,7 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            DateFormat('EEEE, MMM d').format(date),
+                            DateFormat('EEEE, MMM d', Localizations.localeOf(context).toString()).format(date),
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: isToday ? cs.tertiary : cs.onSurface,
@@ -129,7 +130,7 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                '${dayVisits.length} visit${dayVisits.length != 1 ? 's' : ''}',
+                                AppLocalizations.of(context)!.evvCalendarVisitCount(dayVisits.length),
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: cs.onPrimaryContainer,
                                 ),
@@ -142,7 +143,7 @@ class _EVVWeekCalendarViewState extends State<EVVWeekCalendarView> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12.0),
                         child: Text(
-                          'No visits',
+                          AppLocalizations.of(context)!.evvCalendarNoVisits,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurfaceVariant,
                           ),

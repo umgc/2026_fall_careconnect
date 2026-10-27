@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../pages/schedule_page.dart';
@@ -73,7 +74,7 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
                   },
                 ),
                 Text(
-                  DateFormat('MMMM yyyy').format(_currentMonth),
+                  DateFormat.yMMMM(Localizations.localeOf(context).toString()).format(_currentMonth),
                   style: theme.textTheme.headlineSmall,
                 ),
                 IconButton(
@@ -97,7 +98,7 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
               children: [
                 // Weekday headers
                 Row(
-                  children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                  children: List.generate(7, (index) => DateFormat.E(Localizations.localeOf(context).toString()).format(DateTime(2026, 3, 16 + index)))
                       .map((day) => Expanded(
                             child: Center(
                               child: Text(
@@ -121,7 +122,7 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
                   ),
                   itemCount: 42, // 6 weeks * 7 days
                   itemBuilder: (context, index) {
-                    final dayOffset = index - (firstWeekday - 1);
+                    final dayOffset = index - (firstWeekday - 1) + 1;
                     if (dayOffset <= 0 || dayOffset > daysInMonth) {
                       return Container();
                     }
@@ -242,14 +243,14 @@ class _EVVMonthCalendarViewState extends State<EVVMonthCalendarView> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No visits scheduled',
+                      AppLocalizations.of(context)!.evvCalendarNoScheduledVisits,
                       style: theme.textTheme.titleMedium?.copyWith(
                         color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Tap the + button to schedule a new visit',
+                      AppLocalizations.of(context)!.evvCalendarScheduleHint,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: cs.onSurfaceVariant,
                       ),

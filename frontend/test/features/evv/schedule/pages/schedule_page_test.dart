@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for SchedulePage
 // (lib/features/evv/schedule/pages/schedule_page.dart).
 
@@ -101,6 +102,7 @@ Map<String, dynamic> _patientJson({
 /// for the range endpoint. Uses GoRouter so context.push works.
 Widget _wrapWithHttp({
   MockUserProvider? provider,
+  Locale? locale,
 }) {
   final userProvider = provider ??
       MockUserProvider(
@@ -127,7 +129,12 @@ Widget _wrapWithHttp({
 
   return ChangeNotifierProvider<UserProvider>.value(
     value: userProvider,
-    child: MaterialApp.router(routerConfig: router),
+    child: MaterialApp.router(
+      locale: locale,
+      routerConfig: router,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+    ),
   );
 }
 
@@ -136,6 +143,8 @@ Widget _wrap() {
     mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 1),
   );
   return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const SchedulePage(),
@@ -185,6 +194,104 @@ void main() {
         return null;
       },
     );
+  });
+
+  group('SchedulePage localization', () {
+    for (final locale in [const Locale('en'), const Locale('es')]) {
+      _testWidgets('shows localized controls for ${locale.languageCode}', (tester) async {
+        await tester.pumpWidget(_wrapWithHttp(locale: locale));
+        await tester.pumpAndSettle();
+        final spanish = locale.languageCode == 'es';
+        expect(find.text(spanish ? 'Horarios de visitas de EVV' : 'EVV Visit Schedules'), findsOneWidget);
+        expect(find.text(spanish ? 'Vista del cuidador' : 'Caregiver View'), findsOneWidget);
+        expect(find.text(spanish ? 'Vista del paciente' : 'Patient View'), findsOneWidget);
+        expect(find.byTooltip(spanish ? 'Mostrar filtros' : 'Show Filters'), findsOneWidget);
+        await tester.tap(find.byTooltip(spanish ? 'Mostrar filtros' : 'Show Filters'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip(spanish ? 'Ocultar filtros' : 'Hide Filters'), findsOneWidget);
+        expect(find.text(spanish ? 'Fecha de inicio' : 'From Date'), findsOneWidget);
+        expect(find.text(spanish ? 'Fecha de fin' : 'To Date'), findsOneWidget);
+      });
+    }
+  });
+
+  group('SchedulePage visit details localization', () {
+    for (final locale in [const Locale('en'), const Locale('es')]) {
+      _testWidgets('shows visit details in ${locale.languageCode}', (tester) async {
+        final now = clock.now();
+        final future = now.add(const Duration(hours: 2));
+        final visit = _visitJson(
+          patientName: 'Detail Patient',
+          serviceType: 'Respite Care',
+          scheduledDate: DateFormat('yyyy-MM-dd').format(now),
+          scheduledTime: '${future.hour.toString().padLeft(2, '0')}:${future.minute.toString().padLeft(2, '0')}:00',
+        );
+        _httpHandler = (_) async => http.Response(jsonEncode([visit]), 200);
+        await tester.pumpWidget(_wrapWithHttp(locale: locale));
+        await tester.pumpAndSettle();
+        final es = locale.languageCode == 'es';
+        expect(find.text(es ? 'Administre su horario de visitas' : 'Manage your visit schedule'), findsOneWidget);
+        final details = find.widgetWithText(ElevatedButton, es ? 'Ver detalles' : 'View Details');
+        expect(details, findsOneWidget);
+        tester.widget<ElevatedButton>(details).onPressed!();
+        await tester.pumpAndSettle();
+        expect(find.text(es ? 'Detalles de la visita - Detail Patient' : 'Visit Details - Detail Patient'), findsOneWidget);
+        expect(find.text(es ? 'Tipo de servicio' : 'Service Type'), findsOneWidget);
+        expect(find.text('Respite Care'), findsWidgets);
+        expect(find.text(es ? 'Programada' : 'Scheduled'), findsWidgets);
+        expect(find.text(es ? 'Cerrar' : 'Close'), findsOneWidget);
+        expect(find.text(es ? 'Iniciar visita' : 'Start Visit'), findsOneWidget);
+      });
+    }
+  });
+
+  group('Schedule summary localization', () {
+    for (final locale in [const Locale('en'), const Locale('es')]) {
+      _testWidgets('shows summary and empty state in ${locale.languageCode}', (tester) async {
+        _httpHandler = (_) async => http.Response(jsonEncode([]), 200);
+        await tester.pumpWidget(_wrapWithHttp(locale: locale));
+        await tester.pumpAndSettle();
+        final es = locale.languageCode == 'es';
+        expect(find.text(es ? 'Atrasadas' : 'Overdue'), findsOneWidget);
+        expect(find.text(es ? 'Listas' : 'Ready'), findsOneWidget);
+        expect(find.text(es ? 'Próximas' : 'Upcoming'), findsOneWidget);
+        expect(find.text(es ? 'Total de hoy' : 'Total Today'), findsOneWidget);
+        expect(find.text(es ? 'Visitas programadas para hoy' : "Today's Scheduled Visits"), findsOneWidget);
+        expect(find.text(es ? 'No hay visitas programadas para hoy' : 'No visits scheduled for today'), findsOneWidget);
+      });
+    }
+  });
+
+  group('Patient view localization', () {
+    _testWidgets('shows the Spanish empty state', (tester) async {
+      _httpHandler = (_) async => http.Response(jsonEncode([]), 200);
+      await tester.pumpWidget(_wrapWithHttp(locale: const Locale('es')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vista del paciente'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ninguna visita coincide con los filtros actuales'), findsOneWidget);
+      expect(find.text('Ajuste los filtros o programe nuevas visitas'), findsOneWidget);
+    });
+
+    _testWidgets('shows the visit status labels in Spanish', (tester) async {
+      final today = DateFormat('yyyy-MM-dd').format(clock.now());
+      final statuses = ['Scheduled', 'In Progress', 'Completed', 'Cancelled'];
+      final visits = [
+        for (var i = 0; i < statuses.length; i++)
+          _visitJson(id: i + 1, patientName: 'Alex', scheduledDate: today,
+              scheduledTime: '14:00:00', status: statuses[i]),
+      ];
+      _httpHandler = (_) async => http.Response(jsonEncode(visits), 200);
+      await tester.pumpWidget(_wrapWithHttp(locale: const Locale('es')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vista del paciente'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('1 paciente'), findsOneWidget);
+      expect(find.textContaining('Programada'), findsWidgets);
+      expect(find.textContaining('En curso'), findsWidgets);
+      expect(find.textContaining('Completada'), findsWidgets);
+      expect(find.textContaining('Cancelada'), findsWidgets);
+    });
   });
 
   group('SchedulePage - initial render', () {
@@ -686,6 +793,29 @@ void main() {
       // Should have made more API calls
       expect(callCount, greaterThan(initialCallCount));
     });
+  });
+
+  group('Schedule form localization', () {
+    for (final locale in [const Locale('en'), const Locale('es')]) {
+      _testWidgets('shows form labels for ${locale.languageCode}', (tester) async {
+        _httpHandler = (_) async => http.Response(jsonEncode([]), 200);
+        await tester.pumpWidget(_wrapWithHttp(locale: locale));
+        await tester.pumpAndSettle();
+        final es = locale.languageCode == 'es';
+        final open = find.widgetWithText(FilledButton, es ? 'Programar nueva visita' : 'Schedule New Visit');
+        expect(open, findsOneWidget);
+        tester.widget<FilledButton>(open).onPressed!();
+        await tester.pumpAndSettle();
+        expect(find.text(es ? 'Paciente *' : 'Patient *'), findsOneWidget);
+        expect(find.text(es ? 'Tipo de servicio *' : 'Service Type *'), findsOneWidget);
+        expect(find.text(es ? 'Fecha *' : 'Date *'), findsOneWidget);
+        final date = es ? DateFormat.yMd('es').format(clock.now()) : DateFormat('MM/dd/yyyy').format(clock.now());
+        expect(find.text(date), findsOneWidget);
+        expect(find.text(es ? 'Hora *' : 'Time *'), findsOneWidget);
+        expect(find.text(es ? 'Cancelar' : 'Cancel'), findsOneWidget);
+        expect(find.text(es ? 'Programar visita' : 'Schedule Visit'), findsOneWidget);
+      });
+    }
   });
 
   group('SchedulePage - Schedule New Visit dialog', () {
