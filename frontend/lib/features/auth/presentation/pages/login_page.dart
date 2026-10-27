@@ -32,7 +32,26 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  /// Turns a sign-in failure into a message a person can act on: no
+  /// "Login failed:" or Dart "Exception:" prefixes, and a wrong username or
+  /// password says how to fix it (WCAG 3.3.3).
+  static String _readableError(String raw, AppLocalizations t) {
+    final reason = raw
+        .replaceFirst(RegExp(r'^\s*Login failed:\s*'), '')
+        .replaceFirst(RegExp(r'^\s*Exception:\s*'), '');
+    if (reason.toLowerCase().contains('invalid credentials')) {
+      return t.login_invalidCredentials;
+    }
+    return '${t.login_loginFailedError}: $reason';
+  }
+
   Future<void> _login() async {
+    final t = AppLocalizations.of(context)!;
+    // Say what's missing before calling the server (WCAG 3.3.1, 3.3.3).
+    if (_email.text.trim().isEmpty || _pwd.text.isEmpty) {
+      setState(() => _error = t.alexalogin_missingEmailPassword);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -66,13 +85,12 @@ class _LoginPageState extends State<LoginPage> {
         // loginWithRoleValidation only ever returns success or an authentication
         // failure (role validation is not performed here), so surface the error.
         setState(() {
-          _error = authResult.errorMessage;
+          _error = _readableError(authResult.errorMessage ?? '', t);
         });
       }
     } catch (e) {
       setState(() {
-        _error =
-            '${AppLocalizations.of(context)?.login_loginFailedError ?? 'Login failed'}: $e';
+        _error = _readableError(e.toString(), t);
       });
     } finally {
       setState(() => _busy = false);
@@ -348,7 +366,11 @@ class _LoginPageState extends State<LoginPage> {
 
                         // Error message
                         if (_error != null) ...[
-                          Container(
+                          // Live region: screen readers announce the error
+                          // without the user moving to it (WCAG 4.1.3).
+                          Semantics(
+                            liveRegion: true,
+                            child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -363,6 +385,7 @@ class _LoginPageState extends State<LoginPage> {
                                 fontSize: 14,
                               ),
                             ),
+                          ),
                           ),
                           const SizedBox(height: 20),
                         ],

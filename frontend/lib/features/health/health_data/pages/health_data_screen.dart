@@ -502,6 +502,18 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   'One searchable health history from all of your connected healthcare providers.',
                   style: TextStyle(color: _mutedText(context)),
                 ),
+                if (_showManageMedicare())
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      onPressed: _manageMedicare,
+                      style: TextButton.styleFrom(
+                          foregroundColor: _accent(context),
+                          minimumSize: const Size(48, 48)),
+                      icon: const Icon(Icons.settings_outlined, size: 18),
+                      label: const Text('Manage Medicare connection'),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 Card(
                   margin: EdgeInsets.zero,
@@ -1036,6 +1048,22 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
           minimumSize: const Size(48, 48)),
       child: const Text('Connect Medicare Account'),
     );
+  }
+
+  /// A connected patient had no way back to the Medicare page (status,
+  /// sharing, Disconnect) without typing /#/medicare-connect. Hidden when the
+  /// banners above already offer Connect (not linked, link expired) and for
+  /// callers who may not use Medicare here (403).
+  bool _showManageMedicare() =>
+      _mayConnectAthena() &&
+      _medicareProblem != MedicareReadProblem.notLinked &&
+      _medicareProblem != MedicareReadProblem.linkExpired &&
+      _medicareProblem != MedicareReadProblem.forbidden;
+
+  /// Opens the Medicare page, then reloads: the patient may have disconnected.
+  Future<void> _manageMedicare() async {
+    await GoRouter.of(context).push('/medicare-connect');
+    if (mounted) _load();
   }
 
   /// athenahealth is patients only. With athena off the server answers 404

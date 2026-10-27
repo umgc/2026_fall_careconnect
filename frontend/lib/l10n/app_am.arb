@@ -148,6 +148,7 @@
   "ptdashboard_onceAtBed": "በየቀኑ አንድ ጊዜ በመኝታ ሰዓት",
   
   "login_loginFailedError": "መግባት አልተሳካም",
+  "login_invalidCredentials": "የተጠቃሚ ስም ወይም የይለፍ ቃል ትክክል አይደለም። ያረጋግጡና እንደገና ይሞክሩ።",
 
   "roles_Patient": "ታካሚ",
   "roles_Caregiver": "ተንከባካቢ",
