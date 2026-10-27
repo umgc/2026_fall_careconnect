@@ -82,8 +82,8 @@ Future<void> _settle(WidgetTester t) async {
   for (var i = 0;
       i < 40 && find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
       i++) {
-    await t.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await t
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await t.pump(const Duration(milliseconds: 50));
   }
   await t.pumpAndSettle();
@@ -165,27 +165,39 @@ void main() {
     AthenaConnectService.instance = originalAthena;
   });
 
-  Future<void> pumpScreen(WidgetTester t,
-      {_Theme theme = _Theme.light,
-      bool conflict = false,
-      double scale = 1,
-      double? width,
-      Size surface = const Size(800, 3000)}) async {
+  Future<void> pumpScreen(
+    WidgetTester t, {
+    _Theme theme = _Theme.light,
+    bool conflict = false,
+    double scale = 1,
+    double? width,
+    Size surface = const Size(800, 3000),
+  }) async {
     await t.binding.setSurfaceSize(surface);
     addTearDown(() => t.binding.setSurfaceSize(null));
-    ApiClient.instance.debugSetHttpClientAdapter(_sources(conflict: conflict));
-    await t.pumpWidget(MaterialApp(
-      theme: _theme(theme),
-      builder: (_, child) => _sized(child!, scale: scale, width: width),
-      home: const HealthDataScreen(),
-    ));
+
+    ApiClient.instance.debugSetHttpClientAdapter(
+      _sources(conflict: conflict),
+    );
+
+    await t.pumpWidget(
+      MaterialApp(
+        theme: _theme(theme),
+        builder: (_, child) => _sized(child!, scale: scale, width: width),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const HealthDataScreen(),
+      ),
+    );
+
     await _settle(t);
   }
 
   // ---------------------------------------------------------------------
   group('Health Data screen', () {
     for (final e in _themes.entries) {
-      testWidgets('meets the tap-target, label and contrast guidelines '
+      testWidgets(
+          'meets the tap-target, label and contrast guidelines '
           '(${e.key} theme)', (t) async {
         final h = t.ensureSemantics();
         await pumpScreen(t, theme: e.value);
@@ -194,8 +206,7 @@ void main() {
       });
     }
 
-    testWidgets('lays out at 200% text without overflow (SC 1.4.4)',
-        (t) async {
+    testWidgets('lays out at 200% text without overflow (SC 1.4.4)', (t) async {
       await pumpScreen(t, scale: 2);
       expect(t.takeException(), isNull);
       expect(find.text('Type 2 diabetes'), findsOneWidget);
@@ -203,8 +214,7 @@ void main() {
 
     testWidgets('reflows on a 320px-wide screen at 200% text (SC 1.4.10)',
         (t) async {
-      await pumpScreen(t,
-          scale: 2, width: 320, surface: const Size(320, 6000));
+      await pumpScreen(t, scale: 2, width: 320, surface: const Size(320, 6000));
       expect(t.takeException(), isNull);
       expect(find.text('Health Data'), findsOneWidget);
     });
@@ -219,11 +229,18 @@ void main() {
       expect(banner, findsOneWidget);
     });
 
-    testWidgets('the loading state has a text alternative, not just a '
+    testWidgets(
+        'the loading state has a text alternative, not just a '
         'spinner (SC 1.1.1)', (t) async {
       final gate = Completer<void>();
       ApiClient.instance.debugSetHttpClientAdapter(_sources(gate: gate));
-      await t.pumpWidget(const MaterialApp(home: HealthDataScreen()));
+      await t.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HealthDataScreen(),
+        ),
+      );
       await t.pump();
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.text('Loading your health data…'), findsOneWidget);
@@ -231,7 +248,8 @@ void main() {
       await _settle(t);
     });
 
-    testWidgets('the banner\'s Review button works from the keyboard '
+    testWidgets(
+        'the banner\'s Review button works from the keyboard '
         '(SC 2.1.1)', (t) async {
       await pumpScreen(t);
       await _tabTo(t, find.widgetWithText(TextButton, 'Review'));
@@ -259,17 +277,22 @@ void main() {
       }, statusBodies: {
         '/api/athena/resources': '{"code":"NOT_CONNECTED"}',
       }));
-      await t.pumpWidget(MaterialApp(
-        theme: _theme(theme),
-        builder: (_, child) => _sized(child!, scale: scale),
-        home: const HealthDataScreen(),
-      ));
+      await t.pumpWidget(
+        MaterialApp(
+          theme: _theme(theme),
+          builder: (_, child) => _sized(child!, scale: scale),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const HealthDataScreen(),
+        ),
+      );
       await _settle(t);
       return athena;
     }
 
     for (final e in _themes.entries) {
-      testWidgets('the banner and its consent dialog meet the guidelines '
+      testWidgets(
+          'the banner and its consent dialog meet the guidelines '
           '(${e.key} theme)', (t) async {
         final h = t.ensureSemantics();
         await pumpBanner(t, theme: e.value);
@@ -324,7 +347,8 @@ void main() {
       });
     }
 
-    testWidgets('a changed field is named "Different", not shown by colour '
+    testWidgets(
+        'a changed field is named "Different", not shown by colour '
         'alone (SC 1.4.1)', (t) async {
       final h = t.ensureSemantics();
       await pumpScreen(t, conflict: true);
@@ -440,7 +464,8 @@ void main() {
     }
 
     for (final e in _themes.entries) {
-      testWidgets('/athena-connect meets the guidelines and 4.5:1 contrast '
+      testWidgets(
+          '/athena-connect meets the guidelines and 4.5:1 contrast '
           '(${e.key} theme)', (t) async {
         final h = t.ensureSemantics();
         await pumpPage(t, theme: e.value);
