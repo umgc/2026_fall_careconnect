@@ -1,0 +1,169 @@
+name: Team A Flutter Testing
+
+on:
+  push:
+    branches: [careconnect_test, team-a-develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/careconnect_automate_testing.yml'
+  pull_request:
+    branches: [careconnect_test, team-a-develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/careconnect_automate_testing.yml'
+  workflow_dispatch:
+    inputs:
+      create_pr:
+        description: 'After successful tests, create a PR from team-a-develop to develop (run from team-a-develop)'
+        type: boolean
+        default: false
+      run_e2e:
+        description: 'Run Android device integration/E2E tests'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flutter-testing-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: frontend
+    shell: bash
+
+env:
+  FLUTTER_VERSION: '3.35.7'
+  COVERAGE_MIN: '70'
+
+jobs:
+  unit-and-coverage:
+    name: Flutter unit tests and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos
+      - name: Unit/widget tests and coverage
+        run: flutter test test/ --coverage --reporter expanded
+      - name: Check coverage threshold
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('coverage/lcov.info')
+          if not p.exists():
+              raise SystemExit('Coverage report missing')
+          lines = p.read_text().splitlines()
+          found = sum(int(x[3:]) for x in lines if x.startswith('LF:'))
+          hit = sum(int(x[3:]) for x in lines if x.startswith('LH:'))
+          if found == 0:
+              raise SystemExit('No instrumented lines found')
+          percentage = hit * 100 / found
+          minimum = float(os.environ['COVERAGE_MIN'])
+          print(f'Line coverage: {percentage:.2f}% (minimum {minimum:.0f}%)')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write(f'### Flutter coverage: {percentage:.2f}% (minimum {minimum:.0f}%)\n')
+          if percentage < minimum:
+              raise SystemExit('Coverage threshold not met')
+          PY
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: team-a-flutter-coverage
+          path: frontend/coverage/lcov.info
+          if-no-files-found: warn
+
+  accessibility:
+    name: Flutter accessibility checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Verify accessibility test suite exists
+        run: |
+          if [ ! -d test/accessibility ] || ! find test/accessibility -name '*_test.dart' -print -quit | grep -q .; then
+            echo '::error::Add Flutter accessibility widget tests under frontend/test/accessibility/.'
+            echo 'Use tester.ensureSemantics(), meetsGuideline(androidTapTargetGuideline),'
+            echo 'meetsGuideline(iOSTapTargetGuideline), meetsGuideline(labeledTapTargetGuideline),'
+            echo 'and meetsGuideline(textContrastGuideline) on actual app screens.'
+            exit 1
+          fi
+      - name: Run accessibility widget tests
+        run: flutter test test/accessibility/ --reporter expanded
+
+  integration-e2e:
+    name: Android integration and E2E tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    if: github.event_name != 'workflow_dispatch' || inputs.run_e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Run integration and E2E tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            cd frontend
+            flutter devices
+            for test_file in integration_test/*_test.dart; do
+              echo "Running $test_file"
+              flutter test "$test_file" -d emulator-5554 --reporter expanded || exit 1
+            done
+
+  create-pull-request:
+    name: Open PR to develop (manual opt-in)
+    needs: [unit-and-coverage, accessibility, integration-e2e]
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.create_pr == true &&
+      github.ref_name == 'team-a-develop' &&
+      needs.unit-and-coverage.result == 'success' &&
+      needs.accessibility.result == 'success' &&
+      needs.integration-e2e.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Create PR from team-a-develop to develop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh pr list --base develop --head team-a-develop --state open --json number --jq 'length' | grep -qx '0'; then
+            gh pr create --base develop --head team-a-develop \
+              --title 'Merge Team A Flutter changes into develop' \
+              --body 'Automated PR created after successful Flutter analysis, unit tests, coverage gate, accessibility checks, and Android integration/E2E tests.'
+          else
+            echo 'An open Team A -> develop PR already exists.'
+          fi
