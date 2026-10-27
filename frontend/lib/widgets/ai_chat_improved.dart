@@ -1313,8 +1313,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                 : 'Please analyze the uploaded files',
             patientId: currentPatientId,
             userId: currentUserId,
-            conversationId:
-                _conversationId.isNotEmpty ? _conversationId : null,
+            conversationId: _conversationId.isNotEmpty ? _conversationId : null,
             uploadedFiles: uploadedFilesJson,
             includeVitals: true,
             includeMedications: true,
@@ -1328,8 +1327,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             message: userMessage,
             patientId: currentPatientId,
             userId: currentUserId,
-            conversationId:
-                _conversationId.isNotEmpty ? _conversationId : null,
+            conversationId: _conversationId.isNotEmpty ? _conversationId : null,
             includeVitals: true,
             includeMedications: true,
             includeNotes: true,
@@ -1382,7 +1380,8 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
             response = {
               'success': true,
               'aiResponse': edgeResult['content'],
-              'modelUsed': '${edgeResult['model'] ?? 'on-device-slm'} (Local Edge)',
+              'modelUsed':
+                  '${edgeResult['model'] ?? 'on-device-slm'} (Local Edge)',
               'conversationId': _conversationId.isNotEmpty
                   ? _conversationId
                   : 'local-${DateTime.now().millisecondsSinceEpoch}',

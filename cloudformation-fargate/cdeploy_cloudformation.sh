@@ -16,6 +16,9 @@ AI_ENABLED=""
 # Empty means "leave AiModel as whatever parameters/{env}-service.json already
 # has committed" — only override when the caller explicitly asks.
 AI_MODEL=""
+# "true" skips building/pushing the condition-detection sidecar image and
+# deploys with SidecarImageUri='' (voice screening off).
+SKIP_SIDECAR="false"
 CURRENT_STACK_NAME=""
 CURRENT_OPERATION=""
 
@@ -41,6 +44,10 @@ while [[ $# -gt 0 ]]; do
       RUN_TESTS="true"
       shift
       ;;
+    --skip-sidecar)
+      SKIP_SIDECAR="true"
+      shift
+      ;;
     -a|--ai-enabled)
       AI_ENABLED="$2"
       shift 2
@@ -59,6 +66,9 @@ Options:
   -r, --region <region>      AWS region (default: us-east-1)
   -t, --image-tag <tag>      Docker/ECR image tag (default: same as environment)
       --run-tests            Run Maven tests during package build
+      --skip-sidecar         Do not build/push the condition-detection sidecar
+                              image; deploys with SidecarImageUri='' (voice
+                              screening off)
   -a, --ai-enabled <bool>    Override CareConnectAiEnabled (true/false) on the
                               service stack; omit to leave the committed
                               parameters/{env}-service.json value as-is
@@ -101,6 +111,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR/templates"
 PARAMETER_DIR="$SCRIPT_DIR/parameters"
 BACKEND_DIR="$REPO_ROOT/backend/core"
+SIDECAR_DIR="$REPO_ROOT/backend/condition-detection-sidecar"
 
 # Local, gitignored secret overrides — CARECONNECT_DATABASE_MASTER_PASSWORD and
 # CARECONNECT_JWT_SECRET, read below to override the committed parameter
@@ -861,9 +872,36 @@ docker tag "$LOCAL_IMAGE_NAME" "$IMAGE_URI"
 docker push "$IMAGE_URI"
 popd >/dev/null
 
+# Condition-detection sidecar image. Same tag, login and platform as the
+# backend image; its repository comes from the platform stack. An empty
+# SidecarImageUri leaves the sidecar container out (voice screening off).
+SIDECAR_IMAGE_URI=""
+if [[ "$SKIP_SIDECAR" == "true" ]]; then
+  echo "Skipping sidecar build/push (--skip-sidecar); voice screening will be off."
+else
+  step "Reading sidecar ECR repository URI"
+  CURRENT_OPERATION="Reading sidecar ECR repository URI"
+  SIDECAR_REPOSITORY_URI="$(get_stack_output "$PLATFORM_STACK_NAME" "ConditionSidecarRepositoryUri" | tr -d '\r')"
+  if [[ -z "$SIDECAR_REPOSITORY_URI" || "$SIDECAR_REPOSITORY_URI" == "None" ]]; then
+    echo "WARNING: Platform stack did not return ConditionSidecarRepositoryUri (stack predates the sidecar repo); deploying with SidecarImageUri='' (voice screening off)." >&2
+  else
+    SIDECAR_IMAGE_URI="${SIDECAR_REPOSITORY_URI}:${IMAGE_TAG}"
+    SIDECAR_LOCAL_IMAGE_NAME="careconnect-dam-sidecar-local:${IMAGE_TAG}"
+
+    step "Building sidecar Docker image"
+    CURRENT_OPERATION="Building sidecar Docker image"
+    docker build --platform linux/amd64 -t "$SIDECAR_LOCAL_IMAGE_NAME" "$SIDECAR_DIR"
+
+    step "Tagging and pushing sidecar Docker image to ECR"
+    CURRENT_OPERATION="Pushing sidecar Docker image to ECR"
+    docker tag "$SIDECAR_LOCAL_IMAGE_NAME" "$SIDECAR_IMAGE_URI"
+    docker push "$SIDECAR_IMAGE_URI"
+  fi
+fi
+
 # The service stack is deployed last because it needs the final image URI.
 step "Deploying service stack: $SERVICE_STACK_NAME"
-SERVICE_OVERRIDES=("BackendImageUri=${IMAGE_URI}")
+SERVICE_OVERRIDES=("BackendImageUri=${IMAGE_URI}" "SidecarImageUri=${SIDECAR_IMAGE_URI}")
 # Flag-driven overrides (--ai-enabled / --ai-model).
 if [[ -n "$AI_ENABLED" ]]; then
   SERVICE_OVERRIDES+=("CareConnectAiEnabled=${AI_ENABLED}")

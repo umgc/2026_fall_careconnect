@@ -29,7 +29,10 @@ class AppBarHelper {
               if (Navigator.canPop(context)) {
                 Navigator.of(context).pop();
               } else {
-                context.push('/dashboard');
+                // A directly opened page (for example voice navigation to
+                // Calendar) has no parent to pop. Make Home the navigation
+                // root so subsequent Back actions cannot reopen that page.
+                context.go('/dashboard');
               }
             },
           ),

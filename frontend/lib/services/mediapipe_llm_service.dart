@@ -12,7 +12,8 @@ class MediaPipeLlmService {
   factory MediaPipeLlmService() => _instance;
   MediaPipeLlmService._internal();
 
-  static const MethodChannel _channel = MethodChannel('care_connect/mediapipe_llm');
+  static const MethodChannel _channel =
+      MethodChannel('care_connect/mediapipe_llm');
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -27,7 +28,8 @@ class MediaPipeLlmService {
     }
 
     try {
-      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('isAvailable');
+      final res =
+          await _channel.invokeMethod<Map<dynamic, dynamic>>('isAvailable');
       if (res != null) {
         final available = res['available'] as bool? ?? false;
         final initialized = res['isInitialized'] as bool? ?? false;
@@ -56,7 +58,8 @@ class MediaPipeLlmService {
     if (kIsWeb || !Platform.isAndroid) return false;
 
     try {
-      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('initialize', {
+      final res =
+          await _channel.invokeMethod<Map<dynamic, dynamic>>('initialize', {
         if (modelPath != null) 'modelPath': modelPath,
         'maxTokens': maxTokens,
         'topK': topK,
@@ -81,7 +84,8 @@ class MediaPipeLlmService {
     }
 
     try {
-      final res = await _channel.invokeMethod<Map<dynamic, dynamic>>('generate', {
+      final res =
+          await _channel.invokeMethod<Map<dynamic, dynamic>>('generate', {
         'prompt': prompt,
       });
 
@@ -116,7 +120,8 @@ class MediaPipeLlmService {
     if (ColibriService.shouldEscalateToCloud(question)) {
       return {
         'success': true,
-        'content': '${ColibriService.escalateToken} This inquiry involves medication dosage changes, symptoms, or multi-campus facility information.',
+        'content':
+            '${ColibriService.escalateToken} This inquiry involves medication dosage changes, symptoms, or multi-campus facility information.',
         'model': 'gemma-2b-mediapipe',
         'escalateToCloud': true,
       };

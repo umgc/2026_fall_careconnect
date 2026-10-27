@@ -461,7 +461,9 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         return FutureBuilder<UserData?>(
           future: UserRoleStorageService.instance.getUserData(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            // Retain the shell while a tab URL change refreshes stored user data.
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );

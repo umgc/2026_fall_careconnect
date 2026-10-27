@@ -141,4 +141,33 @@ class UserTest {
         assertThat(user.getLoginStreak()).isEqualTo(3);
         assertThat(user.getLeaderboardOptIn()).isTrue();
     }
+
+    @Test
+    void credentialsAreNeverSerialized() throws Exception {
+        // Arrange
+        final User user = User.builder()
+                .id(9L).email("patient@example.com").role(Role.PATIENT)
+                .password("$2a$10$hash").passwordHash("$2a$10$hash").verificationToken("token-123")
+                .build();
+
+        // Act
+        final String json = new com.fasterxml.jackson.databind.ObjectMapper()
+                .findAndRegisterModules().writeValueAsString(user);
+
+        // Assert
+        assertThat(json).contains("patient@example.com")
+                .doesNotContain("password").doesNotContain("$2a$10$hash")
+                .doesNotContain("verificationToken").doesNotContain("token-123");
+    }
+
+    @Test
+    void credentialsCannotBeSetFromJson() throws Exception {
+        final User user = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                "{\"id\":9,\"password\":\"x\",\"passwordHash\":\"y\",\"verificationToken\":\"z\"}",
+                User.class);
+
+        assertThat(user.getPassword()).isNull();
+        assertThat(user.getPasswordHash()).isNull();
+        assertThat(user.getVerificationToken()).isNull();
+    }
 }

@@ -97,8 +97,8 @@ class MedicareDataService {
       List<HealthRecord> records, Map<String, dynamic>? env) {
     final at = EhrResourceMapper.parseDate(env?['fetchedAt']);
     if (at == null) return records;
-    final retrieved =
-        RecordDetail(EhrResourceMapper.lastUpdatedLabel, EhrResourceMapper.shortDate(at));
+    final retrieved = RecordDetail(
+        EhrResourceMapper.lastUpdatedLabel, EhrResourceMapper.shortDate(at));
     return [
       for (final r in records) r.copyWith(details: [...r.details, retrieved]),
     ];

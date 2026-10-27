@@ -25,7 +25,8 @@ Future<Uint8List> lockScreenQrPng(String data) async {
   final top = (height - qrSize) / 2 + 120;
   final left = (width - qrSize) / 2;
 
-  void label(String text, double y, double size, FontWeight weight, Color color) {
+  void label(
+      String text, double y, double size, FontWeight weight, Color color) {
     final tp = TextPainter(
       text: TextSpan(
           text: text,

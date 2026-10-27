@@ -19,8 +19,9 @@ enum RecordConflictKind {
 
 /// Records from several providers that look like the same record.
 class RecordConflict {
-  /// Stable for the same record across loads (type + title, plus the day for
-  /// one-off events), so a decision can be remembered.
+  /// Stable for the same record across loads (type + FHIR resource type +
+  /// title, plus the day for one-off events), so a decision can be
+  /// remembered.
   final String key;
 
   /// One version per source, preferred source first.
@@ -40,8 +41,10 @@ class RecordConflict {
   /// record's title.
   String get storageKey => _hash(key);
 
-  /// Identifies one version within this conflict.
-  static String versionId(HealthRecord r) => '${r.primarySource.name}:${r.id}';
+  /// Identifies one version within this conflict. Includes the FHIR resource
+  /// type, since a source's ids are only unique within one resource type.
+  static String versionId(HealthRecord r) =>
+      '${r.primarySource.name}:${r.resourceType ?? ''}/${r.id}';
 }
 
 class ReconciledRecords {
@@ -57,9 +60,10 @@ class ReconciledRecords {
 
 /// Finds the same record reported by different sources.
 ///
-/// Records match when they have the same type and title (ignoring case and
-/// punctuation) and, for one-off events (visits, results, claims), the same
-/// day. Conditions, medications and allergies match on title alone, since a
+/// Records match when they have the same type, FHIR resource type and title
+/// (ignoring case and punctuation) and, for one-off events (visits, results,
+/// claims), the same day. An Observation and a DiagnosticReport are never the
+/// same record, however alike they look. Conditions, medications and allergies match on title alone, since a
 /// source may date them differently. Records from the same source are never
 /// matched with each other, and an ambiguous match (one source has several)
 /// is left alone.
@@ -162,16 +166,17 @@ class RecordReconciler {
 
   static String matchKey(HealthRecord r) {
     final title = _norm(r.title);
+    final kind = '${r.type.name}|${r.resourceType ?? ''}';
     switch (r.type) {
       case RecordType.condition:
       case RecordType.medication:
       case RecordType.allergy:
-        return '${r.type.name}|$title';
+        return '$kind|$title';
       case RecordType.appointment:
       case RecordType.clinicalRecord:
       case RecordType.claimService:
       case RecordType.other:
-        return '${r.type.name}|$title|${_day(r.date)}';
+        return '$kind|$title|${_day(r.date)}';
     }
   }
 

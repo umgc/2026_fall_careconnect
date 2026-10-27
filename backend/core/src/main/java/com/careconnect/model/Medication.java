@@ -1,5 +1,6 @@
 package com.careconnect.model;
 
+import com.careconnect.service.ai.RetrievalRecordChangeListener;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -7,6 +8,7 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "patient_medication")
+@EntityListeners(RetrievalRecordChangeListener.class)
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

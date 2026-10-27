@@ -415,6 +415,13 @@ delete_stack "$SERVICE_STACK_NAME"
 if [[ "$SKIP_ECR_CLEANUP" != "true" ]]; then
   REPOSITORY_NAME="$(get_repository_name "$PLATFORM_PARAMETERS")"
   clear_ecr_repository_images "$REPOSITORY_NAME"
+  # The condition-detection sidecar repo is named "<RepositoryName>-dam-sidecar"
+  # in 03-platform.yaml; it must be empty too or platform stack deletion fails.
+  # clear_ecr_repository_images skips it cleanly if it does not exist (e.g. a
+  # platform stack that predates the sidecar).
+  if [[ -n "$REPOSITORY_NAME" ]]; then
+    clear_ecr_repository_images "${REPOSITORY_NAME}-dam-sidecar"
+  fi
 else
   echo "Skipping ECR cleanup by request."
 fi

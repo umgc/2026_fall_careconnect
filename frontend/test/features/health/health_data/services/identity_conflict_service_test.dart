@@ -4,6 +4,8 @@
 
 import 'package:care_connect_app/features/health/health_data/models/identity_conflict.dart';
 import 'package:care_connect_app/features/health/health_data/services/identity_conflict_service.dart';
+import 'package:care_connect_app/services/auth_service.dart';
+import 'package:care_connect_app/services/user_role_storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -107,6 +109,77 @@ void main() {
       await report();
       expect(await IdentityConflictService(useMock: false)
           .resolve(1, accepted: true), isFalse);
+    });
+  });
+
+  // Two accounts signed in one after the other in the same app session.
+  group('date-of-birth conflicts belong to one patient', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final storage = UserRoleStorageService.instance;
+    final service = IdentityConflictService(useMock: false);
+
+    Future<void> signIn(int userId, int patientId) => storage.setUserData(
+        role: 'PATIENT', userId: userId, patientId: patientId);
+
+    Future<DateTime?> report() => IdentityConflictService.reportDobDisagreement(
+          current: DateTime(1980, 5, 14),
+          currentSource: 'Epic',
+          incoming: DateTime(1980, 5, 15),
+          incomingSource: 'athenahealth',
+        );
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      IdentityConflictService.clearFound();
+      await storage.clearUserData();
+    });
+    tearDown(() => storage.clearUserData());
+
+    test('another patient neither sees nor can resolve them', () async {
+      await signIn(1, 10);
+      await report();
+      final id = (await service.fetchPending()).single.id;
+
+      await storage.clearUserData();
+      await signIn(2, 20);
+      expect(await service.fetchPending(), isEmpty);
+      expect(await service.resolve(id, accepted: true), isFalse);
+
+      await signIn(1, 10);
+      expect((await service.fetchPending()).single.id, id);
+    });
+
+    test("one patient's saved choice never decides another's date",
+        () async {
+      await signIn(1, 10);
+      await report();
+      await service.resolve((await service.fetchPending()).single.id,
+          accepted: true);
+      expect(await report(), DateTime(1980, 5, 15));
+
+      await storage.clearUserData();
+      await signIn(2, 20);
+      expect(await report(), isNull);
+      expect(await service.fetchPending(), hasLength(1));
+    });
+
+    test('logging out forgets them, so nobody signed in next sees them',
+        () async {
+      await signIn(1, 10);
+      await report();
+      expect(await service.fetchPending(), hasLength(1));
+
+      try {
+        await AuthService.logout();
+      } catch (_) {
+        // The backend is unreachable in tests; local cleanup still runs.
+      }
+
+      await signIn(1, 10);
+      expect(await service.fetchPending(), isEmpty);
+      await storage.clearUserData();
+      await signIn(2, 20);
+      expect(await service.fetchPending(), isEmpty);
     });
   });
 }

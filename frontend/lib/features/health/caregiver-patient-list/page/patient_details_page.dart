@@ -51,6 +51,41 @@ import 'incident_report_history_screen.dart';
 import '../../../audit/audit_log_screen.dart';
 import '../../../../widgets/post_call_telemetry_summary_screen.dart';
 
+/// The patient's login account id (`users.id`) from the loaded payloads, or 0 if none has one.
+///
+/// [PatientDetailsPage.patientId] is the patient record id (`patient.id`), a different number.
+/// It is deliberately not a fallback: it only equals the account id by coincidence (the first
+/// seeded patient), and using it would call, or load the mood history of, another account.
+@visibleForTesting
+int resolvePatientUserId({
+  required Map<String, dynamic> detailsPayload,
+  required Map<String, dynamic> profilePayload,
+  required Map<String, dynamic>? caregiverData,
+}) {
+  final linkMap = caregiverData?['link'] is Map<String, dynamic>
+      ? caregiverData!['link'] as Map<String, dynamic>
+      : const <String, dynamic>{};
+  final detailsUser = detailsPayload['user'] is Map<String, dynamic>
+      ? detailsPayload['user'] as Map<String, dynamic>
+      : const <String, dynamic>{};
+  final profileUser = profilePayload['user'] is Map<String, dynamic>
+      ? profilePayload['user'] as Map<String, dynamic>
+      : const <String, dynamic>{};
+
+  final candidates = <dynamic>[
+    linkMap['patientUserId'],
+    detailsUser['id'],
+    profileUser['id'],
+  ];
+
+  for (final value in candidates) {
+    if (value is int && value > 0) return value;
+    final parsed = int.tryParse(value?.toString() ?? '');
+    if (parsed != null && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
 class PatientDetailsPage extends StatefulWidget {
   final String patientId;
 
@@ -161,14 +196,16 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     var recipientName = patientName;
 
     if (role == 'CAREGIVER') {
-      targetUserId = int.tryParse(widget.patientId);
-      if (targetUserId == null) {
+      // The callee is addressed by login account id. widget.patientId is the patient record
+      // id, which matched only for the first seeded patient (see resolvePatientUserId).
+      if (_callHistoryPatientUserId <= 0) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invalid patient ID for video call.')),
         );
         return;
       }
+      targetUserId = _callHistoryPatientUserId;
     } else if (role == 'PATIENT') {
       final linkedCaregiverUserIds =
           await ApiService.getPatientLinkedCaregiverUserIds(currentUserId);
@@ -1010,31 +1047,12 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     required Map<String, dynamic> detailsPayload,
     required Map<String, dynamic> profilePayload,
     required Map<String, dynamic>? caregiverData,
-  }) {
-    final linkMap = caregiverData?['link'] is Map<String, dynamic>
-        ? caregiverData!['link'] as Map<String, dynamic>
-        : const <String, dynamic>{};
-    final detailsUser = detailsPayload['user'] is Map<String, dynamic>
-        ? detailsPayload['user'] as Map<String, dynamic>
-        : const <String, dynamic>{};
-    final profileUser = profilePayload['user'] is Map<String, dynamic>
-        ? profilePayload['user'] as Map<String, dynamic>
-        : const <String, dynamic>{};
-
-    final candidates = <dynamic>[
-      linkMap['patientUserId'],
-      detailsUser['id'],
-      profileUser['id'],
-      widget.patientId,
-    ];
-
-    for (final value in candidates) {
-      if (value is int) return value;
-      final parsed = int.tryParse(value?.toString() ?? '');
-      if (parsed != null) return parsed;
-    }
-    return 0;
-  }
+  }) =>
+      resolvePatientUserId(
+        detailsPayload: detailsPayload,
+        profilePayload: profilePayload,
+        caregiverData: caregiverData,
+      );
 
   List<String> _extractStringList(dynamic value) {
     if (value is! List) return const [];

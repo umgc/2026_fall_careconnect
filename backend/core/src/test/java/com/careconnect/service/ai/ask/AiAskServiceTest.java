@@ -299,6 +299,78 @@ class AiAskServiceTest {
     }
 
     @Test
+    @DisplayName("ask accepts a claim that is one complete sentence of a longer quoted evidence")
+    void ask_claimIsCompleteSentenceInsideLongerEvidence_isDelivered() throws Exception {
+        // Arrange: the model quotes the whole record but states only its first sentence
+        final String record = "Metformin 500mg is an active medication. Take Metformin twice daily with meals.";
+        stubExtractiveResult(record, "Metformin 500mg is an active medication.", record);
+
+        // Act
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        // Assert
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.answer().text())
+                .isEqualTo("From your records: Metformin 500mg is an active medication.");
+    }
+
+    @Test
+    void ask_caregiverAnswer_speaksAboutThePatient() throws Exception {
+        // Arrange
+        final String record = "Metformin 500mg is an active medication.";
+        stubExtractiveResult(record, record, record);
+        final User caregiver = caller();
+        caregiver.setRole(Role.CAREGIVER);
+
+        // Act
+        final AiAskResponse response = service.ask(caregiver, request("metformin"));
+
+        // Assert
+        assertThat(response.answer().text())
+                .isEqualTo("From the patient's records: Metformin 500mg is an active medication.");
+    }
+
+    @Test
+    @DisplayName("ask shows the whole sentence when the model trims its leading label")
+    void ask_trimmedLabel_showsWholeSourceSentence() throws Exception {
+        // Arrange: the model quotes only the description after "details:"
+        final String record = "Metformin refill is a general task scheduled for 2026-10-21. "
+                + "Metformin refill details: Pick up the metformin refill at the pharmacy.";
+        stubExtractiveResult(record,
+                "Pick up the metformin refill at the pharmacy.",
+                "Pick up the metformin refill at the pharmacy.");
+
+        // Act
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        // Assert
+        assertThat(response.deliveryStatus()).isEqualTo(DeliveryStatus.DELIVERED);
+        assertThat(response.answer().text()).isEqualTo(
+                "From your records: Metformin refill details: Pick up the metformin refill at the pharmacy.");
+    }
+
+    @Test
+    void ask_fragmentInsideEvidence_isShownAsItsFullSentenceWithNegation() throws Exception {
+        // A fragment that drops "did not" is never shown alone: the user reads the whole sentence
+        final String record = "The patient did not take metformin today. Metformin is taken twice daily.";
+        stubExtractiveResult(record, "take metformin today.", record);
+
+        final AiAskResponse response = service.ask(caller(), request("metformin"));
+
+        assertThat(response.answer().text())
+                .isEqualTo("From your records: The patient did not take metformin today.");
+    }
+
+    @Test
+    void ask_claimNotContainedInEvidence_failsClosed() throws Exception {
+        final String record = "Metformin 500mg is an active medication. Take Metformin twice daily with meals.";
+        stubExtractiveResult(record, "Metformin 1000mg is an active medication.", record);
+
+        assertThatThrownBy(() -> service.ask(caller(), request("metformin")))
+                .isInstanceOf(AskAiGroundingException.class);
+    }
+
+    @Test
     void ask_oneCharacterEvidence_failsClosed() throws Exception {
         stubExtractiveResult("A sufficiently long source record", "A", "A");
 
@@ -481,7 +553,7 @@ class AiAskServiceTest {
 
         final AiAskResponse response = service.ask(caller(), request("metformin"));
 
-        assertThat(response.answer().text()).isEqualTo(evidence);
+        assertThat(response.answer().text()).isEqualTo("From your records: " + evidence);
         assertThat(response.citations().get(0).excerpt()).isEqualTo(evidence);
     }
 

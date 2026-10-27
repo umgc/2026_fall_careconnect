@@ -42,7 +42,8 @@ const _warnSoft = Color(0xFFFFFAEB);
 const wideLayoutBreakpoint = 900.0;
 
 final _linkTheme = TextButtonThemeData(
-  style: TextButton.styleFrom(foregroundColor: _brand, minimumSize: const Size(0, 44)),
+  style: TextButton.styleFrom(
+      foregroundColor: _brand, minimumSize: const Size(0, 44)),
 );
 
 class _MedicalPassportPageState extends State<MedicalPassportPage> {
@@ -76,7 +77,8 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
       if (mounted) setState(() => _loadError = e);
       // DEF-EMG-15: with a passport already on screen the error state is not
       // shown, so say the refresh failed.
-      if (_passport != null) _toast('Couldn\'t refresh your passport. Try again.');
+      if (_passport != null)
+        _toast('Couldn\'t refresh your passport. Try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -99,8 +101,8 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
     if (passport == null) return;
     final update = await showDialog<PassportProfileUpdate>(
       context: context,
-      builder: (context) => _branded(
-          context, _EditDetailsDialog(initial: PassportProfileUpdate.from(passport))),
+      builder: (context) => _branded(context,
+          _EditDetailsDialog(initial: PassportProfileUpdate.from(passport))),
     );
     if (update == null || !mounted) return;
     try {
@@ -170,7 +172,8 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white),
+              style: FilledButton.styleFrom(
+                  backgroundColor: _brand, foregroundColor: Colors.white),
               onPressed: () => Navigator.pop(context, true),
               child: Text(action),
             ),
@@ -189,7 +192,8 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
   /// 2.77:1.
   static Widget _branded(BuildContext context, Widget dialog) {
     final current = Theme.of(context);
-    final theme = current.brightness == Brightness.dark ? AppTheme.lightTheme : current;
+    final theme =
+        current.brightness == Brightness.dark ? AppTheme.lightTheme : current;
     return Theme(
       data: theme.copyWith(
         colorScheme: theme.colorScheme.copyWith(primary: _brand),
@@ -207,7 +211,9 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
   }
 
   static String _messageFor(Object error, String fallback) =>
-      error is MedicalPassportException && error.statusCode == 400 && error.message != null
+      error is MedicalPassportException &&
+              error.statusCode == 400 &&
+              error.message != null
           ? error.message!
           : fallback;
 
@@ -238,7 +244,8 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
   Widget _body() {
     if (_loading) {
       return const Center(
-        child: CircularProgressIndicator(semanticsLabel: 'Loading your passport'),
+        child:
+            CircularProgressIndicator(semanticsLabel: 'Loading your passport'),
       );
     }
     final passport = _passport;
@@ -370,12 +377,14 @@ class _MedicalPassportPageState extends State<MedicalPassportPage> {
 }
 
 /// "Jul 1, 2026" in the device's locale and time zone.
-String formatPassportDate(DateTime when) => DateFormat.yMMMd().format(when.toLocal());
+String formatPassportDate(DateTime when) =>
+    DateFormat.yMMMd().format(when.toLocal());
 
 // ---- Header and identity ---------------------------------------------------
 
 class _Header extends StatelessWidget {
-  const _Header({required this.passport, required this.busy, required this.onOpenQr});
+  const _Header(
+      {required this.passport, required this.busy, required this.onOpenQr});
 
   final MedicalPassport passport;
   final bool busy;
@@ -398,14 +407,18 @@ class _Header extends StatelessWidget {
               const Text(
                 'PRIVATE & SECURE',
                 style: TextStyle(
-                    color: _brand, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+                    color: _brand,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2),
               ),
               const SizedBox(height: 6),
               Semantics(
                 header: true,
                 child: const Text(
                   'Medical passport',
-                  style: TextStyle(color: _ink, fontSize: 30, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                      color: _ink, fontSize: 30, fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(height: 6),
@@ -433,7 +446,8 @@ class _Header extends StatelessWidget {
           ),
           onPressed: busy ? null : onOpenQr,
           icon: const Icon(Icons.qr_code_2),
-          label: Text(passport.hasCode ? 'Show emergency QR' : 'Create emergency QR'),
+          label: Text(
+              passport.hasCode ? 'Show emergency QR' : 'Create emergency QR'),
         ),
       ],
     );
@@ -468,9 +482,11 @@ class _IdentityCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(passport.name,
-                  style: const TextStyle(color: _ink, fontSize: 20, fontWeight: FontWeight.w700)),
+                  style: const TextStyle(
+                      color: _ink, fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 4),
-              Text(details.join('  ·  '), style: const TextStyle(color: _muted, fontSize: 14)),
+              Text(details.join('  ·  '),
+                  style: const TextStyle(color: _muted, fontSize: 14)),
               const SizedBox(height: 4),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -487,7 +503,8 @@ class _IdentityCard extends StatelessWidget {
                         passport.isShared(PassportField.bloodType),
                     onChanged: onShareBloodType,
                   ),
-                  TextButton(onPressed: onEdit, child: const Text('Edit details')),
+                  TextButton(
+                      onPressed: onEdit, child: const Text('Edit details')),
                 ],
               ),
             ],
@@ -501,14 +518,19 @@ class _IdentityCard extends StatelessWidget {
         if (constraints.maxWidth < 560) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Padding(padding: const EdgeInsets.all(20), child: person), status],
+            children: [
+              Padding(padding: const EdgeInsets.all(20), child: person),
+              status
+            ],
           );
         }
         return IntrinsicHeight(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: Padding(padding: const EdgeInsets.all(20), child: person)),
+              Expanded(
+                  child: Padding(
+                      padding: const EdgeInsets.all(20), child: person)),
               SizedBox(width: 200, child: status),
             ],
           ),
@@ -536,7 +558,8 @@ class _StatusPanel extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Semantics(
         container: true,
-        label: 'Passport status: ${ready ? 'ready to share' : 'not ready. $hint'}',
+        label:
+            'Passport status: ${ready ? 'ready to share' : 'not ready. $hint'}',
         excludeSemantics: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,7 +567,10 @@ class _StatusPanel extends StatelessWidget {
           children: [
             const Text('PASSPORT STATUS',
                 style: TextStyle(
-                    color: _muted, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1)),
+                    color: _muted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1)),
             const SizedBox(height: 6),
             Row(
               children: [
@@ -553,7 +579,8 @@ class _StatusPanel extends StatelessWidget {
                 Flexible(
                   child: Text(ready ? 'Ready to share' : 'Not ready',
                       style: TextStyle(
-                          color: ready ? _brand : _warn, fontWeight: FontWeight.w700)),
+                          color: ready ? _brand : _warn,
+                          fontWeight: FontWeight.w700)),
                 ),
               ],
             ),
@@ -571,7 +598,8 @@ class _StatusPanel extends StatelessWidget {
 // ---- Section cards ---------------------------------------------------------
 
 class _MedicationsCard extends StatelessWidget {
-  const _MedicationsCard({required this.passport, required this.saving, required this.onShare});
+  const _MedicationsCard(
+      {required this.passport, required this.saving, required this.onShare});
 
   final MedicalPassport passport;
   final bool saving;
@@ -595,7 +623,8 @@ class _MedicationsCard extends StatelessWidget {
             icon: Icons.medication_outlined,
             title: [m.name, if (m.dosage case final d?) d].join(' '),
             subtitle: m.frequency,
-            badge: const _Badge(text: 'Active', color: _brand, background: _brandSoft),
+            badge: const _Badge(
+                text: 'Active', color: _brand, background: _brandSoft),
           ),
       ],
     );
@@ -603,7 +632,8 @@ class _MedicationsCard extends StatelessWidget {
 }
 
 class _AllergiesCard extends StatelessWidget {
-  const _AllergiesCard({required this.passport, required this.saving, required this.onShare});
+  const _AllergiesCard(
+      {required this.passport, required this.saving, required this.onShare});
 
   final MedicalPassport passport;
   final bool saving;
@@ -628,12 +658,14 @@ class _AllergiesCard extends StatelessWidget {
           child: LayoutBuilder(builder: (context, constraints) {
             const gap = 12.0;
             final twoUp = constraints.maxWidth >= 2 * 200 + gap;
-            final width = twoUp ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
+            final width =
+                twoUp ? (constraints.maxWidth - gap) / 2 : constraints.maxWidth;
             return Wrap(
               spacing: gap,
               runSpacing: gap,
               children: [
-                for (final a in allergies) SizedBox(width: width, child: _AllergyTile(allergy: a)),
+                for (final a in allergies)
+                  SizedBox(width: width, child: _AllergyTile(allergy: a)),
               ],
             );
           }),
@@ -651,13 +683,15 @@ class _AllergyTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final severity = severityLabel(allergy.severity);
-    final serious = allergy.severity == 'SEVERE' || allergy.severity == 'LIFE_THREATENING';
+    final serious =
+        allergy.severity == 'SEVERE' || allergy.severity == 'LIFE_THREATENING';
     return IntrinsicHeight(
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: serious ? _dangerSoft : Colors.white,
-          border: Border.all(color: serious ? const Color(0xFFFECDCA) : _border),
+          border:
+              Border.all(color: serious ? const Color(0xFFFECDCA) : _border),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
@@ -667,7 +701,8 @@ class _AllergyTile extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(allergy.allergen,
-                      style: const TextStyle(color: _ink, fontWeight: FontWeight.w700)),
+                      style: const TextStyle(
+                          color: _ink, fontWeight: FontWeight.w700)),
                 ),
                 if (severity != null)
                   _Badge(
@@ -679,7 +714,8 @@ class _AllergyTile extends StatelessWidget {
             ),
             if (allergy.reaction case final reaction?) ...[
               const SizedBox(height: 6),
-              Text('Reaction: $reaction', style: const TextStyle(color: _muted, fontSize: 13)),
+              Text('Reaction: $reaction',
+                  style: const TextStyle(color: _muted, fontSize: 13)),
             ],
           ],
         ),
@@ -726,7 +762,8 @@ class _ConditionsCard extends StatelessWidget {
         if (conditions != null)
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(conditions, style: const TextStyle(color: _ink, height: 1.45)),
+            child: Text(conditions,
+                style: const TextStyle(color: _ink, height: 1.45)),
           ),
       ],
     );
@@ -768,16 +805,22 @@ class _ContactCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _Avatar(initials: initialsOf(contact.name), size: 40, warm: true),
+                    _Avatar(
+                        initials: initialsOf(contact.name),
+                        size: 40,
+                        warm: true),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(contact.name ?? 'Name not added',
-                              style: const TextStyle(color: _ink, fontWeight: FontWeight.w700)),
+                              style: const TextStyle(
+                                  color: _ink, fontWeight: FontWeight.w700)),
                           if (contact.relationship case final r?)
-                            Text(r, style: const TextStyle(color: _muted, fontSize: 13)),
+                            Text(r,
+                                style: const TextStyle(
+                                    color: _muted, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -860,12 +903,17 @@ class _SectionCard extends StatelessWidget {
                         header: true,
                         child: Text(title,
                             style: const TextStyle(
-                                color: _ink, fontSize: 16, fontWeight: FontWeight.w700)),
+                                color: _ink,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700)),
                       ),
                     ),
                     if (count != null) ...[
                       const SizedBox(width: 8),
-                      _Badge(text: '$count', color: _muted, background: const Color(0xFFF1F5F9)),
+                      _Badge(
+                          text: '$count',
+                          color: _muted,
+                          background: const Color(0xFFF1F5F9)),
                     ],
                   ],
                 ),
@@ -890,7 +938,8 @@ class _SectionCard extends StatelessWidget {
             ),
           ),
           const Divider(height: 1, color: _border),
-          if (hasContent) ...children
+          if (hasContent)
+            ...children
           else
             Padding(
               padding: const EdgeInsets.all(16),
@@ -958,7 +1007,9 @@ class _ShareSwitch extends StatelessWidget {
                     ? (on ? 'Shared on QR' : 'Hidden')
                     : '$subject ${on ? 'shared on QR' : 'hidden'}',
                 style: TextStyle(
-                    color: on ? _brand : _muted, fontSize: 13, fontWeight: FontWeight.w600)),
+                    color: on ? _brand : _muted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
           ),
           Switch(
             value: on,
@@ -972,7 +1023,8 @@ class _ShareSwitch extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.icon, required this.title, this.subtitle, this.badge});
+  const _Row(
+      {required this.icon, required this.title, this.subtitle, this.badge});
 
   final IconData icon;
   final String title;
@@ -983,14 +1035,16 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: _border))),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: _border))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(color: _brandSoft, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+                color: _brandSoft, borderRadius: BorderRadius.circular(8)),
             child: Icon(icon, size: 18, color: _brand),
           ),
           const SizedBox(width: 12),
@@ -998,7 +1052,9 @@ class _Row extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: _ink, fontWeight: FontWeight.w700)),
+                Text(title,
+                    style: const TextStyle(
+                        color: _ink, fontWeight: FontWeight.w700)),
                 if (subtitle case final s?) ...[
                   const SizedBox(height: 2),
                   Text(s, style: const TextStyle(color: _muted, fontSize: 13)),
@@ -1034,7 +1090,8 @@ class _EmergencyCard extends StatelessWidget {
     final scanned = code?.lastScannedAt;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(14)),
+      decoration:
+          BoxDecoration(color: _brand, borderRadius: BorderRadius.circular(14)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1043,8 +1100,14 @@ class _EmergencyCard extends StatelessWidget {
             child: Icon(Icons.qr_code_2, color: Colors.white, size: 32),
           ),
           const SizedBox(height: 12),
-          Text(passport.ready ? 'Ready in an emergency' : 'Get ready for an emergency',
-              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(
+              passport.ready
+                  ? 'Ready in an emergency'
+                  : 'Get ready for an emergency',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
           const Text(
             'Your QR code gives first responders quick access to the details you choose to share.',
@@ -1067,11 +1130,14 @@ class _EmergencyCard extends StatelessWidget {
               minimumSize: const Size(0, 48),
             ),
             onPressed: busy ? null : onOpenQr,
-            child: Text(code == null ? 'Create QR passport' : 'Open emergency QR'),
+            child:
+                Text(code == null ? 'Create QR passport' : 'Open emergency QR'),
           ),
           if (code != null)
             TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.white, minimumSize: const Size(0, 44)),
+              style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 44)),
               onPressed: busy ? null : onTurnOff,
               child: const Text('Turn off QR code'),
             ),
@@ -1094,9 +1160,11 @@ class _EditDetailsDialog extends StatefulWidget {
 
 class _EditDetailsDialogState extends State<_EditDetailsDialog> {
   late BloodType? _bloodType = widget.initial.bloodType;
-  late final _conditions = TextEditingController(text: widget.initial.chronicConditions);
+  late final _conditions =
+      TextEditingController(text: widget.initial.chronicConditions);
   late final _name = TextEditingController(text: widget.initial.contactName);
-  late final _relationship = TextEditingController(text: widget.initial.contactRelationship);
+  late final _relationship =
+      TextEditingController(text: widget.initial.contactRelationship);
   late final _phone = TextEditingController(text: widget.initial.contactPhone);
 
   @override
@@ -1143,7 +1211,8 @@ class _EditDetailsDialogState extends State<_EditDetailsDialog> {
                 maxLines: 5,
               ),
               const SizedBox(height: 4),
-              const Text('Emergency contact', style: TextStyle(fontWeight: FontWeight.w700)),
+              const Text('Emergency contact',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
               TextField(
                 controller: _name,
                 decoration: const InputDecoration(labelText: 'Name'),
@@ -1165,9 +1234,12 @@ class _EditDetailsDialogState extends State<_EditDetailsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white),
+          style: FilledButton.styleFrom(
+              backgroundColor: _brand, foregroundColor: Colors.white),
           onPressed: () => Navigator.pop(
             context,
             PassportProfileUpdate(
@@ -1207,7 +1279,8 @@ class _Panel extends StatelessWidget {
 }
 
 class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials, required this.size, this.warm = false});
+  const _Avatar(
+      {required this.initials, required this.size, this.warm = false});
 
   final String initials;
   final double size;
@@ -1229,7 +1302,9 @@ class _Avatar extends StatelessWidget {
           fit: BoxFit.scaleDown,
           child: Text(initials,
               style: TextStyle(
-                  color: warm ? _warn : _brand, fontWeight: FontWeight.w700, fontSize: size / 3)),
+                  color: warm ? _warn : _brand,
+                  fontWeight: FontWeight.w700,
+                  fontSize: size / 3)),
         ),
       ),
     );
@@ -1237,7 +1312,8 @@ class _Avatar extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.text, required this.color, required this.background});
+  const _Badge(
+      {required this.text, required this.color, required this.background});
 
   final String text;
   final Color color;
@@ -1247,8 +1323,11 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+      decoration: BoxDecoration(
+          color: background, borderRadius: BorderRadius.circular(999)),
+      child: Text(text,
+          style: TextStyle(
+              color: color, fontSize: 11, fontWeight: FontWeight.w700)),
     );
   }
 }
@@ -1262,7 +1341,9 @@ class _PrivacyNote extends StatelessWidget {
       TextSpan(
         style: TextStyle(color: _muted, fontSize: 12, height: 1.45),
         children: [
-          TextSpan(text: 'Privacy note: ', style: TextStyle(fontWeight: FontWeight.w700)),
+          TextSpan(
+              text: 'Privacy note: ',
+              style: TextStyle(fontWeight: FontWeight.w700)),
           TextSpan(
             text: 'A scan shows your name, age and only the sections marked '
                 '"Shared on QR". No account details are shared.',
@@ -1274,7 +1355,8 @@ class _PrivacyNote extends StatelessWidget {
 }
 
 class _Notice extends StatelessWidget {
-  const _Notice({required this.icon, required this.text, this.action, this.onAction});
+  const _Notice(
+      {required this.icon, required this.text, this.action, this.onAction});
 
   final IconData icon;
   final String text;
@@ -1296,12 +1378,14 @@ class _Notice extends StatelessWidget {
             Semantics(
               liveRegion: true,
               child: Text(text,
-                  textAlign: TextAlign.center, style: const TextStyle(color: _ink, fontSize: 16)),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: _ink, fontSize: 16)),
             ),
             if (action != null && onAction != null) ...[
               const SizedBox(height: 12),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: _brand, foregroundColor: Colors.white),
+                style: FilledButton.styleFrom(
+                    backgroundColor: _brand, foregroundColor: Colors.white),
                 onPressed: onAction,
                 child: Text(action!),
               ),

@@ -16,6 +16,7 @@ HealthRecord rec(
   String title = 'Type 2 diabetes',
   String? status = 'active',
   DateTime? date,
+  String? resourceType,
 }) =>
     HealthRecord.single(
         id: id,
@@ -23,7 +24,8 @@ HealthRecord rec(
         type: type,
         title: title,
         status: status,
-        date: date ?? DateTime.utc(2026, 7, 1));
+        date: date ?? DateTime.utc(2026, 7, 1),
+        resourceType: resourceType);
 
 void main() {
   test('identical records from Epic and athenahealth show once as Epic\'s '
@@ -233,5 +235,53 @@ void main() {
         [undated('e', RecordSource.epic), undated('a', RecordSource.athena)]);
     expect(r.unresolved.single.kind, RecordConflictKind.possibleDuplicate);
     expect(r.unresolved.single.storageKey, hasLength(64));
+  });
+
+  test('an Observation and a DiagnosticReport with the same title and day '
+      'stay separate records', () {
+    HealthRecord glucose(String id, RecordSource s, String resourceType) =>
+        rec(id, s,
+            type: RecordType.clinicalRecord,
+            title: 'Glucose',
+            date: DateTime.utc(2026, 6, 3),
+            resourceType: resourceType);
+    final r = RecordReconciler.reconcile([
+      glucose('obs-1', RecordSource.epic, 'Observation'),
+      glucose('rep-1', RecordSource.athena, 'DiagnosticReport'),
+    ]);
+    expect(r.unresolved, isEmpty);
+    expect(r.records.map((x) => x.id), ['obs-1', 'rep-1']);
+    expect(r.records.map((x) => x.sources),
+        [[RecordSource.epic], [RecordSource.athena]]);
+
+    // The same resource type from both sources is still matched.
+    final same = RecordReconciler.reconcile([
+      glucose('obs-1', RecordSource.epic, 'Observation'),
+      glucose('obs-2', RecordSource.athena, 'Observation'),
+    ]);
+    expect(same.unresolved.single.kind, RecordConflictKind.possibleDuplicate);
+    expect(same.records.single.id, 'obs-1');
+  });
+
+  test('versions and stored decisions tell resource types apart', () {
+    final obs = rec('7', RecordSource.epic, resourceType: 'Observation');
+    final report = rec('7', RecordSource.epic, resourceType: 'DiagnosticReport');
+    expect(RecordConflict.versionId(obs),
+        isNot(RecordConflict.versionId(report)));
+    expect(RecordReconciler.matchKey(obs),
+        isNot(RecordReconciler.matchKey(report)));
+
+    RecordConflict conflict(String resourceType) => RecordReconciler.reconcile([
+          rec('7', RecordSource.epic, resourceType: resourceType),
+          rec('9', RecordSource.athena,
+              status: 'resolved', resourceType: resourceType),
+        ]).unresolved.single;
+    final asObs = conflict('Observation');
+    final asReport = conflict('DiagnosticReport');
+    expect(asObs.storageKey, isNot(asReport.storageKey));
+    expect(asObs.fingerprint, isNot(asReport.fingerprint));
+    // A decision made for one type never applies to the other.
+    expect(RecordReconciler.encodeChoice(asObs, asObs.versions.first),
+        isNot(RecordReconciler.encodeChoice(asReport, asReport.versions.first)));
   });
 }

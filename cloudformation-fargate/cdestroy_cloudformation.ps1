@@ -269,6 +269,13 @@ try {
     if (-not $SkipEcrCleanup) {
         $RepositoryName = Get-RepositoryNameFromParameters -ParameterFile $PlatformParameters
         Clear-EcrRepositoryImages -RepositoryName $RepositoryName
+        # The condition-detection sidecar repo is named "<RepositoryName>-dam-sidecar"
+        # in 03-platform.yaml; it must be empty too or platform stack deletion fails.
+        # Clear-EcrRepositoryImages skips it cleanly if it does not exist (e.g. a
+        # platform stack that predates the sidecar).
+        if ($RepositoryName) {
+            Clear-EcrRepositoryImages -RepositoryName "$RepositoryName-dam-sidecar"
+        }
     }
     else {
         Write-Host "Skipping ECR cleanup by request." -ForegroundColor DarkYellow

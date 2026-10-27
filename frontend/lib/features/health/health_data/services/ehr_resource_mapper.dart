@@ -20,6 +20,7 @@ class EhrResourceMapper {
       case 'EPIC':
         return RecordSource.epic;
       case 'CERNER':
+      case 'ORACLE_HEALTH':
         return RecordSource.cerner;
       case 'ATHENA':
       case 'ATHENAHEALTH':

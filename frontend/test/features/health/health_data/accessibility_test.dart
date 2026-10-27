@@ -17,7 +17,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/health/health_data/models/health_record.dart';
@@ -28,6 +27,7 @@ import 'package:care_connect_app/features/health/health_data/pages/health_event_
 import 'package:care_connect_app/features/health/health_data/services/athena_connect_service.dart';
 import 'package:care_connect_app/features/health/health_data/services/athena_data_service.dart';
 import 'package:care_connect_app/features/health/health_data/widgets/athena_connect_tile.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/services/api_client.dart';
 
 import 'health_data_test_support.dart';
