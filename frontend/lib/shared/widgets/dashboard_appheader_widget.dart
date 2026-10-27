@@ -41,13 +41,18 @@ class DashboardAppHeader extends StatelessWidget
     final media = MediaQuery.of(context);
     final width = (media.size.width - media.padding.horizontal - 40 - 65)
         .clamp(1.0, double.infinity);
+    // Measure with the style the header text inherits inside the AppBar's
+    // Material (the theme's bodyMedium, including its line height), not the
+    // DefaultTextStyle around the Scaffold, which may lack that height.
+    final baseStyle = Theme.of(context).textTheme.bodyMedium ??
+        DefaultTextStyle.of(context).style;
     double textHeight(String text, double size, {FontWeight? weight}) {
       final painter = TextPainter(
         text: TextSpan(
           text: text,
-          style: DefaultTextStyle.of(context).style.merge(
-                TextStyle(fontSize: size, fontWeight: weight),
-              ),
+          style: baseStyle.merge(
+            TextStyle(fontSize: size, fontWeight: weight),
+          ),
         ),
         textDirection: Directionality.of(context),
         textScaler: media.textScaler,
