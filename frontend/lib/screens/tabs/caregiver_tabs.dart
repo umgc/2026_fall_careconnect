@@ -1265,7 +1265,11 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                                       ),
                                                     ),
                                                     Expanded(
-                                                      child: ListTile(
+                                                      // The selected row is tinted, so give the tile its own
+                                                      // Material to keep its ink splash visible.
+                                                      child: Material(
+                                                        type: MaterialType.transparency,
+                                                        child: ListTile(
                                                         dense: false,
                                                         contentPadding:
                                                             const EdgeInsets
@@ -1361,6 +1365,7 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                                                   ),
                                                                 );
                                                               },
+                                                      ),
                                                       ),
                                                     ),
                                                   ],
