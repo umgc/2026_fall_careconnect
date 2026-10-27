@@ -3,9 +3,6 @@
 // checks (WCAG 2.4.2) for this PR's TitledMaterialPageRoute changes.
 
 import 'package:care_connect_app/widgets/wrapping_bottom_navigation_bar.dart';
-import 'package:care_connect_app/config/navigation/bottom_nav_config.dart';
-import 'package:care_connect_app/config/navigation/navigation_helper.dart';
-import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/config/navigation/main_screen_config.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/screens/main_screen.dart';
@@ -79,43 +76,6 @@ Widget _wrap({
       GoRoute(
         path: '/voice',
         builder: (_, __) => const VoiceCommandAI(),
-      ),
-    ],
-  );
-
-  return ChangeNotifierProvider<UserProvider>.value(
-    value: effectiveProvider,
-    child: MaterialApp.router(
-      routerConfig: router,
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: AppLocalizations.supportedLocales,
-    ),
-  );
-}
-
-/// Wraps MainScreen WITHOUT a config so that it reads from UserProvider.
-Widget _wrapWithoutConfig({
-  _TestableUserProvider? provider,
-}) {
-  final effectiveProvider =
-      provider ?? _TestableUserProvider(mockUser: MockUser(role: 'PATIENT'));
-
-  final router = GoRouter(
-    observers: [probe],
-    initialLocation: '/',
-    routes: [
-      GoRoute(
-        path: '/',
-        builder: (_, __) => const MainScreen(),
-      ),
-      GoRoute(
-        path: '/login',
-        builder: (_, __) => const Scaffold(body: Text('Login Page')),
       ),
     ],
   );

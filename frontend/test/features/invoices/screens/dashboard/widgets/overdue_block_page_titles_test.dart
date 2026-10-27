@@ -38,9 +38,6 @@ Invoice _makeInvoice({
   );
 }
 
-final _pastDate = DateTime.now().subtract(const Duration(days: 10));
-final _futureDate = DateTime.now().add(const Duration(days: 10));
-
 Widget _wrap(Widget child) => MaterialApp(
       navigatorObservers: [probe],
       home: Scaffold(body: SingleChildScrollView(child: child)),
