@@ -76,6 +76,35 @@ class EpicResourceChunkerTest {
     }
 
     @Test
+    void recordTypeFor_mapsAppointment() {
+        assertEquals(Optional.of(RetrievalRecordType.EPIC_APPOINTMENT),
+                EpicResourceChunker.recordTypeFor("Appointment"));
+    }
+
+    @Test
+    void chunk_appointment_flattensTypeServiceAndStart() {
+        EhrResource appt = EhrResource.builder()
+                .userId(7L).source("EPIC").resourceType("Appointment").resourceFhirId("appt-1")
+                .title("Appointment: Follow-up")
+                .occurredAt("2026-04-10")
+                .contentHash("hash-appt")
+                .payloadJson("{\"resourceType\":\"Appointment\",\"status\":\"booked\","
+                        + "\"appointmentType\":{\"text\":\"Follow-up\"},"
+                        + "\"serviceType\":[{\"text\":\"Cardiology\"}],"
+                        + "\"start\":\"2026-04-10T09:00:00Z\"}")
+                .build();
+
+        List<IndexingChunkDraft> drafts = chunker.chunk(appt, "on_consent");
+        assertEquals(1, drafts.size());
+        IndexingChunkDraft draft = drafts.get(0);
+        assertEquals(RetrievalRecordType.EPIC_APPOINTMENT, draft.recordType());
+        assertEquals("Appointment", draft.metadata().get("fhirResourceType"));
+        assertTrue(draft.chunkText().contains("Follow-up"));
+        assertTrue(draft.chunkText().contains("Cardiology"));
+        assertTrue(draft.chunkText().contains("2026-04-10"));
+    }
+
+    @Test
     void chunk_goal_flattensLifecycleStatusAndDescription() {
         EhrResource goal = EhrResource.builder()
                 .userId(7L).source("EPIC").resourceType("Goal").resourceFhirId("goal-1")

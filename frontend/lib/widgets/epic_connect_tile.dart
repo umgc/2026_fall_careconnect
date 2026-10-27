@@ -11,7 +11,18 @@ import '../services/epic_service.dart';
 /// re-polls status. Wire it into the integrations screen next to Wearables, e.g.:
 /// `const EpicConnectTile()`.
 class EpicConnectTile extends StatefulWidget {
-  const EpicConnectTile({super.key});
+  const EpicConnectTile({
+    super.key,
+    this.buttonOnly = false,
+    this.onChanged,
+  });
+
+  /// Only the Connect button, for screens that already display the
+  /// Epic connection status separately.
+  final bool buttonOnly;
+
+  /// Called after the connection status changes.
+  final VoidCallback? onChanged;
 
   @override
   State<EpicConnectTile> createState() => _EpicConnectTileState();
@@ -79,6 +90,7 @@ class _EpicConnectTileState extends State<EpicConnectTile>
           _snack('Epic connected.');
         }
         await _refresh();
+        widget.onChanged?.call();
       }
     } catch (e) {
       _snack('Could not start Epic connection: $e');
@@ -107,6 +119,24 @@ class _EpicConnectTileState extends State<EpicConnectTile>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.buttonOnly) {
+      return TextButton(
+        onPressed: _busy ? null : _connect,
+        style: TextButton.styleFrom(
+          foregroundColor: Theme.of(context).brightness == Brightness.dark
+              ? Theme.of(context).colorScheme.primary
+              : const Color(0xFF006B80),
+          minimumSize: const Size(48, 48),
+        ),
+        child: _busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('Connect'),
+      );
+    }
     return Card(
       child: ListTile(
         leading: const Icon(Icons.local_hospital_outlined),

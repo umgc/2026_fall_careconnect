@@ -135,7 +135,7 @@ class HealthEventDetailsScreen extends StatelessWidget {
                                   .onSurfaceVariant,
                               fontWeight: FontWeight.w600,
                             ),
-                      ),
+                          ),
                       const SizedBox(height: 4),
                       Text(
                         record.sources.map((source) => source.label).join(', '),

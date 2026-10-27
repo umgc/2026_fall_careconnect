@@ -58,7 +58,8 @@ public class EpicSyncService {
             "Encounter",
             // Care-planning + longitudinal context (US Core). Patient-only search except where a
             // required param is listed in REQUIRED_SEARCH_PARAMS below.
-            "CarePlan", "Goal", "CareTeam", "FamilyMemberHistory", "Coverage", "Device");
+            "CarePlan", "Goal", "CareTeam", "FamilyMemberHistory", "Coverage", "Device",
+            "Appointment");
 
     /** Demographics resource, mirrored via a direct read (not a patient search). */
     private static final String PATIENT_TYPE = "Patient";
@@ -605,7 +606,10 @@ public class EpicSyncService {
         // Encounter (visit) has no code/medication — fall back to its type, then class.
         final String visit = textOf(resource.get("type")) != null
                 ? textOf(resource.get("type")) : textOf(resource.get("class"));
-        final String best = firstNonNull(med, label, named, described, relationship, visit);
+        // Appointment: appointmentType, else serviceType.
+        final String appt = textOf(resource.get("appointmentType")) != null
+                ? textOf(resource.get("appointmentType")) : textOf(resource.get("serviceType"));
+        final String best = firstNonNull(med, label, named, described, relationship, visit, appt);
         return best != null ? resourceType + ": " + best : resourceType;
     }
 

@@ -394,21 +394,7 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
         result: MedicareConnectPage.takePendingResult(),
       ),
     ),
-    // athenahealth connect (2-legged OAuth: in-app consent, no browser return).
-    GoRoute(
-      path: '/athena-connect',
-      redirect: _requireSignIn,
-      builder: (_, __) => const AthenaConnectPage(),
-    ),
-    // One athenahealth record with its FHIR resource (GET /api/athena/resources/{type}/{id}).
-    GoRoute(
-      path: '/athena/:type/:id',
-      redirect: _requireSignIn,
-      builder: (context, state) => AthenaResourceDetailPage(
-        resourceType: state.pathParameters['type'] ?? '',
-        resourceId: state.pathParameters['id'] ?? '',
-      ),
-    ),
+
     // WBS 6.2.59: the patient chooses which caregivers see their Medicare data.
     TitledGoRoute(
       title: 'Medicare Sharing',
@@ -431,6 +417,25 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       redirect: _requireSignIn,
       builder: (_, __) => const EmergencyQrPage(),
     ),
+
+    // athenahealth connect (2-legged OAuth: in-app consent, no browser return).
+    TitledGoRoute(
+      title: 'Connect athenahealth',
+      path: '/athena-connect',
+      redirect: _requireSignIn,
+      builder: (_, __) => const AthenaConnectPage(),
+    ),
+    // One athenahealth record with its FHIR resource (GET /api/athena/resources/{type}/{id}).
+    TitledGoRoute(
+      title: 'athenahealth Record',
+      path: '/athena/:type/:id',
+      redirect: _requireSignIn,
+      builder: (context, state) => AthenaResourceDetailPage(
+        resourceType: state.pathParameters['type'] ?? '',
+        resourceId: state.pathParameters['id'] ?? '',
+      ),
+    ),
+
     TitledGoRoute(
       title: 'UI Preview',
       path: '/ui-preview',
