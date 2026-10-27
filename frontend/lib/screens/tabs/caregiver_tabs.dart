@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -1350,7 +1351,8 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                                                 Navigator.of(
                                                                         context)
                                                                     .push(
-                                                                  MaterialPageRoute(
+                                                                  TitledMaterialPageRoute(
+                                                                    title: 'Call Summary',
                                                                     builder: (_) =>
                                                                         PostCallTelemetrySummaryScreen(
                                                                       callId:

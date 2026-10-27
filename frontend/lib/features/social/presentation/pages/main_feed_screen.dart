@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -110,13 +111,14 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
 
     return InkWell(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CommentScreen(postId: post.id),
-          ),
-        );
-      },
+          Navigator.push(
+            context,
+            TitledMaterialPageRoute(
+              title: 'Post Comments',
+              builder: (_) => CommentScreen(postId: post.id),
+            ),
+          );
+          },
       child: Card(
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         elevation: 2,
@@ -162,12 +164,13 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
               const Divider(height: 1),
               TextButton.icon(
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CommentScreen(postId: post.id),
-                    ),
-                  );
+                    Navigator.push(
+                      context,
+                      TitledMaterialPageRoute(
+                        title: 'Post Comments',
+                        builder: (_) => CommentScreen(postId: post.id),
+                      ),
+                    );
                 },
                 icon: const Icon(Icons.comment, size: 18),
                 label: Text(
@@ -227,7 +230,11 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => SearchUserScreen()),
+                          TitledMaterialPageRoute(
+                            title: 'Search User',
+                              builder: (_) =>
+                                  SearchUserScreen()
+                          ),
                         );
                       },
                     ),
@@ -237,8 +244,11 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
-                              builder: (_) => FriendRequestsScreen()),
+                          TitledMaterialPageRoute(
+                            title: 'Friend Requests',
+                              builder: (_) =>
+                                  FriendRequestsScreen()
+                          ),
                         );
                       },
                     ),
@@ -248,7 +258,9 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => ChatInboxScreen()),
+                          TitledMaterialPageRoute(
+                            title: 'Chat Inbox',
+                            builder: (_) => ChatInboxScreen()),
                         );
                       },
                     ),
@@ -262,7 +274,11 @@ class _MainFeedScreenState extends State<MainFeedScreen> {
                       onPressed: () async {
                         final result = await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => NewPostScreen()),
+                          TitledMaterialPageRoute(
+                            title: 'New Post',
+                              builder: (_) =>
+                                  NewPostScreen()
+                          ),
                         );
                         if (result is PostWithCommentCountDto) {
                           setState(() {
