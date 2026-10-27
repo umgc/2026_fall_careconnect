@@ -125,4 +125,8 @@ public class EhrPatientCrosswalk extends Auditable {
     public boolean isLinked() {
         return token != null && !token.isBlank();
     }
+
+    public String getExternalPatientId() {
+        return externalPatientId;
+    }
 }

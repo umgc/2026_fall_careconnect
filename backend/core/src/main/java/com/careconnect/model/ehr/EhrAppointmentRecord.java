@@ -112,4 +112,56 @@ public class EhrAppointmentRecord extends Auditable {
     /** When the source last updated this appointment, from FHIR {@code meta.lastUpdated}. */
     @Column(name = "source_updated_at")
     private LocalDateTime sourceUpdatedAt;
+
+    public EhrAppointmentRecord(String s, String proposed, LocalDateTime parse, LocalDateTime parse1) {
+        super();
+        this.externalAppointmentId = s;
+        this.status = proposed;
+        this.startTime = parse;
+        this.endTime = parse1;
+    }
+
+//    public EhrAppointmentRecord() {
+//
+//    }
+
+    public String getStatus() {
+        return this.status;
+    }
+
+    public String getProviderName() {
+        return this.providerName;
+    }
+
+    public String getLocation() {
+        return this.location;
+    }
+
+    public String getReason() {
+        return this.reason;
+    }
+
+    public String getServiceType() {
+        return this.serviceType;
+    }
+
+    public String getExternalAppointmentId() {
+        return this.externalAppointmentId;
+    }
+
+    public LocalDateTime getSourceCreatedAt() {
+        return this.sourceCreatedAt;
+    }
+
+    public LocalDateTime getSourceUpdatedAt() {
+        return this.sourceUpdatedAt;
+    }
+
+    public LocalDateTime getStartTime() {
+        return this.startTime;
+    }
+
+    public LocalDateTime getEndTime() {
+        return this.endTime;
+    }
 }
