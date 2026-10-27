@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -1131,8 +1130,7 @@ class _HybridVideoCallWidgetState extends State<HybridVideoCallWidget> {
 
     if (shouldForcePatientDetails) {
       Navigator.of(context).pushReplacement(
-        TitledMaterialPageRoute(
-          title: 'Patient Details',
+        MaterialPageRoute(
           builder: (_) => PatientDetailsPage(
             patientId: returnPatientId,
             isCaregiver: widget.returnAsCaregiver,

@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/invoices/services/invoice_ocr_llm_api.dart';
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_detail_page.dart';
@@ -75,8 +74,7 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
     // We assume ReviewPhotosScreen will pass back any file it can't preview.
     final reviewedFiles = await Navigator.push<List<XFile>>(
       context,
-      TitledMaterialPageRoute(
-        title: 'Review Invoice Photos',
+      MaterialPageRoute(
         builder: (_) => ReviewPhotosScreen(
           initialPhotos: allFilesToReview, // Pass all files
         ),
@@ -155,8 +153,7 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
 
     final reviewed =
         await Navigator.of(context, rootNavigator: true).push<List<XFile>>(
-      TitledMaterialPageRoute(
-        title: 'Review Invoice Photos',
+      MaterialPageRoute(
         builder: (_) => ReviewPhotosScreen(initialPhotos: [first]),
         fullscreenDialog: true,
       ),
@@ -205,8 +202,7 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
     // Do not save here. Go to detail so user can review and save there.
     if (!mounted) return;
     await Navigator.of(context, rootNavigator: true).push(
-      TitledMaterialPageRoute(
-        title: 'Invoice Details',
+      MaterialPageRoute(
         builder: (_) => InvoiceDetailPage(
           invoice: res.invoice,
           isNew: res.invoice.id.isEmpty,
@@ -219,8 +215,7 @@ class _UploadInvoicePageState extends State<UploadInvoicePage> {
     if (!mounted) return;
     // No saving here. Just open detail in create mode.
     await Navigator.of(context, rootNavigator: true).push(
-      TitledMaterialPageRoute(
-        title: 'Invoice Details',
+      MaterialPageRoute(
         builder: (_) => InvoiceDetailPage(
           invoice: InvoiceFactories.empty(),
           isNew: true,

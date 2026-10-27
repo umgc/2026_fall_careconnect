@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/services/gamification_service.dart';
 import 'leaderboard_screen.dart';
@@ -134,8 +133,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                TitledMaterialPageRoute(
-                  title: 'Achievement Details',
+                MaterialPageRoute(
                   builder: (_) =>
                       AchievementDetailScreen(achievements: allAchievements),
                 ),
@@ -238,8 +236,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            TitledMaterialPageRoute(
-                              title: 'Leaderboard',
+                            MaterialPageRoute(
                                 builder: (_) => const LeaderboardScreen()),
                           );
                         },
@@ -279,8 +276,7 @@ class _GamificationScreenState extends State<GamificationScreen> {
         onTap: () {
           Navigator.push(
             context,
-            TitledMaterialPageRoute(
-              title: 'Achievement Details',
+            MaterialPageRoute(
               builder: (_) => AchievementDetailScreen(
                 achievements: allAchievements,
               ),

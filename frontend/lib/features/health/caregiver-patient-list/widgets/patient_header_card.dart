@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -413,9 +412,7 @@ class _CallActions extends StatelessWidget {
       onPressed: onStartVideoCall ??
           () {
             Navigator.of(context).push(
-              TitledMaterialPageRoute(
-                title: 'Video Call',
-                builder: (_) => const _VideoCallScreen()),
+              MaterialPageRoute(builder: (_) => const _VideoCallScreen()),
             );
           },
       style: OutlinedButton.styleFrom(

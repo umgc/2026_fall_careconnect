@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
@@ -2027,8 +2026,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
   void _navigateToAddDevice() async {
     final result = await Navigator.push(
       context,
-      TitledMaterialPageRoute(
-        title: 'Add Device',
+      MaterialPageRoute(
         builder: (context) => const AddDeviceScreen(),
       ),
     );

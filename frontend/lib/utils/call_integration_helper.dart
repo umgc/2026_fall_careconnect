@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import '../widgets/hybrid_video_call_widget.dart';
 import '../services/subscription_service.dart';
@@ -56,8 +55,7 @@ class CallIntegrationHelper {
 
     // Direct video call without WebSocket dependency
     Navigator.of(context).push(
-      TitledMaterialPageRoute(
-        title: 'Video Call',
+      MaterialPageRoute(
         builder: (context) => HybridVideoCallWidget(
           userId: caregiverData['id'].toString(),
           callId: callId,
@@ -100,8 +98,7 @@ class CallIntegrationHelper {
 
     // Direct video call without WebSocket dependency
     Navigator.of(context).push(
-      TitledMaterialPageRoute(
-        title: 'Video Call',
+      MaterialPageRoute(
         builder: (context) => HybridVideoCallWidget(
           userId: patientData['id'].toString(),
           callId: callId,
