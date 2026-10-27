@@ -116,6 +116,60 @@ class CernerPatientAppointmentServiceTest {
          verify(client).getPatient("cerner-patient-1", "token-2");
      }
 
+     @Test
+     void synchronizePatientReturnsSavedIdentity() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getPatient("cerner-patient-1", "token-1")).thenReturn(JSON.readTree("""
+                 {
+                   "resourceType":"Patient",
+                   "id":"cerner-patient-1",
+                   "meta":{"lastUpdated":"2026-10-20T14:30:00Z"},
+                   "name":[{"given":["Sandy"],"family":"Smart"}]
+                 }
+                 """));
+         when(identities.findByPatientIdAndSourceId(42L, 7L)).thenReturn(Optional.empty());
+
+         final EhrSourceIdentity identity = service.synchronizePatient(42L);
+
+         assertEquals("Sandy", identity.getGivenName());
+         assertEquals("Smart", identity.getFamilyName());
+         verify(identities).save(any(EhrSourceIdentity.class));
+     }
+
+     @Test
+     void invalidPatientResourceBecomesInvalidResponse() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getPatient("cerner-patient-1", "token-1"))
+                 .thenReturn(JSON.readTree("{\"resourceType\":\"Patient\"}"));
+
+         final CernerAllergyService.CernerSourceException error = assertThrows(
+                 CernerAllergyService.CernerSourceException.class,
+                 () -> service.synchronizePatientWithSourceRecord(42L));
+
+         assertEquals("CERNER_INVALID_RESPONSE", error.code());
+     }
+
+     @Test
+     void newerPatientSnapshotUpdatesExistingIdentityInPlace() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getPatient("cerner-patient-1", "token-1")).thenReturn(JSON.readTree("""
+                 {
+                   "resourceType":"Patient",
+                   "id":"cerner-patient-1",
+                   "meta":{"lastUpdated":"2026-10-20T14:30:00Z"},
+                   "name":[{"given":["Sandy"],"family":"Smart"}]
+                 }
+                 """));
+         final EhrSourceIdentity existing = EhrSourceIdentity.builder()
+                 .id(9L)
+                 .sourceUpdatedAt(Instant.parse("2026-10-01T00:00:00Z"))
+                 .build();
+         when(identities.findByPatientIdAndSourceId(42L, 7L)).thenReturn(Optional.of(existing));
+
+         assertEquals(9L, service.synchronizePatientWithSourceRecord(42L).identity().getId());
+         verify(identities).save(any(EhrSourceIdentity.class));
+     }
+
      @Test @Tag("M3-REQ-19")
      void synchronizeAppointmentsReturnsEmptyWhenSourceEmpty() {
          wireHappyContext("cerner-patient-1", "token-1", "token-2");
@@ -127,10 +181,187 @@ class CernerPatientAppointmentServiceTest {
          final var out = service.synchronizeAppointments(
         42L, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-11-01T00:00:00Z")
          );
+         assertTrue(service.synchronizeAppointmentsAllowingEmptyResults(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")).isEmpty());
 
          assertNotNull(out);
          assertTrue(out.isEmpty());
          verify(appointments, never()).save(any());
+     }
+
+     @Test
+     void synchronizeAppointmentsMapsAndPersistsResource() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         final JsonNode appointment = appointment("appointment-1", "Patient/cerner-patient-1");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(List.of(appointment)));
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-1")).thenReturn(Optional.empty());
+
+         final List<EhrAppointmentRecord> saved = service.synchronizeAppointments(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-11-01T00:00:00Z"));
+
+         assertEquals("appointment-1", saved.get(0).getExternalAppointmentId());
+         assertNotNull(saved.get(0).getRawPayload());
+         assertEquals(1, service.synchronizeAppointmentsAllowingEmptyResults(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")).size());
+         verify(appointments, times(2)).save(any(EhrAppointmentRecord.class));
+     }
+
+     @Test
+     void olderAppointmentDoesNotReplaceCurrentRecord() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(
+                         List.of(appointment("appointment-current", "Patient/cerner-patient-1"))));
+         final EhrAppointmentRecord current = EhrAppointmentRecord.builder()
+                 .externalAppointmentId("appointment-current")
+                 .sourceUpdatedAt(java.time.LocalDateTime.of(2026, 10, 30, 0, 0))
+                 .build();
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-current")).thenReturn(Optional.of(current));
+
+         assertSame(current, service.synchronizeAppointments(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")).get(0));
+         verify(appointments, never()).save(any());
+     }
+
+     @Test
+     void tokenRefreshAppointmentSyncRetriesAfterExpiredAuth() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         final Instant start = Instant.parse("2026-10-01T00:00:00Z");
+         final Instant end = Instant.parse("2026-11-01T00:00:00Z");
+         when(client.getAppointments("cerner-patient-1", "token-1", start, end))
+                 .thenThrow(new CernerAllergyService.CernerSourceException("CERNER_AUTH_EXPIRED", false));
+         when(client.getAppointments("cerner-patient-1", "token-2", start, end))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(
+                         List.of(appointment("appointment-2", "Patient/cerner-patient-1"))));
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-2")).thenReturn(Optional.empty());
+
+         assertEquals(1, service.synchronizeAppointmentsWithTokenRefresh(42L, start, end).size());
+         verify(oauth).refreshAccessToken(1001L);
+     }
+
+     @Test
+     void tokenRefreshAppointmentSyncPropagatesNonAuthFailure() {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         final CernerAllergyService.CernerSourceException unavailable =
+                 new CernerAllergyService.CernerSourceException("CERNER_UNAVAILABLE", true);
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenThrow(unavailable);
+
+         assertSame(unavailable, assertThrows(
+                 CernerAllergyService.CernerSourceException.class,
+                 () -> service.synchronizeAppointmentsWithTokenRefresh(
+                         42L, Instant.parse("2026-10-01T00:00:00Z"),
+                         Instant.parse("2026-11-01T00:00:00Z"))));
+     }
+
+     @Test
+     void paginationSyncRetriesRateLimitedRequest() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenThrow(new CernerAllergyService.CernerSourceException(
+                         "CERNER_RATE_LIMITED", true))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(
+                         List.of(appointment("appointment-retried", "Patient/cerner-patient-1"))));
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-retried")).thenReturn(Optional.empty());
+
+         assertEquals(1, service.synchronizeAppointmentsWithPaginationAndRateLimiting(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")).size());
+         verify(client, times(2)).getAppointments(anyString(), anyString(), any(), any());
+     }
+
+     @Test
+     void paginationSyncRetainsNewerExistingAppointment() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(
+                         List.of(appointment("appointment-newer", "Patient/cerner-patient-1"))));
+         final EhrAppointmentRecord current = EhrAppointmentRecord.builder()
+                 .externalAppointmentId("appointment-newer")
+                 .sourceUpdatedAt(java.time.LocalDateTime.of(2026, 10, 30, 0, 0))
+                 .build();
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-newer")).thenReturn(Optional.of(current));
+
+         assertSame(current, service.synchronizeAppointmentsWithPaginationAndRateLimiting(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")).get(0));
+         verify(appointments, never()).save(any());
+     }
+
+     @Test
+     void referenceMismatchSyncRejectsMalformedMatchingAppointment() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(List.of(JSON.readTree("""
+                         {
+                           "resourceType":"Appointment",
+                           "participant":[{"actor":{"reference":"Patient/cerner-patient-1"}}]
+                         }
+                         """))));
+
+         assertThrows(CernerAllergyService.CernerSourceException.class,
+                 () -> service.synchronizeAppointmentsWithReferenceMismatchHandling(
+                         42L, Instant.parse("2026-10-01T00:00:00Z"),
+                         Instant.parse("2026-11-01T00:00:00Z")));
+     }
+
+     @Test
+     void paginationAndRateLimitSyncPersistsAppointments() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(
+                         List.of(appointment("appointment-3", "Patient/cerner-patient-1"))));
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-3")).thenReturn(Optional.empty());
+
+         assertEquals(1, service.synchronizeAppointmentsWithPaginationAndRateLimiting(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")).size());
+     }
+
+     @Test
+     void referenceMismatchAppointmentSyncSkipsOtherPatients() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         final JsonNode mismatch = appointment("wrong-patient", "Patient/other-patient");
+         final JsonNode match = appointment("appointment-4", "Patient/cerner-patient-1");
+         when(client.getAppointments(anyString(), anyString(), any(), any()))
+                 .thenReturn(new CernerFhirBundleHttpClient.Result(List.of(mismatch, match)));
+         when(appointments.findByPatientIdAndSourceIdAndExternalAppointmentId(
+                 42L, 7L, "appointment-4")).thenReturn(Optional.empty());
+
+         final List<EhrAppointmentRecord> saved =
+                 service.synchronizeAppointmentsWithReferenceMismatchHandling(
+                         42L, Instant.parse("2026-10-01T00:00:00Z"),
+                         Instant.parse("2026-11-01T00:00:00Z"));
+
+         assertEquals(1, saved.size());
+         assertEquals("appointment-4", saved.get(0).getExternalAppointmentId());
+     }
+
+     @Test
+     void fixtureValidationReturnsFalseForUnmappedExternalPatientId() throws Exception {
+         wireHappyContext("cerner-patient-1", "token-1", "token-2");
+         when(client.getPatient("cerner-patient-1", "token-1")).thenReturn(JSON.readTree("""
+                 {
+                   "resourceType":"Patient",
+                   "id":"cerner-patient-1",
+                   "meta":{"lastUpdated":"2026-10-20T14:30:00Z"},
+                   "name":[{"given":["Sandy"],"family":"Smart"}]
+                 }
+                 """));
+
+         assertFalse(service.validatePatientAndAppointmentExpectedOutputFixtures(
+                 42L, Instant.parse("2026-10-01T00:00:00Z"),
+                 Instant.parse("2026-11-01T00:00:00Z")));
      }
 
      @Test @Tag("M3-REQ-03")
@@ -182,6 +413,20 @@ class CernerPatientAppointmentServiceTest {
          when(oauth.patientFhirId(1001L)).thenReturn("Patient/" + externalPatientId);
          when(oauth.validAccessToken(1001L)).thenReturn(token);
          when(oauth.refreshAccessToken(1001L)).thenReturn(refreshedToken);
+     }
+
+     private JsonNode appointment(String id, String patientReference) throws Exception {
+         return JSON.readTree("""
+                 {
+                   "resourceType":"Appointment",
+                   "id":"%s",
+                   "status":"booked",
+                   "meta":{"lastUpdated":"2026-10-20T14:30:00Z"},
+                   "start":"2026-10-25T14:00:00Z",
+                   "end":"2026-10-25T14:30:00Z",
+                   "participant":[{"actor":{"reference":"%s"}}]
+                 }
+                 """.formatted(id, patientReference));
      }
 
      private Patient mockPatient(Long userId) {

@@ -75,7 +75,9 @@ public class CernerPatientAppointmentServiceImpl implements CernerPatientAppoint
         final var existing = identities.findByPatientIdAndSourceId(patientId, sourceId(context.source()));
 
         if (existing.isPresent()
-                && !isAfter(sourceUpdatedAt(incoming), sourceUpdatedAt(existing.get()))) {
+                && (incoming.getSourceUpdatedAt() == null
+                || existing.get().getSourceUpdatedAt() != null
+                && !incoming.getSourceUpdatedAt().isAfter(existing.get().getSourceUpdatedAt()))) {
             return new PatientSynchronization(context.externalPatientId(), existing.get());
         }
 

@@ -199,6 +199,32 @@ class CernerAllergyMapperTest {
      }
 
      @Test
+     void optionalFieldsMapperNormalizesValuesAndSkipsMalformedEntries() throws Exception {
+          final String extra = "\"recordedDate\":\"2024-03-01T10:00:00-05:00\","
+                  + "\"code\":{\"text\":\"Peanuts\",\"coding\":[{\"code\":\"A1\"}]},"
+                  + "\"clinicalStatus\":{\"coding\":[{\"code\":\"active\"}]},"
+                  + "\"verificationStatus\":{\"coding\":[{\"code\":\"confirmed\"}]},"
+                  + "\"reaction\":[{\"severity\":\"moderate\",\"manifestation\":["
+                  + "{\"coding\":[{\"display\":\"Hives\"}]},{\"text\":\"\"}]}]";
+          final JsonNode source = bundle(
+                  allergy("", PATIENT, ""),
+                  allergy("missing-patient", null, ""),
+                  allergy("invalid-date", PATIENT, "\"recordedDate\":\"2024-02-30\""),
+                  "{\"resourceType\":\"Observation\",\"id\":\"ignored\"}",
+                  allergy("valid", PATIENT, extra));
+
+          assertThat(CernerAllergyMapper.mapPatientWithOptionalFieldsAbsent(source, PATIENT))
+                  .containsExactly(new Allergy(
+                          "ORACLE_HEALTH", "valid", "Peanuts", "A1", "active", "confirmed",
+                          "moderate", "2024-03-01T15:00:00Z", List.of("Hives")));
+          assertThatThrownBy(() -> CernerAllergyMapper.mapPatientWithOptionalFieldsAbsent(
+                  bundle(allergy("wrong-patient", "999", "")), PATIENT))
+                  .isInstanceOf(IllegalArgumentException.class);
+          assertThatThrownBy(() -> CernerAllergyMapper.mapPatientWithOptionalFieldsAbsent(null, PATIENT))
+                  .isInstanceOf(IllegalArgumentException.class);
+     }
+
+     @Test
      @DisplayName("Additional-edge mapper rejects blank authorized patient id")
      void additionalEdgeMapperRejectsBlankAuthorizedPatientId() throws Exception {
           assertThatThrownBy(() -> CernerAllergyMapper.mapAdditionalPatientMappingEdgeCases(bundle(), " "))
@@ -237,6 +263,29 @@ class CernerAllergyMapperTest {
           assertThat(out.get(0).severity()).isEqualTo("mild");
           assertThat(out.get(0).reactions()).containsExactly("Hives", "Wheezing");
      }
+
+     @Test
+     void additionalEdgeMapperSkipsMalformedAndEnteredInErrorEntries() throws Exception {
+          final String enteredInError =
+                  "\"verificationStatus\":{\"coding\":[{\"code\":\"entered-in-error\"}]}";
+          final JsonNode source = bundle(
+                  allergy("", PATIENT, ""),
+                  allergy("missing-patient", null, ""),
+                  "{\"resourceType\":\"Observation\",\"id\":\"ignored\"}",
+                  allergy("invalid-date", PATIENT, "\"recordedDate\":\"invalid\""),
+                  allergy("error", PATIENT, enteredInError),
+                  allergy("keep", PATIENT, ""));
+
+          assertThat(CernerAllergyMapper.mapAdditionalPatientMappingEdgeCases(source, PATIENT))
+                  .extracting(Allergy::sourceRecordId).containsExactly("keep");
+          assertThatThrownBy(() -> CernerAllergyMapper.mapAdditionalPatientMappingEdgeCases(
+                  bundle(allergy("wrong-patient", "999", "")), PATIENT))
+                  .isInstanceOf(IllegalArgumentException.class);
+          assertThatThrownBy(() -> CernerAllergyMapper.mapAdditionalPatientMappingEdgeCases(null, PATIENT))
+                  .isInstanceOf(IllegalArgumentException.class);
+     }
+
+
 
      @Test
      @DisplayName("Fixture validator returns false when patient mismatches")
