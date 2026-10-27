@@ -31,8 +31,12 @@ void _ignoreOverflowErrors(FlutterErrorDetails details) {
   }
 }
 
-Widget _wrap({int patientId = 0}) => MaterialApp(
-      locale: const Locale('en'),
+Widget _wrap({
+  int patientId = 0,
+  Locale locale = const Locale('en'),
+}) =>
+    MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: AnalyticsPage(patientId: patientId),
@@ -320,6 +324,18 @@ void main() {
     testWidgets('shows Patient Analytics title during loading', (tester) async {
       await tester.pumpWidget(_wrap(patientId: 1));
       expect(find.text('Patient Analytics'), findsOneWidget);
+    });
+
+    testWidgets('shows the localized Spanish title during loading',
+        (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          patientId: 1,
+          locale: const Locale('es'),
+        ),
+      );
+
+      expect(find.text('Análisis del paciente'), findsOneWidget);
     });
 
     testWidgets('renders with different patientId', (tester) async {

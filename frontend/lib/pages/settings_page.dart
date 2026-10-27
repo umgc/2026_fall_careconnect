@@ -10,6 +10,7 @@ import '../services/notification_settings_service.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/language/language_picker.dart';
 import '../widgets/epic_connect_tile.dart';
+import '../widgets/oracle_health_connect_tile.dart';
 import '../utils/responsive_utils.dart';
 
 import '../features/telemetry/telemetry.dart';
@@ -720,9 +721,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   const SizedBox(height: 24),
 
-                  // Connected Services (Epic SMART-on-FHIR connect — Epic Phase 0)
+                  // Connected Services
                   _buildSectionHeader(context, 'Connected Services'),
                   const EpicConnectTile(),
+                  const OracleHealthConnectTile(),
                   const SizedBox(height: 24),
 
                   // Privacy

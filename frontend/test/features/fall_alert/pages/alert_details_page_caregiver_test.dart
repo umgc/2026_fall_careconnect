@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // AlertDetailsPage → PatientDetailsPage for each role (DEF-MCR-33, PR #364).
 // Test ID TC-MCR-CG-043 is permanent. Never renumber, never reuse.
 
@@ -34,6 +35,9 @@ void main() {
   Future<PatientDetailsPage> openedFor(WidgetTester t, String? role) async {
     final pushes = _Pushes();
     final app = MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       navigatorObservers: [pushes],
       home: AlertDetailsPage(alert: alert()),
     );

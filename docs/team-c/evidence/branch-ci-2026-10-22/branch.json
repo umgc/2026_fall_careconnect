@@ -1,0 +1,20 @@
+{
+  "fetched_utc": "2026-10-22T20:15:02.406233+00:00",
+  "endpoint": "repos/umgc/2026_fall_careconnect/branches/team-c-develop",
+  "exit_code": 0,
+  "stderr": "",
+  "response": {
+    "name": "team-c-develop",
+    "protected": true,
+    "protection": {
+      "enabled": true,
+      "required_status_checks": {
+        "enforcement_level": "off",
+        "contexts": [],
+        "checks": []
+      }
+    },
+    "protection_url": "https://api.github.com/repos/umgc/2026_fall_careconnect/branches/team-c-develop/protection",
+    "sha": "21d5a521e87f70eb9c304bd5d993d24cdad9adad"
+  }
+}

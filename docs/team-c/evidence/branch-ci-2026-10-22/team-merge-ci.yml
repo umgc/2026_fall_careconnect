@@ -1,0 +1,305 @@
+# team-merge-ci.yml
+# CareConnect — Feature Branch CI Pipeline
+#
+# Runs once on every PR targeting any team-*-develop branch
+# (team-a-develop, team-b-develop, team-c-develop, team-d-develop,
+# team-e-develop, or any future team-<name>-develop).
+# Only tests that map to files changed in the PR are executed.
+# A failing build, test, or coverage check blocks the merge.
+#
+# Triggers:
+#   PR → team-*-develop
+#
+# team-a-develop (testing team) is excluded: its feature/* branches only
+# add E2E tests and never touch other teams' source or unit tests, so
+# there is nothing here for this diff-based gate to check. The job stays
+# unconditional (steps are skipped, not the job) so it still reports a
+# status instead of leaving a required check stuck at "Expected --
+# waiting for status to be reported."
+#
+# Stages (single job, sequential steps):
+#   1. Checkout, branch info, JAVA_HOME
+#   2. Build  (Flutter + Maven); flutter analyze fails on errors and
+#      warnings (infos are reported only)
+#   3. Unit tests for changed files only (BLOCKING) — a changed source
+#      file that gains lines but has no same-name test fails
+#      (scripts/test-exemptions.txt); deletion-only edits need no test
+#   4. Diff coverage gate — 80% of the changed executable lines in each
+#      changed source file (BLOCKING), except a verified
+#      develop-to-team synchronization whose imported develop history is
+#      governed by its own upstream branch policy
+#   5. Test result artifact upload
+
+name: Feature Branch CI
+
+on:
+  pull_request:
+    branches:
+      - 'team-*-develop'
+
+env:
+  # Pinned (not '3.x'): a floating SDK pulled Flutter 3.47.6 into CI and broke
+  # chat_page tests. Keep in sync with the other workflows and local dev.
+  FLUTTER_VERSION: '3.44.1'
+  JAVA_VERSION: '17'
+  # Parallel Flutter test runners — matches local full-suite verification.
+  FLUTTER_TEST_CONCURRENCY: '4'
+
+# Cancel superseded runs on the same PR so CI does not pile up.
+concurrency:
+  group: feature-ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  feature-ci-pipeline:
+    name: Feature Branch — Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # ----------------------------------------------------------------
+      # Stage 0: team-a-develop exclusion (see header note)
+      # ----------------------------------------------------------------
+      - name: Determine run mode
+        id: mode
+        run: |
+          if [ "${{ github.base_ref }}" = "team-a-develop" ]; then
+            echo "run_suite=false" >> "$GITHUB_OUTPUT"
+            echo "Target branch is team-a-develop (E2E-only team) -- skipping build/test suite."
+          else
+            echo "run_suite=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ----------------------------------------------------------------
+      # Stage 1: Checkout + branch info + JAVA_HOME
+      # ----------------------------------------------------------------
+      - name: Checkout repository
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Log branch info
+        if: steps.mode.outputs.run_suite == 'true'
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          echo "Branch: ${HEAD_BRANCH}"
+          echo "Event: ${{ github.event_name }}"
+
+      - name: Setup backend toolchain
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: ./.github/actions/setup-backend
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Confirm JAVA_HOME
+        if: steps.mode.outputs.run_suite == 'true'
+        run: |
+          echo "JAVA_HOME=${JAVA_HOME}"
+          java -version
+
+      # ----------------------------------------------------------------
+      # Stage 2: Build — Flutter + Maven
+      # ----------------------------------------------------------------
+      - name: Setup frontend toolchain
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: ./.github/actions/setup-frontend
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Maven compile (skip tests)
+        if: steps.mode.outputs.run_suite == 'true'
+        working-directory: backend/core
+        run: mvn -B clean compile -DskipTests
+
+      # Web uses different conditional imports (dart.library.js_interop)
+      # than the native path, so web-only breakage is invisible to the
+      # other build/test steps. Compile check only — no artifacts kept.
+      - name: Flutter build web (compile check)
+        if: steps.mode.outputs.run_suite == 'true'
+        working-directory: frontend
+        run: flutter build web --release
+
+      # ----------------------------------------------------------------
+      # Stage 3: Unit tests for changed files only (BLOCKING)
+      #
+      # scripts/test_mapping.py maps changed source files to their tests
+      # by naming convention:
+      #   lib/foo/bar.dart        → test/foo/bar_test.dart
+      #   src/main/java/Foo.java  → src/test/java/FooTest.java
+      # and also picks up test files changed directly. A changed source
+      # file with no test at its expected path FAILS this stage, unless
+      # it is listed in scripts/test-exemptions.txt or has no executable
+      # code (interfaces, export-only Dart files).
+      # ----------------------------------------------------------------
+      - name: Set up Python (test mapping + coverage gate)
+        if: steps.mode.outputs.run_suite == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Determine diff base
+        if: steps.mode.outputs.run_suite == 'true'
+        run: |
+          TARGET="${{ github.base_ref }}"
+          git fetch origin "+${TARGET}:refs/remotes/origin/${TARGET}"
+          echo "DIFF_BASE=$(git merge-base HEAD "origin/${TARGET}")" >> "$GITHUB_ENV"
+
+      # A develop-to-team sync makes every imported upstream file appear changed
+      # relative to the team branch. Unit tests still run, but re-applying the
+      # feature-branch-only same-name-test rule and per-file coverage gate would
+      # require the syncing team to retroactively add tests and raise coverage
+      # for unrelated upstream work.
+      #
+      # This is intentionally strict: it accepts only the documented sync
+      # branch name, and a branch head that is either
+      #   - itself a commit on origin/develop (a fast-forward sync), or
+      #   - exactly one first-parent merge after the team base, whose second
+      #     parent is reachable from current origin/develop (a --no-ff sync).
+      - name: Detect validated develop sync
+        id: upstream_sync
+        if: steps.mode.outputs.run_suite == 'true'
+        env:
+          TARGET_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          skip_changed_file_coverage=false
+          target="${TARGET_BRANCH}"
+          head="${HEAD_BRANCH}"
+
+          if [[ "$target" =~ ^team-([a-z0-9-]+)-develop$ ]]; then
+            team="${BASH_REMATCH[1]}"
+            if [[ "$head" =~ ^chore/${team}-sync-develop-[0-9]{8}$ ]]; then
+              # actions/checkout checks out GitHub's temporary PR merge commit
+              # for merge-result validation. Inspect the submitted branch head
+              # instead; otherwise that temporary commit appears as a second
+              # first-parent merge and rejects every legitimate sync.
+              git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr-head"
+              git fetch origin "+develop:refs/remotes/origin/develop"
+              sync_head="$(git rev-parse origin/pr-head)"
+              merge_commits=()
+              if [ "${sync_head}" = "${PR_HEAD_SHA}" ]; then
+                if git merge-base --is-ancestor "${sync_head}" origin/develop; then
+                  skip_changed_file_coverage=true
+                  echo "Verified develop sync: ${sync_head} is already on develop (fast-forward)."
+                else
+                  mapfile -t merge_commits < <(git rev-list --first-parent --merges "${DIFF_BASE}..${sync_head}")
+                fi
+              fi
+              if [ "${#merge_commits[@]}" -eq 1 ]; then
+                read -r -a parents <<< "$(git show -s --format=%P "${merge_commits[0]}")"
+                if [ "${#parents[@]}" -eq 2 ] \
+                  && [ "${parents[0]}" = "${DIFF_BASE}" ] \
+                  && git merge-base --is-ancestor "${parents[1]}" origin/develop; then
+                  skip_changed_file_coverage=true
+                  echo "Verified develop sync: ${merge_commits[0]} imports ${parents[1]}."
+                fi
+              fi
+            fi
+          fi
+
+          echo "skip_changed_file_coverage=${skip_changed_file_coverage}" >> "$GITHUB_OUTPUT"
+
+      # Errors and warnings block; infos (~1,360 lint suggestions) are
+      # reported only. A verified develop sync reports warnings instead of
+      # failing on them: it carries the syncing team's own pre-existing
+      # history, which that team cleans up in its next feature PR.
+      - name: Flutter analyze (errors and warnings block)
+        if: steps.mode.outputs.run_suite == 'true'
+        working-directory: frontend
+        env:
+          VERIFIED_SYNC: ${{ steps.upstream_sync.outputs.skip_changed_file_coverage }}
+        run: |
+          extra=()
+          if [ "${VERIFIED_SYNC}" = "true" ]; then extra=(--no-fatal-warnings); fi
+          flutter analyze --no-pub --no-fatal-infos "${extra[@]}"
+
+      - name: Map changed files to unit tests
+        if: steps.mode.outputs.run_suite == 'true'
+        env:
+          VERIFIED_SYNC: ${{ steps.upstream_sync.outputs.skip_changed_file_coverage }}
+        run: |
+          # A verified sync still runs every mapped test; it only stops
+          # failing on upstream sources that have no same-name test.
+          extra=()
+          if [ "${VERIFIED_SYNC}" = "true" ]; then extra=(--allow-missing); fi
+          python scripts/test_mapping.py \
+            --diff-base "${DIFF_BASE}" \
+            --frontend-out "${RUNNER_TEMP}/frontend-tests.txt" \
+            --backend-out "${RUNNER_TEMP}/backend-tests.txt" \
+            --repo-root . \
+            "${extra[@]}"
+
+      - name: Flutter unit tests (changed files only)
+        if: steps.mode.outputs.run_suite == 'true'
+        working-directory: frontend
+        run: |
+          mapfile -t TEST_FILES < "${RUNNER_TEMP}/frontend-tests.txt"
+          if [ ${#TEST_FILES[@]} -eq 0 ]; then
+            echo "No frontend tests map to changed code; skipping."
+            exit 0
+          fi
+          flutter test \
+            --concurrency="${FLUTTER_TEST_CONCURRENCY}" \
+            --coverage \
+            --exclude-tags integration \
+            --reporter expanded \
+            "${TEST_FILES[@]}"
+
+      - name: Maven unit tests (changed files only)
+        if: steps.mode.outputs.run_suite == 'true'
+        working-directory: backend/core
+        run: |
+          mapfile -t TEST_CLASSES < "${RUNNER_TEMP}/backend-tests.txt"
+          if [ ${#TEST_CLASSES[@]} -eq 0 ]; then
+            echo "No backend tests map to changed code; skipping."
+            exit 0
+          fi
+          TEST_ARG="$(IFS=,; echo "${TEST_CLASSES[*]}")"
+          echo "Running: ${TEST_ARG}"
+          # failIfNoSpecifiedTests=false: a changed abstract *Test base class
+          # matches no runnable test and would otherwise error out.
+          mvn -B test jacoco:report -Dtest="${TEST_ARG}" -Dsurefire.failIfNoSpecifiedTests=false
+
+      # ----------------------------------------------------------------
+      # Stage 4: Diff coverage gate — 80% of changed lines (BLOCKING)
+      #
+      # Only the lines a PR adds or modifies are scored, so a small fix to a
+      # large, poorly covered file is judged on the fix. A changed source
+      # file missing from the coverage report (no test ran it) fails; a
+      # missing report is not a pass. A verified
+      # upstream sync above still builds and runs every mapped unit test, but
+      # skips this per-file threshold for already-integrated develop history.
+      # ----------------------------------------------------------------
+      - name: Diff coverage gate (changed lines, 80% threshold)
+        if: steps.mode.outputs.run_suite == 'true' && steps.upstream_sync.outputs.skip_changed_file_coverage != 'true'
+        run: |
+          python scripts/coverage_gate.py \
+            --diff-base "${DIFF_BASE}" \
+            --threshold 0.80 \
+            --jacoco-xml backend/core/target/site/jacoco/jacoco.xml \
+            --lcov-info frontend/coverage/lcov.info \
+            --repo-root .
+
+      - name: Report verified upstream-sync coverage handling
+        if: steps.mode.outputs.run_suite == 'true' && steps.upstream_sync.outputs.skip_changed_file_coverage == 'true'
+        run: |
+          echo "Skipping the per-file coverage threshold for verified develop history."
+          echo "Build, mapped unit tests, and all non-coverage checks remain required."
+
+      # ----------------------------------------------------------------
+      # Stage 5: Test result artifact upload
+      # ----------------------------------------------------------------
+      - name: Upload test results
+        if: always() && steps.mode.outputs.run_suite == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            backend/core/target/surefire-reports/
+            backend/core/target/site/jacoco/
+            frontend/test-results/
+            frontend/coverage/
+          retention-days: 14

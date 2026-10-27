@@ -34,15 +34,28 @@ void main() {
       expect(provider.locale!.languageCode, 'es');
     });
 
-    test('clears saved locale if previously persisted language code is not supported', () async {
-      // Verifies that loadSaved() reads the stored code and wraps it in a
-      // Locale object, restoring the user's language choice across sessions.
+    test('restores a supported locale outside English and Spanish', () async {
       SharedPreferences.setMockInitialValues(
-          <String, Object>{'selected_locale': 'fy'});
+        <String, Object>{'selected_locale': 'fr'},
+      );
+      final provider = LocaleProvider();
+      await provider.loadSaved();
+
+      expect(provider.locale, const Locale('fr'));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('selected_locale'), 'fr');
+    });
+
+    test('clears a saved language when it is unsupported', () async {
+      SharedPreferences.setMockInitialValues(
+        <String, Object>{'selected_locale': 'fy'},
+      );
       final provider = LocaleProvider();
       await provider.loadSaved();
 
       expect(provider.locale, isNull);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('selected_locale'), isNull);
     });
 
     test('keeps locale null when no preference has been saved', () async {
@@ -89,19 +102,40 @@ void main() {
   });
 
   group('LocaleProvider.setLocale', () {
-    test('sets locale in memory and persists language code to SharedPreferences',
+    test(
+        'sets locale in memory and persists language code to SharedPreferences',
         () async {
       // Verifies that setLocale stores the locale and writes its languageCode
       // so that it can be restored by loadSaved() on the next app launch.
       final provider = LocaleProvider();
-      await provider.setLocale(const Locale('de'));
+      await provider.setLocale(const Locale('es'));
 
-      expect(provider.locale!.languageCode, 'de');
+      expect(provider.locale!.languageCode, 'es');
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('selected_locale'), 'de');
+      expect(prefs.getString('selected_locale'), 'es');
     });
 
-    test('clears locale and removes preference when called with null', () async {
+    test('sets and persists a supported locale outside English and Spanish',
+        () async {
+      final provider = LocaleProvider();
+      await provider.setLocale(const Locale('ja'));
+
+      expect(provider.locale, const Locale('ja'));
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('selected_locale'), 'ja');
+    });
+
+    test('ignores an unsupported locale', () async {
+      final provider = LocaleProvider();
+      await provider.setLocale(const Locale('ko'));
+
+      expect(provider.locale, isNull);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('selected_locale'), isNull);
+    });
+
+    test('clears locale and removes preference when called with null',
+        () async {
       // Verifies the null branch: passing null removes the stored preference
       // so the app falls back to the system locale on next launch.
       final provider = LocaleProvider();
@@ -128,12 +162,12 @@ void main() {
     test('overwrites a previously set locale', () async {
       // Verifies that calling setLocale twice keeps only the latest value.
       final provider = LocaleProvider();
-      await provider.setLocale(const Locale('it'));
-      await provider.setLocale(const Locale('pt'));
+      await provider.setLocale(const Locale('en'));
+      await provider.setLocale(const Locale('es'));
 
-      expect(provider.locale!.languageCode, 'pt');
+      expect(provider.locale!.languageCode, 'es');
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('selected_locale'), 'pt');
+      expect(prefs.getString('selected_locale'), 'es');
     });
   });
 

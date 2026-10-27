@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -137,6 +138,12 @@ class CernerPatientAppointmentControllerTest {
 
         mvc.perform(get("/v1/api/cerner/patients/42/appointments")
                         .param("start", "2026-11-01T00:00:00Z")
+                        .param("end", "2026-10-01T00:00:00Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));
+
+        mvc.perform(get("/v1/api/cerner/patients/42/appointments")
+                        .param("start", "2026-10-01T00:00:00Z")
                         .param("end", "2026-10-01T00:00:00Z"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_DATE_RANGE"));

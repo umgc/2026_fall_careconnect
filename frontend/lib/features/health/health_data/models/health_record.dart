@@ -15,7 +15,7 @@ enum RecordSource {
       case RecordSource.epic:
         return 'Epic';
       case RecordSource.cerner:
-        return 'Cerner';
+        return 'Oracle Health';
       case RecordSource.athena:
         return 'Athena';
       case RecordSource.medicare:

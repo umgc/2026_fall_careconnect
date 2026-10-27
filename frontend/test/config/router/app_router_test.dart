@@ -21,6 +21,7 @@ import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/user_role_storage_service.dart';
+import 'package:care_connect_app/services/pending_oracle_health_launch.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -187,6 +188,91 @@ void main() {
   setUpAll(() {
     allPaths = _extractPaths(appRouter.configuration.routes);
     namedRoutes = _extractNamedRoutes(appRouter.configuration.routes);
+  });
+
+  group('Oracle Health SMART launch routing', () {
+    const issuer = 'https://fhir-ehr-code.cerner.com/r4/test';
+
+    setUp(PendingOracleHealthLaunch.clear);
+    tearDown(PendingOracleHealthLaunch.clear);
+
+    test('detects query and hash launch parameters', () {
+      expect(
+        hasOracleHealthLaunchParameters(
+          Uri.parse('https://app.example/?launch=temporary'),
+        ),
+        isTrue,
+      );
+      expect(
+        hasOracleHealthLaunchParameters(
+          Uri.parse('https://app.example/#/oracle-health-launch?iss=$issuer'),
+        ),
+        isTrue,
+      );
+      expect(
+        hasOracleHealthLaunchParameters(Uri.parse('https://app.example/')),
+        isFalse,
+      );
+    });
+
+    test('rejects missing or incomplete launch parameters', () {
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse('https://app.example/'),
+        routeUri: Uri.parse('/oracle-health-launch?iss=$issuer'),
+        expectedIssuer: issuer,
+      );
+
+      expect(
+        page.errorMessage,
+        'Missing or invalid Oracle Health launch parameters.',
+      );
+    });
+
+    test('resumes a previously validated launch after login', () {
+      PendingOracleHealthLaunch.set(
+        issuer: issuer,
+        launch: 'temporary-launch',
+      );
+
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse('https://app.example/'),
+        routeUri: Uri.parse('/oracle-health-launch'),
+        expectedIssuer: issuer,
+      );
+
+      expect(page.errorMessage, isNull);
+      expect(PendingOracleHealthLaunch.hasPending, isTrue);
+    });
+
+    test('accepts and stores a trusted launch', () {
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse('https://app.example/'),
+        routeUri: Uri.parse(
+          '/oracle-health-launch?iss=${Uri.encodeComponent(issuer)}'
+          '&launch=temporary-launch',
+        ),
+        expectedIssuer: issuer,
+      );
+
+      expect(page.errorMessage, isNull);
+      final pending = PendingOracleHealthLaunch.take();
+      expect(pending?.issuer, issuer);
+      expect(pending?.launch, 'temporary-launch');
+    });
+
+    test('rejects an untrusted issuer', () {
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse(
+          'https://app.example/?iss=${Uri.encodeComponent(issuer)}'
+          '&launch=temporary-launch',
+        ),
+        routeUri: Uri.parse('/oracle-health-launch'),
+        expectedIssuer: 'https://different.example.com/r4/test',
+      );
+
+      expect(page.errorMessage, 'The Oracle Health issuer is not trusted.');
+      expect(PendingOracleHealthLaunch.hasPending, isFalse);
+    });
   });
 
   group('appRouter configuration', () {
@@ -1755,6 +1841,10 @@ void main() {
       ('/admin/users', '/admin/users', {}, null, 'AdminUsersPage', {}),
       ('/oauth/callback', '/oauth/callback?token=t&user=u&error=e', {}, null,
           'OAuthCallbackPage', {'token': 't', 'user': 'u', 'error': 'e'}),
+      ('/oracle-health-launch', '/oracle-health-launch', {}, null,
+          'OracleHealthLaunchPage', {}),
+      ('/oracle-health-linked', '/oracle-health-linked?status=ok', {}, null,
+          'OracleHealthLinkedReturnPage', {'status': 'ok'}),
       ('/wearables', '/wearables', {}, null, 'WearablesScreen', {}),
       ('/home-monitoring', '/home-monitoring', {}, null,
           'HomeMonitoringScreen', {}),
@@ -1896,6 +1986,7 @@ void main() {
             'fromPortal' => d.fromPortal,
             'user' => d.user,
             'error' => d.error,
+            'status' => d.status,
             'serviceType' => d.serviceType,
             'locationType' => d.locationType,
             'latitude' => d.latitude,

@@ -10,6 +10,56 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/config/env_constant.dart';
 
 void main() {
+  group('Oracle Health FHIR issuer', () {
+    test('requires the compile-time issuer setting', () {
+      expect(getOracleHealthFhirIssuer, throwsStateError);
+    });
+
+    test('normalizes whitespace and trailing slashes', () {
+      expect(
+        normalizeOracleHealthFhirIssuer(
+          '  https://fhir-ehr-code.cerner.com/r4/test///  ',
+        ),
+        'https://fhir-ehr-code.cerner.com/r4/test',
+      );
+    });
+
+    test('rejects an empty issuer', () {
+      expect(
+        () => normalizeOracleHealthFhirIssuer('   '),
+        throwsStateError,
+      );
+    });
+
+    test('rejects non-HTTPS and malformed issuers', () {
+      for (final issuer in [
+        'http://fhir.example.com/r4/test',
+        'not a URL',
+        'https:///missing-host',
+      ]) {
+        expect(
+          () => normalizeOracleHealthFhirIssuer(issuer),
+          throwsStateError,
+          reason: issuer,
+        );
+      }
+    });
+
+    test('rejects user information, query parameters, and fragments', () {
+      for (final issuer in [
+        'https://user@fhir.example.com/r4/test',
+        'https://fhir.example.com/r4/test?tenant=one',
+        'https://fhir.example.com/r4/test#fragment',
+      ]) {
+        expect(
+          () => normalizeOracleHealthFhirIssuer(issuer),
+          throwsStateError,
+          reason: issuer,
+        );
+      }
+    });
+  });
+
   // ---------------------------------------------------------------
   // getBackendBaseUrl
   // ---------------------------------------------------------------

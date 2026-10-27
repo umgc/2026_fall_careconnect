@@ -10,6 +10,47 @@ const String _backendBaseUrl = String.fromEnvironment(
   defaultValue: '',
 );
 
+const String _oracleHealthFhirIssuer = String.fromEnvironment(
+  'ORACLE_HEALTH_FHIR_ISSUER',
+  defaultValue: '',
+);
+
+/// Expected Oracle Health FHIR issuer for EHR-initiated SMART launches.
+///
+/// Must match the FHIR base URL configured in the CareConnect backend.
+String getOracleHealthFhirIssuer() {
+  return normalizeOracleHealthFhirIssuer(_oracleHealthFhirIssuer);
+}
+
+/// Validates and normalizes an Oracle Health FHIR issuer.
+///
+/// Kept separate from the compile-time environment lookup so every validation
+/// rule can be exercised without changing the application's build defines.
+String normalizeOracleHealthFhirIssuer(String configuredIssuer) {
+  final issuer = configuredIssuer.trim();
+
+  if (issuer.isEmpty) {
+    throw StateError(
+      'ORACLE_HEALTH_FHIR_ISSUER is not configured.',
+    );
+  }
+
+  final uri = Uri.tryParse(issuer);
+
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host.isEmpty ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    throw StateError(
+      'ORACLE_HEALTH_FHIR_ISSUER must be a valid HTTPS FHIR base URL.',
+    );
+  }
+
+  return uri.toString().replaceAll(RegExp(r'/+$'), '');
+}
+
 const String _wsOverrideUrl = String.fromEnvironment('WEBSOCKET_SERVER_URL');
 const String _wsGatewayUrl = String.fromEnvironment('WEBSOCKET_GATEWAY_URL');
 const String _backendToken = String.fromEnvironment('CC_BACKEND_TOKEN');

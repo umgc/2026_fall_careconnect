@@ -1,0 +1,957 @@
+# File: .github/workflows/build-and-analyze.yml
+# ==========================================================
+# Build and Analyze — SAST / SCA / Secrets Scan (Report-Only)
+# ----------------------------------------------------------
+# Quality/security workflow for CareConnect.
+#
+# CURRENT MODE: report_only  (set in quality/ci/gate/policy.yaml)
+# ----------------------------------------------------------
+# The gate runs on every PR and publishes a report, but it does NOT
+# block merges while gate.mode = report_only. This is intentional
+# during the baseline-establishment phase of the semester.
+#
+# Report status language (defined in report_md.py):
+#   REPORT ONLY — findings detected; gate is report_only; PR not blocked.
+#   PASSED      — no violations detected (any gate mode).
+#   BLOCKED     — reserved for gate.mode = enforce + actual blocking
+#                 violations that prevent a GitHub merge.
+#
+# Role column language:
+#   Advisory / Report Only — tool is blocking in policy.yaml, but the
+#                            gate mode overrides enforcement right now.
+#   Enforced               — only used when gate.mode = enforce.
+#   Advisory               — tool has blocking: false in policy.yaml.
+#
+# Secrets (TruffleHog / Gitleaks):
+#   Even in report_only mode, secrets findings are highlighted separately
+#   because a real credential or private key must be investigated and
+#   rotated regardless of the overall gate status.
+#
+# System of record:
+#   quality/ci/gate/
+#
+# Pipeline responsibilities:
+#   1) Execute scanners (SAST/SCA/Secrets)
+#   2) Write raw artifacts to: quality/analysis/raw/
+#   3) Normalize results:       quality/analysis/normalized/normalized.json
+#   4) Evaluate policy:         quality/analysis/evaluated/evaluated.json
+#   5) Report outcome (gate engine exits 0 in report_only mode)
+#   6) Publish rich report:
+#        - quality/analysis/report.md  (written by report.py)
+#        - Actions Job Summary
+#        - PR comment (single updatable comment, written by report.py)
+#
+# Architecture:
+#   This workflow is ORCHESTRATION ONLY.
+#   - No pass/fail logic lives here (gate.py owns enforcement).
+#   - No report rendering lives here (report.py owns reporting).
+#   - No tool-specific parsing lives here (parsers/ own parsing).
+#
+# IMPORTANT:
+#   - Every scanner step is non-blocking (|| true).
+#     The gate engine decides enforcement, not the workflow.
+#   - The ONLY environment difference between sandbox and production
+#     is SCAN_ROOT, controlled via .env (no workflow edits required).
+#   - Enforcement mode is controlled ONLY by gate.mode in policy.yaml.
+#     Do not edit this workflow to change blocking behavior.
+#
+# Environment Toggle:
+#   Sandbox:    SCAN_ROOT=quality/sandbox/passing|failing  (set in .env)
+#   Production: SCAN_ROOT=.                                (set in .env)
+#
+# Planned enforcement progression (per course roadmap):
+#   Now    — report_only: all findings advisory, no PRs blocked.
+#   Next   — block newly introduced secrets and serious new CVEs.
+#   Later  — progressively enforce new/high-severity findings and
+#             agreed coverage/quality requirements.
+#
+# To tighten enforcement (when the team is ready):
+#   1) Update gate.mode in quality/ci/gate/policy.yaml.
+#   2) Set blocking: true only for tools you want to enforce.
+#   3) Open a PR so team leads can review the change — this workflow
+#      affects every team's merge process.
+#   Do NOT flip enforcement suddenly on inherited/baseline findings.
+# ==========================================================
+
+name: Build and Analyze
+
+# ----------------------------------------------------------
+# Trigger Conditions
+# ----------------------------------------------------------
+# Runs on every PR, regardless of source or target branch, so
+# SAST/SCA/secrets findings surface early instead of accumulating
+# on a team branch until it merges into develop. Does not run on
+# push — PR feedback is the intended entry point for this gate.
+#
+# While gate.mode = report_only, this trigger is safe for all teams:
+# no PR will be blocked by this workflow. Teams see their findings
+# as advisory context, not as a merge barrier.
+on:
+  pull_request:
+
+# ----------------------------------------------------------
+# Default SCAN_ROOT
+# ----------------------------------------------------------
+env:
+  SCAN_ROOT: .
+
+# ----------------------------------------------------------
+# Permissions
+# ----------------------------------------------------------
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ------------------------------------------------------
+      # Step 1: Checkout Repository
+      # ------------------------------------------------------
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ------------------------------------------------------
+      # Step 2: Load Environment Overrides (.env)
+      # ----------------------------------------------------------
+      # If .env exists at the repo root, SCAN_ROOT is read from it.
+      # This is the ONLY mechanism for toggling sandbox vs production.
+      # ----------------------------------------------------------
+      - name: Load .env overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ENV_FILE="${GITHUB_WORKSPACE}/.env"
+          if [[ -f "${ENV_FILE}" ]]; then
+            while IFS='=' read -r key value; do
+              [[ -z "${key}" ]] && continue
+              [[ "${key}" =~ ^# ]] && continue
+              key="$(echo "${key}" | xargs)"
+              value="$(echo "${value}" | xargs)"
+              case "${key}" in
+                SCAN_ROOT)
+                  echo "SCAN_ROOT=${value}" >> "$GITHUB_ENV"
+                  echo "Loaded from .env: SCAN_ROOT=${value}"
+                  ;;
+                *)
+                  ;;
+              esac
+            done < "${ENV_FILE}"
+          else
+            echo "No .env file found; using default SCAN_ROOT=${SCAN_ROOT}"
+          fi
+
+      # ------------------------------------------------------
+      # Step 3: Set Up Python Runtime
+      # ------------------------------------------------------
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # ------------------------------------------------------
+      # Step 4: Install Python Dependencies
+      # ----------------------------------------------------------
+      # pyyaml   → required by gate.py (policy.yaml parsing)
+      # requests → required by report.py (GitHub API for PR comments)
+      # semgrep  → pinned, installed once here only
+      # pylint   → Python static analysis
+      # bandit   → Python security SAST
+      # ----------------------------------------------------------
+      - name: Install Python Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            pyyaml \
+            requests \
+            semgrep==1.73.0 \
+            pylint \
+            bandit
+
+      # ------------------------------------------------------
+      # Step 5: Create Analysis Directory Structure
+      # ----------------------------------------------------------
+      # raw/        → native tool outputs (evidence layer)
+      # normalized/ → normalized.json (normalize.py output)
+      # evaluated/  → evaluated.json  (policy_engine.py output)
+      # ----------------------------------------------------------
+      - name: Create Analysis Directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p quality/analysis/raw
+          mkdir -p quality/analysis/normalized
+          mkdir -p quality/analysis/evaluated
+
+      # ======================================================
+      # Step 6: Resolve Scan Roots
+      # ----------------------------------------------------------
+      # Exports to GITHUB_ENV:
+      #   RESOLVED_ROOT, FLUTTER_ROOT, JAVA_ROOT, JS_ROOT, PY_ROOT
+      # ======================================================
+      - name: Resolve scan roots
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="${GITHUB_WORKSPACE}/${SCAN_ROOT}"
+
+          if [[ ! -d "${ROOT}" ]]; then
+            echo "::error::SCAN_ROOT does not exist: ${ROOT}"
+            exit 1
+          fi
+
+          # Flutter root — directory containing pubspec.yaml
+          FLUTTER_ROOT="$(find "${ROOT}" -maxdepth 4 -name pubspec.yaml -print -quit \
+            | xargs -r dirname || true)"
+
+          # Java root — directory containing pom.xml or src/main/java
+          JAVA_POM="$(find "${ROOT}" -maxdepth 6 -name pom.xml -print -quit || true)"
+          if [[ -n "${JAVA_POM}" ]]; then
+            JAVA_ROOT="$(dirname "${JAVA_POM}")"
+          else
+            JAVA_SRC="$(find "${ROOT}" -maxdepth 8 -type d -path "*/src/main/java" \
+              -print -quit || true)"
+            JAVA_ROOT="$(dirname "$(dirname "$(dirname "${JAVA_SRC:-/}")")")"
+            [[ "${JAVA_ROOT}" == "/" ]] && JAVA_ROOT=""
+          fi
+
+          # JS root — directory containing package.json (excluding node_modules)
+          JS_ROOT="$(find "${ROOT}" -maxdepth 4 -name package.json \
+            ! -path "*/node_modules/*" -print -quit \
+            | xargs -r dirname || true)"
+
+          # Python root — use RESOLVED_ROOT if any .py files exist
+          PY_COUNT="$(find "${ROOT}" -name "*.py" \
+            ! -path "*/.venv/*" ! -path "*/node_modules/*" | wc -l)"
+          if [[ "${PY_COUNT}" -gt 0 ]]; then
+            PY_ROOT="${ROOT}"
+          else
+            PY_ROOT=""
+          fi
+
+          echo "RESOLVED_ROOT=${ROOT}"         >> "$GITHUB_ENV"
+          echo "FLUTTER_ROOT=${FLUTTER_ROOT}"  >> "$GITHUB_ENV"
+          echo "JAVA_ROOT=${JAVA_ROOT}"        >> "$GITHUB_ENV"
+          echo "JS_ROOT=${JS_ROOT}"            >> "$GITHUB_ENV"
+          echo "PY_ROOT=${PY_ROOT}"            >> "$GITHUB_ENV"
+
+          echo "SCAN_ROOT      = ${SCAN_ROOT}"
+          echo "RESOLVED_ROOT  = ${ROOT}"
+          echo "FLUTTER_ROOT   = ${FLUTTER_ROOT:-<none>}"
+          echo "JAVA_ROOT      = ${JAVA_ROOT:-<none>}"
+          echo "JS_ROOT        = ${JS_ROOT:-<none>}"
+          echo "PY_ROOT        = ${PY_ROOT:-<none>}"
+
+      # ======================================================
+      # TOOL EXECUTION
+      # ======================================================
+
+      # ------------------------------------------------------
+      # Tool: TruffleHog (Secrets Detection)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/trufflehog.jsonl
+      # ------------------------------------------------------
+      - name: Run TruffleHog (Secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/trufflehog.jsonl"
+          : > "${OUT}"
+
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/repo" \
+            trufflesecurity/trufflehog:3.82.6 \
+            filesystem "/repo/${SCAN_ROOT}" \
+            --json \
+            --no-verification \
+            >> "${OUT}" || true
+
+          test -s "${OUT}" || echo "" > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: Gitleaks (Secrets Detection)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/gitleaks.json
+      # ------------------------------------------------------
+      - name: Run Gitleaks (Secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/gitleaks.json"
+          echo '[]' > "${OUT}"
+
+          curl -sSL \
+            -o gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+
+          ./gitleaks detect \
+            --source "${GITHUB_WORKSPACE}/${SCAN_ROOT}" \
+            --report-format json \
+            --report-path "${OUT}" \
+            --no-git \
+            --exit-code 0 || true
+
+          test -s "${OUT}" || echo '[]' > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: Flutter Analyze (Dart Static Analyzer)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/flutter_analyze.json
+      # Format: {"issues": [{severity, message, file, line, rule}]}
+      # ------------------------------------------------------
+      - name: Set up Flutter (if Flutter project found)
+        if: env.FLUTTER_ROOT != ''
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.1'   # keep in sync with FLUTTER_VERSION in the other workflows
+          channel: stable
+          cache: true
+
+      - name: Run Flutter Analyze (if Flutter project found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/flutter_analyze.json"
+          echo '{"issues":[]}' > "${OUT}"
+
+          if [[ -z "${FLUTTER_ROOT:-}" ]]; then
+            echo "No Flutter project found under SCAN_ROOT; skipping flutter analyze."
+            exit 0
+          fi
+
+          flutter --version
+
+          pushd "${FLUTTER_ROOT}" >/dev/null
+          flutter pub get
+
+          TMP="${RUNNER_TEMP}/flutter_analyze_raw.txt"
+          flutter analyze > "${TMP}" 2>&1 || true
+
+          popd >/dev/null
+
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import re
+          import sys
+
+          tmp_path     = os.environ.get("TMP_FLUTTER", "")
+          out_path     = os.environ["OUT"]
+          flutter_root = os.environ.get("FLUTTER_ROOT", "")
+
+          ISSUE_RE = re.compile(
+              r"^\s*(error|warning|info|hint)\s+[•·]\s+"
+              r"(.+?)\s+[•·]\s+"
+              r"(.+?):(\d+):\d+\s+[•·]\s+"
+              r"(\S+)\s*$",
+              re.IGNORECASE
+          )
+
+          try:
+              with open(tmp_path) as f:
+                  lines = f.readlines()
+          except Exception as e:
+              print(f"Warning: could not read flutter analyze output: {e}", file=sys.stderr)
+              lines = []
+
+          issues = []
+          for line in lines:
+              m = ISSUE_RE.match(line)
+              if not m:
+                  continue
+              severity, message, file_path, lineno, rule = m.groups()
+              if flutter_root and file_path.startswith(flutter_root):
+                  file_path = file_path[len(flutter_root):].lstrip("/")
+              issues.append({
+                  "severity": severity.lower(),
+                  "message":  message.strip(),
+                  "file":     file_path,
+                  "line":     int(lineno),
+                  "column":   0,
+                  "rule":     rule,
+              })
+
+          with open(out_path, "w") as f:
+              json.dump({"issues": issues}, f, indent=2)
+
+          print(f"Flutter analyze: {len(issues)} issue(s) written to {out_path}")
+          PYEOF
+        env:
+          OUT:          ${{ github.workspace }}/quality/analysis/raw/flutter_analyze.json
+          FLUTTER_ROOT: ${{ env.FLUTTER_ROOT }}
+          TMP_FLUTTER:  ${{ runner.temp }}/flutter_analyze_raw.txt
+
+      # ------------------------------------------------------
+      # Toolchain: Java 17
+      # ----------------------------------------------------------
+      # Required by Checkstyle, PMD, and SpotBugs.
+      # ------------------------------------------------------
+      - name: Setup Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'   # match the project and the other workflows
+
+      # ------------------------------------------------------
+      # Tool: Checkstyle (Java Style Analysis)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/checkstyle.xml
+      # ------------------------------------------------------
+      - name: Run Checkstyle (if Java project found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/checkstyle.xml"
+          echo "<checkstyle></checkstyle>" > "${OUT}"
+
+          if [[ -z "${JAVA_ROOT:-}" || ! -d "${JAVA_ROOT}" ]]; then
+            echo "No Java project found under SCAN_ROOT; skipping Checkstyle."
+            exit 0
+          fi
+
+          TARGET="${JAVA_ROOT}/src/main/java"
+          [[ -d "${TARGET}" ]] || TARGET="${JAVA_ROOT}"
+
+          curl -sSL \
+            -o checkstyle.jar \
+            https://github.com/checkstyle/checkstyle/releases/download/checkstyle-10.12.4/checkstyle-10.12.4-all.jar
+
+          java -jar checkstyle.jar \
+            -c /google_checks.xml \
+            "${TARGET}" \
+            -f xml \
+            -o "${OUT}" || true
+
+          test -s "${OUT}" || echo "<checkstyle></checkstyle>" > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: PMD (Java Source Static Analysis)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/pmd.xml
+      # ------------------------------------------------------
+      - name: Run PMD (if Java project found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/pmd.xml"
+          echo "<pmd></pmd>" > "${OUT}"
+
+          if [[ -z "${JAVA_ROOT:-}" || ! -d "${JAVA_ROOT}" ]]; then
+            echo "No Java project found under SCAN_ROOT; skipping PMD."
+            exit 0
+          fi
+
+          TARGET="${JAVA_ROOT}/src/main/java"
+          [[ -d "${TARGET}" ]] || TARGET="${JAVA_ROOT}"
+
+          curl -sSL \
+            -o pmd.zip \
+            https://github.com/pmd/pmd/releases/download/pmd_releases/6.55.0/pmd-bin-6.55.0.zip
+          unzip -q pmd.zip
+
+          ./pmd-bin-6.55.0/bin/run.sh pmd \
+            -d "${TARGET}" \
+            -R category/java/bestpractices.xml,category/java/errorprone.xml,category/java/codestyle.xml \
+            -f xml \
+            -r "${OUT}" || true
+
+          test -s "${OUT}" || echo "<pmd></pmd>" > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool Prep: Compile Java via Maven (required by SpotBugs)
+      # ----------------------------------------------------------
+      # Exports to GITHUB_ENV:
+      #   JAVA_CLASSES_DIR
+      # ------------------------------------------------------
+      - name: Compile Java (for SpotBugs)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${JAVA_ROOT:-}" || ! -d "${JAVA_ROOT}" ]]; then
+            echo "No Java project found; skipping Java compilation."
+            CLASSES="$(mktemp -d)"
+            echo "JAVA_CLASSES_DIR=${CLASSES}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if [[ -f "${JAVA_ROOT}/pom.xml" ]]; then
+            pushd "${JAVA_ROOT}" >/dev/null
+            echo "Running Maven compile..."
+            mvn compile -q --batch-mode -DskipTests || {
+              echo "::warning::Maven compile failed; falling back to javac."
+            }
+            popd >/dev/null
+            CLASSES="${JAVA_ROOT}/target/classes"
+
+            if [[ ! -d "${CLASSES}" || -z "$(ls -A "${CLASSES}" 2>/dev/null)" ]]; then
+              echo "::warning::Maven produced no classes; falling back to javac."
+              CLASSES="$(mktemp -d)"
+              TARGET="${JAVA_ROOT}/src/main/java"
+              mapfile -t SOURCES < <(find "${TARGET}" -type f -name "*.java" || true)
+              if [[ "${#SOURCES[@]}" -gt 0 ]]; then
+                echo "javac: compiling ${#SOURCES[@]} source file(s)."
+                javac -d "${CLASSES}" "${SOURCES[@]}" || true
+              fi
+            fi
+          else
+            CLASSES="$(mktemp -d)"
+            TARGET="${JAVA_ROOT}/src/main/java"
+            [[ -d "${TARGET}" ]] || TARGET="${JAVA_ROOT}"
+            mapfile -t SOURCES < <(find "${TARGET}" -type f -name "*.java" || true)
+            if [[ "${#SOURCES[@]}" -gt 0 ]]; then
+              javac -d "${CLASSES}" "${SOURCES[@]}" || true
+            fi
+          fi
+
+          echo "JAVA_CLASSES_DIR=${CLASSES}" >> "$GITHUB_ENV"
+          echo "Compiled classes directory: ${CLASSES}"
+          echo "Class file count: $(find "${CLASSES}" -name "*.class" | wc -l)"
+
+      # ------------------------------------------------------
+      # Tool: SpotBugs (Java Bytecode Static Analysis)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/spotbugs.xml
+      # ------------------------------------------------------
+      - name: Run SpotBugs (if classes exist)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/spotbugs.xml"
+          echo "<BugCollection></BugCollection>" > "${OUT}"
+
+          if [[ -z "${JAVA_CLASSES_DIR:-}" || ! -d "${JAVA_CLASSES_DIR}" ]]; then
+            echo "No compiled classes directory; skipping SpotBugs."
+            exit 0
+          fi
+
+          CLASS_COUNT="$(find "${JAVA_CLASSES_DIR}" -name "*.class" | wc -l)"
+          if [[ "${CLASS_COUNT}" -eq 0 ]]; then
+            echo "No .class files found in ${JAVA_CLASSES_DIR}; skipping SpotBugs."
+            exit 0
+          fi
+          echo "SpotBugs: analyzing ${CLASS_COUNT} class file(s)."
+
+          curl -sSL \
+            -o spotbugs.tgz \
+            https://github.com/spotbugs/spotbugs/releases/download/4.8.3/spotbugs-4.8.3.tgz
+          tar -xzf spotbugs.tgz
+          chmod +x ./spotbugs-4.8.3/bin/spotbugs
+
+          ./spotbugs-4.8.3/bin/spotbugs \
+            -textui -xml \
+            -effort:max \
+            -output "${OUT}" \
+            "${JAVA_CLASSES_DIR}" || true
+
+          test -s "${OUT}" || echo "<BugCollection></BugCollection>" > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: Semgrep (Multi-language SAST)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/semgrep.json
+      # ------------------------------------------------------
+      - name: Run Semgrep (SAST)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/semgrep.json"
+          echo '{"results":[]}' > "${OUT}"
+
+          semgrep --config=auto "${RESOLVED_ROOT}" --json > "${OUT}" || true
+          test -s "${OUT}" || echo '{"results":[]}' > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: Pylint (Python Static Analysis)
+      # ----------------------------------------------------------
+      # Runs only when Python files are found under SCAN_ROOT.
+      # Excludes virtual environments and node_modules.
+      #
+      # Output: quality/analysis/raw/pylint.json
+      # Format: array of message objects
+      # ------------------------------------------------------
+      - name: Run Pylint (if Python files found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/pylint.json"
+          echo '[]' > "${OUT}"
+
+          if [[ -z "${PY_ROOT:-}" ]]; then
+            echo "No Python files found under SCAN_ROOT; skipping Pylint."
+            exit 0
+          fi
+
+          # Collect all .py files excluding venv and node_modules
+          mapfile -t PY_FILES < <(find "${PY_ROOT}" -name "*.py" \
+            ! -path "*/.venv/*" \
+            ! -path "*/venv/*" \
+            ! -path "*/node_modules/*" \
+            ! -path "*/__pycache__/*" \
+            || true)
+
+          if [[ "${#PY_FILES[@]}" -eq 0 ]]; then
+            echo "No Python files found; skipping Pylint."
+            exit 0
+          fi
+
+          echo "Pylint: analyzing ${#PY_FILES[@]} Python file(s)."
+
+          pylint "${PY_FILES[@]}" \
+            --output-format=json \
+            --exit-zero > "${OUT}" || true
+
+          test -s "${OUT}" || echo '[]' > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: Bandit (Python Security SAST)
+      # ----------------------------------------------------------
+      # Runs only when Python files are found under SCAN_ROOT.
+      # Scans recursively from PY_ROOT.
+      #
+      # Output: quality/analysis/raw/bandit.json
+      # Format: {"results": [...], "metrics": {...}}
+      # ------------------------------------------------------
+      - name: Run Bandit (if Python files found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/bandit.json"
+          echo '{"results":[]}' > "${OUT}"
+
+          if [[ -z "${PY_ROOT:-}" ]]; then
+            echo "No Python files found under SCAN_ROOT; skipping Bandit."
+            exit 0
+          fi
+
+          echo "Bandit: scanning ${PY_ROOT}"
+
+          bandit \
+            -r "${PY_ROOT}" \
+            -f json \
+            -o "${OUT}" \
+            --exit-zero \
+            --exclude "${PY_ROOT}/.venv,${PY_ROOT}/venv,${PY_ROOT}/node_modules" \
+            || true
+
+          test -s "${OUT}" || echo '{"results":[]}' > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: HTMLHint (HTML Static Analysis)
+      # ----------------------------------------------------------
+      # Runs only when HTML files are found under SCAN_ROOT.
+      # Uses mapfile + array to pass files individually to htmlhint,
+      # avoiding the single-string subshell argument bug.
+      #
+      # Output: quality/analysis/raw/htmlhint.json
+      # Format: array of per-file result objects
+      # ------------------------------------------------------
+      - name: Run HTMLHint (if HTML files found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/htmlhint.json"
+          echo '[]' > "${OUT}"
+
+          mapfile -t HTML_FILES < <(find "${RESOLVED_ROOT}" -name "*.html" \
+            ! -path "*/node_modules/*" \
+            ! -path "*/.dart_tool/*" \
+            ! -path "*/build/*" \
+            || true)
+
+          if [[ "${#HTML_FILES[@]}" -eq 0 ]]; then
+            echo "No HTML files found under SCAN_ROOT; skipping HTMLHint."
+            exit 0
+          fi
+
+          echo "HTMLHint: analyzing ${#HTML_FILES[@]} HTML file(s)."
+
+          npx --yes htmlhint \
+                      "${HTML_FILES[@]}" \
+                      --format json \
+                      2>/dev/null > "${OUT}" || true
+
+                    test -s "${OUT}" || echo '[]' > "${OUT}"
+
+      # ------------------------------------------------------
+      # Tool: Stylelint (CSS/SCSS Static Analysis)
+      # ----------------------------------------------------------
+      # Runs only when CSS or SCSS files are found under SCAN_ROOT.
+      # Installs stylelint-config-standard locally to avoid the
+      # "could not find stylelint-config-standard" npx error.
+      # Uses mapfile + array to pass files individually.
+      #
+      # Output: quality/analysis/raw/stylelint.json
+      # Format: array of per-file result objects
+      # ------------------------------------------------------
+      - name: Run Stylelint (if CSS/SCSS files found)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/stylelint.json"
+          echo '[]' > "${OUT}"
+
+          mapfile -t CSS_FILES < <(find "${RESOLVED_ROOT}" \
+            \( -name "*.css" -o -name "*.scss" \) \
+            ! -path "*/node_modules/*" \
+            ! -path "*/build/*" \
+            || true)
+
+          if [[ "${#CSS_FILES[@]}" -eq 0 ]]; then
+            echo "No CSS/SCSS files found under SCAN_ROOT; skipping Stylelint."
+            exit 0
+          fi
+
+          echo "Stylelint: analyzing ${#CSS_FILES[@]} CSS/SCSS file(s)."
+
+          # Install stylelint and config-standard together locally so
+          # npx can resolve the extends reference without a configBasedir error.
+          npm install --save-dev \
+            stylelint \
+            stylelint-config-standard 2>/dev/null || true
+
+          echo '{"extends":["stylelint-config-standard"]}' \
+            > "${GITHUB_WORKSPACE}/.stylelintrc.json"
+
+          npx stylelint \
+            "${CSS_FILES[@]}" \
+            --formatter json \
+            --allow-empty-input \
+            > >(tee /tmp/stylelint_stdout.txt) \
+            2> >(tee /tmp/stylelint_stderr.txt) || true
+
+          echo "=== STYLELINT STDOUT ==="
+          cat /tmp/stylelint_stdout.txt
+          echo "=== STYLELINT STDERR ==="
+          cat /tmp/stylelint_stderr.txt
+          echo "=== STYLELINT STDOUT LENGTH ==="
+          wc -c /tmp/stylelint_stdout.txt
+          echo "=== STYLELINT STDERR LENGTH ==="
+          wc -c /tmp/stylelint_stderr.txt
+
+          # Copy whichever stream has content to OUT
+          if [[ -s /tmp/stylelint_stdout.txt ]]; then
+            cp /tmp/stylelint_stdout.txt "${OUT}"
+          elif [[ -s /tmp/stylelint_stderr.txt ]]; then
+            cp /tmp/stylelint_stderr.txt "${OUT}"
+          else
+            echo '[]' > "${OUT}"
+          fi
+
+      # ------------------------------------------------------
+      # Tool: Trivy (Container + Filesystem SCA)
+      # ----------------------------------------------------------
+      # Scans the filesystem for known CVEs across all ecosystems:
+      # Java (pom.xml), Python (requirements.txt), Flutter (pubspec.yaml),
+      # Node (package.json), and OS packages.
+      #
+      # Output: quality/analysis/raw/trivy.json
+      # Format: {"Results": [{Target, Type, Vulnerabilities: [...]}]}
+      # ------------------------------------------------------
+      - name: Run Trivy (Filesystem SCA)
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="${GITHUB_WORKSPACE}/quality/analysis/raw/trivy.json"
+          echo '{"Results":[]}' > "${OUT}"
+
+          # Install Trivy via apt — most reliable method on ubuntu-latest
+          sudo apt-get install -y wget apt-transport-https gnupg lsb-release
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key \
+            | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb \
+            $(lsb_release -sc) main" \
+            | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update -qq
+          sudo apt-get install -y trivy
+
+          trivy fs \
+            "${RESOLVED_ROOT}" \
+            --format json \
+            --output "${OUT}" \
+            --exit-code 0 \
+            --scanners vuln \
+            --ignore-unfixed \
+            || true
+
+          test -s "${OUT}" || echo '{"Results":[]}' > "${OUT}"
+
+      # ------------------------------------------------------
+      # Diagnostic — Check NVD API Key presence
+      # ------------------------------------------------------
+      - name: Diagnostic — NVD API Key presence
+        shell: bash
+        run: |
+          if [[ -n "${NVD_KEY}" ]]; then
+            echo "NVD_API_KEY is set (length: ${#NVD_KEY} chars)"
+          else
+            echo "::warning::NVD_API_KEY is NOT set or empty"
+          fi
+        env:
+          NVD_KEY: ${{ secrets.NVD_API_KEY }}
+
+      # ------------------------------------------------------
+      # Cache: OWASP Dependency-Check NVD database
+      # ------------------------------------------------------
+      - name: Cache Dependency-Check data
+        uses: actions/cache@v4
+        with:
+          path: quality/analysis/dc-data
+          key: dependency-check-${{ runner.os }}
+
+      # ------------------------------------------------------
+      # Tool: OWASP Dependency-Check (SCA)
+      # ----------------------------------------------------------
+      # Output: quality/analysis/raw/dependency-check-report.json
+      # ------------------------------------------------------
+      - name: Run OWASP Dependency-Check (SCA)
+        shell: bash
+        env:
+          NVD_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          set -euo pipefail
+          ROOT="${GITHUB_WORKSPACE}/${SCAN_ROOT}"
+          OUT_DIR="${GITHUB_WORKSPACE}/quality/analysis/raw"
+          DATA_DIR="${GITHUB_WORKSPACE}/quality/analysis/dc-data"
+          mkdir -p "${OUT_DIR}" "${DATA_DIR}"
+      
+          curl -sSL -o dc.zip \
+            https://github.com/jeremylong/DependencyCheck/releases/download/v9.2.0/dependency-check-9.2.0-release.zip
+          unzip -q dc.zip
+      
+          if ! ./dependency-check/bin/dependency-check.sh \
+            --project "careconnect-scan" \
+            --scan "${ROOT}" \
+            --format JSON \
+            --out "${OUT_DIR}" \
+            --data "${DATA_DIR}" \
+            --nvdApiKey "${NVD_KEY}" \
+            --nvdApiDelay 6000 \
+            --failOnCVSS 7 ; then
+
+            echo "::warning::Dependency-Check NVD update failed; retrying with --noupdate"
+            ./dependency-check/bin/dependency-check.sh \
+              --project "careconnect-scan" \
+              --scan "${ROOT}" \
+              --format JSON \
+              --out "${OUT_DIR}" \
+              --data "${DATA_DIR}" \
+              --noupdate \
+              --disableAssembly \
+              --failOnCVSS 7 || true
+          fi
+
+          [[ -f "${OUT_DIR}/dependency-check-report.json" ]] || \
+            echo '{"dependencies":[]}' > "${OUT_DIR}/dependency-check-report.json"
+
+      # ======================================================
+      # GATE ENGINE + REPORTING
+      # ======================================================
+
+      # ------------------------------------------------------
+      # Step 7: Run Quality Gate Engine
+      # ----------------------------------------------------------
+      # Exit codes:
+      #   0 → all checks passed, or gate.mode = report_only (never exits 1)
+      #   1 → policy violations detected AND gate.mode = enforce
+      #
+      # Current mode: report_only — this step always exits 0.
+      # Violations are reported but do not block the PR.
+      # To change enforcement, update gate.mode in policy.yaml.
+      # ------------------------------------------------------
+      - name: Run Quality Gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m quality.ci.gate.gate
+
+      # ------------------------------------------------------
+      # Step 8: Generate Report
+      # ------------------------------------------------------
+      - name: Generate Report
+        if: always()
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER:    ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python -m quality.ci.gate.report.report
+
+      # ------------------------------------------------------
+      # Step 9: Publish report.md to Actions Job Summary
+      # ------------------------------------------------------
+      - name: Publish Report to Actions Summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPORT_PATH="quality/analysis/report.md"
+          if [[ -f "${REPORT_PATH}" ]]; then
+            cat "${REPORT_PATH}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::report.md not found at ${REPORT_PATH}; nothing to publish."
+            echo "Report generation failed or was skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # ------------------------------------------------------
+      # Step 10: Diagnostic — Raw Artifact Inventory
+      # ------------------------------------------------------
+      - name: Diagnostic — Raw Artifact Inventory
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Raw artifact directory listing ==="
+          ls -la quality/analysis/raw || echo "Directory not found"
+          echo ""
+          echo "=== Artifact previews (first 3 lines each) ==="
+          for f in \
+            trufflehog.jsonl \
+            gitleaks.json \
+            flutter_analyze.json \
+            checkstyle.xml \
+            pmd.xml \
+            spotbugs.xml \
+            semgrep.json \
+            pylint.json \
+            bandit.json \
+            htmlhint.json \
+            stylelint.json \
+            trivy.json \
+            dependency-check-report.json; do
+            echo "---- ${f} ----"
+            if test -f "quality/analysis/raw/${f}"; then
+              head -n 3 "quality/analysis/raw/${f}" || true
+            else
+              echo "MISSING"
+            fi
+          done
+
+      # ------------------------------------------------------
+      # Step 11: Set SHORT_SHA
+      # ------------------------------------------------------
+      - name: Set SHORT_SHA
+        if: always()
+        id: sha
+        shell: bash
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------
+      # Step 12: Upload Analysis Artifacts
+      # ------------------------------------------------------
+      - name: Upload Analysis Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.run_number }}_${{ steps.sha.outputs.short_sha }}_quality_analysis_report
+          path: |
+            quality/analysis/
+            !quality/analysis/dc-data/**
+          if-no-files-found: warn

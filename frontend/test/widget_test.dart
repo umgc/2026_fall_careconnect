@@ -110,7 +110,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(const MaterialApp(
-          locale: const Locale('en'),
+          locale: Locale('en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           home: PasswordResetPage()));
@@ -197,9 +197,16 @@ void main() {
   });
 
   group('Analytics Tests', () {
-    testWidgets('AnalyticsPage renders correctly', (WidgetTester tester) async {
+    testWidgets('AnalyticsPage renders correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
-        const MaterialApp(home: AnalyticsPage(patientId: 1)),
+        MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const AnalyticsPage(patientId: 1),
+        ),
       );
 
       expect(find.byType(AnalyticsPage), findsOneWidget);

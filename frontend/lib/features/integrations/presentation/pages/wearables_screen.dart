@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'dart:convert';
@@ -347,14 +348,15 @@ class _WearablesScreenState extends State<WearablesScreen> {
               .where((device) => device.isActive)
               .toList();
         });
-        print('✓ Loaded ${connectedDevices.length} connected devices');
+        debugPrint(
+            'Ã¢Å“â€œ Loaded ${connectedDevices.length} connected devices');
       }
 
       if (kIsWeb) {
         await _syncWebGoogleHealthConnection(prefs);
       }
     } catch (e) {
-      print('✗ Failed to load devices: $e');
+      debugPrint('Ã¢Å“â€” Failed to load devices: $e');
     }
   }
 
@@ -383,7 +385,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
       if (connected && !hasWebGoogleHealthDevice) {
         connectedDevices.add(
           ConnectedDevice(
-            id: '${webDevicePrefix}${DateTime.now().millisecondsSinceEpoch}',
+            id: '$webDevicePrefix${DateTime.now().millisecondsSinceEpoch}',
             platform: 'fitbit',
             name: 'Fitbit (Google Health)',
             connectedAt: DateTime.now(),
@@ -461,16 +463,22 @@ class _WearablesScreenState extends State<WearablesScreen> {
       } else if (!hasPersistedData && readings.isEmpty) {
         setState(() {
           syncStatusMessage =
-              'No Apple Health samples were collected in the last 7 days. '
-              'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
+              AppLocalizations.of(context)!.wearablesNoAppleHealthSamples(
+            _lastCollectedCount,
+            _lastAcceptedCount,
+            _lastRejectedCount,
+          );
         });
       }
     } catch (e) {
       setState(() {
         hasSyncError = true;
-        syncStatusMessage = 'Failed to synchronize wearable data: $e';
+        syncStatusMessage =
+            AppLocalizations.of(context)!.wearablesSyncFailedWithError(
+          e.toString(),
+        );
       });
-      print('✗ Error syncing wearable health data: $e');
+      debugPrint('Ã¢Å“â€” Error syncing wearable health data: $e');
     } finally {
       setState(() {
         isLoadingData = false;
@@ -607,7 +615,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
         );
       }
     } catch (e) {
-      print('⚠ Fitbit reading collection failed: $e');
+      debugPrint('Ã¢Å¡Â  Fitbit reading collection failed: $e');
     }
   }
 
@@ -658,7 +666,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
         );
       }
     } catch (e) {
-      print('⚠ Plugin health fallback collection failed for $source: $e');
+      debugPrint(
+          'Ã¢Å¡Â  Plugin health fallback collection failed for $source: $e');
     }
   }
 
@@ -737,7 +746,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
         });
       }
     } catch (e) {
-      print('⚠ Health data collection failed: $e');
+      debugPrint('Ã¢Å¡Â  Health data collection failed: $e');
     }
   }
 
@@ -959,10 +968,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
       latestHealthData = persisted;
       if (persisted.isEmpty) {
         syncStatusMessage =
-            'No persisted wearable vitals available in this range. '
-            'Debug: collected=$_lastCollectedCount accepted=$_lastAcceptedCount rejected=$_lastRejectedCount';
-      } else if (syncStatusMessage == null) {
-        syncStatusMessage = null;
+            AppLocalizations.of(context)!.wearablesNoPersistedVitals(
+          _lastCollectedCount,
+          _lastAcceptedCount,
+          _lastRejectedCount,
+        );
       }
     });
     return persisted.isNotEmpty;
@@ -1155,23 +1165,33 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Future<void> _removeDevice(ConnectedDevice device) async {
+    final t = AppLocalizations.of(context)!;
+
     try {
       bool? shouldRemove = await showDialog<bool>(
         context: context,
-        builder: (BuildContext context) {
+        builder: (BuildContext dialogContext) {
           return AlertDialog(
-            title: const Text('Remove Device'),
-            content: Text('Are you sure you want to remove ${device.name}?'),
+            title: Text(t.wearablesRemoveDevice),
+            content: Text(
+              t.wearablesConfirmRemoveDevice(device.name),
+            ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(t.cancel),
               ),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                child:
-                    const Text('Remove', style: TextStyle(color: Colors.white)),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+                child: Text(
+                  t.wearablesRemove,
+                  style: const TextStyle(
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ],
           );
@@ -1201,20 +1221,24 @@ class _WearablesScreenState extends State<WearablesScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${device.name} has been removed'),
+              content: Text(
+                t.wearablesDeviceRemoved(device.name),
+              ),
               backgroundColor: Colors.green,
             ),
           );
         }
 
-        print('✓ Removed device: ${device.name}');
+        debugPrint('Ã¢Å“â€œ Removed device: ${device.name}');
       }
     } catch (e) {
-      print('✗ Failed to remove device: $e');
+      debugPrint('Ã¢Å“â€” Failed to remove device: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to remove device'),
+          SnackBar(
+            content: Text(
+              t.wearablesFailedToRemoveDevice,
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -1228,9 +1252,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
       final devicesJson =
           connectedDevices.map((device) => device.toJson()).toList();
       await prefs.setString('connected_devices', jsonEncode(devicesJson));
-      print('✓ Saved ${connectedDevices.length} connected devices');
+      debugPrint('Ã¢Å“â€œ Saved ${connectedDevices.length} connected devices');
     } catch (e) {
-      print('✗ Failed to save devices: $e');
+      debugPrint('Ã¢Å“â€” Failed to save devices: $e');
     }
   }
 
@@ -1270,11 +1294,13 @@ class _WearablesScreenState extends State<WearablesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+
     return Scaffold(
       drawer: const CommonDrawer(currentRoute: '/wearables'),
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'Wearables',
+        title: t.wearablesTitle,
         centerTitle: true,
         additionalActions: [
           IconButton(
@@ -1314,7 +1340,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
           ),
           const SizedBox(height: 32),
           Text(
-            'No Wearables Connected',
+            AppLocalizations.of(context)!.wearablesNoConnected,
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -1322,10 +1348,14 @@ class _WearablesScreenState extends State<WearablesScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Connect wearable devices to track your patient\'s health data in real-time.',
+          Text(
+            AppLocalizations.of(context)!.wearablesConnectDescription,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.4),
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 40),
           SizedBox(
@@ -1339,7 +1369,7 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 color: Theme.of(context).colorScheme.onPrimary,
               ),
               label: Text(
-                'Add Your First Device',
+                AppLocalizations.of(context)!.wearablesAddFirstDevice,
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onPrimary,
                   fontSize: 16,
@@ -1365,9 +1395,12 @@ class _WearablesScreenState extends State<WearablesScreen> {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  const Text(
-                    'Supported Devices',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    AppLocalizations.of(context)!.wearablesSupportedDevices,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Wrap(
@@ -1424,9 +1457,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             if (isLoadingData ||
                 latestHealthData.isNotEmpty ||
                 syncStatusMessage != null) ...[
-              const Text(
-                'Latest Health Data',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.wearablesLatestHealthData,
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.indigo,
@@ -1444,25 +1477,28 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 _buildSyncStateCard(
                   icon: Icons.sync_problem,
                   color: Colors.red,
-                  title: 'Synchronization failed',
+                  title: AppLocalizations.of(context)!
+                      .wearablesSynchronizationFailed,
                   subtitle: syncStatusMessage ??
-                      'We could not synchronize wearable readings.',
+                      AppLocalizations.of(context)!
+                          .wearablesSynchronizationFailedDescription,
                 )
               else if (latestHealthData.isEmpty)
                 _buildSyncStateCard(
                   icon: Icons.inbox_outlined,
                   color: Colors.blueGrey,
-                  title: 'No synced data yet',
+                  title: AppLocalizations.of(context)!.wearablesNoSyncedDataYet,
                   subtitle: syncStatusMessage ??
-                      'Connect a wearable and run sync to view persisted vitals.',
+                      AppLocalizations.of(context)!
+                          .wearablesNoSyncedDataDescription,
                 )
               else
                 _buildHealthDataCards(),
               const SizedBox(height: 20),
             ],
-            const Text(
-              'Your Devices',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.wearablesYourDevices,
+              style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.indigo,
@@ -1477,8 +1513,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Widget _buildConnectedDevicesHeader() {
-    final subtitle =
-        '${connectedDevices.length} device${connectedDevices.length == 1 ? '' : 's'} connected';
+    final subtitle = AppLocalizations.of(context)!
+        .wearablesDevicesConnected(connectedDevices.length);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1487,9 +1523,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Connected Devices',
-                style: TextStyle(
+              Text(
+                AppLocalizations.of(context)!.wearablesConnectedDevices,
+                style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: Colors.indigo,
@@ -1509,7 +1545,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _navigateToAddDevice,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add Device'),
+                  label: Text(
+                    AppLocalizations.of(context)!.wearablesAddDevice,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                     foregroundColor: Colors.white,
@@ -1526,9 +1564,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Connected Devices',
-                  style: TextStyle(
+                Text(
+                  AppLocalizations.of(context)!.wearablesConnectedDevices,
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Colors.indigo,
@@ -1547,7 +1585,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
             ElevatedButton.icon(
               onPressed: _navigateToAddDevice,
               icon: const Icon(Icons.add, size: 18),
-              label: const Text('Add Device'),
+              label: Text(
+                AppLocalizations.of(context)!.wearablesAddDevice,
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo,
                 foregroundColor: Colors.white,
@@ -1597,10 +1637,11 @@ class _WearablesScreenState extends State<WearablesScreen> {
                           !metric.mappedToPersistedEntity;
                   final Color chipColor =
                       isPlaceholder ? Colors.orange : Colors.green;
-                  final String status = metric.mappedToPersistedEntity &&
-                          metric.availableFromCurrentSource
-                      ? 'Persisted'
-                      : 'Placeholder';
+
+                  final String status = isPlaceholder
+                      ? AppLocalizations.of(context)!.wearablesPlaceholder
+                      : AppLocalizations.of(context)!.wearablesPersisted;
+
                   return Chip(
                     label: Text('${metric.type} ($status)'),
                     backgroundColor: chipColor.withValues(alpha: 0.12),
@@ -1629,18 +1670,21 @@ class _WearablesScreenState extends State<WearablesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Semester Metric Scope',
-              style: TextStyle(
-                fontSize: 16,
+            Text(
+              AppLocalizations.of(context)!.wearablesSemesterMetricScope,
+              style: const TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.indigo,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Persisted = mapped to backend entities. Placeholder = UI-only demo or not wired this semester.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              AppLocalizations.of(context)!.wearablesMetricScopeDescription,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
             ),
             const SizedBox(height: 12),
             ...rows,
@@ -1660,9 +1704,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text(
-              'Health Metrics',
-              style: TextStyle(
+            Text(
+              AppLocalizations.of(context)!.wearablesHealthMetrics,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.indigo,
@@ -1818,7 +1862,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Updated: ${_formatDate(data.date)}',
+                  AppLocalizations.of(context)!
+                      .wearablesUpdated(_formatDate(data.date)),
                   style: const TextStyle(
                     fontSize: 11,
                     color: Colors.grey,
@@ -1890,6 +1935,8 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   Widget _buildDeviceCard(ConnectedDevice device) {
+    final t = AppLocalizations.of(context)!;
+
     IconData deviceIcon;
     Color deviceColor;
 
@@ -1948,7 +1995,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Connected ${_formatDate(device.connectedAt)}',
+                    t.wearablesConnectedOn(
+                      _formatDate(device.connectedAt),
+                    ),
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.grey,
@@ -1956,7 +2005,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${device.permissions.length} permission${device.permissions.length == 1 ? '' : 's'} granted',
+                    t.wearablesPermissionsGranted(
+                      device.permissions.length,
+                    ),
                     style: const TextStyle(
                       fontSize: 12,
                       color: Colors.green,
@@ -1974,9 +2025,9 @@ class _WearablesScreenState extends State<WearablesScreen> {
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  child: const Text(
-                    'Active',
-                    style: TextStyle(
+                  child: Text(
+                    t.wearablesActive,
+                    style: const TextStyle(
                       fontSize: 12,
                       color: Colors.green,
                       fontWeight: FontWeight.bold,
@@ -2009,17 +2060,18 @@ class _WearablesScreenState extends State<WearablesScreen> {
   }
 
   String _formatDate(DateTime date) {
+    final t = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final difference = now.difference(date);
 
     if (difference.inDays > 0) {
-      return '${difference.inDays} day${difference.inDays == 1 ? '' : 's'} ago';
+      return t.wearablesDaysAgo(difference.inDays);
     } else if (difference.inHours > 0) {
-      return '${difference.inHours} hour${difference.inHours == 1 ? '' : 's'} ago';
+      return t.wearablesHoursAgo(difference.inHours);
     } else if (difference.inMinutes > 0) {
-      return '${difference.inMinutes} minute${difference.inMinutes == 1 ? '' : 's'} ago';
+      return t.wearablesMinutesAgo(difference.inMinutes);
     } else {
-      return 'Just now';
+      return t.wearablesJustNow;
     }
   }
 
