@@ -1,9 +1,6 @@
 // Page-title test for WearablesScreen (lib/features/integrations/presentation/pages/wearables_screen.dart).
 // Setup copied from wearables_screen_test.dart; adds the page-title
 // checks (WCAG 2.4.2) for this PR's TitledMaterialPageRoute changes.
-
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,68 +26,6 @@ Widget _wrap(Widget child) {
     child: MaterialApp(navigatorObservers: [probe], home: child),
   );
 }
-
-/// Creates a JSON-encoded list of connected devices for SharedPreferences.
-String _makeDevicesJson(List<Map<String, dynamic>> devices) {
-  return jsonEncode(devices);
-}
-
-/// A single Fitbit device JSON map.
-Map<String, dynamic> _fitbitDevice({
-  String id = 'fitbit-1',
-  String name = 'My Fitbit',
-  bool isActive = true,
-  DateTime? connectedAt,
-}) => {
-  'id': id,
-  'platform': 'fitbit',
-  'name': name,
-  'connectedAt': (connectedAt ?? DateTime.now().subtract(const Duration(hours: 2))).toIso8601String(),
-  'permissions': ['steps', 'calories'],
-  'isActive': isActive,
-};
-
-/// A Google Fit device JSON map.
-Map<String, dynamic> _googleFitDevice({
-  String id = 'gfit-1',
-  String name = 'Google Fit',
-  bool isActive = true,
-}) => {
-  'id': id,
-  'platform': 'google_fit',
-  'name': name,
-  'connectedAt': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
-  'permissions': ['steps', 'heart_rate', 'calories'],
-  'isActive': isActive,
-};
-
-/// An Apple Health device JSON map.
-Map<String, dynamic> _appleHealthDevice({
-  String id = 'ahealth-1',
-  String name = 'Apple Health',
-  bool isActive = true,
-}) => {
-  'id': id,
-  'platform': 'apple_health',
-  'name': name,
-  'connectedAt': DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String(),
-  'permissions': ['steps'],
-  'isActive': isActive,
-};
-
-/// An unknown-platform device JSON map.
-Map<String, dynamic> _unknownDevice({
-  String id = 'unknown-1',
-  String name = 'Unknown Band',
-  bool isActive = true,
-}) => {
-  'id': id,
-  'platform': 'some_other',
-  'name': name,
-  'connectedAt': DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(),
-  'permissions': [],
-  'isActive': isActive,
-};
 
 /// Sets a tall test viewport and registers the teardown to reset it.
 Future<void> _setTallViewport(WidgetTester tester) async {
