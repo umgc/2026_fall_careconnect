@@ -260,6 +260,7 @@
   "login_e2eEncrypted": "End-to-end encrypted",
   "login_wcagAACompliant": "WCAG AA compliant",
   "login_loginFailedError": "Login failed",
+  "login_invalidCredentials": "The username or password is incorrect. Check them and try again.",
 
   "voicecommand_wakeWordError": "Wake word init error",
   "voicecommand_voiceCommandsUnavailable": "Speech recognition not available",

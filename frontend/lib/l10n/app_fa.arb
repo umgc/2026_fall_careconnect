@@ -155,6 +155,7 @@
   "ptdashboard_onceAtBed": "یک بار در روز قبل از خواب",
   
   "login_loginFailedError": "ورود ناموفق بود",
+  "login_invalidCredentials": "نام کاربری یا رمز عبور نادرست است. آن‌ها را بررسی کنید و دوباره امتحان کنید.",
 
   "settings_telemetryDefaultDialogTitle": "تله‌متری فعال است",
   "settings_telemetryDefaultDialogDescription": "CareConnect به طور پیش‌فرض معیارهای تشخیصی و عملکردی ناشناس را برای کمک به بهبود قابلیت اطمینان جمع‌آوری می‌کند.\nشما می‌توانید در هر زمانی انصراف دهید.",

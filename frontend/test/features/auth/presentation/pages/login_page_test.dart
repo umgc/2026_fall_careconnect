@@ -265,7 +265,11 @@ void main() {
       await tester.pump(); // kick off the async login
       await tester.pump(const Duration(seconds: 1)); // let the future resolve
 
-      expect(find.textContaining('Login failed'), findsWidgets);
+      // A rejected sign-in says what's wrong and how to fix it (WCAG 3.3.3).
+      expect(
+          find.text(
+              'The username or password is incorrect. Check them and try again.'),
+          findsOneWidget);
     });
   });
 
