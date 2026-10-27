@@ -40,7 +40,12 @@ class ChatRoomScreen extends StatefulWidget {
     required int receiverId,
     required String content,
   })? messageSender;
+  final Future<http.Response> Function({
+    required int receiverId,
+    required String kind,
+  })? shareCardSender;
   final bool enableAutoSync;
+  final bool enableWebSocket;
 
   const ChatRoomScreen({
     super.key,
@@ -48,7 +53,9 @@ class ChatRoomScreen extends StatefulWidget {
     required this.peerName,
     this.conversationLoader,
     this.messageSender,
+    this.shareCardSender,
     this.enableAutoSync = true,
+    this.enableWebSocket = true,
   });
 
   @override
@@ -72,6 +79,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   // Messaging permission
   bool _messagingAllowed = true;
   String? _messagingBlockedReason;
+  bool _hasLinkedCaregiver = false;
+  bool _isSharing = false;
 
   // Video call permission
   bool _videoCallAllowed = true;
@@ -127,7 +136,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _refreshMessagingPermission();
         _refreshVideoCallPermission();
         _startPolling();
-        _connectWebSocket();
+        if (widget.enableWebSocket) _connectWebSocket();
         _startPermissionRefresh();
       } else {
         isLoading = false;
@@ -259,34 +268,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       final type = data['type'] as String?;
 
       if (type == 'message-received') {
-        final senderIdRaw = data['senderId'];
-        final senderId = senderIdRaw is int
-            ? senderIdRaw
-            : int.tryParse(senderIdRaw?.toString() ?? '');
-        final content = data['content'] as String? ?? '';
-        final tsStr = data['timestamp'] as String?;
-        final ts = tsStr != null
-            ? DateTime.tryParse(tsStr) ?? DateTime.now()
-            : DateTime.now();
-        final msgId = (data['messageId'] as num?)?.toInt() ?? 0;
-
-        if (senderId == null) return;
-
-        final msg = MessageDto(
-          id: msgId,
-          senderId: senderId,
+        final msg = MessageDto.fromWebSocketEvent(
+          data,
           receiverId: _currentUserId ?? 0,
-          content: content,
-          timestamp: ts,
         );
+        if (msg == null) return;
 
-        if (!messages.any((m) => m.id == msgId)) {
+        if (!messages.any((m) => m.id == msg.id)) {
           if (mounted) {
             setState(() => messages.add(msg));
             _scrollToBottom();
           }
         }
-        _sendReadReceipt(msgId);
+        _sendReadReceipt(msg.id);
         fetchConversation(silent: true);
       } else if (type == 'message-sent') {
         final messageId = (data['messageId'] as num?)?.toInt();
@@ -937,6 +931,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         final links =
             await ApiService.getPatientLinkedCaregiverLinks(_currentUserId!);
         if (links.isEmpty) {
+          if (mounted) setState(() => _hasLinkedCaregiver = false);
           debugPrint(
             'Messaging permission refresh inconclusive (no caregiver links returned); keeping current state.',
           );
@@ -954,17 +949,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           }
         }
         if (matching == null) {
+          if (mounted) setState(() => _hasLinkedCaregiver = false);
           debugPrint(
             'Messaging permission refresh inconclusive (no matching caregiver link); keeping current state.',
           );
           return;
         } else {
+          _hasLinkedCaregiver = true;
           final enabledRaw = matching['patientMessagingEnabled'];
           allowed = enabledRaw is bool
               ? enabledRaw
               : '$enabledRaw'.toLowerCase() != 'false';
         }
       } else if (currentUser.role == 'CAREGIVER') {
+        _hasLinkedCaregiver = false;
         final caregiverId = currentUser.caregiverId;
         if (caregiverId == null) {
           allowed = false;
@@ -1216,7 +1214,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 : Icons.done);
 
     Widget bodyContent;
-    if (msg.hasAttachment) {
+    if (msg.shareKind != null) {
+      bodyContent = _buildShareCard(msg, textColor);
+    } else if (msg.hasAttachment) {
       bodyContent = _buildAttachmentBubble(msg, textColor);
     } else {
       bodyContent = Text(
@@ -1279,6 +1279,165 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildShareCard(MessageDto msg, Color textColor) {
+    final shareKind = msg.shareKind!;
+    final senderName = msg.senderId == _currentUserId
+        ? Provider.of<UserProvider>(context, listen: false).user?.name ?? 'You'
+        : widget.peerName;
+    return Semantics(
+      button: msg.sharePatientId != null,
+      child: InkWell(
+        onTap: msg.sharePatientId == null
+            ? null
+            : () => context.push(
+                  '/patients/${msg.sharePatientId}?tab=${shareKind.destinationTab}',
+                ),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.share_outlined, size: 18, color: textColor),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  '$senderName shared ${shareKind.description} · Open',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool get _canShareCard {
+    final role = Provider.of<UserProvider>(context, listen: false)
+        .user
+        ?.role
+        .toUpperCase();
+    return role == 'PATIENT' && _hasLinkedCaregiver && _messagingAllowed;
+  }
+
+  Future<void> _showShareCardOptions() async {
+    final kind = await showModalBottomSheet<ShareKind>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.medical_information_outlined),
+              title: const Text('Share Medicare records'),
+              onTap: () => Navigator.pop(context, ShareKind.medicare),
+            ),
+            ListTile(
+              leading: const Icon(Icons.health_and_safety_outlined),
+              title: const Text('Share health information'),
+              onTap: () => Navigator.pop(context, ShareKind.health),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (kind != null) await _sendShareCard(kind);
+  }
+
+  Future<void> _sendShareCard(ShareKind kind) async {
+    if (!_canShareCard || _currentUserId == null || _isSharing) return;
+    setState(() => _isSharing = true);
+    final role = Provider.of<UserProvider>(context, listen: false)
+        .user
+        ?.role
+        .toUpperCase();
+    try {
+      final response = await (widget.shareCardSender?.call(
+            receiverId: widget.peerUserId,
+            kind: kind.wireValue,
+          ) ??
+          ApiService.sendShareCard(
+            receiverId: widget.peerUserId,
+            kind: kind.wireValue,
+          ));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final detail = response.body.toLowerCase();
+        final message = switch (response.statusCode) {
+          403 => role != 'PATIENT'
+              ? 'Only a patient can share their records.'
+              : 'You can\'t send messages to this user.',
+          400 when detail.contains('receiverid') => 'receiverId is required.',
+          400 => 'Unknown share kind.',
+          409 when kind == ShareKind.medicare =>
+            'Connect Medicare before sharing it.',
+          _ => 'Couldn\'t share this information. Please try again.',
+        };
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(message)));
+        }
+        return;
+      }
+
+      final payload = jsonDecode(response.body);
+      if (payload is! Map || payload['message'] is! Map) {
+        throw const FormatException('Invalid share-card response');
+      }
+      final message = MessageDto.fromJson(
+        Map<String, dynamic>.from(payload['message'] as Map),
+      );
+      if (!mounted) return;
+      setState(() {
+        messages.add(message);
+        messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      });
+      _scrollToBottom();
+
+      if (kind == ShareKind.medicare && payload['receiverCanView'] == false) {
+        await _showMedicareConsentPrompt();
+      }
+    } catch (e) {
+      debugPrint('Share-card send failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn\'t share this information.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
+  Future<void> _showMedicareConsentPrompt() async {
+    final router = GoRouter.of(context);
+    final shareNow = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(
+          '${widget.peerName} can\'t see your Medicare records yet. Share now?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Not now'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Share now'),
+          ),
+        ],
+      ),
+    );
+    if (shareNow == true && mounted) {
+      unawaited(router.push('/medicare-sharing'));
+    }
   }
 
   Widget _buildAttachmentBubble(MessageDto msg, Color textColor) {
@@ -1396,6 +1555,12 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          if (_canShareCard)
+            IconButton(
+              icon: const Icon(Icons.share_outlined),
+              tooltip: 'Share health information',
+              onPressed: _isSharing ? null : _showShareCardOptions,
+            ),
           IconButton(
             icon: const Icon(Icons.videocam),
             tooltip: 'Start video call',

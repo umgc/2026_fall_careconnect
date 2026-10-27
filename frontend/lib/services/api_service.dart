@@ -2041,6 +2041,23 @@ class ApiService {
         .timeout(const Duration(seconds: 15));
   }
 
+  static Future<http.Response> sendShareCard({
+    required int receiverId,
+    required String kind,
+  }) async {
+    final headers = await AuthTokenManager.getAuthHeaders();
+    return _httpClient
+        .post(
+          Uri.parse('${ApiConstants.baseUrl}messages/share'),
+          headers: headers,
+          body: jsonEncode({
+            'receiverId': receiverId,
+            'kind': kind.toUpperCase(),
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+  }
+
   static Future<List<dynamic>> getConversation({
     required int user1,
     required int user2,
