@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/features/activities/presentation/pages/client_category_activities_screen.dart';
 import 'package:care_connect_app/features/activities/presentation/pages/activity_log_history_screen.dart';
@@ -44,8 +43,7 @@ class AdlIadlManagementScreen extends StatelessWidget {
             subtitle: 'Log and manage Activities of Daily Living',
             onTap: () {
               Navigator.of(context).push(
-                TitledMaterialPageRoute<void>(
-                  title: 'Daily Living Activities',
+                MaterialPageRoute<void>(
                   builder: (context) => ClientCategoryActivitiesScreen(
                     clientId: clientId,
                     clientName: clientName,
@@ -63,8 +61,7 @@ class AdlIadlManagementScreen extends StatelessWidget {
             subtitle: 'Log and manage Instrumental Activities of Daily Living',
             onTap: () {
               Navigator.of(context).push(
-                TitledMaterialPageRoute<void>(
-                  title: 'Daily Living Activities',
+                MaterialPageRoute<void>(
                   builder: (context) => ClientCategoryActivitiesScreen(
                     clientId: clientId,
                     clientName: clientName,
@@ -82,8 +79,7 @@ class AdlIadlManagementScreen extends StatelessWidget {
             subtitle: 'View logged activities for this client',
             onTap: () {
               Navigator.of(context).push(
-                TitledMaterialPageRoute<void>(
-                  title: 'Activity Log History',
+                MaterialPageRoute<void>(
                   builder: (context) => ActivityLogHistoryScreen(
                     clientId: clientId,
                     clientName: clientName,

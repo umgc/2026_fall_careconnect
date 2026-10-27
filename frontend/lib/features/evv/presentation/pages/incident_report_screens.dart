@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -150,8 +149,7 @@ class _IncidentReportWizardScreenState
         );
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
-          TitledMaterialPageRoute<void>(
-            title: 'Incident Report Details',
+          MaterialPageRoute<void>(
             builder: (context) => IncidentReportDetailScreen(
               clientName: widget.clientName,
               report: entry,

@@ -1,4 +1,3 @@
-import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:convert';
@@ -564,8 +563,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
       // Navigate immediately; invitation is sent only after caller joins and is waiting.
       if (!mounted) return;
       Navigator.of(context).push(
-        TitledMaterialPageRoute(
-          title: 'Video Call',
+        MaterialPageRoute(
           builder: (context) => HybridVideoCallWidget(
             userId: widget.caregiverId.toString(),
             callId: callId,
@@ -1224,8 +1222,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                             label: 'Message',
                             onPressed: () async {
                               final result = await Navigator.of(context).push(
-                                TitledMaterialPageRoute(
-                                  title: 'Messages',
+                                MaterialPageRoute(
                                   builder: (context) => MessagingWidget(
                                     currentUserId:
                                         widget.caregiverId.toString(),
@@ -1284,8 +1281,7 @@ class _CaregiverDashboardState extends State<CaregiverDashboard> {
                             label: 'Medical Notes',
                             onPressed: () {
                               Navigator.of(context).push(
-                                TitledMaterialPageRoute(
-                                  title: 'Patient Medical Notes',
+                                MaterialPageRoute(
                                   builder: (context) => PatientMedicalNotesPage(
                                     patientId: patient.id,
                                     patientName:
