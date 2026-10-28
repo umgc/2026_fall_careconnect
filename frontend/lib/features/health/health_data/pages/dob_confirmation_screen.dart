@@ -83,6 +83,19 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
         // Couldn't check: keep the card.
       }
     }
+    if(gone){
+      final accepted = await _service.fetchAccepted();
+      if(accepted.any((x) => x.id == c.id)){
+        await IdentityConflictService.rememberServerChoice(c.id, true);
+      }else{
+        final rejected = await _service.fetchRejected();
+        if(rejected.any((x) => x.id == c.id)){
+          await IdentityConflictService.rememberServerChoice(c.id, false);
+        }
+      }
+
+    }
+
     if (!mounted) return;
     setState(() {
       _resolving.remove(c.id);

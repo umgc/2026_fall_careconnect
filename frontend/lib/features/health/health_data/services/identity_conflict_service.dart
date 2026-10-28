@@ -30,7 +30,7 @@ class IdentityConflictService {
     // Throws when the backend can't be checked, so the screen says so
     // instead of "all caught up".
     final owner = await _owner();
-    final server = await _fetchServer();
+    final server = await _fetchServer("PENDING");
     _shown
       ..clear()
       ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
@@ -41,15 +41,50 @@ class IdentityConflictService {
     return List.unmodifiable([...server, ...local]);
   }
 
+  Future<List<IdentityConflict>> fetchAccepted() async {
+    if (useMock) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      return _mockPending;
+    }
+    final owner = await _owner();
+    final server = await _fetchServer("ACCEPTED");
+    _shown
+      ..clear()
+      ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
+    final local = _found.values
+        .where((f) => f.owner == owner)
+        .map((f) => f.conflict)
+        .where((l) => !server.any((s) => _sameDates(s, l) != 0));
+    return List.unmodifiable([...server, ...local]);
+  }
+
+  Future<List<IdentityConflict>> fetchRejected() async {
+    if (useMock) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      return _mockPending;
+    }
+    final owner = await _owner();
+    final server = await _fetchServer("REJECTED");
+    _shown
+      ..clear()
+      ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
+    final local = _found.values
+        .where((f) => f.owner == owner)
+        .map((f) => f.conflict)
+        .where((l) => !server.any((s) => _sameDates(s, l) != 0));
+    return List.unmodifiable([...server, ...local]);
+  }
+
+
   /// The patient's pending date-of-birth conflicts from the backend. A 400,
   /// 403, 404 or 409 means the backend has none this caller can confirm (not
   /// a patient, or no patient record); anything else is rethrown.
-  Future<List<IdentityConflict>> _fetchServer() async {
+  Future<List<IdentityConflict>> _fetchServer(final String status) async {
     final Map<String, dynamic> env;
     try {
       env = await ApiClient.instance.getJson<Map<String, dynamic>>(
         _path,
-        query: const {'status': 'PENDING'},
+        query: {'status': status},
         parser: (json) =>
             json is Map<String, dynamic> ? json : <String, dynamic>{},
       );
@@ -107,14 +142,14 @@ class IdentityConflictService {
     } catch (_) {
       return false;
     }
-    await _rememberServerChoice(conflictId, accepted);
+    await rememberServerChoice(conflictId, accepted);
     return true;
   }
 
   /// Once the backend has saved [conflictId], the same choice is kept on the
   /// device for that pair of dates, and a matching disagreement this device
   /// found is dropped, so neither this screen nor Health Data asks again.
-  static Future<void> _rememberServerChoice(int id, bool accepted) async {
+  static Future<void> rememberServerChoice(int id, bool accepted) async {
     final shown = _shown.remove(id);
     if (shown == null || shown.owner != await _owner()) return;
     final c = shown.conflict;
