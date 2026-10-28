@@ -36,7 +36,7 @@ defaults:
 
 env:
   FLUTTER_VERSION: '3.47.8'
-  COVERAGE_MIN: '70'
+  COVERAGE_MIN: '80'
 
 jobs:
   unit-and-coverage:
