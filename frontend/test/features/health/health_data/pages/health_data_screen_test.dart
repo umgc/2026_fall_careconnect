@@ -1244,8 +1244,9 @@ void main() {
           }),
         );
 
-    testWidgets('the screen asks to confirm, keeps the current date until '
-        'then, and queues it for the DOB confirmation screen', (t) async {
+    testWidgets('TC-HDATA-069: the screen asks to confirm, keeps the '
+        'current date until then, and queues it for the DOB confirmation '
+        'screen', (t) async {
       await t.binding.setSurfaceSize(const Size(1200, 3000));
       addTearDown(() => t.binding.setSurfaceSize(null));
       await pump(t, dobs());
@@ -1265,8 +1266,8 @@ void main() {
       expect(pending.single.incomingValue, '05/15/1980');
     });
 
-    testWidgets('once the patient chooses, the card shows that date and '
-        'nothing asks again', (t) async {
+    testWidgets('TC-HDATA-070: once the patient chooses, the card shows '
+        'that date and nothing asks again', (t) async {
       await t.binding.setSurfaceSize(const Size(1200, 3000));
       addTearDown(() => t.binding.setSurfaceSize(null));
       await pump(t, dobs());
@@ -1283,7 +1284,8 @@ void main() {
       expect(find.textContaining('different dates of birth'), findsNothing);
     });
 
-    testWidgets('the same date from both sources asks nothing', (t) async {
+    testWidgets('TC-HDATA-071: the same date from both sources asks '
+        'nothing', (t) async {
       await t.binding.setSurfaceSize(const Size(1200, 3000));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final same = dobs()..athena = dobs().epic;

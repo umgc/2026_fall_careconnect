@@ -57,7 +57,8 @@ void main() {
   };
 
   for (final entry in items.entries) {
-    testWidgets('"${entry.key}" opens a page titled "${entry.value}"',
+    testWidgets(
+        'TC-MENU-007: "${entry.key}" opens a page titled "${entry.value}"',
         (tester) async {
       await pumpMenu(tester);
       final item = find.text(entry.key, skipOffstage: false).first;

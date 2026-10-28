@@ -3,12 +3,17 @@
 // date_of_birth (ck_ehr_identity_conflict_pending_dob).
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/config/theme/app_theme.dart';
+import 'package:care_connect_app/services/api_client.dart';
 
 import 'package:care_connect_app/features/health/health_data/models/identity_conflict.dart';
 import 'package:care_connect_app/features/health/health_data/pages/dob_confirmation_screen.dart';
@@ -220,12 +225,6 @@ void main() {
     expect(find.text('We couldn\u2019t check your information'), findsOneWidget);
     expect(find.textContaining('all caught up'), findsNothing);
     expect(find.text('Try again'), findsOneWidget);
-  });
-
-  test('TC-EHR-REC-046: with the mock off, resolve never reports a save that did not happen '
-      '(#263 review)', () async {
-    expect(await IdentityConflictService(useMock: false).resolve(1, accepted: true),
-        isFalse);
   });
 
   // M3 feedback: name and date of birth can match two people, so before the
@@ -577,4 +576,201 @@ void main() {
       expect(find.textContaining(hidden), findsNothing, reason: type);
     }
   });
+
+  // ---- The screen on the real service and a fake backend (PR #453) ----
+  group('with the identity-conflicts backend (#432)', () {
+    late _Backend backend;
+    late HttpClientAdapter original;
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      IdentityConflictService.clearFound();
+      original = ApiClient.instance.debugHttpClientAdapter;
+      backend = _Backend();
+      ApiClient.instance.debugSetHttpClientAdapter(backend);
+    });
+    tearDown(() => ApiClient.instance.debugSetHttpClientAdapter(original));
+
+    /// Dio answers on real time, outside the test's fake clock.
+    Future<void> settle(WidgetTester t) async {
+      for (var i = 0; i < 8; i++) {
+        await t.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await t.pump(const Duration(milliseconds: 20));
+      }
+      await t.pumpAndSettle();
+    }
+
+    Future<void> open(WidgetTester t) async {
+      await t.pumpWidget(MaterialApp(
+          home: DobConfirmationScreen(
+              service: IdentityConflictService(useMock: false))));
+      await settle(t);
+    }
+
+    Future<void> press(WidgetTester t, String label) async {
+      await t.ensureVisible(find.text(label));
+      await t.pumpAndSettle();
+      await t.tap(find.text(label));
+      await settle(t);
+    }
+
+    testWidgets('TC-EHR-REC-117: a backend conflict shows both dates '
+        'MM/DD/YYYY, where each came from, and the hidden phone to confirm',
+        (t) async {
+      backend.conflicts = [_Backend.dob(7)];
+      await open(t);
+      expect(backend.gets.single.queryParameters['status'], 'PENDING');
+      expect(find.text('05/14/1980'), findsOneWidget);
+      expect(find.text('05/14/1985'), findsOneWidget);
+      expect(find.text('From Epic'), findsOneWidget);
+      expect(find.text('From Oracle Health'), findsOneWidget);
+      expect(find.textContaining('ending in 4821'), findsOneWidget);
+      expect(find.text('Use new date'), findsNothing);
+    });
+
+    testWidgets('TC-EHR-REC-118: when the backend fails (500) the screen says '
+        'it couldn’t check, and Try again loads the conflict', (t) async {
+      backend.getStatus = 500;
+      await open(t);
+      expect(find.text('We couldn’t check your information'),
+          findsOneWidget);
+      expect(find.textContaining('all caught up'), findsNothing);
+
+      backend
+        ..getStatus = 200
+        ..conflicts = [_Backend.dob(7)];
+      await press(t, 'Try again');
+      expect(find.text('Which date of birth is correct?'), findsOneWidget);
+    });
+
+    testWidgets('TC-EHR-REC-119: a 403 (not a patient) is nothing to '
+        'confirm, not an error', (t) async {
+      backend.getStatus = 403;
+      await open(t);
+      expect(find.text('You’re all caught up'), findsOneWidget);
+      expect(find.text('We couldn’t check your information'), findsNothing);
+    });
+
+    testWidgets('TC-EHR-REC-120: Yes, it’s mine then Use new date saves '
+        'ACCEPTED on the backend and the card goes', (t) async {
+      backend.conflicts = [_Backend.dob(7)];
+      await open(t);
+      await press(t, 'Yes, it’s mine');
+      await press(t, 'Use new date');
+      expect(backend.posts.single.path,
+          endsWith('/v1/api/ehr/identity-conflicts/7/resolve'));
+      expect(jsonDecode(jsonEncode(backend.posts.single.data)),
+          {'status': 'ACCEPTED', 'resolvedBy': 'PATIENT'});
+      expect(find.text('Date of birth updated.'), findsOneWidget);
+      expect(find.text('Which date of birth is correct?'), findsNothing);
+    });
+
+    testWidgets('TC-EHR-REC-121: Not mine saves REJECTED on the backend and '
+        'says nothing was changed', (t) async {
+      backend.conflicts = [_Backend.dob(7)];
+      await open(t);
+      await press(t, 'Not mine');
+      expect(jsonDecode(jsonEncode(backend.posts.single.data)),
+          {'status': 'REJECTED', 'resolvedBy': 'PATIENT'});
+      expect(find.text('Nothing was changed. This record may not be yours.'),
+          findsOneWidget);
+      expect(find.text('Which date of birth is correct?'), findsNothing);
+    });
+
+    testWidgets('TC-EHR-REC-122: a save the backend fails (500) keeps the '
+        'card and says nothing was changed', (t) async {
+      backend
+        ..conflicts = [_Backend.dob(7)]
+        ..postStatus = 500;
+      await open(t);
+      await press(t, 'Yes, it’s mine');
+      await press(t, 'Use new date');
+      expect(
+          find.text('We couldn’t save your choice. Nothing was changed. '
+              'Please try again.'),
+          findsOneWidget);
+      expect(find.text('Which date of birth is correct?'), findsOneWidget);
+    });
+
+    testWidgets('TC-EHR-REC-123: a conflict from a backend without #432 (no '
+        'source names, no identity check) warns before the date choice',
+        (t) async {
+      backend.raw = {
+        'id': 3,
+        'fieldName': 'date_of_birth',
+        'canonicalValueBefore': '1980-05-14',
+        'incomingValue': '1985-05-14',
+        'status': 'PENDING',
+      };
+      await open(t);
+      expect(find.textContaining('We couldn’t double-check'), findsOneWidget);
+      expect(find.text('Use new date'), findsOneWidget);
+      expect(find.textContaining('From '), findsNothing);
+    });
+
+    testWidgets('TC-EHR-REC-124: a conflict already answered elsewhere (409) '
+        'leaves the screen instead of asking to try again', (t) async {
+      backend
+        ..conflicts = [_Backend.dob(7)]
+        ..postStatus = 409;
+      await open(t);
+      await press(t, 'Yes, it’s mine');
+      backend.conflicts = []; // answered on another device meanwhile
+      await press(t, 'Use new date');
+      expect(find.text('Which date of birth is correct?'), findsNothing);
+      expect(find.textContaining('Please try again'), findsNothing);
+      expect(find.text('This was already answered, so nothing was saved.'),
+          findsOneWidget);
+    });
+  });
+}
+
+/// A fake identity-conflicts backend for [ApiClient]: GET lists [conflicts]
+/// (or the single [raw] row), POST answers [postStatus].
+class _Backend implements HttpClientAdapter {
+  List<Map<String, dynamic>> conflicts = [];
+  Map<String, dynamic>? raw;
+  int getStatus = 200;
+  int postStatus = 200;
+  final gets = <RequestOptions>[];
+  final posts = <RequestOptions>[];
+
+  static Map<String, dynamic> dob(int id) => {
+        'id': id,
+        'fieldName': 'date_of_birth',
+        'canonicalValueBefore': '1980-05-14',
+        'incomingValue': '1985-05-14',
+        'canonicalSourceLabel': 'Epic',
+        'incomingSourceLabel': 'Oracle Health',
+        'status': 'PENDING',
+        'detectedAt': '2026-10-25T12:00:00Z',
+        'identityCheck': {'type': 'PHONE', 'value': '4821'},
+      };
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    final json = {
+      Headers.contentTypeHeader: [Headers.jsonContentType]
+    };
+    if (options.method == 'GET') {
+      gets.add(options);
+      return getStatus == 200
+          ? ResponseBody.fromString(
+              jsonEncode({
+                'resources': raw == null ? conflicts : [raw]
+              }),
+              200,
+              headers: json)
+          : ResponseBody.fromString('{"error":"x"}', getStatus, headers: json);
+    }
+    posts.add(options);
+    return ResponseBody.fromString(
+        postStatus == 200 ? '{"decision":"APPLIED"}' : '{"error":"x"}',
+        postStatus,
+        headers: json);
+  }
+
+  @override
+  void close({bool force = false}) {}
 }
