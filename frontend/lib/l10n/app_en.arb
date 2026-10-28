@@ -1962,6 +1962,7 @@
   "evvSelectPatientEmptyBody": "You don't have any patients assigned to you yet.",
   "evvSelectPatientAdd": "Add Patient",
   "evvSelectPatientNoAddress": "Address not available",
+  "evvCaregiverProfileRequired": "A valid caregiver profile is required to access EVV patients.",
   "evvSelectPatientUnauthenticated": "User not authenticated",
   "evvSelectPatientHttpError": "Failed to load patients: {statusCode}",
   "@evvSelectPatientHttpError": {"placeholders": {"statusCode": {"type": "int"}}},

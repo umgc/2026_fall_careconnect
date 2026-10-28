@@ -76,7 +76,11 @@ class _CheckinLocationPageState extends State<CheckinLocationPage> {
       }
 
       // Fetch patient details
-      final caregiverId = user.caregiverId ?? user.id;
+      final caregiverId = user.caregiverId;
+      if (user.role != 'CAREGIVER' || caregiverId == null || caregiverId <= 0) {
+        throw Exception(
+            'A valid caregiver profile is required to access EVV patients.');
+      }
       final response = await ApiService.getCaregiverPatients(caregiverId);
 
       if (response.statusCode == 200) {

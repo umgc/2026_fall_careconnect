@@ -50,7 +50,11 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
       }
 
       // Fetch patients for the current caregiver using ApiService
-      final caregiverId = user.caregiverId ?? user.id;
+      final caregiverId = user.caregiverId;
+      if (user.role != 'CAREGIVER' || caregiverId == null || caregiverId <= 0) {
+        throw Exception(
+            'A valid caregiver profile is required to access EVV patients.');
+      }
       final response = await ApiService.getCaregiverPatients(caregiverId);
 
       if (response.statusCode == 200) {
@@ -112,7 +116,8 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
           TextButton.icon(
             onPressed: () => context.go('/dashboard?role=CAREGIVER'),
             icon: const Icon(Icons.cancel, color: Colors.red),
-            label: Text(AppLocalizations.of(context)!.evvSelectPatientCancel, style: const TextStyle(color: Colors.red)),
+            label: Text(AppLocalizations.of(context)!.evvSelectPatientCancel,
+                style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),

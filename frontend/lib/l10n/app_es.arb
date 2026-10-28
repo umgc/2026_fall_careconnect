@@ -1748,6 +1748,7 @@
   "evvSelectPatientEmptyBody": "Aún no tienes pacientes asignados.",
   "evvSelectPatientAdd": "Agregar paciente",
   "evvSelectPatientNoAddress": "Dirección no disponible",
+  "evvCaregiverProfileRequired": "Se requiere un perfil de cuidador válido para acceder a los pacientes de EVV.",
   "evvSelectPatientUnauthenticated": "Usuario no autenticado",
   "evvSelectPatientHttpError": "No se pudieron cargar los pacientes: {statusCode}",
   "evvHistoryTitle": "Historial de visitas EVV",

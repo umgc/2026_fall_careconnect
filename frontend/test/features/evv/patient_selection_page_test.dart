@@ -13,7 +13,8 @@ import 'package:care_connect_app/providers/user_provider.dart';
 import '../../mock_user_provider.dart';
 
 Widget _wrap() {
-  final provider = MockUserProvider(mockUser: MockUser(id: 1, role: 'CAREGIVER'));
+  final provider = MockUserProvider(
+      mockUser: MockUser(id: 1, role: 'CAREGIVER', caregiverId: 1));
   return MaterialApp(
     locale: const Locale('en'),
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -37,7 +38,8 @@ void main() {
       expect(find.text('Select Patient'), findsOneWidget);
     });
 
-    testWidgets('shows CircularProgressIndicator while loading', (tester) async {
+    testWidgets('shows CircularProgressIndicator while loading',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
