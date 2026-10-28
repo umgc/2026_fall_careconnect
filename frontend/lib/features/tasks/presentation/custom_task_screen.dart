@@ -31,7 +31,10 @@ class _CustomTaskScreenState extends State<CustomTaskScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Custom Task Scheduling'),
+        title: Semantics(
+          headingLevel: 1,
+          child: const Text('Custom Task Scheduling'),
+        ),
         centerTitle: true,
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,

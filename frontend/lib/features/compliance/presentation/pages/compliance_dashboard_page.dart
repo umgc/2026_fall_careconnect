@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:care_connect_app/services/document_compliance_service.dart';
@@ -162,7 +163,8 @@ class _ComplianceDashboardPageState extends State<ComplianceDashboardPage>
   void _openChecklist(String subjectType, int subjectId, String subjectName) {
     Navigator.of(context)
         .push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Compliance Checklist',
         builder: (routeContext) => ComplianceChecklistPage(
           subjectType: subjectType,
           subjectId: subjectId,

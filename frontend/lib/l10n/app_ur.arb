@@ -154,6 +154,7 @@
   "ptdashboard_onceAtBed": "روزانہ ایک بار سونے کے وقت",
   
   "login_loginFailedError": "لاگ ان ناکام",
+  "login_invalidCredentials": "صارف نام یا پاس ورڈ غلط ہے۔ انہیں چیک کریں اور دوبارہ کوشش کریں۔",
 
   "settings_telemetryDefaultDialogTitle": "ٹیلی میٹری فعال ہے",
   "settings_telemetryDefaultDialogDescription": "CareConnect قابل اعتماد کو بہتر بنانے میں مدد کے لیے بطور ڈیفالٹ گمنام تشخیصات اور کارکردگی کی پیمائشیں جمع کرتا ہے۔\nآپ کسی بھی وقت آپٹ آؤٹ کر سکتے ہیں۔",

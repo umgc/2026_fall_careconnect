@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:io';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -177,7 +178,8 @@ class _FileManagementPageState extends State<FileManagementPage>
               tooltip: t.filemanage_docComplianceDash,
               onPressed: () {
                 Navigator.of(context).push(
-                  MaterialPageRoute(
+                  TitledMaterialPageRoute(
+                    title: 'Compliance Dashboard',
                     builder: (routeContext) => const ComplianceDashboardPage(),
                   ),
                 );

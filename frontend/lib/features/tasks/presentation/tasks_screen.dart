@@ -87,13 +87,17 @@ class _TasksScreenState extends State<TasksScreen> {
         backgroundColor: Colors.blue.shade900,
         iconTheme: const IconThemeData(color: Colors.white),
         foregroundColor: Colors.white,
-        title: const Text(
-          'Tasks Dashboard',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Semantics(
+          headingLevel: 1,
+          child: const Text(
+            'Tasks Dashboard',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
         ),
       ),
       drawer: const CommonDrawer(currentRoute: '/patient-tasks'),
       floatingActionButton: FloatingActionButton(
+        tooltip: 'Add task',
         onPressed: () {
           context.go(
             '/assign-task?patientId=${widget.patientId}&patientName=${widget.patientName}',
