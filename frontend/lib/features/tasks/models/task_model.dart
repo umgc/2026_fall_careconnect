@@ -25,6 +25,8 @@ class Task {
   List<ScheduledNotification>? notifications;
 
   //Recurrence fields
+  DateTime? recurrenceAnchorDate;
+  List<DateTime>? recurrenceExcludedDates;
   String? frequency; // e.g., daily, weekly, monthly, yearly
   int? interval; // number of days/weeks/months between recurrences
   int? count; // number of total occurrences
@@ -44,6 +46,8 @@ class Task {
     this.isComplete = false,
     this.notifications,
     this.frequency,
+    this.recurrenceAnchorDate,
+    this.recurrenceExcludedDates,
     this.interval,
     this.count,
     this.daysOfWeek,
@@ -86,6 +90,12 @@ class Task {
               .toList()
           : null,
       frequency: json['frequency'],
+      recurrenceExcludedDates: (json['recurrenceExcludedDates'] as List?)
+          ?.map((value) => DateTime.parse(value as String))
+          .toList(),
+      recurrenceAnchorDate: json['recurrenceAnchorDate'] != null
+          ? DateTime.parse(json['recurrenceAnchorDate'])
+          : null,
       interval: json['interval'] ?? json['taskInterval'],
       count: json['count'] ?? json['doCount'],
       daysOfWeek: parsedDays,
@@ -148,6 +158,8 @@ extension TaskCopyWith on Task {
     int? assignedPatientId,
     bool? isComplete,
     String? frequency,
+    DateTime? recurrenceAnchorDate,
+    List<DateTime>? recurrenceExcludedDates,
     int? interval,
     int? count,
     List<bool>? daysOfWeek,
@@ -166,6 +178,9 @@ extension TaskCopyWith on Task {
       isComplete: isComplete ?? this.isComplete,
       notifications: notifications, // keep existing notifications
       frequency: frequency ?? this.frequency,
+      recurrenceAnchorDate: recurrenceAnchorDate ?? this.recurrenceAnchorDate,
+      recurrenceExcludedDates:
+          recurrenceExcludedDates ?? this.recurrenceExcludedDates,
       interval: interval ?? this.interval,
       count: count ?? this.count,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,

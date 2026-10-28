@@ -6,6 +6,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TaskTest {
 
+    @Test
+    void recurrenceAnchorIsOptionalAndRetainedByTheEntity() {
+        final Task task = Task.builder().date("2025-02-28").recurrenceAnchorDate("2024-02-29").build();
+        assertThat(task.getRecurrenceAnchorDate()).isEqualTo("2024-02-29");
+        task.setRecurrenceAnchorDate(null);
+        assertThat(task.getRecurrenceAnchorDate()).isNull();
+    }
+
     // ─── No-arg constructor ───────────────────────────────────────────────────
 
     @Test

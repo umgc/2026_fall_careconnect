@@ -37,6 +37,7 @@ class RecurrenceForm extends StatefulWidget {
   final bool initialApplyToSeries;
   final bool showApplyToSeries;
   final DateTime? anchorStartDate;
+  final DateTime? cadenceAnchorDate;
 
   const RecurrenceForm({
     super.key,
@@ -53,6 +54,7 @@ class RecurrenceForm extends StatefulWidget {
     this.applyToSeries = false,
     this.initialApplyToSeries = false,
     this.anchorStartDate,
+    this.cadenceAnchorDate,
   });
 
   @override
@@ -383,11 +385,11 @@ class _RecurrenceFormState extends State<RecurrenceForm> {
                   onChanged: (val) {
                     if (val != null && startDate != null) {
                       setState(() {
+                        final anchor = widget.cadenceAnchorDate ?? startDate!;
+                        final lastDay =
+                            DateUtils.getDaysInMonth(val, anchor.month);
                         endDate = DateTime(
-                          val,
-                          startDate!.month,
-                          startDate!.day,
-                        );
+                            val, anchor.month, anchor.day.clamp(1, lastDay));
                         count = (val - startDate!.year) + 1; // auto-calc count
                       });
                       widget.onChanged(

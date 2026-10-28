@@ -120,7 +120,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
       );
 
       if (recurrenceType == "Monthly") {
-        dayOfMonth = t.date.day;
+        dayOfMonth = t.recurrenceAnchorDate?.day ?? t.date.day;
       }
       // compute end date using helper
       if (count != null &&
@@ -134,6 +134,8 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
           interval: iv,
           count: count!,
           daysOfWeek: daysOfWeek,
+          cadenceAnchorDate: t.recurrenceAnchorDate,
+          excludedDates: t.recurrenceExcludedDates,
         );
       }
     } else {
@@ -518,10 +520,11 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                   initialDaysOfWeek: daysOfWeek,
                   initialInterval: interval,
                   initialCount: count,
-                  initialStartDate: widget.seriesAnchorDate ?? startDate,
+                  initialStartDate: startDate,
                   initialEndDate: endDate,
                   initialDayOfMonth: dayOfMonth,
                   anchorStartDate: widget.seriesAnchorDate,
+                  cadenceAnchorDate: widget.initialTask?.recurrenceAnchorDate,
                   onChanged: ({
                     bool? isRecurring,
                     String? recurrenceType,
@@ -577,6 +580,10 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                                 notifications:
                                     widget.initialTask?.notifications,
                                 frequency: recurrenceType,
+                                recurrenceAnchorDate:
+                                    widget.initialTask?.recurrenceAnchorDate,
+                                recurrenceExcludedDates:
+                                    widget.initialTask?.recurrenceExcludedDates,
                                 interval: interval,
                                 count: count,
                                 daysOfWeek: daysOfWeek,

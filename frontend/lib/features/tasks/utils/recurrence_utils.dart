@@ -147,7 +147,10 @@ class RecurrenceUtils {
               ? 1
               : intervalToSend;
 
-          int dom = dayOfMonth ?? recurrenceStartDate.day;
+          final preferredDom = dayOfMonth ??
+              baseTask.recurrenceAnchorDate?.day ??
+              recurrenceStartDate.day;
+          int dom = preferredDom;
 
           // Adjust the first occurrence so it’s not before the startDate
           final daysInStartMonth = DateUtils.getDaysInMonth(
@@ -170,7 +173,7 @@ class RecurrenceUtils {
               nextYear,
               adjustedMonth,
             );
-            final nextDom = dom.clamp(1, daysInNextMonth);
+            final nextDom = preferredDom.clamp(1, daysInNextMonth);
             firstCandidate = DateTime(nextYear, adjustedMonth, nextDom);
           }
 
@@ -186,7 +189,7 @@ class RecurrenceUtils {
                 nextYear,
                 adjustedMonth,
               );
-              final nextDom = dom.clamp(1, daysInNextMonth);
+              final nextDom = preferredDom.clamp(1, daysInNextMonth);
               cursor = DateTime(nextYear, adjustedMonth, nextDom);
             }
             countToSend = occurrences;
@@ -212,11 +215,12 @@ class RecurrenceUtils {
             DateTime cursor = recurrenceStartDate;
             while (!cursor.isAfter(normalizedEndDate)) {
               occurrences++;
+              final anchor =
+                  baseTask.recurrenceAnchorDate ?? recurrenceStartDate;
+              final nextYear = cursor.year + intervalToSend;
+              final lastDay = DateUtils.getDaysInMonth(nextYear, anchor.month);
               cursor = DateTime(
-                cursor.year + intervalToSend,
-                cursor.month,
-                cursor.day,
-              );
+                  nextYear, anchor.month, anchor.day.clamp(1, lastDay));
             }
             countToSend = occurrences;
           } else {
@@ -224,6 +228,30 @@ class RecurrenceUtils {
           }
           break;
       }
+    }
+    if (isRecurring == true &&
+        recurrenceType != null &&
+        normalizedEndDate != null &&
+        baseTask.recurrenceExcludedDates?.isNotEmpty == true) {
+      final excluded = baseTask.recurrenceExcludedDates!
+          .map(TaskUtils.normalizeDate)
+          .toSet();
+      var cursor = TaskUtils.normalizeDate(recurrenceStartDate);
+      var activeCount = 0;
+      while (!cursor.isAfter(normalizedEndDate)) {
+        if (!excluded.contains(cursor) &&
+            _isCadenceDate(
+                cursor,
+                recurrenceStartDate,
+                recurrenceType,
+                intervalToSend ?? 1,
+                daysOfWeek,
+                baseTask.recurrenceAnchorDate)) {
+          activeCount++;
+        }
+        cursor = DateTime(cursor.year, cursor.month, cursor.day + 1);
+      }
+      countToSend = activeCount;
     }
     return baseTask.copyWith(
       date: effectiveDate,
@@ -312,7 +340,47 @@ class RecurrenceUtils {
     required int interval,
     required int count,
     List<bool>? daysOfWeek,
+    DateTime? cadenceAnchorDate,
+    List<DateTime>? excludedDates,
   }) {
+    if (excludedDates?.isNotEmpty == true && count > 0) {
+      var rawCount = count;
+      while (true) {
+        final end = calculateEndDate(
+            startDate: startDate,
+            frequency: frequency,
+            interval: interval,
+            count: rawCount,
+            daysOfWeek: daysOfWeek,
+            cadenceAnchorDate: cadenceAnchorDate);
+        final removed = excludedDates!
+            .map(TaskUtils.normalizeDate)
+            .toSet()
+            .where((day) =>
+                !day.isBefore(startDate) &&
+                !day.isAfter(end) &&
+                _isCadenceDate(day, startDate, frequency, interval, daysOfWeek,
+                    cadenceAnchorDate))
+            .length;
+        final requiredRawCount = count + removed;
+        if (requiredRawCount == rawCount) return end;
+        rawCount = requiredRawCount;
+      }
+    }
+    if (cadenceAnchorDate != null && count > 1) {
+      final yearly = frequency.toLowerCase() == "yearly";
+      if (yearly || frequency.toLowerCase() == "monthly") {
+        final month = DateTime(
+          startDate.year + (yearly ? (count - 1) * interval : 0),
+          yearly
+              ? cadenceAnchorDate.month
+              : startDate.month + (count - 1) * interval,
+        );
+        final lastDay = DateUtils.getDaysInMonth(month.year, month.month);
+        return DateTime(
+            month.year, month.month, cadenceAnchorDate.day.clamp(1, lastDay));
+      }
+    }
     switch (frequency.toLowerCase()) {
       case "daily":
         return startDate.add(Duration(days: (count - 1) * interval));
@@ -367,6 +435,53 @@ class RecurrenceUtils {
         );
       default:
         return startDate;
+    }
+  }
+
+  static bool _isCadenceDate(DateTime day, DateTime start, String frequency,
+      int interval, List<bool>? days, DateTime? anchor) {
+    final step = interval < 1 ? 1 : interval;
+    final date = TaskUtils.normalizeDate(day);
+    final origin = TaskUtils.normalizeDate(start);
+    final delta = DateTime.utc(date.year, date.month, date.day)
+        .difference(DateTime.utc(origin.year, origin.month, origin.day))
+        .inDays;
+    if (delta < 0) return false;
+    switch (frequency.toLowerCase()) {
+      case 'daily':
+        return delta % step == 0;
+      case 'weekly':
+        if (days == null || days.length != 7) {
+          return delta % (7 * step) == 0;
+        }
+        if (!days.any((selected) => selected)) return false;
+        return ((delta + origin.weekday % 7) ~/ 7) % step == 0 &&
+            days[date.weekday % 7];
+      case 'monthly':
+        final months =
+            (date.year - origin.year) * 12 + date.month - origin.month;
+        return months >= 0 &&
+            months % step == 0 &&
+            calculateEndDate(
+                    startDate: origin,
+                    frequency: frequency,
+                    interval: step,
+                    count: months ~/ step + 1,
+                    cadenceAnchorDate: anchor) ==
+                date;
+      case 'yearly':
+        final years = date.year - origin.year;
+        return years >= 0 &&
+            years % step == 0 &&
+            calculateEndDate(
+                    startDate: origin,
+                    frequency: frequency,
+                    interval: step,
+                    count: years ~/ step + 1,
+                    cadenceAnchorDate: anchor) ==
+                date;
+      default:
+        return date == origin;
     }
   }
 }

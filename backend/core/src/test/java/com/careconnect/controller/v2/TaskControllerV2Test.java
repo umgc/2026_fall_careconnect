@@ -153,6 +153,96 @@ class TaskControllerV2Test {
         verify(authorizationService, never()).requireAdminOrCaregiver(any());
     }
 
+    @Test
+    void updateTask_patientCannotReassignEvenWithSeriesUpdate() throws Exception {
+        final User patient = User.builder().id(100L).role(Role.PATIENT).build();
+        final Task existing = taskOfPatient(7L, 10L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(patient);
+        when(taskService.getTaskById(7L)).thenReturn(existing);
+        for (boolean series : List.of(false, true)) {
+            final TaskDtoV2 request = TaskDtoV2.builder().patientId(20L).updateSeries(series).build();
+            assertThatThrownBy(() -> controller.updateTask(7L, request))
+                    .isInstanceOf(UnauthorizedException.class)
+                    .hasMessageContaining("cannot reassign");
+        }
+        verify(taskService, never()).updateTask(anyLong(), any());
+        verify(authorizationService, never()).requirePatientRecordAccess(any(), anyLong());
+    }
+
+    @Test
+    void updateTask_patientCanKeepSamePatientId() throws Exception {
+        final User patient = User.builder().id(100L).role(Role.PATIENT).build();
+        final Task existing = taskOfPatient(7L, 10L);
+        final TaskDtoV2 request = TaskDtoV2.builder().patientId(10L).name("Edited").build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(patient);
+        when(taskService.getTaskById(7L)).thenReturn(existing);
+        controller.updateTask(7L, request);
+        verify(taskService).updateTask(7L, request);
+        verify(authorizationService, never()).requirePatientRecordAccess(any(), anyLong());
+    }
+
+    @Test
+    void updateTask_caregiverCannotReassignToInaccessiblePatient() throws Exception {
+        final User user = caregiver();
+        final Task existing = taskOfPatient(7L, 5L);
+        final TaskDtoV2 request = TaskDtoV2.builder().patientId(20L).build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(existing);
+        doThrow(new UnauthorizedException("not assigned to destination"))
+                .when(authorizationService).requirePatientRecordAccess(user, 20L);
+        assertThatThrownBy(() -> controller.updateTask(7L, request))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(taskService, never()).updateTask(anyLong(), any());
+    }
+
+    @Test
+    void updateTask_caregiverChecksBothPatientsBeforeSaving() throws Exception {
+        final User user = caregiver();
+        final Task existing = taskOfPatient(7L, 5L);
+        final TaskDtoV2 request = TaskDtoV2.builder().patientId(20L).updateSeries(true).build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(existing);
+        controller.updateTask(7L, request);
+        final var order = inOrder(authorizationService, taskService);
+        order.verify(authorizationService).requireTaskAccess(user, existing);
+        order.verify(authorizationService).requireWriteAccess(user);
+        order.verify(authorizationService).requirePatientRecordAccess(user, 20L);
+        order.verify(taskService).updateTask(7L, request);
+    }
+
+    @Test
+    void updateTask_adminCanAssignPreviouslyUnassignedTask() throws Exception {
+        final User admin = User.builder().id(1L).role(Role.ADMIN).build();
+        final Task existing = Task.builder().id(7L).patient(null).build();
+        final TaskDtoV2 request = TaskDtoV2.builder().patientId(20L).build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(admin);
+        when(taskService.getTaskById(7L)).thenReturn(existing);
+        when(taskService.updateTask(7L, request)).thenReturn(request);
+
+        assertThat(controller.updateTask(7L, request).getBody()).isEqualTo(request);
+
+        final var order = inOrder(authorizationService, taskService);
+        order.verify(authorizationService).requireTaskAccess(admin, existing);
+        order.verify(authorizationService).requireWriteAccess(admin);
+        order.verify(authorizationService).requirePatientRecordAccess(admin, 20L);
+        order.verify(taskService).updateTask(7L, request);
+    }
+
+    @Test
+    void updateTask_unassignedTaskStillRequiresCurrentTaskAccess() throws Exception {
+        final User user = caregiver();
+        final Task existing = Task.builder().id(7L).patient(null).build();
+        final TaskDtoV2 request = TaskDtoV2.builder().patientId(20L).build();
+        when(securityUtil.resolveCurrentUser()).thenReturn(user);
+        when(taskService.getTaskById(7L)).thenReturn(existing);
+        doThrow(new UnauthorizedException("Admin access required"))
+                .when(authorizationService).requireTaskAccess(user, existing);
+
+        assertThatThrownBy(() -> controller.updateTask(7L, request))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(taskService, never()).updateTask(anyLong(), any());
+    }
+
     // ─── updateTaskCompletion ─────────────────────────────────────────────────
 
     @Test

@@ -6,6 +6,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,6 +30,15 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.careconnect.dto.ScheduledNotificationDTO;
 import com.careconnect.dto.v2.TaskDtoV2;
@@ -33,6 +48,10 @@ import com.careconnect.exception.TaskNotFoundException;
 import com.careconnect.model.Patient;
 import com.careconnect.model.ScheduledNotification;
 import com.careconnect.model.Task;
+import com.careconnect.model.User;
+import com.careconnect.notifications.SesService;
+import com.careconnect.notifications.SnsService;
+import com.careconnect.service.TaskService;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.TaskRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,6 +64,14 @@ class TaskServiceV2Test {
 
     @Mock
     private PatientRepository patientRepository;
+    @Mock
+    private com.careconnect.repository.UserRepository userRepository;
+    @Mock
+    private com.careconnect.security.AuthorizationService authorizationService;
+    @Mock
+    private com.careconnect.util.SecurityUtil securityUtil;
+    @Mock
+    private TaskService appointmentNotifications;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -56,8 +83,821 @@ class TaskServiceV2Test {
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
-        service = new TaskServiceV2(taskRepository, patientRepository, objectMapper);
+        when(securityUtil.resolveCurrentUser()).thenReturn(com.careconnect.model.User.builder()
+                .id(999L).role(com.careconnect.security.Role.ADMIN).build());
+        service = new TaskServiceV2(taskRepository, patientRepository, objectMapper, appointmentNotifications, authorizationService, securityUtil, userRepository);
         patient = Patient.builder().id(1L).firstName("John").lastName("Doe").build();
+    }
+
+    @Nested
+    class SeriesAuthorization {
+        private final User userA = User.builder().id(100L).role(com.careconnect.security.Role.PATIENT).build();
+        private final User userB = User.builder().id(200L).role(com.careconnect.security.Role.PATIENT).build();
+        private final User caregiver = User.builder().id(300L).role(com.careconnect.security.Role.CAREGIVER).build();
+        private Patient a;
+        private Patient b;
+        private Task parent;
+        private Task child;
+        private Task sibling;
+        private List<Task> records;
+        private java.util.Set<Long> linkedUsers;
+        private com.careconnect.repository.CaregiverPatientLinkRepository links;
+        private com.careconnect.controller.v2.TaskControllerV2 controller;
+
+        @BeforeEach
+        void configureAuthorization() {
+            a = Patient.builder().id(10L).user(userA).build();
+            b = Patient.builder().id(20L).user(userB).build();
+            parent = seriesTask(1L, null, "2026-01-06", a);
+            child = seriesTask(2L, 1L, "2026-01-20", a);
+            sibling = seriesTask(3L, 1L, "2026-01-21", a);
+            records = new ArrayList<>(List.of(parent, child, sibling));
+            linkedUsers = java.util.Set.of(100L, 200L);
+            links = mock(com.careconnect.repository.CaregiverPatientLinkRepository.class);
+            final var families = mock(com.careconnect.repository.FamilyMemberLinkRepository.class);
+            when(links.existsActiveNonExpiredLinkByUserIds(any(), any(), any()))
+                    .thenAnswer(invocation -> Long.valueOf(300L).equals(invocation.getArgument(0))
+                            && linkedUsers.contains(invocation.<Long>getArgument(1)));
+            when(patientRepository.findById(10L)).thenReturn(Optional.of(a));
+            when(patientRepository.findById(20L)).thenReturn(Optional.of(b));
+            when(taskRepository.findById(anyLong())).thenAnswer(invocation ->
+                    records.stream().filter(t -> t.getId().equals(invocation.getArgument(0))).findFirst());
+            when(taskRepository.findByParentTaskId(anyLong())).thenAnswer(invocation -> {
+                final Long id = invocation.getArgument(0);
+                return records.stream().filter(t -> id.equals(t.getParentTaskId()))
+                        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+            });
+            when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            when(taskRepository.saveAll(any())).thenAnswer(invocation -> {
+                final List<Task> saved = new ArrayList<>();
+                for (Task task : invocation.<Iterable<Task>>getArgument(0)) {
+                    if (task.getId() == null) {
+                        task.setId(records.stream().mapToLong(Task::getId).max().orElse(0L) + 1L);
+                        records.add(task);
+                    }
+                    saved.add(task);
+                }
+                return saved;
+            });
+            doAnswer(invocation -> {
+                final List<Task> deleted = new ArrayList<>();
+                invocation.<Iterable<Task>>getArgument(0).forEach(deleted::add);
+                records.removeAll(deleted);
+                return null;
+            }).when(taskRepository).deleteAll(any(Iterable.class));
+            final var authorization = new com.careconnect.security.AuthorizationService(
+                    links, families, patientRepository);
+            service = new TaskServiceV2(taskRepository, patientRepository, objectMapper,
+                    appointmentNotifications, authorization, securityUtil, userRepository);
+            controller = new com.careconnect.controller.v2.TaskControllerV2(service, securityUtil, authorization);
+            when(securityUtil.resolveCurrentUser()).thenReturn(caregiver);
+        }
+
+        private Task seriesTask(long id, Long parentId, String date, Patient owner) {
+            return Task.builder().id(id).parentTaskId(parentId).patient(owner)
+                    .name("Original " + id).date(date).timeOfDay("10:00")
+                    .frequency("daily").taskInterval(1).doCount(30).build();
+        }
+
+        private void assertDenied(org.assertj.core.api.ThrowableAssert.ThrowingCallable operation) {
+            assertThatThrownBy(operation).isInstanceOf(com.careconnect.security.UnauthorizedException.class);
+            verify(taskRepository, never()).save(any(Task.class));
+            verify(taskRepository, never()).saveAll(any());
+            verify(taskRepository, never()).delete(any(Task.class));
+            verify(taskRepository, never()).deleteAll(any(Iterable.class));
+            assertThat(parent.getName()).isEqualTo("Original 1");
+        }
+
+        @Test
+        void movingOneOccurrenceDetachesItFromTheFormerSeries() throws Exception {
+            final TaskDtoV2 result = controller.updateTask(2L,
+                    TaskDtoV2.builder().patientId(20L).updateSeries(false).build()).getBody();
+            assertThat(result.getPatientId()).isEqualTo(20L);
+            assertThat(result.getParentTaskId()).isNull();
+            assertThat(result.getFrequency()).isNull();
+            assertThat(result.getCount()).isNull();
+            assertThat(result.getDate()).isEqualTo("2026-01-20");
+            assertThat(parent.getPatient()).isSameAs(a);
+            assertThat(sibling.getPatient()).isSameAs(a);
+            assertThat(sibling.getParentTaskId()).isEqualTo(1L);
+        }
+
+        @Test
+        void movedOccurrenceCannotBeUsedToEditOrDeleteTheFormerSeries() throws Exception {
+            controller.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            controller.updateTask(2L, TaskDtoV2.builder().patientId(20L)
+                    .name("B independent task").updateSeries(true).build());
+            assertThat(parent.getName()).isEqualTo("Original 1");
+            assertThat(parent.getPatient()).isSameAs(a);
+            controller.deleteTask(2L, true);
+            final ArgumentCaptor<Iterable<Task>> deleted = ArgumentCaptor.forClass(Iterable.class);
+            verify(taskRepository).deleteAll(deleted.capture());
+            assertThat(deleted.getValue()).containsExactly(child);
+        }
+
+        @Test
+        void existingMixedSeriesCannotBeEditedThroughItsForeignChild() {
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> controller.updateTask(2L, TaskDtoV2.builder().patientId(20L)
+                    .name("Unauthorized").updateSeries(true).build()));
+            assertThat(parent.getPatient()).isSameAs(a);
+            assertThat(child.getParentTaskId()).isEqualTo(1L);
+        }
+
+        @Test
+        void existingMixedSeriesCannotBeDeletedThroughItsForeignChild() {
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> controller.deleteTask(2L, true));
+        }
+
+        @Test
+        void ownParentDoesNotAuthorizeEditingAnotherPatientsChild() {
+            parent.setPatient(b);
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> controller.updateTask(1L, TaskDtoV2.builder().patientId(20L)
+                    .name("Unauthorized").updateSeries(true).build()));
+            assertThat(sibling.getPatient()).isSameAs(a);
+        }
+
+        @Test
+        void ownParentDoesNotAuthorizeDeletingAnotherPatientsChild() {
+            parent.setPatient(b);
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> controller.deleteTask(1L, true));
+        }
+
+        @Test
+        void singleParentDeletionCannotPromoteAnotherPatientsChild() {
+            parent.setPatient(b);
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> controller.deleteTask(1L, false));
+            assertThat(child.getParentTaskId()).isEqualTo(1L);
+            assertThat(sibling.getParentTaskId()).isEqualTo(1L);
+        }
+
+        @Test
+        void caregiverMustHaveAccessToTheParentAndAllChildren() {
+            child.setPatient(b);
+            linkedUsers = java.util.Set.of(200L);
+            assertDenied(() -> controller.updateTask(2L,
+                    TaskDtoV2.builder().name("Unauthorized").updateSeries(true).build()));
+            assertDenied(() -> controller.deleteTask(2L, true));
+        }
+
+        @Test
+        void inaccessibleDestinationRejectsTheWholeMoveBeforeMutation() {
+            linkedUsers = java.util.Set.of(100L);
+            assertDenied(() -> service.updateTask(1L,
+                    TaskDtoV2.builder().patientId(20L).updateSeries(true).build()));
+            assertThat(parent.getPatient()).isSameAs(a);
+            assertThat(child.getPatient()).isSameAs(a);
+        }
+
+        @Test
+        void seriesReassignmentMovesEveryMemberToTheDestination() throws Exception {
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(records).allSatisfy(t -> assertThat(t.getPatient()).isSameAs(b));
+            assertThat(parent.getParentTaskId()).isNull();
+            assertThat(child.getParentTaskId()).isEqualTo(1L);
+            assertThat(sibling.getParentTaskId()).isEqualTo(1L);
+        }
+
+        @Test
+        void movingTheParentPromotesItsOriginalChildrenAndDetachesTheMovedTask() throws Exception {
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(false).build());
+            assertThat(parent.getPatient()).isSameAs(b);
+            assertThat(parent.getFrequency()).isNull();
+            assertThat(child.getPatient()).isSameAs(a);
+            assertThat(child.getParentTaskId()).isNull();
+            assertThat(sibling.getParentTaskId()).isEqualTo(2L);
+            assertThat(sibling.getPatient()).isSameAs(a);
+        }
+
+        @Test
+        void parentMovePromotesEarliestRemainingOccurrenceRegardlessOfQueryOrder() throws Exception {
+            records = new ArrayList<>(List.of(parent, sibling, child));
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(child.getParentTaskId()).isNull();
+            assertThat(child.getDate()).isEqualTo("2026-01-20");
+            assertThat(sibling.getParentTaskId()).isEqualTo(2L);
+        }
+
+        @Test
+        void parentMoveChecksChildrenBeforePromotingOrReassigningAnything() {
+            final Patient c = Patient.builder().id(30L)
+                    .user(User.builder().id(400L).role(com.careconnect.security.Role.PATIENT).build()).build();
+            when(patientRepository.findById(30L)).thenReturn(Optional.of(c));
+            child.setPatient(b);
+            linkedUsers = java.util.Set.of(100L, 400L);
+            assertDenied(() -> service.updateTask(1L, TaskDtoV2.builder().patientId(30L).build()));
+            assertThat(parent.getPatient()).isSameAs(a);
+            assertThat(child.getParentTaskId()).isEqualTo(1L);
+        }
+
+        @Test
+        void keepingTheSamePatientPreservesTheSeriesLink() throws Exception {
+            when(securityUtil.resolveCurrentUser()).thenReturn(userA);
+            service.updateTask(2L, TaskDtoV2.builder().patientId(10L).name("Own edit").build());
+            assertThat(child.getParentTaskId()).isEqualTo(1L);
+            assertThat(child.getFrequency()).isEqualTo("daily");
+        }
+
+        @Test
+        void directServiceCallCannotBypassPatientReassignmentRestriction() {
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> service.updateTask(2L, TaskDtoV2.builder().patientId(10L).build()));
+            assertThat(child.getPatient()).isSameAs(b);
+            assertThat(child.getParentTaskId()).isEqualTo(1L);
+        }
+
+        private ScheduledNotification addReminder(Task task, long receiver, String status) {
+            final ScheduledNotification reminder = ScheduledNotification.builder().receiverId(receiver)
+                    .title("Reminder").body("Task reminder").status(status).task(task)
+                    .scheduledTime(LocalDateTime.parse(task.getDate() + "T09:45:00")).build();
+            task.getNotifications().add(reminder);
+            return reminder;
+        }
+
+        private void threeConsecutiveOccurrences() {
+            parent.setDoCount(3);
+            child.setDoCount(3);
+            sibling.setDoCount(3);
+            child.setDate("2026-01-07");
+            sibling.setDate("2026-01-08");
+        }
+
+        @Test
+        void promotedCountMatchesRemainingOccurrencesAndSurvivesAnotherEdit() throws Exception {
+            threeConsecutiveOccurrences();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(child.getDoCount()).isEqualTo(2);
+            assertThat(sibling.getDoCount()).isEqualTo(2);
+            assertThat(service.getTaskDtoById(2L).getCount()).isEqualTo(2);
+            service.updateTask(2L, TaskDtoV2.builder().frequency("weekly")
+                    .interval(1).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-01-07", "2026-01-14");
+        }
+
+        @Test
+        void deletingTheParentAlsoUpdatesCountsForEveryRemainingOccurrence() throws Exception {
+            threeConsecutiveOccurrences();
+            service.deleteTask(1L, false);
+            assertThat(child.getDoCount()).isEqualTo(2);
+            assertThat(sibling.getDoCount()).isEqualTo(2);
+        }
+
+        @Test
+        void singleRemainingOccurrenceHasCountOneAfterPromotion() throws Exception {
+            records.remove(sibling);
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(child.getDoCount()).isEqualTo(1);
+            assertThat(child.getParentTaskId()).isNull();
+        }
+
+        @Test
+        void seriesMoveRetargetsAllPendingPatientRemindersToTheUserId() throws Exception {
+            records.forEach(t -> addReminder(t, 100L, "PENDING"));
+            final LocalDateTime originalTime = child.getNotifications().get(0).getScheduledTime();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(records).allSatisfy(t -> {
+                assertThat(t.getNotifications().get(0).getReceiverId()).isEqualTo(200L);
+                assertThat(t.getNotifications().get(0).getStatus()).isEqualTo("PENDING");
+            });
+            assertThat(child.getNotifications().get(0).getScheduledTime()).isEqualTo(originalTime);
+        }
+
+        @Test
+        void childMoveUpdatesOnlyItsPatientReminder() throws Exception {
+            final var parentReminder = addReminder(parent, 100L, "PENDING");
+            final var childReminder = addReminder(child, 100L, "PENDING");
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(childReminder.getReceiverId()).isEqualTo(200L);
+            assertThat(parentReminder.getReceiverId()).isEqualTo(100L);
+        }
+
+        @Test
+        void parentMoveDoesNotRetargetTheRemainingPatientsReminders() throws Exception {
+            final var rootReminder = addReminder(parent, 100L, "PENDING");
+            final var childReminder = addReminder(child, 100L, "PENDING");
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(rootReminder.getReceiverId()).isEqualTo(200L);
+            assertThat(childReminder.getReceiverId()).isEqualTo(100L);
+        }
+
+        @Test
+        void authorizedCaregiverReminderIsPreserved() throws Exception {
+            when(userRepository.findById(300L)).thenReturn(Optional.of(caregiver));
+            final var reminder = addReminder(child, 300L, "PENDING");
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(reminder.getReceiverId()).isEqualTo(300L);
+            assertThat(reminder.getStatus()).isEqualTo("PENDING");
+        }
+
+        @Test
+        void caregiverWithoutDestinationAccessIsCancelled() throws Exception {
+            final User formerCaregiver = User.builder().id(400L)
+                    .role(com.careconnect.security.Role.CAREGIVER).build();
+            when(userRepository.findById(400L)).thenReturn(Optional.of(formerCaregiver));
+            final var reminder = addReminder(child, 400L, "PENDING");
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(reminder.getStatus()).isEqualTo("CANCELLED");
+        }
+
+        @Test
+        void unrelatedPatientAndMissingRecipientRemindersAreCancelled() throws Exception {
+            when(userRepository.findById(999L)).thenReturn(Optional.of(User.builder().id(999L)
+                    .role(com.careconnect.security.Role.PATIENT).build()));
+            final var unrelated = addReminder(child, 999L, "PENDING");
+            final var missing = addReminder(child, 888L, "PENDING");
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(unrelated.getStatus()).isEqualTo("CANCELLED");
+            assertThat(missing.getStatus()).isEqualTo("CANCELLED");
+        }
+
+        @Test
+        void destinationUserRecipientIsAlreadyCorrect() throws Exception {
+            final var reminder = addReminder(child, 200L, "PENDING");
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(reminder.getReceiverId()).isEqualTo(200L);
+            assertThat(reminder.getStatus()).isEqualTo("PENDING");
+            verifyNoInteractions(userRepository);
+        }
+
+        @Test
+        void historicalReminderRecipientsAndStatusesAreNotRewritten() throws Exception {
+            for (String status : List.of("SENT", "FAILED", "CANCELLED")) {
+                addReminder(child, 100L, status);
+            }
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(child.getNotifications()).allSatisfy(n -> assertThat(n.getReceiverId()).isEqualTo(100L));
+            assertThat(child.getNotifications()).extracting(ScheduledNotification::getStatus)
+                    .containsExactly("SENT", "FAILED", "CANCELLED");
+        }
+
+        @Test
+        void unavailableDestinationUserCancelsUnsafeReminders() throws Exception {
+            b.setUser(null);
+            when(userRepository.findById(100L)).thenReturn(Optional.of(userA));
+            when(securityUtil.resolveCurrentUser()).thenReturn(User.builder().id(900L)
+                    .role(com.careconnect.security.Role.ADMIN).build());
+            final var reminder = addReminder(child, 100L, "PENDING");
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).updateSeries(true).build());
+            assertThat(reminder.getStatus()).isEqualTo("CANCELLED");
+        }
+
+        @Test
+        void regeneratedChildrenUseSanitizedPendingRemindersWithShiftedTimes() throws Exception {
+            threeConsecutiveOccurrences();
+            addReminder(parent, 100L, "PENDING");
+            addReminder(parent, 100L, "SENT");
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).frequency("weekly")
+                    .updateSeries(true).build());
+            assertThat(records).hasSize(3);
+            assertThat(records.stream().filter(t -> t.getParentTaskId() != null)).allSatisfy(t -> {
+                assertThat(t.getPatient()).isSameAs(b);
+                assertThat(t.getNotifications()).hasSize(1);
+                final var reminder = t.getNotifications().get(0);
+                assertThat(reminder.getReceiverId()).isEqualTo(200L);
+                assertThat(reminder.getStatus()).isEqualTo("PENDING");
+                assertThat(reminder.getScheduledTime()).isEqualTo(LocalDateTime.parse(t.getDate() + "T09:45:00"));
+            });
+            assertThat(parent.getNotifications().get(1).getStatus()).isEqualTo("SENT");
+            assertThat(parent.getNotifications().get(1).getReceiverId()).isEqualTo(100L);
+        }
+
+        @Test
+        void samePatientEditDoesNotRewriteReminderRecipients() throws Exception {
+            final var reminder = addReminder(child, 100L, "PENDING");
+            service.updateTask(2L, TaskDtoV2.builder().patientId(10L).name("Edited").build());
+            assertThat(reminder.getReceiverId()).isEqualTo(100L);
+            assertThat(reminder.getStatus()).isEqualTo("PENDING");
+            verifyNoInteractions(userRepository);
+        }
+
+        private void monthlyMonthEndSeries() {
+            parent.setDate("2026-01-31");
+            child.setDate("2026-02-28");
+            sibling.setDate("2026-03-31");
+            for (Task task : records) {
+                task.setFrequency("monthly");
+                task.setDoCount(3);
+            }
+        }
+
+        @Test
+        void promotedMonthEndAnchorSurvivesCountChanges() throws Exception {
+            monthlyMonthEndSeries();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(service.getTaskDtoById(2L).getRecurrenceAnchorDate()).isEqualTo("2026-01-31");
+            assertThat(parent.getRecurrenceAnchorDate()).isNull();
+            service.updateTask(2L, TaskDtoV2.builder().count(3).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-02-28", "2026-03-31", "2026-04-30");
+            assertThat(records.stream().filter(t -> t.getPatient() == a))
+                    .allSatisfy(t -> assertThat(t.getRecurrenceAnchorDate()).isEqualTo("2026-01-31"));
+        }
+
+        @Test
+        void promotedLeapDaySeriesReturnsToFebruary29InLeapYears() throws Exception {
+            parent.setDate("2024-02-29");
+            child.setDate("2025-02-28");
+            sibling.setDate("2026-02-28");
+            for (Task task : records) {
+                task.setFrequency("yearly");
+                task.setDoCount(3);
+            }
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(2L, TaskDtoV2.builder().count(4).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29");
+        }
+
+        @Test
+        void repeatedPromotionRetainsOriginalMonthEndCadence() throws Exception {
+            monthlyMonthEndSeries();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(sibling.getRecurrenceAnchorDate()).isEqualTo("2026-01-31");
+            assertThat(sibling.getDoCount()).isEqualTo(1);
+            service.updateTask(3L, TaskDtoV2.builder().count(2).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-03-31", "2026-04-30");
+        }
+
+        @Test
+        void changedMonthlyIntervalUsesPromotedMonthAndOriginalDay() throws Exception {
+            monthlyMonthEndSeries();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(2L, TaskDtoV2.builder().interval(2).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-02-28", "2026-04-30");
+        }
+
+        @Test
+        void changingFrequencyResetsTheFormerCadenceAnchor() throws Exception {
+            monthlyMonthEndSeries();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(2L, TaskDtoV2.builder().frequency("daily").updateSeries(true).build());
+            assertThat(child.getRecurrenceAnchorDate()).isEqualTo("2026-02-28");
+            service.updateTask(2L, TaskDtoV2.builder().frequency("monthly").updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-02-28", "2026-03-28");
+        }
+
+        @Test
+        void clientCannotOverwriteServerOwnedCadenceMetadata() throws Exception {
+            monthlyMonthEndSeries();
+            service.updateTask(1L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(2L, TaskDtoV2.builder().recurrenceAnchorDate("1900-01-01")
+                    .recurrenceExcludedDates(List.of("2026-03-31"))
+                    .name("Own edit").updateSeries(true).build());
+            assertThat(child.getRecurrenceAnchorDate()).isEqualTo("2026-01-31");
+            assertThat(service.getTaskDtoById(2L).getRecurrenceExcludedDates()).containsExactly("2026-01-31");
+        }
+
+        @Test
+        void removedMiddleOccurrenceIsNotRecreatedWhenTheCountIsExtended() throws Exception {
+            threeConsecutiveOccurrences();
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(parent.getDoCount()).isEqualTo(2);
+            assertThat(sibling.getDoCount()).isEqualTo(2);
+            assertThat(service.getTaskDtoById(1L).getRecurrenceExcludedDates()).containsExactly("2026-01-07");
+            service.updateTask(1L, TaskDtoV2.builder().count(3).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-01-06", "2026-01-08", "2026-01-09");
+            assertThat(child.getPatient()).isSameAs(b);
+            assertThat(child.getRecurrenceExcludedDates()).isNull();
+        }
+
+        @Test
+        void changingIntervalAfterMiddleRemovalDoesNotAddAnExtraOccurrence() throws Exception {
+            threeConsecutiveOccurrences();
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(1L, TaskDtoV2.builder().interval(2).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-01-06", "2026-01-08");
+        }
+
+        @Test
+        void deletingAMiddleOccurrenceRetainsItsExceptionAndRemainingCount() throws Exception {
+            threeConsecutiveOccurrences();
+            service.deleteTask(2L, false);
+            assertThat(parent.getDoCount()).isEqualTo(2);
+            assertThat(parent.getRecurrenceExcludedDates()).contains("2026-01-07");
+            service.updateTask(1L, TaskDtoV2.builder().count(3).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> !t.getId().equals(2L)).map(Task::getDate))
+                    .doesNotContain("2026-01-07");
+        }
+
+        @Test
+        void removingAChildInAnExistingMixedSeriesChecksTheParentBeforeMetadataChanges() {
+            child.setPatient(b);
+            when(securityUtil.resolveCurrentUser()).thenReturn(userB);
+            assertDenied(() -> service.deleteTask(2L, false));
+            assertThat(parent.getRecurrenceExcludedDates()).isNull();
+        }
+
+        @Test
+        void removedMonthlyDateStaysExcludedWithoutLosingMonthEndCadence() throws Exception {
+            monthlyMonthEndSeries();
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            assertThat(parent.getDoCount()).isEqualTo(2);
+            service.updateTask(1L, TaskDtoV2.builder().count(3).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-01-31", "2026-03-31", "2026-04-30");
+        }
+
+        @Test
+        void repairedWeeklySeriesIncludesTheCurrentWeekAndSkipsTheRemovedDate() throws Exception {
+            parent.setDate("2026-01-06");
+            child.setDate("2026-01-07");
+            sibling.setDate("2026-01-13");
+            for (Task task : records) {
+                task.setFrequency("weekly");
+                task.setDoCount(3);
+                task.setDaysOfWeek("[false,false,true,true,false,false,false]");
+            }
+            service.updateTask(2L, TaskDtoV2.builder().patientId(20L).build());
+            service.updateTask(1L, TaskDtoV2.builder().count(3).updateSeries(true).build());
+            assertThat(records.stream().filter(t -> t.getPatient() == a).map(Task::getDate))
+                    .containsExactlyInAnyOrder("2026-01-06", "2026-01-13", "2026-01-14");
+        }
+
+        @Test
+        void malformedPersistedExceptionMetadataFailsBeforeAnyMutation() {
+            parent.setRecurrenceExcludedDates("not JSON");
+            assertThatThrownBy(() -> service.updateTask(1L,
+                    TaskDtoV2.builder().name("Unsafe").updateSeries(true).build()))
+                    .isInstanceOf(IllegalArgumentException.class);
+            verify(taskRepository, never()).save(any(Task.class));
+            assertThat(parent.getName()).isEqualTo("Original 1");
+        }
+
+        @Test
+        void authorizedMixedSeriesDeletionIncludesEveryAuthorizedMember() throws Exception {
+            child.setPatient(b);
+            service.deleteTask(2L, true);
+            final ArgumentCaptor<Iterable<Task>> deleted = ArgumentCaptor.forClass(Iterable.class);
+            verify(taskRepository).deleteAll(deleted.capture());
+            assertThat(deleted.getValue()).containsExactlyInAnyOrder(parent, child, sibling);
+        }
+    }
+
+    @Nested
+    class AppointmentConfirmations {
+        private SesService email;
+        private SnsService sms;
+        private TaskService dispatcher;
+
+        @BeforeEach
+        void configureDispatcher() {
+            email = mock(SesService.class);
+            sms = mock(SnsService.class);
+            dispatcher = new TaskService();
+            ReflectionTestUtils.setField(dispatcher, "sesService", email);
+            ReflectionTestUtils.setField(dispatcher, "snsService", sms);
+            service = new TaskServiceV2(taskRepository, patientRepository, objectMapper, dispatcher, authorizationService, securityUtil, userRepository);
+            patient.setUser(User.builder()
+                    .name("Jane Doe").email("patient@example.test").phone("+12025550100").build());
+            when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
+            when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> {
+                Task saved = invocation.getArgument(0);
+                saved.setId(51L);
+                return saved;
+            });
+        }
+
+        private TaskDtoV2 appointment(String type) {
+            return TaskDtoV2.builder().name("Checkup").description("Clinic")
+                    .date("2026-01-20").timeOfDay("10:00").taskType(type).build();
+        }
+
+        @Test
+        void sendsBothConfirmationsAfterSaveUsingPatientContacts() {
+            TaskDtoV2 result = service.createTask(1L, appointment("appointment"));
+            assertThat(result.getId()).isEqualTo(51L);
+            final var order = inOrder(taskRepository, email, sms);
+            order.verify(taskRepository).save(any(Task.class));
+            order.verify(email).sendAppointmentReminder("patient@example.test", "Jane Doe",
+                    "Checkup", "2026-01-20 at 10:00", "Clinic");
+            order.verify(sms).sendAppointmentReminderSms("+12025550100", "Jane Doe",
+                    "Checkup", "2026-01-20 at 10:00");
+        }
+
+        private TaskServiceV2 transactionalService(TestTransactionManager manager) {
+            final TransactionInterceptor interceptor = new TransactionInterceptor();
+            interceptor.setTransactionManager(manager);
+            interceptor.setTransactionAttributeSource(new AnnotationTransactionAttributeSource());
+            final ProxyFactory factory = new ProxyFactory(service);
+            factory.addAdvice(interceptor);
+            return (TaskServiceV2) factory.getProxy();
+        }
+
+        @Test
+        void transactionalCreateSendsBothChannelsOnlyAfterCommit() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            doAnswer(invocation -> {
+                assertThat(manager.committed).isTrue();
+                return null;
+            }).when(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            doAnswer(invocation -> {
+                assertThat(manager.committed).isTrue();
+                return null;
+            }).when(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+
+            assertThat(transactionalService(manager).createTask(1L, appointment("Appointment")).getId())
+                    .isEqualTo(51L);
+
+            assertThat(manager.committed).isTrue();
+            verify(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            verify(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+            verifyNoMoreInteractions(email, sms);
+        }
+
+        @Test
+        void enclosingTransactionDefersConfirmationUntilItsCommit() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            new TransactionTemplate(manager).execute(status -> {
+                service.createTask(1L, appointment("Appointment"));
+                verifyNoInteractions(email, sms);
+                assertThat(manager.committed).isFalse();
+                return null;
+            });
+            assertThat(manager.committed).isTrue();
+            verify(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            verify(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+        }
+
+        @Test
+        void rollbackOnlyTransactionDoesNotSendConfirmations() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            new TransactionTemplate(manager).execute(status -> {
+                service.createTask(1L, appointment("Appointment"));
+                verifyNoInteractions(email, sms);
+                status.setRollbackOnly();
+                return null;
+            });
+            assertThat(manager.rolledBack).isTrue();
+            assertThat(manager.committed).isFalse();
+            verifyNoInteractions(email, sms);
+        }
+
+        @Test
+        void exceptionAfterCreationRollsBackWithoutConfirmations() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            assertThatThrownBy(() -> new TransactionTemplate(manager).execute(status -> {
+                service.createTask(1L, appointment("Appointment"));
+                verifyNoInteractions(email, sms);
+                throw new IllegalStateException("later work failed");
+            })).isInstanceOf(IllegalStateException.class);
+            assertThat(manager.rolledBack).isTrue();
+            verifyNoInteractions(email, sms);
+        }
+
+        @Test
+        void failedCommitDoesNotSendConfirmations() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            manager.failCommit = true;
+            assertThatThrownBy(() -> transactionalService(manager)
+                    .createTask(1L, appointment("Appointment")))
+                    .isInstanceOf(TransactionSystemException.class);
+            assertThat(manager.committed).isFalse();
+            verifyNoInteractions(email, sms);
+        }
+
+        @Test
+        void recurringCreationSendsOneConfirmationPairAfterCommit() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            final TaskDtoV2 request = appointment("Appointment");
+            request.setFrequency("daily");
+            request.setInterval(1);
+            request.setCount(3);
+            new TransactionTemplate(manager).execute(status -> {
+                service.createTask(1L, request);
+                verify(taskRepository).saveAll(anyList());
+                verifyNoInteractions(email, sms);
+                return null;
+            });
+            assertThat(manager.committed).isTrue();
+            verify(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            verify(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+            verifyNoMoreInteractions(email, sms);
+        }
+
+        @Test
+        void emailFailureAfterCommitStillSendsSmsAndReturnsCreatedTask() {
+            final TestTransactionManager manager = new TestTransactionManager();
+            doThrow(new IllegalStateException("email unavailable"))
+                    .when(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            assertThat(transactionalService(manager).createTask(1L, appointment("Appointment")).getId())
+                    .isEqualTo(51L);
+            assertThat(manager.committed).isTrue();
+            verify(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+        }
+
+        @Test
+        void recurringAppointmentSendsOneConfirmationForCreation() {
+            TaskDtoV2 request = appointment("Appointment");
+            request.setFrequency("daily");
+            request.setInterval(1);
+            request.setCount(3);
+            service.createTask(1L, request);
+            verify(taskRepository).saveAll(anyList());
+            verify(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            verify(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+            verifyNoMoreInteractions(email, sms);
+        }
+
+        @Test
+        void nonAppointmentAndMissingTypeDoNotSendConfirmations() {
+            service.createTask(1L, appointment("General"));
+            service.createTask(1L, appointment(null));
+            verifyNoInteractions(email, sms);
+        }
+
+        @Test
+        void failedSaveDoesNotSendConfirmations() {
+            when(taskRepository.save(any(Task.class))).thenThrow(new IllegalStateException("save failed"));
+            assertThatThrownBy(() -> service.createTask(1L, appointment("Appointment")))
+                    .isInstanceOf(IllegalStateException.class);
+            verifyNoInteractions(email, sms);
+        }
+
+        @Test
+        void emailFailureDoesNotPreventSmsOrTaskCreation() {
+            doThrow(new IllegalStateException("email unavailable"))
+                    .when(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+            assertThat(service.createTask(1L, appointment("APPOINTMENT")).getId()).isEqualTo(51L);
+            verify(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+        }
+
+        @Test
+        void smsFailureDoesNotFailTaskCreation() {
+            doThrow(new IllegalStateException("SMS unavailable"))
+                    .when(sms).sendAppointmentReminderSms(any(), any(), any(), any());
+            assertThat(service.createTask(1L, appointment("Appointment")).getId()).isEqualTo(51L);
+            verify(email).sendAppointmentReminder(any(), any(), any(), any(), any());
+        }
+
+        @Test
+        void absentContactsSkipConfirmations() {
+            patient.setUser(null);
+            assertThat(service.createTask(1L, appointment("Appointment")).getId()).isEqualTo(51L);
+            verifyNoInteractions(email, sms);
+        }
+
+        @Test
+        void demoOverridesAndFallbackDetailsMatchV1() {
+            patient.setUser(null);
+            ReflectionTestUtils.setField(dispatcher,
+                    "demoNotificationEmail", "demo@example.test");
+            ReflectionTestUtils.setField(dispatcher,
+                    "demoNotificationPhone", "+12025550101");
+            TaskDtoV2 request = appointment("Appointment");
+            request.setDescription(null);
+            service.createTask(1L, request);
+            verify(email).sendAppointmentReminder("demo@example.test", "Patient",
+                    "Checkup", "2026-01-20 at 10:00", "TBD");
+            verify(sms).sendAppointmentReminderSms("+12025550101", "Patient",
+                    "Checkup", "2026-01-20 at 10:00");
+        }
+    }
+
+    // Exercise Spring's real transaction lifecycle without a database or external senders.
+    private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+        boolean committed;
+        boolean rolledBack;
+        boolean failCommit;
+
+        @Override
+        protected Object doGetTransaction() {
+            return new Object();
+        }
+
+        @Override
+        protected void doBegin(Object transaction, TransactionDefinition definition) {
+        }
+
+        @Override
+        protected void doCommit(DefaultTransactionStatus status) {
+            if (failCommit) {
+                throw new TransactionSystemException("commit failed");
+            }
+            committed = true;
+        }
+
+        @Override
+        protected void doRollback(DefaultTransactionStatus status) {
+            rolledBack = true;
+        }
     }
 
     // ================================================================

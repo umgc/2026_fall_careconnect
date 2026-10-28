@@ -38,6 +38,11 @@ class TaskServiceTest {
     @Mock
     private PatientRepository patientRepository;
 
+    @Mock
+    private com.careconnect.notifications.SesService sesService;
+    @Mock
+    private com.careconnect.notifications.SnsService snsService;
+
     @InjectMocks
     private TaskService taskService;
 
@@ -53,6 +58,33 @@ class TaskServiceTest {
         patient = Patient.builder().id(1L).firstName("Jane").lastName("Doe").build();
         task = Task.builder().id(1L).name("Check Vitals").date("2025-06-01")
                 .patient(patient).isCompleted(false).build();
+    }
+
+    @Test
+    void appointmentPreviewUsesPatientContactsWithoutSending() {
+        patient.setUser(com.careconnect.model.User.builder()
+                .email("patient@example.test").phone("+12025550100").build());
+        when(patientRepository.findById(1L)).thenReturn(Optional.of(patient));
+        when(sesService.buildAppointmentReminderSubject()).thenReturn("Appointment");
+        when(sesService.buildAppointmentReminderHtmlBody("2026-01-20 at 10:00")).thenReturn("<p>Appointment</p>");
+        when(sesService.buildAppointmentReminderTextBody("2026-01-20 at 10:00")).thenReturn("Appointment details");
+        when(snsService.buildAppointmentReminderSmsMessage("2026-01-20 at 10:00")).thenReturn("Appointment SMS");
+        final TaskDto request = TaskDto.builder().name("Checkup").description("Clinic")
+                .date("2026-01-20").timeOfDay("10:00").taskType("Appointment").build();
+        final var response = taskService.previewTaskNotification(1L, request);
+        final var preview = (java.util.Map<?, ?>) response.get("notificationPreview");
+        assertEquals("preview", response.get("mode"));
+        assertEquals("patient@example.test", preview.get("emailRecipient"));
+        assertEquals("+12025550100", preview.get("smsRecipient"));
+        assertEquals(true, preview.get("willSendEmail"));
+        assertEquals(true, preview.get("willSendSms"));
+        assertEquals("Appointment", preview.get("emailSubject"));
+        assertEquals("<p>Appointment</p>", preview.get("emailHtmlBody"));
+        assertEquals("Appointment details", preview.get("emailTextBody"));
+        assertEquals("Appointment SMS", preview.get("smsBody"));
+        verify(sesService, never()).sendAppointmentReminder(any(), any(), any(), any(), any());
+        verify(snsService, never()).sendAppointmentReminderSms(any(), any(), any(), any());
+        verify(taskRepository, never()).save(any());
     }
 
     // ==========================================================================

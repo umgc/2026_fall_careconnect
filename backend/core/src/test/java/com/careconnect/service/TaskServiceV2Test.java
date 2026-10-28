@@ -58,14 +58,24 @@ class TaskServiceV2Test {
     private TaskRepository taskRepository;
     @Mock
     private PatientRepository patientRepository;
+    @Mock
+    private com.careconnect.repository.UserRepository userRepository;
+    @Mock
+    private com.careconnect.security.AuthorizationService authorizationService;
+    @Mock
+    private com.careconnect.util.SecurityUtil securityUtil;
+    @Mock
+    private TaskService appointmentNotifications;
     @InjectMocks
     private TaskServiceV2 taskService;
 
     @BeforeEach
     void setUp() throws Exception {
         MockitoAnnotations.openMocks(this);
+        when(securityUtil.resolveCurrentUser()).thenReturn(com.careconnect.model.User.builder()
+                .id(999L).role(com.careconnect.security.Role.ADMIN).build());
         // Construct the service manually so the real ObjectMapper is wired in
-        taskService = new TaskServiceV2(taskRepository, patientRepository, mapper);
+        taskService = new TaskServiceV2(taskRepository, patientRepository, mapper, appointmentNotifications, authorizationService, securityUtil, userRepository);
     }
 
     // ==========================================================================
