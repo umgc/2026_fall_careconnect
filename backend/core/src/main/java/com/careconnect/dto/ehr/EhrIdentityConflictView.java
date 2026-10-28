@@ -6,15 +6,23 @@ package com.careconnect.dto.ehr;
  * match the frontend's {@code IdentityConflict.fromJson} (camelCase), and {@code detectedAt} is an
  * ISO-8601 instant string the frontend parses with {@code DateTime.tryParse}.
  *
- * <p>{@code canonicalSourceLabel} / {@code incomingSourceLabel} are optional in that model and are
- * intentionally omitted here: the store keys conflicts by {@code source_id}, not a display label, and
- * deriving labels is out of scope for the I3e interim.
+ * <p>{@code incomingSourceLabel} is the {@code ehr_source.display_name} of the conflict's source;
+ * {@code canonicalSourceLabel} is the display name of the source that currently owns the canonical
+ * value for this field (from {@code ehr_identity_field_provenance}), or {@code null} when no source
+ * has established provenance yet. Both are optional in the frontend model.
+ *
+ * <p>{@code identityCheck} is an optional hidden second detail (phone/email/ZIP) from the incoming
+ * record for the patient to confirm; {@code null} when the source has none. See
+ * {@link EhrIdentityCheckView}.
  */
 public record EhrIdentityConflictView(
         Long id,
         String fieldName,
         String canonicalValueBefore,
         String incomingValue,
+        String canonicalSourceLabel,
+        String incomingSourceLabel,
         String status,
-        String detectedAt) {
+        String detectedAt,
+        EhrIdentityCheckView identityCheck) {
 }

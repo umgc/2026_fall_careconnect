@@ -20,14 +20,14 @@ void main() {
 
   setUp(() {
     VoiceIntentService.testOverride = null;
-    VoiceIntentService.requestTimeout = const Duration(seconds: 3);
+    VoiceIntentService.requestTimeout = const Duration(seconds: 8);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_secureStorageChannel, (_) async => null);
   });
 
   tearDown(() {
     VoiceIntentService.testOverride = null;
-    VoiceIntentService.requestTimeout = const Duration(seconds: 3);
+    VoiceIntentService.requestTimeout = const Duration(seconds: 8);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_secureStorageChannel, null);
   });
@@ -111,7 +111,8 @@ void main() {
 
 // ─── Tests for Ambiguous / Conversational Voice Intents ─────────────────
 
-  test('returns successful navigation for ambiguous medication phrase', () async {
+  test('returns successful navigation for ambiguous medication phrase',
+      () async {
     final client = MockClient((request) async {
       final body = jsonDecode(request.body) as Map<String, dynamic>;
       expect(body['utterance'], 'where are my pills');
@@ -146,7 +147,8 @@ void main() {
     expect(result.requiresConfirmation, isTrue);
   });
 
-  test('returns successful navigation for gamification / achievements', () async {
+  test('returns successful navigation for gamification / achievements',
+      () async {
     final client = MockClient((request) async {
       return http.Response(
         jsonEncode({
@@ -175,7 +177,9 @@ void main() {
     expect(result.destination, '/gamification');
   });
 
-  test('returns null when backend responds with intent: unknown (off-topic chatter)', () async {
+  test(
+      'returns null when backend responds with intent: unknown (off-topic chatter)',
+      () async {
     final client = MockClient((request) async {
       return http.Response(
         jsonEncode({
@@ -200,5 +204,34 @@ void main() {
     expect(result, isNull);
   });
 
-} //end main
+  for (final timeoutSeconds in [3, 8]) {
+    test('3.5-second response with $timeoutSeconds-second timeout', () async {
+      VoiceIntentService.requestTimeout = Duration(seconds: timeoutSeconds);
+      final client = MockClient((_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 3500));
+        return http.Response(
+          jsonEncode({
+            'intent': 'navigate',
+            'destination': '/calendar',
+            'success': true,
+          }),
+          200,
+        );
+      });
 
+      final result = await _withClient(
+        client,
+        () => VoiceIntentService.extractIntent(utterance: 'show my calendar'),
+      );
+
+      if (timeoutSeconds == 3) {
+        expect(result, isNull);
+      } else {
+        expect(result, isNotNull);
+        expect(result!.intent, 'navigate');
+        expect(result.destination, '/calendar');
+      }
+      client.close();
+    });
+  }
+} //end main

@@ -131,6 +131,7 @@ final class CitationMetadataMapper {
             case EPIC_FAMILY_HISTORY -> "Epic family history";
             case EPIC_COVERAGE -> "Epic coverage";
             case EPIC_DEVICE -> "Epic device";
+            case EPIC_APPOINTMENT -> "Epic appointment";
         };
         return occurredAt == null ? label : label + " — " + occurredAt.toString().substring(0, 10);
     }

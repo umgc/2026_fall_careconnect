@@ -122,8 +122,8 @@ class _AthenaConnectTileState extends State<AthenaConnectTile> {
     try {
       final s = await _service.connect();
       if (!mounted) return;
-      setState(() => _status =
-          s.connected ? _Status.connected : _Status.notConnected);
+      setState(() =>
+          _status = s.connected ? _Status.connected : _Status.notConnected);
       _show(s.connected
           ? widget.compact
               ? const _Message(_Tone.success, 'athenahealth connected.')
@@ -202,7 +202,8 @@ class _AthenaConnectTileState extends State<AthenaConnectTile> {
     _show(ok
         ? widget.compact
             ? const _Message(_Tone.info, 'Disconnected from athenahealth.')
-            : const _Message(_Tone.info,
+            : const _Message(
+                _Tone.info,
                 'athenahealth is disconnected and its records were removed. '
                 'You can connect again anytime.')
         : const _Message(_Tone.error,
@@ -257,11 +258,14 @@ class _AthenaConnectTileState extends State<AthenaConnectTile> {
     }
     return TextButton(
       onPressed: _connectWithConsent,
-      // Same style as the screen's other banner actions.
+      // Matches the action style used in the Connected Sources card.
       style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF006B80),
-          minimumSize: const Size(48, 48)),
-      child: const Text('Connect athenahealth'),
+        foregroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.primary
+            : const Color(0xFF006B80),
+        minimumSize: const Size(48, 48),
+      ),
+      child: const Text('Connect'),
     );
   }
 
@@ -504,7 +508,6 @@ class _AthenaConnectTileState extends State<AthenaConnectTile> {
       ),
     );
   }
-
 }
 
 /// The consent text with an "I agree" box; Connect stays off until it's
@@ -550,8 +553,7 @@ class _ConsentDialogState extends State<_ConsentDialog> {
           // The light theme's primary is 2.85:1 on white (WCAG 1.4.3).
           style: Theme.of(context).brightness == Brightness.dark
               ? null
-              : TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF006B80)),
+              : TextButton.styleFrom(foregroundColor: const Color(0xFF006B80)),
           onPressed: () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
@@ -581,7 +583,8 @@ class _Message {
           _Tone.success, '${lead}Your records will show in Health Data.');
     }
     if (!r.completed) {
-      return _Message(_Tone.error,
+      return _Message(
+          _Tone.error,
           '${lead}We couldn\'t get your records just now. '
           'Please try Refresh records in a few minutes.');
     }
@@ -606,39 +609,47 @@ class _Message {
   static _Message forReason(AthenaNotConnectedReason reason) {
     switch (reason) {
       case AthenaNotConnectedReason.noPatientProfile:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'We need your patient profile to find your athenahealth chart. '
             'Please finish your profile, then connect again.');
       case AthenaNotConnectedReason.incompleteProfile:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'Your profile needs your first name, last name and date of birth '
             'to find your athenahealth chart. Please add them, then connect '
             'again.');
       case AthenaNotConnectedReason.notMatched:
-        return const _Message(_Tone.info,
+        return const _Message(
+            _Tone.info,
             'We couldn\'t find an athenahealth chart that matches your '
             'profile. Check that your name and date of birth match your '
             'provider\'s records, then connect again.');
       case AthenaNotConnectedReason.ambiguousMatch:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'More than one athenahealth chart matches your profile, so we '
             'didn\'t connect any of them. Please contact support.');
       case AthenaNotConnectedReason.linkConflict:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'This athenahealth chart is already connected to a different '
             'CareConnect account, so we didn\'t connect it here. If you '
             'didn\'t expect this, please contact support.');
       case AthenaNotConnectedReason.sourceUnavailable:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'We couldn\'t reach athenahealth. Please try again in a few '
             'minutes.');
       case AthenaNotConnectedReason.notLinked:
-        return const _Message(_Tone.info,
+        return const _Message(
+            _Tone.info,
             'Your athenahealth chart isn\'t linked yet. Check your profile '
             'details, then connect again.');
       case AthenaNotConnectedReason.notConsented:
       case AthenaNotConnectedReason.unknown:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'We couldn\'t connect athenahealth. Please try again in a few '
             'minutes.');
     }
@@ -653,26 +664,31 @@ class _Message {
         return const _Message(_Tone.error,
             'Your sign-in has expired. Please sign in again, then try again.');
       case AthenaConnectError.notPatient:
-        return const _Message(_Tone.info,
+        return const _Message(
+            _Tone.info,
             'Only the patient can connect their own athenahealth records. '
             'Please sign in with the patient\'s account.');
       case AthenaConnectError.network:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'We couldn\'t reach CareConnect. Check your internet connection '
             'and try again.');
       case AthenaConnectError.syncInProgress:
-        return const _Message(_Tone.info,
+        return const _Message(
+            _Tone.info,
             'Your records are already being updated. Please wait a moment, '
             'then check Health Data.');
       case AthenaConnectError.notConnected:
         return const _Message(_Tone.info,
             'athenahealth isn\'t connected anymore. Please connect again.');
       case AthenaConnectError.sourceUnavailable:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'We couldn\'t reach your provider. Please try again in a few '
             'minutes.');
       case AthenaConnectError.disabled:
-        return const _Message(_Tone.error,
+        return const _Message(
+            _Tone.error,
             'athenahealth isn\'t available right now. Please try again '
             'later.');
       case AthenaConnectError.server:
