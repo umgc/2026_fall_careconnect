@@ -9,6 +9,7 @@ import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -131,4 +132,30 @@ void main() {
     expect(live, isTrue, reason: 'the error should be in a live region');
     handle.dispose();
   });
+
+  testWidgets('on the web the error is also spoken directly (NVDA, 4.1.3)',
+      (tester) async {
+    _suppressOverflow();
+    LoginPage.debugAnnounceErrors = true;
+    addTearDown(() => LoginPage.debugAnnounceErrors = false);
+    final announced = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockDecodedMessageHandler<dynamic>(
+        SystemChannels.accessibility, (message) async {
+      final data = (message as Map)['data'] as Map?;
+      if (message['type'] == 'announce' && data != null) {
+        announced.add(data['message'] as String);
+      }
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockDecodedMessageHandler<dynamic>(
+            SystemChannels.accessibility, null));
+
+    await tester.pumpWidget(_wrap());
+    await tester.pump();
+    await _submit(tester);
+
+    expect(announced, [_missing]);
+  });
 }
+

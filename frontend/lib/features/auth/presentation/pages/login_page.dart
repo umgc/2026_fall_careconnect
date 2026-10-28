@@ -1,5 +1,7 @@
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +18,10 @@ class LoginPage extends StatefulWidget {
 
   @override
   State<LoginPage> createState() => _LoginPageState();
+
+  /// Lets tests exercise the web-only error announcement on the test platform.
+  @visibleForTesting
+  static bool debugAnnounceErrors = false;
 }
 
 class _LoginPageState extends State<LoginPage> {
@@ -45,11 +51,28 @@ class _LoginPageState extends State<LoginPage> {
     return '${t.login_loginFailedError}: $reason';
   }
 
+  /// Shows a sign-in error and, on the web, has the screen reader speak it.
+  /// The live region around the message covers mobile, but NVDA in Chrome
+  /// didn't read it (VPAT 10/27 check), so web also announces it directly
+  /// (WCAG 4.1.3).
+  void _showError(String message) {
+    if (!mounted) return;
+    setState(() => _error = message);
+    if (kIsWeb || LoginPage.debugAnnounceErrors) {
+      SemanticsService.sendAnnouncement(
+        View.of(context),
+        message,
+        Directionality.of(context),
+        assertiveness: Assertiveness.assertive,
+      );
+    }
+  }
+
   Future<void> _login() async {
     final t = AppLocalizations.of(context)!;
     // Say what's missing before calling the server (WCAG 3.3.1, 3.3.3).
     if (_email.text.trim().isEmpty || _pwd.text.isEmpty) {
-      setState(() => _error = t.alexalogin_missingEmailPassword);
+      _showError(t.alexalogin_missingEmailPassword);
       return;
     }
     setState(() {
@@ -84,14 +107,10 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         // loginWithRoleValidation only ever returns success or an authentication
         // failure (role validation is not performed here), so surface the error.
-        setState(() {
-          _error = _readableError(authResult.errorMessage ?? '', t);
-        });
+        _showError(_readableError(authResult.errorMessage ?? '', t));
       }
     } catch (e) {
-      setState(() {
-        _error = _readableError(e.toString(), t);
-      });
+      _showError(_readableError(e.toString(), t));
     } finally {
       setState(() => _busy = false);
     }
