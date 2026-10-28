@@ -37,7 +37,7 @@ class IdentityConflictService {
     final local = _found.values
         .where((f) => f.owner == owner)
         .map((f) => f.conflict)
-        .where((l) => !server.any((s) => _sameDates(s, l)));
+        .where((l) => !server.any((s) => _sameDates(s, l) != 0));
     return List.unmodifiable([...server, ...local]);
   }
 
@@ -117,9 +117,21 @@ class IdentityConflictService {
   static Future<void> _rememberServerChoice(int id, bool accepted) async {
     final shown = _shown.remove(id);
     if (shown == null || shown.owner != await _owner()) return;
-    await _saveChoice(shown.owner, shown.conflict, accepted);
-    _found.removeWhere((_, f) =>
-        f.owner == shown.owner && _sameDates(shown.conflict, f.conflict));
+    final c = shown.conflict;
+    await _saveChoice(shown.owner, c, accepted);
+    // The same two dates in the other order are the same question, so that
+    // pair is decided too: Use new date here keeps its current date
+    // (DEF-EHR-REC-09).
+    await _saveChoice(
+        shown.owner,
+        IdentityConflict(
+            id: c.id,
+            fieldName: c.fieldName,
+            canonicalValueBefore: c.incomingValue,
+            incomingValue: c.canonicalValueBefore),
+        !accepted);
+    _found.removeWhere(
+        (_, f) => f.owner == shown.owner && _sameDates(c, f.conflict) != 0);
   }
 
   /// The backend sends dates as ISO (1980-05-14); the screen and the
@@ -143,13 +155,17 @@ class IdentityConflictService {
     );
   }
 
-  static bool _sameDates(IdentityConflict a, IdentityConflict b) {
+  /// 1 when [a] and [b] hold the same two dates in the same order, -1 in
+  /// the other order (one source's current is the other's new), else 0.
+  static int _sameDates(IdentityConflict a, IdentityConflict b) {
     final a1 = _parseAny(a.canonicalValueBefore);
     final a2 = _parseAny(a.incomingValue);
-    return a1 != null &&
-        a2 != null &&
-        a1 == _parseAny(b.canonicalValueBefore) &&
-        a2 == _parseAny(b.incomingValue);
+    if (a1 == null || a2 == null) return 0;
+    final b1 = _parseAny(b.canonicalValueBefore);
+    final b2 = _parseAny(b.incomingValue);
+    if (a1 == b1 && a2 == b2) return 1;
+    if (a1 == b2 && a2 == b1) return -1;
+    return 0;
   }
 
   /// MM/DD/YYYY or ISO (YYYY-MM-DD, with or without a time), else null.
@@ -158,8 +174,16 @@ class IdentityConflictService {
     if (mdy != null) return mdy;
     final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(v.trim());
     if (m == null) return null;
-    return DateTime(
+    return _date(
         int.parse(m.group(1)!), int.parse(m.group(2)!), int.parse(m.group(3)!));
+  }
+
+  /// Null for an impossible date (02/30, month 13): DateTime would roll it
+  /// over to another real date, and the patient would be shown that one
+  /// (DEF-EHR-REC-10).
+  static DateTime? _date(int y, int m, int d) {
+    final date = DateTime(y, m, d);
+    return date.year == y && date.month == m && date.day == d ? date : null;
   }
 
   // ---- Date-of-birth disagreements found between connected sources ----
@@ -289,7 +313,7 @@ class IdentityConflictService {
   static DateTime? _parse(String v) {
     final m = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(v);
     if (m == null) return null;
-    return DateTime(
+    return _date(
         int.parse(m.group(3)!), int.parse(m.group(1)!), int.parse(m.group(2)!));
   }
 

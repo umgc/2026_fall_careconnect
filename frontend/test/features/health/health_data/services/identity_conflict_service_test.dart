@@ -1,8 +1,8 @@
 // IdentityConflictService: it never reports a save that didn't happen, and
 // the sample conflict is opt-in only. Since the backend endpoint (#432) it
 // loads and saves through GET/POST /v1/api/ehr/identity-conflicts.
-// Test IDs TC-EHR-REC-065..069 and 094..101 are permanent. Never renumber,
-// never reuse.
+// Test IDs TC-EHR-REC-065, 067..069, 094..116 and 132 are permanent (066
+// is withdrawn). Never renumber, never reuse.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -34,13 +34,6 @@ void main() {
     test('TC-EHR-REC-065: with nothing pending on the backend, there is '
         'nothing pending', () async {
       expect(await service.fetchPending(), isEmpty);
-    });
-
-    test('TC-EHR-REC-066: a choice the backend does not save is never '
-        'reported as saved', () async {
-      backend.postStatus = 500;
-      expect(await service.resolve(1, accepted: true), isFalse);
-      expect(await service.resolve(1, accepted: false), isFalse);
     });
   });
 
@@ -116,7 +109,7 @@ void main() {
     });
 
     for (final accepted in [true, false]) {
-      test('TC-EHR-REC-101: once the backend saves '
+      test('TC-EHR-REC-114: once the backend saves '
           '${accepted ? 'Use new date' : 'Keep current'}, the same dates '
           'found on this device are not asked again, and Health Data shows '
           'the chosen date', () async {
@@ -191,8 +184,146 @@ void main() {
           backend.postStatus = int.parse(failure);
         }
         expect(await service.resolve(12, accepted: true), isFalse);
+        expect(await service.resolve(12, accepted: false), isFalse);
       });
     }
+
+    // ---- Testing Lead (PR #453 review) ----
+
+    Future<DateTime?> found(DateTime current, DateTime incoming) =>
+        IdentityConflictService.reportDobDisagreement(
+            current: current,
+            currentSource: 'Epic',
+            incoming: incoming,
+            incomingSource: 'athenahealth');
+
+    test('TC-EHR-REC-108: a 401 the app cannot refresh makes loading fail, '
+        'so the screen never says "all caught up"', () async {
+      backend.getStatus = 401;
+      await expectLater(service.fetchPending(), throwsA(anything));
+    });
+
+    test('TC-EHR-REC-109: a backend date with a time is shown MM/DD/YYYY; a '
+        'partial or unreadable date is shown as the backend sent it',
+        () async {
+      backend.conflicts = [
+        dob(1, before: '1980-05-14T00:00:00Z', incoming: '1985-05-14 08:30'),
+        dob(2, before: '1980-05', incoming: 'unknown'),
+      ];
+      final p = await service.fetchPending();
+      expect([p[0].canonicalValueBefore, p[0].incomingValue],
+          ['05/14/1980', '05/14/1985']);
+      expect([p[1].canonicalValueBefore, p[1].incomingValue],
+          ['1980-05', 'unknown']);
+    });
+
+    test('TC-EHR-REC-110: an impossible backend date is shown as sent, never '
+        'as a different real date', () async {
+      backend.conflicts = [
+        dob(1, before: '1980-02-30', incoming: '1985-13-01'),
+        dob(2, before: '02/30/1980', incoming: '1985-05-14'),
+      ];
+      final p = await service.fetchPending();
+      expect([p[0].canonicalValueBefore, p[0].incomingValue],
+          ['1980-02-30', '1985-13-01']);
+      expect(p[1].canonicalValueBefore, '02/30/1980');
+    });
+
+    test('TC-EHR-REC-111: a reply that is not the expected list offers '
+        'nothing from the backend and does not fail', () async {
+      for (final body in [
+        '[]',
+        '{}',
+        '{"resources":null}',
+        '{"resources":[1,"x",null]}',
+        'null',
+      ]) {
+        backend.getBody = body;
+        expect(await service.fetchPending(), isEmpty, reason: body);
+      }
+    });
+
+    test('TC-EHR-REC-112: a conflict from a backend without #432 (no source '
+        'names, no identity check) is still offered, with neither', () async {
+      backend.getBody = jsonEncode({
+        'resources': [
+          {
+            'id': 3,
+            'fieldName': 'date_of_birth',
+            'canonicalValueBefore': '1980-05-14',
+            'incomingValue': '1985-05-14',
+            'status': 'PENDING',
+            'detectedAt': '2026-10-25T12:00:00Z',
+          }
+        ]
+      });
+      final c = (await service.fetchPending()).single;
+      expect(c.id, 3);
+      expect(c.canonicalValueBefore, '05/14/1980');
+      expect(c.canonicalSourceLabel, isNull);
+      expect(c.incomingSourceLabel, isNull);
+      expect(c.identityCheck, isNull);
+    });
+
+    test('TC-EHR-REC-113: a conflict found on this device is saved on the '
+        'device and never sent to the backend', () async {
+      await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15));
+      final id = (await service.fetchPending()).single.id;
+      backend.postStatus = 200;
+      expect(await service.resolve(id, accepted: true), isTrue);
+      expect(await service.resolve(-99, accepted: true), isFalse);
+      expect(backend.posts, isEmpty);
+    });
+
+    test('TC-EHR-REC-115: the same two dates in the other order are one '
+        'question, shown once, as the backend\'s', () async {
+      backend.conflicts = [dob(6, before: '1980-05-15', incoming: '1980-05-14')];
+      await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15));
+      expect((await service.fetchPending()).map((c) => c.id), [6]);
+      backend.postStatus = 200;
+      // Use new date on the backend's card: 05/14/1980, this device's current.
+      expect(await service.resolve(6, accepted: true), isTrue);
+
+      backend.conflicts = [];
+      expect(await service.fetchPending(), isEmpty);
+      expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)),
+          DateTime(1980, 5, 14));
+    });
+
+    test('TC-EHR-REC-116: when saving a backend conflict fails, nothing is '
+        'decided on this device either', () async {
+      backend.conflicts = [dob(5, before: '1980-05-14', incoming: '1980-05-15')];
+      await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15));
+      backend.postStatus = 500;
+      expect(await service.resolve(5, accepted: true), isFalse);
+
+      backend.conflicts = [];
+      expect((await service.fetchPending()).single.id, isNegative);
+      expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)), isNull);
+    });
+
+    test('TC-EHR-REC-132: a backend conflict loaded for one patient and '
+        'saved while another is signed in decides nothing on this device '
+        'for either', () async {
+      final storage = UserRoleStorageService.instance;
+      addTearDown(storage.clearUserData);
+      await storage.setUserData(role: 'PATIENT', userId: 1, patientId: 10);
+      backend.conflicts = [dob(5, before: '1980-05-14', incoming: '1980-05-15')];
+      await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15));
+      expect((await service.fetchPending()).map((c) => c.id), [5]);
+
+      await storage.clearUserData();
+      await storage.setUserData(role: 'PATIENT', userId: 2, patientId: 20);
+      backend.postStatus = 200;
+      expect(await service.resolve(5, accepted: true), isTrue);
+      expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)), isNull);
+
+      await storage.clearUserData();
+      await storage.setUserData(role: 'PATIENT', userId: 1, patientId: 10);
+      backend.conflicts = [];
+      expect((await service.fetchPending()).single.id, isNegative);
+      expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)), isNull);
+    });
   });
 
   test('TC-EHR-REC-067: the default build has the demo data off', () {
@@ -237,7 +368,8 @@ void main() {
           incomingSource: 'athenahealth',
         );
 
-    test('is queued for the confirmation screen once, from named sources',
+    test('TC-EHR-REC-101: is queued for the confirmation screen once, '
+        'from named sources',
         () async {
       expect(await report(), isNull);
       expect(await report(), isNull);
@@ -254,8 +386,9 @@ void main() {
     });
 
     for (final accepted in [true, false]) {
-      test('${accepted ? 'Use new date' : 'Keep current'} is saved, leaves '
-          'nothing pending, and decides the date shown', () async {
+      test('TC-EHR-REC-102: ${accepted ? 'Use new date' : 'Keep current'} '
+          'is saved, leaves nothing pending, and decides the date shown',
+          () async {
         await report();
         final service = IdentityConflictService(useMock: false);
         final id = (await service.fetchPending()).single.id;
@@ -267,7 +400,8 @@ void main() {
       });
     }
 
-    test('no date of birth is stored on the device', () async {
+    test('TC-EHR-REC-103: no date of birth is stored on the device',
+        () async {
       await report();
       final service = IdentityConflictService(useMock: false);
       await service.resolve((await service.fetchPending()).single.id,
@@ -279,10 +413,15 @@ void main() {
       }
     });
 
-    test('a backend conflict id is still never reported as saved', () async {
+    test('TC-EHR-REC-104: a backend conflict the backend refuses to save '
+        'is never reported as saved, and leaves what this device found '
+        'queued', () async {
       await report();
-      expect(await IdentityConflictService(useMock: false)
-          .resolve(1, accepted: true), isFalse);
+      final service = IdentityConflictService(useMock: false);
+      expect(await service.resolve(1, accepted: true), isFalse);
+      expect(backend.posts.single.path,
+          endsWith('/v1/api/ehr/identity-conflicts/1/resolve'));
+      expect((await service.fetchPending()).single.id, isNegative);
     });
   });
 
@@ -309,7 +448,8 @@ void main() {
     });
     tearDown(() => storage.clearUserData());
 
-    test('another patient neither sees nor can resolve them', () async {
+    test('TC-EHR-REC-105: another patient neither sees nor can resolve '
+        'them', () async {
       await signIn(1, 10);
       await report();
       final id = (await service.fetchPending()).single.id;
@@ -323,7 +463,8 @@ void main() {
       expect((await service.fetchPending()).single.id, id);
     });
 
-    test("one patient's saved choice never decides another's date",
+    test("TC-EHR-REC-106: one patient's saved choice never decides "
+        "another's date",
         () async {
       await signIn(1, 10);
       await report();
@@ -337,7 +478,8 @@ void main() {
       expect(await service.fetchPending(), hasLength(1));
     });
 
-    test('logging out forgets them, so nobody signed in next sees them',
+    test('TC-EHR-REC-107: logging out forgets them, so nobody signed in '
+        'next sees them',
         () async {
       await signIn(1, 10);
       await report();
@@ -361,6 +503,9 @@ void main() {
 /// A fake identity-conflicts backend for [ApiClient].
 class _FakeBackend implements HttpClientAdapter {
   List<Map<String, dynamic>> conflicts = [];
+
+  /// When set, a 200 GET answers with this body instead of [conflicts].
+  String? getBody;
   int getStatus = 200;
   int postStatus = 400;
   bool offline = false;
@@ -383,7 +528,7 @@ class _FakeBackend implements HttpClientAdapter {
       gets.add(options);
       return getStatus == 200
           ? ResponseBody.fromString(
-              jsonEncode({'resources': conflicts}), 200,
+              getBody ?? jsonEncode({'resources': conflicts}), 200,
               headers: json)
           : ResponseBody.fromString('{"error":"x"}', getStatus, headers: json);
     }

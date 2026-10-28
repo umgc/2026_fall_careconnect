@@ -73,22 +73,35 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
     } catch (_) {
       ok = false;
     }
+    // A backend conflict answered meanwhile (on another device) is no longer
+    // pending there, so trying again could never work (DEF-EHR-REC-11).
+    var gone = false;
+    if (!ok && c.id > 0) {
+      try {
+        gone = !(await _service.fetchPending()).any((x) => x.id == c.id);
+      } catch (_) {
+        // Couldn't check: keep the card.
+      }
+    }
     if (!mounted) return;
     setState(() {
       _resolving.remove(c.id);
-      if (ok) _conflicts.removeWhere((x) => x.id == c.id);
+      if (ok || gone) _conflicts.removeWhere((x) => x.id == c.id);
     });
     // A failed save keeps the card and says so; nothing changed.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: ok ? _success : const Color(0xFFB91C1C),
-        content: Text(!ok
-            ? 'We couldn\u2019t save your choice. Nothing was changed. Please try again.'
-            : notMine
-                ? 'Nothing was changed. This record may not be yours.'
-                : accepted
-                    ? 'Date of birth updated.'
-                    : 'Kept your current date of birth.'),
+        backgroundColor:
+            ok ? _success : (gone ? _muted : const Color(0xFFB91C1C)),
+        content: Text(gone
+            ? 'This was already answered, so nothing was saved.'
+            : !ok
+                ? 'We couldn\u2019t save your choice. Nothing was changed. Please try again.'
+                : notMine
+                    ? 'Nothing was changed. This record may not be yours.'
+                    : accepted
+                        ? 'Date of birth updated.'
+                        : 'Kept your current date of birth.'),
       ),
     );
   }

@@ -104,7 +104,7 @@ void main() {
   // ─── Null-user (logged-out) branch ───────────────────────────────────────
 
   group('MenuPage – null user', () {
-    testWidgets('renders the Menu app bar title', (tester) async {
+    testWidgets('TC-MENU-001: renders the Menu app bar title', (tester) async {
       // Verifies the scaffold app bar appears with the localised title.
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
@@ -113,7 +113,7 @@ void main() {
       expect(find.text('Menu'), findsOneWidget);
     });
 
-    testWidgets('renders the login button', (tester) async {
+    testWidgets('TC-MENU-002: renders the login button', (tester) async {
       // Verifies _LoggedOutPrompt's ElevatedButton is present.
       await tester.pumpWidget(_buildApp());
       await tester.pumpAndSettle();
@@ -153,7 +153,8 @@ void main() {
     });
 
     testWidgets(
-        'Team C smoke: renders logged-in menu integration surfaces - Spanish',
+        'TC-MENU-003: Team C smoke: renders logged-in menu integration '
+        'surfaces - Spanish',
         (tester) async {
       await tester.pumpWidget(
         _buildApp(session: caregiverSession, locale: 'es'),
@@ -228,7 +229,7 @@ void main() {
       }
     });
 
-    testWidgets('renders the Tools section header', (tester) async {
+    testWidgets('TC-MENU-004: renders the Tools section header', (tester) async {
       // Verifies that the grid section header for Tools is present.
       await tester.pumpWidget(_buildApp(session: caregiverSession));
       await tester.pumpAndSettle();
@@ -237,7 +238,7 @@ void main() {
       expect(find.text('Tools'), findsOneWidget);
     });
 
-    testWidgets('renders the Preferences section header', (tester) async {
+    testWidgets('TC-MENU-005: renders the Preferences section header', (tester) async {
       // Verifies the Preferences section header appears.
       await tester.pumpWidget(_buildApp(session: caregiverSession));
       await tester.pumpAndSettle();
@@ -246,7 +247,7 @@ void main() {
       expect(find.text('Preferences', skipOffstage: false), findsOneWidget);
     });
 
-    testWidgets('renders at least one tool tile', (tester) async {
+    testWidgets('TC-MENU-006: renders at least one tool tile', (tester) async {
       // Verifies that the nav-item grid is populated with at least one card.
       await tester.pumpWidget(_buildApp(session: caregiverSession));
       await tester.pumpAndSettle();
@@ -290,7 +291,7 @@ void main() {
           name: 'Test User',
         );
 
-    testWidgets('TC-HDATA-051: a patient sees Health Data in the More menu, '
+    testWidgets('TC-HDATA-067: a patient sees Health Data in the More menu, '
         'and tapping it opens /health-data', (tester) async {
       tester.view.physicalSize = const Size(1200, 2400);
       tester.view.devicePixelRatio = 1.0;
@@ -306,12 +307,32 @@ void main() {
     });
 
     for (final role in ['CAREGIVER', 'ADMIN', 'FAMILY_LINK']) {
-      testWidgets('TC-HDATA-052: a $role does not see Health Data in the More '
+      testWidgets('TC-HDATA-068: a $role does not see Health Data in the More '
           'menu', (tester) async {
         await tester.pumpWidget(_buildApp(session: session(role)));
         await tester.pumpAndSettle();
         expect(find.text('Health Data', skipOffstage: false), findsNothing);
       });
     }
+
+    testWidgets('TC-HDATA-072: Health Data opens on top of the More menu, so '
+        'Back returns to the menu', (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(_buildApp(session: session('PATIENT')));
+      await tester.pumpAndSettle();
+      await _scrollUntilTextVisible(tester, 'Health Data');
+      await tester.tap(find.text('Health Data'));
+      await tester.pumpAndSettle();
+      final router =
+          GoRouter.of(tester.element(find.text('Health Data Entry Route')));
+      expect(router.canPop(), isTrue);
+      router.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('Health Data Entry Route'), findsNothing);
+      expect(find.text('Health Data'), findsOneWidget);
+    });
   });
 }
