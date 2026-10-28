@@ -1,8 +1,10 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../services/api_client.dart';
 import '../../../../services/user_role_storage_service.dart';
 import '../models/identity_conflict.dart';
 
@@ -20,24 +22,57 @@ class IdentityConflictService {
       await Future.delayed(const Duration(milliseconds: 400));
       return _mockPending;
     }
-    // TODO wire to backend when ready, e.g.:
-    // final env = await ApiClient.instance.getJson<Map<String, dynamic>>(
-    //   '/v1/api/ehr/identity-conflicts?status=PENDING');
-    // Each conflict should carry identityCheck: {"type": "PHONE", "value":
-    // "4821"} from the incoming source's ehr_source_identity row: the phone's
-    // last 4 digits, else the email (name part hidden), else the 5-digit
-    // postal_code; omitted if the record has none of them.
-    // return ((env['resources'] as List?) ?? [])
-    //     .map((j) => IdentityConflict.fromJson(j as Map<String, dynamic>))
-    //     .toList();
-    // Until then, only the date-of-birth disagreements this device found
-    // between connected sources (see [reportDobDisagreement]) for the
-    // signed-in patient.
+    // The backend's pending conflicts (GET /v1/api/ehr/identity-conflicts,
+    // #432), each with its masked identityCheck and source labels, plus the
+    // date-of-birth disagreements this device found between connected
+    // sources (see [reportDobDisagreement]) for the signed-in patient. A pair
+    // of dates the backend already has is shown once, as the backend's.
+    // Throws when the backend can't be checked, so the screen says so
+    // instead of "all caught up".
     final owner = await _owner();
-    return List.unmodifiable(_found.values
+    final server = await _fetchServer();
+    _shown
+      ..clear()
+      ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
+    final local = _found.values
         .where((f) => f.owner == owner)
-        .map((f) => f.conflict));
+        .map((f) => f.conflict)
+        .where((l) => !server.any((s) => _sameDates(s, l)));
+    return List.unmodifiable([...server, ...local]);
   }
+
+  /// The patient's pending date-of-birth conflicts from the backend. A 400,
+  /// 403, 404 or 409 means the backend has none this caller can confirm (not
+  /// a patient, or no patient record); anything else is rethrown.
+  Future<List<IdentityConflict>> _fetchServer() async {
+    final Map<String, dynamic> env;
+    try {
+      env = await ApiClient.instance.getJson<Map<String, dynamic>>(
+        _path,
+        query: const {'status': 'PENDING'},
+        parser: (json) =>
+            json is Map<String, dynamic> ? json : <String, dynamic>{},
+      );
+    } on DioException catch (e) {
+      final inner = e.error;
+      final status = e.response?.statusCode ??
+          (inner is ApiException ? inner.status : null);
+      if (const {400, 403, 404, 409}.contains(status)) return const [];
+      rethrow;
+    }
+    final out = <IdentityConflict>[];
+    for (final j in (env['resources'] as List?) ?? const []) {
+      if (j is! Map) continue;
+      final c = IdentityConflict.fromJson(Map<String, dynamic>.from(j));
+      // Only a pending date of birth is the patient's to confirm here, and
+      // only a positive id can be sent back to the backend.
+      if (!c.isDob || !c.isPending || c.id <= 0) continue;
+      out.add(_withShownDates(c));
+    }
+    return out;
+  }
+
+  static const _path = '/v1/api/ehr/identity-conflicts';
 
   Future<bool> resolve(int conflictId, {required bool accepted}) async {
     if (useMock) {
@@ -56,15 +91,75 @@ class IdentityConflictService {
       if (saved) _found.remove(conflictId);
       return saved;
     }
-    // TODO wire to backend when ready, e.g.:
-    // await ApiClient.instance.postJson(
-    //   '/v1/api/ehr/identity-conflicts/$conflictId/resolve',
-    //   body: {'status': accepted ? 'ACCEPTED' : 'REJECTED', 'resolvedBy': 'PATIENT'});
-    //
-    // Until then nothing is saved, so never report success: the screen shows
-    // "We couldn't save your choice. Nothing was changed." instead of a false
-    // "Date of birth updated." Wire this together with fetchPending.
-    return false;
+    // A backend conflict (positive id) is saved through the endpoint (#432).
+    // Anything but a 2xx means nothing was saved, so it is never reported as
+    // saved: the screen says "We couldn't save your choice. Nothing was
+    // changed." and keeps the card.
+    if (conflictId <= 0) return false;
+    try {
+      await ApiClient.instance.postJson<dynamic>(
+        '$_path/$conflictId/resolve',
+        body: {
+          'status': accepted ? 'ACCEPTED' : 'REJECTED',
+          'resolvedBy': 'PATIENT',
+        },
+      );
+    } catch (_) {
+      return false;
+    }
+    await _rememberServerChoice(conflictId, accepted);
+    return true;
+  }
+
+  /// Once the backend has saved [conflictId], the same choice is kept on the
+  /// device for that pair of dates, and a matching disagreement this device
+  /// found is dropped, so neither this screen nor Health Data asks again.
+  static Future<void> _rememberServerChoice(int id, bool accepted) async {
+    final shown = _shown.remove(id);
+    if (shown == null || shown.owner != await _owner()) return;
+    await _saveChoice(shown.owner, shown.conflict, accepted);
+    _found.removeWhere((_, f) =>
+        f.owner == shown.owner && _sameDates(shown.conflict, f.conflict));
+  }
+
+  /// The backend sends dates as ISO (1980-05-14); the screen and the
+  /// device-found conflicts use MM/DD/YYYY. Anything else is left as is.
+  static IdentityConflict _withShownDates(IdentityConflict c) {
+    String shown(String v) {
+      final d = _parseAny(v);
+      return d == null ? v : _format(d);
+    }
+
+    return IdentityConflict(
+      id: c.id,
+      fieldName: c.fieldName,
+      canonicalValueBefore: shown(c.canonicalValueBefore),
+      incomingValue: shown(c.incomingValue),
+      canonicalSourceLabel: c.canonicalSourceLabel,
+      incomingSourceLabel: c.incomingSourceLabel,
+      status: c.status,
+      detectedAt: c.detectedAt,
+      identityCheck: c.identityCheck,
+    );
+  }
+
+  static bool _sameDates(IdentityConflict a, IdentityConflict b) {
+    final a1 = _parseAny(a.canonicalValueBefore);
+    final a2 = _parseAny(a.incomingValue);
+    return a1 != null &&
+        a2 != null &&
+        a1 == _parseAny(b.canonicalValueBefore) &&
+        a2 == _parseAny(b.incomingValue);
+  }
+
+  /// MM/DD/YYYY or ISO (YYYY-MM-DD, with or without a time), else null.
+  static DateTime? _parseAny(String v) {
+    final mdy = _parse(v.trim());
+    if (mdy != null) return mdy;
+    final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(v.trim());
+    if (m == null) return null;
+    return DateTime(
+        int.parse(m.group(1)!), int.parse(m.group(2)!), int.parse(m.group(3)!));
   }
 
   // ---- Date-of-birth disagreements found between connected sources ----
@@ -79,6 +174,12 @@ class IdentityConflictService {
   /// Ids for found disagreements are negative, so they never collide with a
   /// backend conflict id.
   static int _nextId = -1;
+
+  /// The backend conflicts [fetchPending] last returned, by id, each tagged
+  /// with the patient it was loaded for. [resolve] uses them to keep a saved
+  /// choice on the device too.
+  static final Map<int, ({String owner, IdentityConflict conflict})> _shown =
+      {};
 
   static const _choicesKey = 'health_data.dob_choices';
 
@@ -118,10 +219,12 @@ class IdentityConflictService {
     return null;
   }
 
-  /// Forgets every undecided disagreement. Called on logout so the next
+  /// Forgets every undecided disagreement and the backend conflicts last
+  /// shown. Called on logout so the next
   /// account signed in during this app session never sees them.
   static void clearFound() {
     _found.clear();
+    _shown.clear();
     _nextId = -1;
   }
 
