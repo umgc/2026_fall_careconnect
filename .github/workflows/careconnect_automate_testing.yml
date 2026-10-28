@@ -18,7 +18,7 @@ on:
         type: boolean
         default: false
       run_e2e:
-        description: 'Run Android device integration/E2E tests'
+        description: 'Run Windows desktop integration/E2E tests'
         type: boolean
         default: true
 
@@ -37,6 +37,7 @@ defaults:
 env:
   FLUTTER_VERSION: '3.47.8'
   COVERAGE_MIN: '80'
+  ACCESSIBILITY_TEST_DIR: 'test/team_alpha_accessibility'
 
 jobs:
   unit-and-coverage:
@@ -98,47 +99,46 @@ jobs:
         run: flutter pub get
       - name: Verify accessibility test suite exists
         run: |
-          if [ ! -d test/accessibility ] || ! find test/accessibility -name '*_test.dart' -print -quit | grep -q .; then
-            echo '::error::Add Flutter accessibility widget tests under frontend/test/accessibility/.'
+          if [ ! -d "$ACCESSIBILITY_TEST_DIR" ] || ! find "$ACCESSIBILITY_TEST_DIR" -name '*_test.dart' -print -quit | grep -q .; then
+            echo "::error::Add Flutter accessibility widget tests under frontend/$ACCESSIBILITY_TEST_DIR/."
             echo 'Use tester.ensureSemantics(), meetsGuideline(androidTapTargetGuideline),'
             echo 'meetsGuideline(iOSTapTargetGuideline), meetsGuideline(labeledTapTargetGuideline),'
             echo 'and meetsGuideline(textContrastGuideline) on actual app screens.'
             exit 1
           fi
       - name: Run accessibility widget tests
-        run: flutter test test/accessibility/ --reporter expanded
+        run: flutter test "$ACCESSIBILITY_TEST_DIR/" --reporter expanded
 
   integration-e2e:
-    name: Android integration and E2E tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    name: Integration and E2E tests (Windows desktop)
+    runs-on: windows-latest
+    timeout-minutes: 45
     if: github.event_name != 'workflow_dispatch' || inputs.run_e2e
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
       - name: Install dependencies
         run: flutter pub get
-      - name: Run integration and E2E tests on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_6
-          script: |
-            cd frontend
-            flutter devices
-            for test_file in integration_test/*_test.dart; do
-              echo "Running $test_file"
-              flutter test "$test_file" -d emulator-5554 --reporter expanded || exit 1
-            done
+      - name: Verify Windows platform and integration tests exist
+        run: |
+          if [ ! -d windows ]; then
+            echo '::error::frontend/windows/ is missing. Run "flutter create --platforms=windows ." in frontend/ and commit it.'
+            exit 1
+          fi
+          if ! compgen -G 'integration_test/*_test.dart' > /dev/null; then
+            echo '::error::Add integration/E2E tests under frontend/integration_test/ (files ending in _test.dart).'
+            exit 1
+          fi
+      - name: Flutter devices
+        run: flutter devices
+      - name: Run integration and E2E tests on Windows desktop
+        run: flutter test integration_test/ -d windows --reporter expanded
 
   create-pull-request:
     name: Open PR to develop (manual opt-in)
@@ -156,6 +156,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Create PR from team-a-develop to develop
+        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -163,7 +164,7 @@ jobs:
           if gh pr list --base develop --head team-a-develop --state open --json number --jq 'length' | grep -qx '0'; then
             gh pr create --base develop --head team-a-develop \
               --title 'Merge Team A Flutter changes into develop' \
-              --body 'Automated PR created after successful Flutter analysis, unit tests, coverage gate, accessibility checks, and Android integration/E2E tests.'
+              --body 'Automated PR created after successful Flutter analysis, unit tests, coverage gate, accessibility checks, and Windows desktop integration/E2E tests.'
           else
             echo 'An open Team A -> develop PR already exists.'
           fi
