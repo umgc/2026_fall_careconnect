@@ -21,6 +21,7 @@ import 'services/local_db/local_db_startup.dart';
 import 'config/theme/app_theme.dart';
 import 'config/theme/app_text_scaling.dart';
 import 'config/utils/responsive_utils.dart';
+import 'config/utils/web_accessibility.dart';
 import 'config/utils/web_utils.dart';
 import 'features/tasks/utils/task_type_manager.dart';
 import 'features/telemetry/telemetry.dart';
@@ -34,6 +35,7 @@ Future<void> main() async {
   runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      enableWebAccessibility();
       installTelemetryErrorHandlers();
 
       // Load env config. Prefer a bundled .env when a build provides one, else
