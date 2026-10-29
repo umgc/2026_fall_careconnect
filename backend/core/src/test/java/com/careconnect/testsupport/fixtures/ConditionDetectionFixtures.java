@@ -3,6 +3,7 @@ package com.careconnect.testsupport.fixtures;
 import com.careconnect.model.CallAttendee;
 import com.careconnect.model.CallRecording;
 import com.careconnect.model.CallSession;
+import com.careconnect.model.CallTranscriptSegment;
 import com.careconnect.model.User;
 import com.careconnect.model.conditiondetection.ConditionDetectionRun;
 import com.careconnect.model.conditiondetection.ConditionFlag;
@@ -10,6 +11,7 @@ import com.careconnect.model.conditiondetection.ConditionInputKind;
 import com.careconnect.model.conditiondetection.ConditionName;
 import com.careconnect.model.conditiondetection.ConditionRunState;
 import com.careconnect.security.Role;
+import com.careconnect.service.PostCallTranscriptionService;
 import java.time.LocalDateTime;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -28,6 +30,12 @@ public final class ConditionDetectionFixtures {
     public static final Long CAREGIVER_USER_ID = 80L;
     public static final Long RECORDING_ID = 55L;
     public static final String MODEL_ID = "kintsugi-dam-3.1";
+
+    /** Source of per-attendee KVS transcript segments: actor user id is the speaker. */
+    public static final String KVS_SOURCE = PostCallTranscriptionService.KVS_TRANSCRIPT_SOURCE;
+
+    /** Source the live call screen uploads Chime captions under: actor user id is the uploader. */
+    public static final String LIVE_CAPTION_SOURCE = "chime-transcript";
 
     private ConditionDetectionFixtures() {
         // Utility class
@@ -69,6 +77,22 @@ public final class ConditionDetectionFixtures {
         attendee.setJoinedAt(joinedAt);
         attendee.setLeftAt(leftAt);
         return attendee;
+    }
+
+    /**
+     * A transcript segment. {@code source} decides whether {@code actorUserId} is the speaker
+     * ({@link #KVS_SOURCE}) or merely the uploader ({@link #LIVE_CAPTION_SOURCE}).
+     */
+    public static CallTranscriptSegment transcriptSegment(
+            final Long actorUserId, final String source, final long startMs, final String text) {
+        final CallTranscriptSegment segment = new CallTranscriptSegment();
+        segment.setCallId(CALL_ID);
+        segment.setActorUserId(actorUserId);
+        segment.setSource(source);
+        segment.setStartMs(startMs);
+        segment.setEndMs(startMs + 1_000L);
+        segment.setText(text);
+        return segment;
     }
 
     /** A persisted-looking run for {@link #MODEL_ID} in the given state, one attempt used. */

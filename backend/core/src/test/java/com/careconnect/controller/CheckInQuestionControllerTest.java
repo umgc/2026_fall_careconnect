@@ -94,7 +94,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$[0].type").value("TEXT"));
 
         verify(checkInSnapshotService, times(1)).getSnapshotQuestions(checkInId);
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
         verify(questionService, never()).findActiveOrdered();
     }
 
@@ -112,7 +112,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$[0].prompt").value("Legacy active"));
 
         verify(questionService).findActiveOrdered();
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
         verify(checkInSnapshotService, never()).getSnapshotQuestions(any());
     }
 
@@ -131,7 +131,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$[0].prompt").value("Legacy active"));
 
         verify(questionService).findActiveOrdered();
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
         verify(checkInSnapshotService, never()).getSnapshotQuestions(any());
     }
 
@@ -151,7 +151,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$.questionCount").value(3));
 
         verify(checkInSnapshotService).createCheckInWithSnapshot(eq(request));
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
     }
 
     @Test
@@ -178,7 +178,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$[0].questionCount").value(3));
 
         verify(checkInSnapshotService).listCheckInsForPatient(7L);
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
     }
 
     @Test
@@ -204,7 +204,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(5));
 
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
     }
 
     @Test
@@ -216,7 +216,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(checkInSnapshotService).getLatestCheckInForPatient(7L);
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
     }
 
     @Test
@@ -241,7 +241,7 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$.submittedAt").isNotEmpty())
                 .andExpect(jsonPath("$.reviewedAt").isNotEmpty());
 
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
         verify(checkInSnapshotService).getCheckInDetail(eq(checkInId));
     }
 
@@ -265,14 +265,27 @@ class CheckInQuestionControllerTest {
                 .andExpect(jsonPath("$.checkInId").value(42))
                 .andExpect(jsonPath("$.status").value("reviewed"));
 
-        verify(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+        verify(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
         verify(checkInSnapshotService).markCheckInReviewed(eq(checkInId), any(User.class));
+    }
+
+    @Test
+    void markCheckInReviewed_byReadOnlyUser_returnsForbidden() throws Exception {
+        // Arrange: a linked family member may read the check-in but not review it
+        when(checkInSnapshotService.getPatientIdForCheckIn(42L)).thenReturn(7L);
+        doThrow(new UnauthorizedException("read-only"))
+                .when(authorizationService).requireWriteAccess(any());
+
+        // Act / Assert
+        mockMvc.perform(post("/api/checkins/{checkInId}/review", 42L))
+                .andExpect(status().isForbidden());
+        verify(checkInSnapshotService, never()).markCheckInReviewed(any(), any());
     }
 
     @Test
     void listPatientCheckIns_withoutAccess_returnsForbidden() throws Exception {
         doThrow(new UnauthorizedException("Patients can only access their own data"))
-                .when(authorizationService).requirePatientAccess(any(User.class), eq(7L));
+                .when(authorizationService).requirePatientRecordAccess(any(User.class), eq(7L));
 
         mockMvc.perform(get("/api/checkins/patients/{patientId}", 7L)
                         .contentType(MediaType.APPLICATION_JSON))

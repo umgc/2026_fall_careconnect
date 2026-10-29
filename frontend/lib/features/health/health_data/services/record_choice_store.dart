@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// One decision about a flagged record, for the audit trail.
 class RecordDecisionEntry {
   final DateTime at;
+
   /// `confirmed`, `keep_both` or `deferred`.
   final String decision;
 

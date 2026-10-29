@@ -273,24 +273,11 @@ public class TaskServiceV2 {
         Integer originalCount = parentTask.getDoCount();
         String originalDays = parentTask.getDaysOfWeek();
 
-        // Original implied end before change
-        LocalDate originalEnd = impliedEndDateFromSaved(parentTask);
-
-        // Apply updates but preserve recurrence fields and start date if editing a
-        // later occurrence
+        // Apply the requested series changes, then keep the original series anchor.
         applyTaskUpdates(parentTask, taskDto, true);
 
         // Force parent to keep its original recurrence anchor
         parentTask.setDate(originalParentDate);
-        if (originalFreq != null)
-            parentTask.setFrequency(originalFreq);
-        if (originalInterval != null)
-            parentTask.setTaskInterval(originalInterval);
-        if (originalCount != null)
-            parentTask.setDoCount(originalCount);
-        if (originalDays != null)
-            parentTask.setDaysOfWeek(originalDays);
-
         taskRepository.save(parentTask);
         // ---- Detect changes (compare DTO vs original series values) ----
         List<Boolean> originalDaysList = TaskMapper.parseDays(originalDays);
@@ -344,25 +331,14 @@ public class TaskServiceV2 {
             if (!targetDates.isEmpty()) {
                 LocalDate earliest = targetDates.get(0);
                 LocalDate parentDate = onlyDate(parentTask.getDate());
-                if (earliest.isBefore(parentDate)) {
+                if (!earliest.equals(parentDate)) {
                     log.info("Adjusting parent date from {} → {}", parentDate, earliest);
                     parentTask.setDate(earliest.toString());
                     taskRepository.save(parentTask);
                 }
             }
-            if ("weekly".equalsIgnoreCase(newParams.frequency) && daysChanged) {
-                // Weekly days changed → keep the same calendar END, recompute COUNT
-                int newCount = recomputeCountFromEnd(newParams, originalEnd);
-                parentTask.setDoCount(newCount);
-                taskRepository.save(parentTask);
-
-                newParams = newParams.withCount(newCount);
-                reconcileSeries(parentTask, newParams, originalEnd); // end-capped
-            } else {
-                // All other edits → use implied end from parentTask
-                LocalDate afterEditEnd = impliedEndDateFromSaved(parentTask);
-                reconcileSeries(parentTask, newParams, afterEditEnd);
-            }
+            LocalDate afterEditEnd = impliedEndDateFromSaved(parentTask);
+            reconcileSeries(parentTask, newParams, afterEditEnd);
 
         } else {
             // Non-recurrence edits → update children safely
@@ -469,6 +445,8 @@ public class TaskServiceV2 {
             task.setDescription(dto.getDescription());
         if (typeChanged)
             task.setTaskType(dto.getTaskType());
+        if (dto.getTimeOfDay() != null)
+            task.setTimeOfDay(dto.getTimeOfDay());
 
         if (freqChanged)
             task.setFrequency(dto.getFrequency());
@@ -568,6 +546,7 @@ public class TaskServiceV2 {
                 .daysOfWeek(TaskMapper.parseDays(task.getDaysOfWeek()))
                 .taskType(task.getTaskType())
                 .patientId(task.getPatient() != null ? task.getPatient().getId() : null)
+                .parentTaskId(task.getParentTaskId())
                 .notifications(task.getNotifications() != null
                         ? task.getNotifications().stream()
                         .map(n -> new ScheduledNotificationDTO(

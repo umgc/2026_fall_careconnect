@@ -88,7 +88,8 @@ class AthenaConnectService {
     }
     final resp = await _post('connect', body: {'consent': true});
     final body = _decode(resp);
-    if (body == null) throw const AthenaConnectException(AthenaConnectError.server);
+    if (body == null)
+      throw const AthenaConnectException(AthenaConnectError.server);
     return AthenaStatus.fromJson(body);
   }
 
@@ -99,7 +100,8 @@ class AthenaConnectService {
     }
     final resp = await _post('sync');
     final body = _decode(resp);
-    if (body == null) throw const AthenaConnectException(AthenaConnectError.server);
+    if (body == null)
+      throw const AthenaConnectException(AthenaConnectError.server);
     return AthenaSyncResult.fromJson(body);
   }
 
@@ -227,7 +229,8 @@ class AthenaStatus {
       reason: connected
           ? null
           : AthenaNotConnectedReason.parse(json['reason']?.toString()),
-      sync: sync is Map<String, dynamic> ? AthenaSyncResult.fromJson(sync) : null,
+      sync:
+          sync is Map<String, dynamic> ? AthenaSyncResult.fromJson(sync) : null,
     );
   }
 }

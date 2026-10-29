@@ -54,7 +54,7 @@ public class SymptomEntryController {
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<?> getSymptoms(@PathVariable Long patientId) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         try {
             List<SymptomEntryDTO> list = symptomEntryService.getSymptomsForPatient(patientId);
             return ResponseEntity.ok(Map.of("data", list, "message", "Symptoms retrieved successfully"));

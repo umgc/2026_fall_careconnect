@@ -39,8 +39,8 @@ Future<RecordConflictDecision?> showRecordConflictDialog(
 }) {
   return showDialog<RecordConflictDecision>(
     context: context,
-    builder: (ctx) => _RecordConflictDialog(
-        conflict: conflict, index: index, total: total),
+    builder: (ctx) =>
+        _RecordConflictDialog(conflict: conflict, index: index, total: total),
   );
 }
 
@@ -155,20 +155,20 @@ class _RecordConflictDialog extends StatelessWidget {
           for (final (label, values) in rows)
             _field(label, values[i], differs: values.toSet().length > 1),
           if (conflict.kind == RecordConflictKind.differs) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _teal,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(48, 48),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _teal,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(48, 48),
+                ),
+                onPressed: () =>
+                    Navigator.of(context).pop(RecordConflictDecision.choose(v)),
+                child: Text('Use version ${i + 1}'),
               ),
-              onPressed: () =>
-                  Navigator.of(context).pop(RecordConflictDecision.choose(v)),
-              child: Text('Use version ${i + 1}'),
             ),
-          ),
           ],
         ],
       ),
@@ -221,8 +221,10 @@ class _RecordConflictDialog extends StatelessWidget {
     final rows = <(String, List<String>)>[
       ('Record', versions.map((v) => v.title).toList()),
       ('Status', versions.map((v) => v.status ?? '').toList()),
-      ('Date',
-          versions.map((v) => v.date == null ? '' : _date(v.date!)).toList()),
+      (
+        'Date',
+        versions.map((v) => v.date == null ? '' : _date(v.date!)).toList()
+      ),
     ];
     final labels = <String>{
       for (final v in versions)

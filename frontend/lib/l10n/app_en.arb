@@ -1421,6 +1421,26 @@
   "@medicarehelp_errMcr04": {"description": "ERR-MCR-04. Exact SRS text (section 8.6); do not reword."},
   "medicarehelp_errMcr05": "Your Medicare connection has expired. Connect again to see current records.",
   "@medicarehelp_errMcr05": {"description": "ERR-MCR-05. Exact SRS text (section 8.6); do not reword."},
+  "connectionRequests_title": "Caregiver requests",
+  "@connectionRequests_title": {"description": "Heading of the patient dashboard card listing caregivers who asked to connect."},
+  "connectionRequests_wantsToConnect": "{caregiverName} would like to be your caregiver. They will see your health records only if you accept.",
+  "@connectionRequests_wantsToConnect": {
+    "description": "Body of one pending caregiver connection request.",
+    "placeholders": {"caregiverName": {"type": "String"}}
+  },
+  "connectionRequests_accept": "Accept",
+  "@connectionRequests_accept": {"description": "Button that accepts a caregiver connection request."},
+  "connectionRequests_decline": "Decline",
+  "@connectionRequests_decline": {"description": "Button that declines a caregiver connection request."},
+  "connectionRequests_accepted": "You are now connected with {caregiverName}.",
+  "@connectionRequests_accepted": {
+    "description": "Snackbar after the patient accepts a caregiver connection request.",
+    "placeholders": {"caregiverName": {"type": "String"}}
+  },
+  "connectionRequests_declined": "Request declined.",
+  "@connectionRequests_declined": {"description": "Snackbar after the patient declines a caregiver connection request."},
+  "connectionRequests_error": "Could not update the request. Please try again.",
+  "@connectionRequests_error": {"description": "Snackbar when accepting or declining a caregiver connection request fails."},
   "conditionFlags_title": "Condition screening",
   "@conditionFlags_title": {
     "description": "Title of the post-call card showing AI condition screening flags (caregivers, family, admins only)."

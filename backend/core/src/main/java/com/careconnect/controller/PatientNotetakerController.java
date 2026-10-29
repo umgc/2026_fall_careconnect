@@ -54,7 +54,7 @@ public class PatientNotetakerController {
             @PathVariable Long patientId) throws UnauthorizedException {
 
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         PatientNotetakerConfigDTO patientNotetakerConfig;
         try {
             patientNotetakerConfig = patientNotetakerService.getNotetakerConfigByPatientId(patientId);
@@ -78,7 +78,7 @@ public class PatientNotetakerController {
             @RequestBody PatientNotetakerConfigDTO configDTO) throws UnauthorizedException {
 
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         PatientNotetakerConfigDTO updatedConfig;
         try {
             updatedConfig = patientNotetakerService.createOrUpdatePatientNotetakerConfig(patientId, configDTO);
@@ -96,7 +96,7 @@ public class PatientNotetakerController {
     public ResponseEntity<PatientNoteDTO> createPatientNote(@PathVariable Long patientId,
                                                             @RequestBody PatientNoteDTO noteDTO) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         try {
             PatientNoteDTO createdNote = patientNotetakerService.createNoteForPatient(patientId, noteDTO);
             return ResponseEntity.status(HttpStatus.CREATED).body(createdNote);
@@ -114,7 +114,7 @@ public class PatientNotetakerController {
                                                             @PathVariable Long id,
                                                             @RequestBody PatientNoteDTO noteDTO) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         try {
             PatientNoteDTO updatedNote = patientNotetakerService.updateNoteForPatient(patientId, id, noteDTO);
             return ResponseEntity.ok(updatedNote);
@@ -131,7 +131,7 @@ public class PatientNotetakerController {
     public ResponseEntity<PatientNoteDTO> getPatientNote(@PathVariable Long patientId,
                                                          @PathVariable Long id) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         try {
             PatientNoteDTO note = patientNotetakerService.getNoteById(patientId, id);
             return ResponseEntity.ok(note);
@@ -147,7 +147,7 @@ public class PatientNotetakerController {
     @GetMapping("/{patientId}/notes")
     public ResponseEntity<List<PatientNoteDTO>> getAllNotesForPatient(@PathVariable Long patientId) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         try {
             List<PatientNoteDTO> notes = patientNotetakerService.getAllNotesForPatient(patientId);
             return ResponseEntity.ok(notes);
@@ -164,7 +164,7 @@ public class PatientNotetakerController {
     public ResponseEntity<Void> deletePatientNote(@PathVariable Long patientId,
                                                   @PathVariable Long id) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         try {
             patientNotetakerService.deleteNoteById(id);
             return ResponseEntity.noContent().build();

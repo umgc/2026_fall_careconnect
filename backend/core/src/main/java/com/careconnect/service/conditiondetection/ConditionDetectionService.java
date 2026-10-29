@@ -66,6 +66,10 @@ public class ConditionDetectionService {
     @Value("${careconnect.condition-detection.max-attempts:5}")
     private int maxAttempts;
 
+    /** Past the voice audio limit (20 h): older calls would only be skipped as expired. */
+    @Value("${careconnect.condition-detection.reconcile.lookback-hours:24}")
+    private long reconcileLookbackHours;
+
     @Autowired
     @Lazy
     private ConditionDetectionService self;
@@ -96,7 +100,7 @@ public class ConditionDetectionService {
 
     /**
      * Creates one run per enabled adapter for an ended call. Idempotent: re-running termination
-     * or the reconciler never duplicates runs. Short calls and calls without a recording get
+     * or {@link #reconcileMissingRuns} never duplicates runs. Short calls and calls without a recording get
      * their run created directly as SKIPPED so the UI can say why.
      *
      * <p>Deliberately not {@code @Transactional}: each run commits on its own, so a duplicate
@@ -176,6 +180,34 @@ public class ConditionDetectionService {
             for (final ConditionDueRunProjection due : runRepository.findDueRuns(modelId)) {
                 final Long id = due.getId().longValue();
                 lanes.submit(due.getModelId(), id, () -> worker.processRun(id));
+            }
+        }
+    }
+
+    /**
+     * Creates runs that termination failed to create. Termination swallows enqueue failures so a
+     * DB hiccup never blocks ending a call, and nothing else would revisit that call. Only fully
+     * ended calls are considered, so the recording is final and never misread as missing.
+     */
+    @Scheduled(fixedDelayString = "${careconnect.condition-detection.reconcile.interval-ms:600000}")
+    public void reconcileMissingRuns() {
+        if (!enabled) {
+            return;
+        }
+        final List<String> modelIds = adapters().stream().map(ConditionModelAdapter::modelId).toList();
+        if (modelIds.isEmpty()) {
+            return;
+        }
+        for (final String callId : runRepository.findEndedCallsMissingRuns(
+                reconcileLookbackHours, modelIds, modelIds.size())) {
+            try {
+                enqueueForCall(callId);
+            } catch (RuntimeException e) {
+                // One bad call must not stop the batch; it is retried next pass until it ages out.
+                if (log.isWarnEnabled()) {
+                    log.warn("Could not reconcile condition runs for call {}: {}",
+                            callId, e.getClass().getSimpleName());
+                }
             }
         }
     }

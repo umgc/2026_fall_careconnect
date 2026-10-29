@@ -118,8 +118,8 @@ class AthenaDataService {
 
   static AthenaReadProblem _problemFor(DioException e) {
     final inner = e.error;
-    final status = e.response?.statusCode ??
-        (inner is ApiException ? inner.status : null);
+    final status =
+        e.response?.statusCode ?? (inner is ApiException ? inner.status : null);
     switch (status) {
       case 409:
       case 404:
@@ -131,8 +131,7 @@ class AthenaDataService {
     }
   }
 
-  static String _isoDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
+  static String _isoDate(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
 }

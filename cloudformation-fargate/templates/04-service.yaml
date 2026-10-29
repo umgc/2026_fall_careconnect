@@ -652,6 +652,12 @@ Resources:
           - Name: dam-sidecar
             Image: !Ref SidecarImageUri
             Essential: false
+            # The sidecar exits after its model-load retries are exhausted; ECS restarts it in
+            # place (the API keeps serving). It must have run 300 s before a restart is attempted
+            # again, so a permanently broken image doesn't restart in a tight loop.
+            RestartPolicy:
+              Enabled: true
+              RestartAttemptPeriod: 300
             Memory: 4096
             Cpu: 256
             PortMappings:
@@ -685,6 +691,38 @@ Resources:
                 awslogs-region: !Ref AWS::Region
                 awslogs-stream-prefix: dam
           - !Ref AWS::NoValue
+
+  # Voice screening is unavailable while the sidecar can't load its model. Count each failed
+  # load and raise a console-only alarm (no notification actions by design).
+  SidecarModelLoadFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: HasConditionSidecar
+    Properties:
+      LogGroupName:
+        Fn::ImportValue: !Sub careconnect-${Environment}-BackendLogGroupName
+      FilterPattern: '"model load failed"'
+      MetricTransformations:
+        - MetricNamespace: CareConnect/ConditionDetection
+          MetricName: !Sub SidecarModelLoadFailures-${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+
+  SidecarModelLoadFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasConditionSidecar
+    Properties:
+      AlarmName: !Sub careconnect-${Environment}-dam-sidecar-model-load-failed
+      AlarmDescription: >-
+        The DAM sidecar failed to load its model, so voice (depression/anxiety) screening is
+        paused. The sidecar retries, then exits and ECS restarts it; check the dam/ log streams.
+      Namespace: CareConnect/ConditionDetection
+      MetricName: !Sub SidecarModelLoadFailures-${Environment}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
 
   # ECS Fargate service registered with Cloud Map for API Gateway discovery
   # and with the websocket NLB target group for the WebSocket API.

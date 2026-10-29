@@ -34,7 +34,8 @@ class RecordConflict {
 
   /// Changes when any version changes, so a remembered decision no longer
   /// applies and the record is flagged again.
-  String get fingerprint => versions.map(versionId).join('|') +
+  String get fingerprint =>
+      versions.map(versionId).join('|') +
       versions.map((v) => '${_norm(v.status)}@${_day(v.date)}').join('|');
 
   /// [key] hashed, for storing decisions on the device without the
@@ -103,8 +104,8 @@ class RecordReconciler {
         continue;
       }
 
-      final versions = [...group]..sort((a, b) =>
-          _rank(a.primarySource).compareTo(_rank(b.primarySource)));
+      final versions = [...group]..sort(
+          (a, b) => _rank(a.primarySource).compareTo(_rank(b.primarySource)));
       final sources = versions.map((v) => v.primarySource).toList();
       final preferred = versions.first;
       final same = versions.every((v) => _sameDetails(v, preferred));
@@ -189,10 +190,8 @@ class RecordReconciler {
   }
 }
 
-String _norm(String? s) => (s ?? '')
-    .toLowerCase()
-    .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-    .trim();
+String _norm(String? s) =>
+    (s ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').trim();
 
 String _hash(String s) => sha256.convert(utf8.encode(s)).toString();
 

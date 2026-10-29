@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/widgets/current_medications_card.dart';
 import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
 
-Widget _wrap(Widget child) => MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
+Widget _wrap(Widget child) =>
+    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: child)));
 
 Medication _med({
   String name = 'Aspirin',
@@ -32,12 +33,14 @@ Medication _med({
 void main() {
   group('CurrentMedicationsSection', () {
     testWidgets('renders without crashing', (tester) async {
-      await tester.pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
+      await tester
+          .pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
       expect(find.byType(CurrentMedicationsSection), findsOneWidget);
     });
 
     testWidgets('shows default Current Medications title', (tester) async {
-      await tester.pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
+      await tester
+          .pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
       expect(find.text('Current Medications'), findsOneWidget);
     });
 
@@ -50,7 +53,8 @@ void main() {
     });
 
     testWidgets('shows empty state when no entries', (tester) async {
-      await tester.pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
+      await tester
+          .pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
       expect(find.text('No current medications'), findsOneWidget);
     });
 
@@ -96,7 +100,8 @@ void main() {
       expect(find.text('Approve'), findsOneWidget);
     });
 
-    testWidgets('does not show Approve button for active medication', (tester) async {
+    testWidgets('does not show Approve button for active medication',
+        (tester) async {
       await tester.pumpWidget(_wrap(CurrentMedicationsSection(
         entries: [_med(isActive: true)],
       )));
@@ -125,8 +130,25 @@ void main() {
     });
 
     testWidgets('shows vaccines_outlined icon', (tester) async {
-      await tester.pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
+      await tester
+          .pumpWidget(_wrap(const CurrentMedicationsSection(entries: [])));
       expect(find.byIcon(Icons.vaccines_outlined), findsOneWidget);
+    });
+
+    testWidgets('shows Add Medication and invokes its callback',
+        (tester) async {
+      var addRequested = false;
+      await tester.pumpWidget(_wrap(CurrentMedicationsSection(
+        entries: const [],
+        onAddMedication: () => addRequested = true,
+      )));
+
+      final button = find.byKey(const Key('add-medication-button'));
+      expect(button, findsOneWidget);
+
+      await tester.tap(button);
+
+      expect(addRequested, isTrue);
     });
   });
 }

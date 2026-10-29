@@ -17,6 +17,7 @@ import 'package:care_connect_app/services/communication_service.dart';
 import 'package:care_connect_app/features/ui_preview/new_ui_preview_card.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:care_connect_app/features/connection_requests/presentation/widgets/pending_connection_requests_card.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../services/evv_service.dart';
@@ -1243,6 +1244,9 @@ class _PatientDashboardState extends State<PatientDashboard> {
                         children: [
                           const SizedBox(height: 8),
                           const NewUiPreviewCard(),
+                          PendingConnectionRequestsCard(
+                            onAccepted: _loadDashboardData,
+                          ),
 
                           // Responsive layout for tablets
                           if (isTablet) ...[

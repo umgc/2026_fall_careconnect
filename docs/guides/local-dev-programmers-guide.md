@@ -239,6 +239,8 @@ $token=($login.Content | ConvertFrom-Json).token
 
 ### 7.2 Create link (caregiver userId=2, patient userId=1 example)
 
+Direct linking is admin-only: a caregiver token gets 403. Run this with an admin token (log in as in 7.1 with `admin@careconnect.com` and `role='ADMIN'`), or have the caregiver send a connection request (`POST /v1/api/connection-requests/create`) that the patient accepts on their dashboard.
+
 ```powershell
 $linkBody=@{
   targetUserId=1

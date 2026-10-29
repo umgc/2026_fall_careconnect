@@ -87,7 +87,8 @@ class MessageControllerAttachmentHttpTest {
     private SecurityUtil securityUtil;
     @Spy
     private AuthorizationService authorizationService = new AuthorizationService(
-            mock(CaregiverPatientLinkRepository.class), mock(FamilyMemberLinkRepository.class));
+            mock(CaregiverPatientLinkRepository.class), mock(FamilyMemberLinkRepository.class),
+            mock(PatientRepository.class));
     @InjectMocks
     private MessageController controller;
 
