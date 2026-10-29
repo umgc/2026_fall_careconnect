@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/ai_hitl/models/hitl_models.dart';
 import 'package:care_connect_app/features/ai_hitl/presentation/hitl_review_page.dart';
 import 'package:care_connect_app/features/ai_hitl/services/hitl_api_service.dart';
@@ -110,7 +111,8 @@ class _HitlQueuePageState extends State<HitlQueuePage> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () async {
                     final changed = await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(
+                      TitledMaterialPageRoute(
+                        title: 'Review AI Result',
                         builder: (_) => HitlReviewPage(
                           heldItemId: item.heldItemId,
                           api: _api,

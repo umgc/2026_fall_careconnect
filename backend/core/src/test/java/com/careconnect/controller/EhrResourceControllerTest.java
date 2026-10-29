@@ -2,8 +2,13 @@ package com.careconnect.controller;
 
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrResource;
+import com.careconnect.model.ehr.EhrSource;
+import com.careconnect.repository.ConsentGrantRepository;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.repository.ehr.EhrSourceRepository;
 import com.careconnect.security.Role;
+import com.careconnect.security.EpicAccessPolicy;
+import com.careconnect.security.MedicareAccessPolicy;
 import com.careconnect.util.SecurityUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +52,15 @@ class EhrResourceControllerTest {
 
     @MockitoBean
     private EhrResourceRepository resourceRepo;
+
+    @MockitoBean
+    private EpicAccessPolicy epicAccessPolicy;
+
+    @MockitoBean
+    private EhrSourceRepository ehrSourceRepository;
+
+    @MockitoBean
+    private ConsentGrantRepository consentGrants;
 
     private User user;
 
@@ -172,5 +186,169 @@ class EhrResourceControllerTest {
         when(resourceRepo.findByUserIdAndSource(1L, EPIC)).thenReturn(List.of(
                 row("Condition", "c1", "Hypertension", "active", "2024-01-01", null)));
         mockMvc.perform(get("/api/ehr/patient")).andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /resources?source=ALL unions across sources, stamping each row's own source")
+    void listAllSourcesUnion() throws Exception {
+        EhrResource epic = EhrResource.builder().userId(1L).source("EPIC")
+                .resourceType("Condition").resourceFhirId("c1").title("Hypertension")
+                .statusValue("active").occurredAt("2024-01-01").build();
+        EhrResource athena = EhrResource.builder().userId(1L).source("ATHENAHEALTH")
+                .resourceType("MedicationRequest").resourceFhirId("m1").title("Lisinopril")
+                .statusValue("active").occurredAt("2024-02-01").build();
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(epic, athena));
+        when(resourceRepo.findMaxLastSyncedAt(1L)).thenReturn(Instant.parse("2024-06-01T00:00:00Z"));
+
+        mockMvc.perform(get("/api/ehr/resources").param("source", "ALL"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Last-Synced-At", "2024-06-01T00:00:00Z"))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[?(@.resourceType=='Condition')].source", is(List.of("EPIC"))))
+                .andExpect(jsonPath("$[?(@.resourceType=='MedicationRequest')].source",
+                        is(List.of("ATHENAHEALTH"))));
+
+        verify(resourceRepo).findByUserId(1L);
+    }
+
+    private static User caregiver(long id) {
+        User c = new User();
+        c.setId(id);
+        c.setEmail("caregiver@test.com");
+        c.setRole(Role.CAREGIVER);
+        return c;
+    }
+
+    private static EhrResource medicareCoverage() {
+        return EhrResource.builder().userId(1L).source("MEDICARE")
+                .resourceType("Coverage").resourceFhirId("mc1").title("Part B")
+                .statusValue("active").occurredAt("2024-02-01").build();
+    }
+
+    @Test
+    @DisplayName("GET /resources?source=ALL excludes MEDICARE rows for a caregiver without MEDICARE_VIEW consent")
+    void listAllSourcesExcludesMedicareWithoutConsent() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(caregiver(2L));
+        when(consentGrants.existsActiveGrant(eq(1L), eq(2L),
+                eq(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW), any())).thenReturn(false);
+        EhrResource epic = EhrResource.builder().userId(1L).source("EPIC")
+                .resourceType("Condition").resourceFhirId("c1").title("Hypertension")
+                .statusValue("active").occurredAt("2024-01-01").build();
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(epic, medicareCoverage()));
+
+        mockMvc.perform(get("/api/ehr/resources").param("source", "ALL").param("patientUserId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].source", is("EPIC")))
+                .andExpect(jsonPath("$[?(@.source=='MEDICARE')]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("GET /resources?source=ALL includes MEDICARE rows for a caregiver with MEDICARE_VIEW consent")
+    void listAllSourcesIncludesMedicareWithConsent() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(caregiver(2L));
+        when(consentGrants.existsActiveGrant(eq(1L), eq(2L),
+                eq(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW), any())).thenReturn(true);
+        EhrResource epic = EhrResource.builder().userId(1L).source("EPIC")
+                .resourceType("Condition").resourceFhirId("c1").title("Hypertension")
+                .statusValue("active").occurredAt("2024-01-01").build();
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(epic, medicareCoverage()));
+
+        mockMvc.perform(get("/api/ehr/resources").param("source", "ALL").param("patientUserId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[?(@.source=='MEDICARE')]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("GET /resources?source=ALL returns the patient's own MEDICARE rows without a grant")
+    void listAllSourcesPatientSeesOwnMedicare() throws Exception {
+        // Default current user (setup) is the patient id=1 reading their own record.
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(medicareCoverage()));
+
+        mockMvc.perform(get("/api/ehr/resources").param("source", "ALL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].source", is("MEDICARE")));
+    }
+
+    @Test
+    @DisplayName("GET /patient?source=ALL skips a MEDICARE Patient row for a caregiver without MEDICARE_VIEW consent")
+    void patientAllSourcesSkipsMedicareWithoutConsent() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(caregiver(2L));
+        when(consentGrants.existsActiveGrant(eq(1L), eq(2L),
+                eq(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW), any())).thenReturn(false);
+        String epicFhir = "{\"resourceType\":\"Patient\",\"name\":[{\"given\":[\"Mary\"],\"family\":\"Johnson\"}],"
+                + "\"birthDate\":\"1948-03-11\",\"gender\":\"female\"}";
+        String mcrFhir = "{\"resourceType\":\"Patient\",\"name\":[{\"given\":[\"Mary\"],\"family\":\"Johnson\"}],"
+                + "\"birthDate\":\"1948-03-12\",\"gender\":\"female\"}";
+        EhrResource epicPatient = EhrResource.builder().userId(1L).source("EPIC")
+                .resourceType("Patient").resourceFhirId("p1").payloadJson(epicFhir).build();
+        EhrResource mcrPatient = EhrResource.builder().userId(1L).source("MEDICARE")
+                .resourceType("Patient").resourceFhirId("p2").payloadJson(mcrFhir).build();
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(mcrPatient, epicPatient));
+
+        mockMvc.perform(get("/api/ehr/patient").param("source", "ALL").param("patientUserId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source", is("EPIC")));
+    }
+
+    @Test
+    @DisplayName("GET /patient?source=ALL returns 404 when only a MEDICARE Patient row exists and no consent")
+    void patientAllSourcesMedicareOnlyNoConsent404() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(caregiver(2L));
+        when(consentGrants.existsActiveGrant(eq(1L), eq(2L),
+                eq(MedicareAccessPolicy.SCOPE_MEDICARE_VIEW), any())).thenReturn(false);
+        String mcrFhir = "{\"resourceType\":\"Patient\",\"name\":[{\"given\":[\"Mary\"],\"family\":\"Johnson\"}],"
+                + "\"birthDate\":\"1948-03-12\",\"gender\":\"female\"}";
+        EhrResource mcrPatient = EhrResource.builder().userId(1L).source("MEDICARE")
+                .resourceType("Patient").resourceFhirId("p2").payloadJson(mcrFhir).build();
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(mcrPatient));
+
+        mockMvc.perform(get("/api/ehr/patient").param("source", "ALL").param("patientUserId", "1"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("GET /patient?source=ALL applies primary-source precedence (EPIC over ATHENAHEALTH)")
+    void patientAllSourcesPrimary() throws Exception {
+        String epicFhir = "{\"resourceType\":\"Patient\",\"name\":[{\"given\":[\"Mary\"],\"family\":\"Johnson\"}],"
+                + "\"birthDate\":\"1948-03-11\",\"gender\":\"female\"}";
+        String athenaFhir = "{\"resourceType\":\"Patient\",\"name\":[{\"given\":[\"Mary\"],\"family\":\"Johnson\"}],"
+                + "\"birthDate\":\"1948-03-12\",\"gender\":\"female\"}";
+        EhrResource epicPatient = EhrResource.builder().userId(1L).source("EPIC")
+                .resourceType("Patient").resourceFhirId("p1").payloadJson(epicFhir).build();
+        EhrResource athenaPatient = EhrResource.builder().userId(1L).source("ATHENAHEALTH")
+                .resourceType("Patient").resourceFhirId("p2").payloadJson(athenaFhir).build();
+        // Athena first in the list to prove the result is precedence-driven, not list-order-driven.
+        when(resourceRepo.findByUserId(1L)).thenReturn(List.of(athenaPatient, epicPatient));
+
+        mockMvc.perform(get("/api/ehr/patient").param("source", "ALL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source", is("EPIC")))
+                .andExpect(jsonPath("$.birthDate", is("1948-03-11")));
+    }
+
+    @Test
+    @DisplayName("GET /sources returns the ehr_source catalog as {code,displayName,enabled}, sorted by code")
+    void sourcesReturnsCatalog() throws Exception {
+        when(ehrSourceRepository.findAll()).thenReturn(List.of(
+                EhrSource.builder().code("EPIC").displayName("Epic").enabled(true).build(),
+                EhrSource.builder().code("ATHENAHEALTH").displayName("athenahealth").enabled(true).build()));
+
+        mockMvc.perform(get("/api/ehr/sources"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].code", is("ATHENAHEALTH")))
+                .andExpect(jsonPath("$[0].displayName", is("athenahealth")))
+                .andExpect(jsonPath("$[0].enabled", is(true)))
+                .andExpect(jsonPath("$[1].code", is("EPIC")));
+    }
+
+    @Test
+    @DisplayName("GET /sources returns 401 when unauthenticated")
+    void sourcesUnauthenticated() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(null);
+        mockMvc.perform(get("/api/ehr/sources")).andExpect(status().isUnauthorized());
     }
 }

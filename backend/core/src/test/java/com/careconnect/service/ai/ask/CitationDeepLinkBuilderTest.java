@@ -107,7 +107,7 @@ class CitationDeepLinkBuilderTest {
                 "epic",
                 "epic-enc-1",
                 "{\"fhirResourceType\":\"Encounter\",\"fhirResourceId\":\"enc-1\"}"))
-                .isEqualTo("/epic/Encounter/enc-1?patientId=42");
+                .isEqualTo("/epic/Encounter/enc-1?patientUserId=42");
     }
 
     @Test

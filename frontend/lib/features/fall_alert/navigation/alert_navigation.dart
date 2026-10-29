@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/fall_alert/pages/alert_details_page_patient.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +21,8 @@ class AlertNavigation {
     if (isPatient) {
       // Patient view: show the fall prompt with countdown and actions
       Navigator.of(context).push(
-        MaterialPageRoute(
+        TitledMaterialPageRoute(
+          title: 'Fall Alert',
           settings: const RouteSettings(name: PatientFallPromptPage.routeName),
           builder: (_) => PatientFallPromptPage(
             autoCallSeconds: 30,
@@ -39,7 +41,8 @@ class AlertNavigation {
       );
     } else {
       Navigator.of(context).push(
-        MaterialPageRoute(
+        TitledMaterialPageRoute(
+          title: 'Alert Details',
           settings: const RouteSettings(name: AlertDetailsPage.routeName),
           builder: (_) => AlertDetailsPage(alert: alert),
         ),

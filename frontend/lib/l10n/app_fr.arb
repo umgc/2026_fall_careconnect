@@ -153,6 +153,7 @@
   "ptdashboard_onceAtBed": "Une fois par jour au coucher",
   
   "login_loginFailedError": "Échec de la connexion",
+  "login_invalidCredentials": "Le nom d'utilisateur ou le mot de passe est incorrect. Vérifiez-les et réessayez.",
 
   "settings_telemetryDefaultDialogTitle": "La télémétrie est activée",
   "settings_telemetryDefaultDialogDescription": "CareConnect collecte par défaut des données de diagnostic anonymes et des indicateurs de performance afin d'améliorer la fiabilité.\nVous pouvez vous désinscrire à tout moment.",

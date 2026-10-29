@@ -10,6 +10,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,8 +24,9 @@ import org.hibernate.type.SqlTypes;
  * One source's normalized view of a FHIR {@code Condition}.
  *
  * <p>The row remains source-specific. Records from separate EHRs are not silently merged, and the
- * optional raw-payload link preserves the source resource for replay and audit. Public API field
- * names remain provisional until the unified OpenAPI contract is approved.
+ * optional raw-payload link preserves the source resource for replay and audit. The Epic projection
+ * also uses the simpler display, code, and onset-date columns. Public API field names remain
+ * provisional until the unified OpenAPI contract is approved.
  */
 @Getter
 @Setter
@@ -49,26 +51,43 @@ public class EhrConditionRecord extends Auditable {
     @Column(name = "patient_id", nullable = false)
     private Long patientId;
 
+    /** References {@code ehr_source.id}. */
     @Column(name = "source_id", nullable = false)
     private Long sourceId;
+
+    /** The resource's own id within that source. NOT NULL so the unique key dedups. */
+    @Column(name = "external_condition_id", nullable = false, length = 255)
+    private String externalConditionId;
+
+    /** The source's own last-modified time ({@code meta.lastUpdated}), if provided. */
+    @Column(name = "source_updated_at")
+    private Instant sourceUpdatedAt;
+
+    /** Human-readable condition name. */
+    @Column(name = "condition_display", length = 512)
+    private String conditionDisplay;
+
+    /** Coding, e.g. ICD-10 / SNOMED. */
+    @Column(name = "code", length = 128)
+    private String code;
+
+    /** FHIR Condition.clinicalStatus, e.g. active / resolved. */
+    @Column(name = "clinical_status", length = 64)
+    private String clinicalStatus;
+
+    /** FHIR Condition.verificationStatus, e.g. confirmed / provisional. */
+    @Column(name = "verification_status", length = 64)
+    private String verificationStatus;
+
+    /** Onset as a calendar date, when given to day precision. */
+    @Column(name = "onset_date")
+    private LocalDate onsetDate;
 
     @Column(name = "raw_payload_id")
     private Long rawPayloadId;
 
-    @Column(name = "external_condition_id", nullable = false, length = 255)
-    private String externalConditionId;
-
     @Column(name = "source_version_id", length = 255)
     private String sourceVersionId;
-
-    @Column(name = "source_updated_at")
-    private Instant sourceUpdatedAt;
-
-    @Column(name = "clinical_status", length = 64)
-    private String clinicalStatus;
-
-    @Column(name = "verification_status", length = 64)
-    private String verificationStatus;
 
     @Column(name = "severity", length = 255)
     private String severity;

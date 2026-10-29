@@ -1,5 +1,7 @@
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -16,6 +18,10 @@ class LoginPage extends StatefulWidget {
 
   @override
   State<LoginPage> createState() => _LoginPageState();
+
+  /// Lets tests exercise the web-only error announcement on the test platform.
+  @visibleForTesting
+  static bool debugAnnounceErrors = false;
 }
 
 class _LoginPageState extends State<LoginPage> {
@@ -32,7 +38,43 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  /// Turns a sign-in failure into a message a person can act on: no
+  /// "Login failed:" or Dart "Exception:" prefixes, and a wrong username or
+  /// password says how to fix it (WCAG 3.3.3).
+  static String _readableError(String raw, AppLocalizations t) {
+    final reason = raw
+        .replaceFirst(RegExp(r'^\s*Login failed:\s*'), '')
+        .replaceFirst(RegExp(r'^\s*Exception:\s*'), '');
+    if (reason.toLowerCase().contains('invalid credentials')) {
+      return t.login_invalidCredentials;
+    }
+    return '${t.login_loginFailedError}: $reason';
+  }
+
+  /// Shows a sign-in error and, on the web, has the screen reader speak it.
+  /// The live region around the message covers mobile, but NVDA in Chrome
+  /// didn't read it (VPAT 10/27 check), so web also announces it directly
+  /// (WCAG 4.1.3).
+  void _showError(String message) {
+    if (!mounted) return;
+    setState(() => _error = message);
+    if (kIsWeb || LoginPage.debugAnnounceErrors) {
+      SemanticsService.sendAnnouncement(
+        View.of(context),
+        message,
+        Directionality.of(context),
+        assertiveness: Assertiveness.assertive,
+      );
+    }
+  }
+
   Future<void> _login() async {
+    final t = AppLocalizations.of(context)!;
+    // Say what's missing before calling the server (WCAG 3.3.1, 3.3.3).
+    if (_email.text.trim().isEmpty || _pwd.text.isEmpty) {
+      _showError(t.alexalogin_missingEmailPassword);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -65,15 +107,10 @@ class _LoginPageState extends State<LoginPage> {
       } else {
         // loginWithRoleValidation only ever returns success or an authentication
         // failure (role validation is not performed here), so surface the error.
-        setState(() {
-          _error = authResult.errorMessage;
-        });
+        _showError(_readableError(authResult.errorMessage ?? '', t));
       }
     } catch (e) {
-      setState(() {
-        _error =
-            '${AppLocalizations.of(context)?.login_loginFailedError ?? 'Login failed'}: $e';
-      });
+      _showError(_readableError(e.toString(), t));
     } finally {
       setState(() => _busy = false);
     }
@@ -124,6 +161,7 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(8),
                         child: Image.asset(
                           'assets/images/CareConnectLogo.png',
+                          semanticLabel: 'CareConnect',
                           width: isMobile ? 150 : 170,
                           height: isMobile ? 150 : 170,
                           fit: BoxFit.contain,
@@ -182,12 +220,15 @@ class _LoginPageState extends State<LoginPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Form title
-                        Text(
-                          t.login_signInTitle,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.primary,
+                        Semantics(
+                          headingLevel: 1,
+                          child: Text(
+                            t.login_signInTitle,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                            ),
                           ),
                         ),
 
@@ -297,6 +338,9 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 ),
                                 suffixIcon: IconButton(
+                                  tooltip: _showPassword
+                                      ? 'Hide password'
+                                      : 'Show password',
                                   icon: Icon(
                                     _showPassword
                                         ? Icons.visibility_off_outlined
@@ -341,7 +385,11 @@ class _LoginPageState extends State<LoginPage> {
 
                         // Error message
                         if (_error != null) ...[
-                          Container(
+                          // Live region: screen readers announce the error
+                          // without the user moving to it (WCAG 4.1.3).
+                          Semantics(
+                            liveRegion: true,
+                            child: Container(
                             width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -356,6 +404,7 @@ class _LoginPageState extends State<LoginPage> {
                                 fontSize: 14,
                               ),
                             ),
+                          ),
                           ),
                           const SizedBox(height: 20),
                         ],

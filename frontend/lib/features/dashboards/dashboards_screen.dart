@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/features/dashboards/behavioral_trend_screen.dart';
 import 'package:care_connect_app/features/dashboards/competency_trend_screen.dart';
@@ -43,7 +44,8 @@ class DashboardsScreen extends StatelessWidget {
             subtitle: 'Average competency score over time by activity',
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
+                TitledMaterialPageRoute<void>(
+                  title: 'Competency Trend',
                   builder: (context) => CompetencyTrendScreen(
                     clientId: clientId,
                     clientName: clientName,
@@ -61,7 +63,8 @@ class DashboardsScreen extends StatelessWidget {
                 'Incident count by week and most frequent behavior keywords',
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
+                TitledMaterialPageRoute<void>(
+                  title: 'Behavioral Trend',
                   builder: (context) => BehavioralTrendScreen(
                     clientId: clientId,
                     clientName: clientName,
@@ -78,7 +81,8 @@ class DashboardsScreen extends StatelessWidget {
             subtitle: 'Activity log counts and last logged by ADL / IADL',
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute<void>(
+                TitledMaterialPageRoute<void>(
+                  title: 'Participation',
                   builder: (context) => ParticipationScreen(
                     clientId: clientId,
                     clientName: clientName,

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 
 import 'package:care_connect_app/config/env_constant.dart';
@@ -129,7 +130,9 @@ class _FriendRequestsScreenState extends State<FriendRequestsScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => MyFriendsScreen()),
+                TitledMaterialPageRoute(
+                  title: 'My Friends',
+                  builder: (_) => MyFriendsScreen()),
               );
             },
           ),
