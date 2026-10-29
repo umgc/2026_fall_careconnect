@@ -137,6 +137,7 @@
   "ptdashboard_onceAtBed": "Один раз в день перед сном",
   
   "login_loginFailedError": "Ошибка входа",
+  "login_invalidCredentials": "Неверное имя пользователя или пароль. Проверьте их и повторите попытку.",
 
   "settings_telemetryDefaultDialogTitle": "Телеметрия включена",
   "settings_telemetryDefaultDialogDescription": "CareConnect по умолчанию собирает анонимные диагностические данные и показатели производительности для повышения надежности.\nВы можете отказаться от этого в любое время.",

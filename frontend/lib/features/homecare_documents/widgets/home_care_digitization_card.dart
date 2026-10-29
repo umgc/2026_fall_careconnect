@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -147,7 +148,8 @@ class _HomeCareDigitizationCardState extends State<HomeCareDigitizationCard> {
 
   Future<void> _openReview(HomeCareExtractionResult result) async {
     final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Review Home Care Document',
         builder: (_) => HomeCareDocumentReviewPage(
           result: result,
           patientId: widget.patientId,

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
@@ -98,7 +99,9 @@ class _MenuPageState extends State<MenuPage> {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const InvoiceTabbedPage()),
+            TitledMaterialPageRoute(
+              title: 'Invoice Assistant',
+              builder: (context) => const InvoiceTabbedPage()),
           );
         },
       ),
@@ -110,9 +113,19 @@ class _MenuPageState extends State<MenuPage> {
           onTap: () {
             Navigator.push(
                 context,
-                MaterialPageRoute(
+                TitledMaterialPageRoute(
+                  title: 'Patient Reports',
                     builder: (context) => const PatientReportsTab()));
           }),
+      // Unified Health Data: the patient's records from every connected
+      // source, and Manage Medicare connection. Before this the only way in
+      // was Health (bottom bar) > Unified Health Data, or typing the URL.
+      _MenuItem(
+        icon: Icons.health_and_safety,
+        label: 'Health Data',
+        route: '/health-data',
+        visibleFor: const {'PATIENT'},
+      ),
       _MenuItem(
         icon: Icons.verified_user,
         label: local.evv,
@@ -130,7 +143,8 @@ class _MenuPageState extends State<MenuPage> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
+              TitledMaterialPageRoute(
+                title: 'Medication Tracker',
                   builder: (context) => const MedicationsTrackerPage()),
             );
           },

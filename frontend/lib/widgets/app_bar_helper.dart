@@ -14,10 +14,28 @@ class AppBarHelper {
     bool centerTitle = false,
     bool automaticallyImplyLeading = true,
   }) {
+    final theme = Theme.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    final scaler = MediaQuery.textScalerOf(context);
+    final compact = width < 600 || scaler.scale(16) > 24;
+    final titleStyle =
+        theme.appBarTheme.titleTextStyle ?? theme.textTheme.titleLarge!;
+    final titleText = Text(title,
+        style: titleStyle, softWrap: true, overflow: TextOverflow.visible);
+    double titleHeight = 0;
+    if (compact) {
+      final painter = TextPainter(
+        text: TextSpan(text: title, style: titleStyle),
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+      )..layout(maxWidth: (width - 32).clamp(1.0, double.infinity));
+      titleHeight = painter.height + 16;
+      painter.dispose();
+    }
     return AppBar(
       backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
       iconTheme: Theme.of(context).appBarTheme.iconTheme,
-      title: Text(title, style: Theme.of(context).appBarTheme.titleTextStyle),
+      title: compact ? null : titleText,
       centerTitle: centerTitle,
       automaticallyImplyLeading: automaticallyImplyLeading,
       leading: leading ??
@@ -36,7 +54,24 @@ class AppBarHelper {
               }
             },
           ),
-      bottom: bottom,
+      bottom: compact
+          ? PreferredSize(
+              preferredSize: Size.fromHeight(
+                  titleHeight + (bottom?.preferredSize.height ?? 0)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Semantics(headingLevel: 1, child: titleText),
+                  ),
+                  if (bottom != null) bottom,
+                ],
+              ),
+            )
+          : bottom,
       actions: [
         AppBarActions(additionalActions: additionalActions),
         const SizedBox(width: 8),

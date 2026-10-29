@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_data_screen.dart';
+import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
+import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
 import 'package:care_connect_app/features/health/health_data/services/athena_connect_service.dart';
 import 'package:care_connect_app/features/health/health_data/services/identity_conflict_service.dart';
 import 'package:care_connect_app/features/health/health_data/widgets/athena_connect_tile.dart';
@@ -73,7 +76,9 @@ void main() {
     }
     await t.pumpAndSettle();
   }
-
+  Finder athenaConnect() => find.descendant(
+      of: find.byType(AthenaConnectTile),
+      matching: find.widgetWithText(TextButton, 'Connect'));
   testWidgets(
       'TC-HDATA-009: a loading state shows until Medicare answers '
       '(FR-MCR-27)', (t) async {
@@ -247,12 +252,12 @@ void main() {
             'again to see current records.'),
         findsOneWidget);
     expect(find.text(_errMcr03), findsNothing);
-    expect(find.text('Connect Medicare Account'), findsOneWidget);
+    expect(find.text('Connect'), findsWidgets);
   });
 
   testWidgets(
       'TC-HDATA-021: a patient with no Medicare link (404) is offered '
-      'Connect Medicare Account, not told Medicare could not be reached '
+      'Connect, not told Medicare could not be reached '
       '(AC-MCR-11-2)', (t) async {
     await pump(
         t,
@@ -265,7 +270,316 @@ void main() {
         }));
     await settle(t);
     expect(find.text(_errMcr03), findsNothing);
-    expect(find.text('Connect Medicare Account'), findsOneWidget);
+    expect(find.text('Connect'), findsWidgets);
+  });
+
+  // ---- Reaching the Medicare page without typing a URL (2026-10-25) ----
+
+  const manage = 'Manage Medicare connection';
+
+  testWidgets(
+      'TC-HDATA-045: with Medicare connected, "Manage Medicare connection" '
+      'opens the Medicare page, and coming back reloads the screen',
+      (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    var reads = 0;
+    final adapter = fixtures();
+    ApiClient.instance.debugSetHttpClientAdapter(_CountingAdapter(adapter,
+        onVisits: () => reads++));
+    final router = GoRouter(initialLocation: '/health-data', routes: [
+      GoRoute(
+          path: '/health-data', builder: (_, __) => const HealthDataScreen()),
+      GoRoute(
+          path: '/medicare-connect',
+          builder: (context, _) => Scaffold(
+              body: TextButton(
+                  onPressed: () => context.pop(),
+                  child: const Text('Back from Medicare page')))),
+    ]);
+    await t.pumpWidget(MaterialApp.router(routerConfig: router));
+    await settle(t);
+    expect(find.widgetWithText(TextButton, manage), findsOneWidget);
+    final before = reads;
+    await t.tap(find.widgetWithText(TextButton, manage));
+    await t.pumpAndSettle();
+    expect(find.text('Back from Medicare page'), findsOneWidget);
+    await t.tap(find.text('Back from Medicare page'));
+    await t.pump();
+    // The reload's requests run on real time (Dio), outside the fake clock:
+    // give them up to ~2 s to go out before checking.
+    for (var i = 0; i < 40 && reads <= before; i++) {
+      await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    await settle(t);
+    expect(find.widgetWithText(TextButton, manage), findsOneWidget);
+    expect(reads, greaterThan(before));
+  });
+
+  for (final c in {
+    'not connected (404)': (404, '{}'),
+    'connection expired (409)': (
+      409,
+      '{"error":"ERR-MCR-05","message":"Your Medicare connection has expired. '
+          'Connect again to see current records.","connected":false}'
+    ),
+    'not allowed (403)': (403, '{}'),
+  }.entries) {
+    testWidgets(
+        'TC-HDATA-046: when Medicare is ${c.key}, "$manage" is not shown',
+        (t) async {
+      await pump(
+          t,
+          RouteAdapter(const {}, status: {
+            '/v1/api/medicare/visits': c.value.$1,
+            '/v1/api/medicare/coverage': c.value.$1,
+          }, statusBodies: {
+            '/v1/api/medicare/visits': c.value.$2,
+            '/v1/api/medicare/coverage': c.value.$2,
+          }));
+      await settle(t);
+      expect(find.text(manage), findsNothing);
+    });
+  }
+
+  for (final role in ['CAREGIVER', 'ADMIN', 'FAMILY_MEMBER']) {
+    testWidgets('TC-HDATA-047: a $role does not see "$manage"', (t) async {
+      ApiClient.instance.debugSetHttpClientAdapter(fixtures());
+      await t.pumpWidget(ChangeNotifierProvider<UserProvider>(
+        create: (_) => UserProvider()
+          ..setUser(UserSession(
+              id: 2, email: 'user@example.com', role: role, token: 't')),
+        child: const MaterialApp(home: HealthDataScreen()),
+      ));
+      await settle(t);
+      expect(find.text(manage), findsNothing);
+    });
+  }
+
+  testWidgets('TC-HDATA-048: "$manage" is a labelled button that meets the '
+      'tap-target size', (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    await pump(t, fixtures());
+    await settle(t);
+    final button = find.widgetWithText(TextButton, manage);
+    expect(button, findsOneWidget);
+    final size = t.getSize(button);
+    expect(size.height, greaterThanOrEqualTo(48));
+    expect(size.width, greaterThanOrEqualTo(48));
+  });
+
+  // ---- PR #428 review (2026-10-25), Testing Lead ----
+
+  testWidgets(
+      'TC-HDATA-051: when Medicare can\'t be checked (500) the patient still '
+      'gets "$manage", beside ERR-MCR-03', (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    await pump(
+        t,
+        RouteAdapter(const {}, status: {
+          '/v1/api/medicare/visits': 500,
+          '/v1/api/medicare/coverage': 500,
+        }));
+    await settle(t);
+    expect(find.text(_errMcr03), findsOneWidget);
+    expect(find.widgetWithText(TextButton, manage), findsOneWidget);
+  });
+
+  testWidgets(
+      'TC-HDATA-052: a connected patient with no Medicare records still gets '
+      '"$manage"', (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    await pump(
+        t,
+        RouteAdapter({
+          '/v1/api/medicare/visits': envelope(const [], synthetic: false),
+          '/v1/api/medicare/coverage': envelope(const [], synthetic: false),
+        }));
+    await settle(t);
+    expect(find.textContaining(_noRecords), findsOneWidget);
+    expect(find.widgetWithText(TextButton, manage), findsOneWidget);
+  });
+
+  testWidgets('TC-HDATA-053: "$manage" is not shown while the screen loads',
+      (t) async {
+    final gate = Completer<void>();
+    await pump(t, fixtures(gate: gate));
+    await t.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text(manage), findsNothing);
+    gate.complete();
+    await settle(t);
+    expect(find.text(manage), findsOneWidget);
+  });
+
+  for (final role in ['PATIENT', 'patient']) {
+    testWidgets('TC-HDATA-054: a signed-in $role sees "$manage"', (t) async {
+      await t.binding.setSurfaceSize(const Size(1200, 3000));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      ApiClient.instance.debugSetHttpClientAdapter(fixtures());
+      await t.pumpWidget(ChangeNotifierProvider<UserProvider>(
+        create: (_) => UserProvider()
+          ..setUser(UserSession(
+              id: 1, email: 'patient@example.com', role: role, token: 't')),
+        child: const MaterialApp(home: HealthDataScreen()),
+      ));
+      await settle(t);
+      expect(find.widgetWithText(TextButton, manage), findsOneWidget);
+    });
+  }
+
+  for (final theme in {
+    'light': AppTheme.lightTheme,
+    'dark': AppTheme.darkTheme,
+  }.entries) {
+    testWidgets(
+        'TC-HDATA-055: "$manage" has at least 4.5:1 contrast in the app\'s '
+        '${theme.key} theme (WCAG 2.1 SC 1.4.3)', (t) async {
+      await t.binding.setSurfaceSize(const Size(1200, 3000));
+      addTearDown(() => t.binding.setSurfaceSize(null));
+      ApiClient.instance.debugSetHttpClientAdapter(fixtures());
+      await t.pumpWidget(MaterialApp(
+        theme: theme.value,
+        home: const HealthDataScreen(),
+      ));
+      await settle(t);
+      final button = find.widgetWithText(TextButton, manage);
+      expect(button, findsOneWidget);
+      final low = lowContrastText(t, button).toSet();
+      expect(low, isEmpty, reason: low.join('\n'));
+    });
+  }
+
+  testWidgets(
+      'TC-HDATA-056: at 200% text "$manage" is not cut off and keeps its '
+      'tap-target size (WCAG 2.1 SC 1.4.4)', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    ApiClient.instance.debugSetHttpClientAdapter(fixtures());
+    await t.pumpWidget(MaterialApp(
+      theme: AppTheme.lightTheme,
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(2)),
+        child: child!,
+      ),
+      home: const HealthDataScreen(),
+    ));
+    await settle(t);
+    final button = find.widgetWithText(TextButton, manage);
+    expect(button, findsOneWidget);
+    // A label squeezed into a box shorter than its text is cut off with no
+    // layout error, so compare its needed height with its size.
+    final para = t.renderObject<RenderParagraph>(find.descendant(
+        of: button, matching: find.byType(RichText)).first);
+    final needed = para.getMaxIntrinsicHeight(para.size.width);
+    expect(needed, lessThanOrEqualTo(para.size.height + 0.5),
+        reason: 'needs ${needed.toStringAsFixed(0)} px, has '
+            '${para.size.height.toStringAsFixed(0)} px');
+    expect(t.getSize(button).height, greaterThanOrEqualTo(48));
+    expect(t.takeException(), isNull);
+  });
+
+  testWidgets(
+      'TC-HDATA-057: screen readers get "$manage" as one focusable button '
+      'with a tap action (WCAG 2.1 SC 4.1.2)', (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    final h = t.ensureSemantics();
+    await pump(t, fixtures());
+    await settle(t);
+    expect(
+        t.getSemantics(find.widgetWithText(TextButton, manage)),
+        matchesSemantics(
+          label: manage,
+          isButton: true,
+          isFocusable: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasTapAction: true,
+          hasFocusAction: true,
+        ));
+    h.dispose();
+  });
+
+  testWidgets(
+      'TC-HDATA-059: where tap targets are not padded (web and desktop), '
+      '"$manage" is still at least 48 px tall (WCAG 2.5.5)', (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    ApiClient.instance.debugSetHttpClientAdapter(fixtures());
+    await t.pumpWidget(MaterialApp(
+      theme: AppTheme.lightTheme
+          .copyWith(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      home: const HealthDataScreen(),
+    ));
+    await settle(t);
+    final size = t.getSize(find.widgetWithText(TextButton, manage));
+    expect(size.height, greaterThanOrEqualTo(48));
+    expect(size.width, greaterThanOrEqualTo(48));
+  });
+
+  testWidgets(
+      'TC-HDATA-058: integration: "$manage" opens the real Medicare page; '
+      'after Disconnect there, Back shows Medicare "Not connected" with '
+      'Connect, and the link is gone', (t) async {
+    await t.binding.setSurfaceSize(const Size(1200, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    final medicare = _ConnectedMedicare();
+    final original = MedicareConnectService.instance;
+    MedicareConnectService.instance = medicare;
+    addTearDown(() => MedicareConnectService.instance = original);
+    ApiClient.instance.debugSetHttpClientAdapter(
+        _SwitchingAdapter(fixtures(), () => medicare.connected));
+    final router = GoRouter(initialLocation: '/health-data', routes: [
+      GoRoute(
+          path: '/health-data', builder: (_, __) => const HealthDataScreen()),
+      GoRoute(
+          path: '/medicare-connect',
+          builder: (_, __) => const MedicareConnectPage()),
+    ]);
+    await t.pumpWidget(MaterialApp.router(routerConfig: router));
+    await settle(t);
+
+    await t.tap(find.widgetWithText(TextButton, manage));
+    await t.pumpAndSettle();
+    expect(find.text('Connect Medicare'), findsOneWidget);
+    await t.tap(find.widgetWithText(TextButton, 'Disconnect'));
+    await t.pumpAndSettle();
+    await t.tap(find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Disconnect')));
+    await t.pumpAndSettle();
+    expect(medicare.disconnects, 1);
+
+    await t.tap(find.byTooltip('Back to Health Data'));
+    await t.pump();
+    // Since #430 the Connected Sources card shows Medicare's status (the
+    // "Medicare isn't connected yet." banner is gone): its row reads
+    // "Not connected" and offers Connect.
+    Finder inMedicareRow(Finder f) => find.descendant(
+        of: find
+            .ancestor(of: find.text('Medicare'), matching: find.byType(Row))
+            .first,
+        matching: f);
+    // The reload's requests run on real time (Dio), outside the fake clock.
+    for (var i = 0;
+        i < 40 && inMedicareRow(find.text('Not connected')).evaluate().isEmpty;
+        i++) {
+      await t.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await t.pump(const Duration(milliseconds: 50));
+    }
+    await settle(t);
+    expect(inMedicareRow(find.text('Not connected')), findsOneWidget);
+    expect(inMedicareRow(find.widgetWithText(TextButton, 'Connect')),
+        findsOneWidget);
+    expect(find.text(manage), findsNothing);
   });
 
   testWidgets(
@@ -283,9 +597,11 @@ void main() {
         }));
     await settle(t);
     expect(
-        find.textContaining(
-            RegExp('couldn.t .*Oracle Health', caseSensitive: false)),
-        findsOneWidget);
+      find.text(
+        'We couldn\'t load records from your connected health sources. Showing what we could.',
+      ),
+      findsOneWidget,
+    );
     expect(
         find.text('Simple pneumonia and pleurisy with CC', skipOffstage: false),
         findsOneWidget);
@@ -418,9 +734,102 @@ void main() {
     expect(find.text('Female'), findsOneWidget);
   });
 
+  testWidgets(
+      'TC-HDATA-040: a Cerner allergy appears in the shared history, '
+      'uses the Allergies filter, and preserves Cerner provenance', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+    await pump(
+        t,
+        RouteAdapter({
+          '/v1/api/medicare/visits': envelope(const []),
+          '/v1/api/medicare/coverage':
+              envelope(fixtureResources('coverage-bundle.json')),
+          '/api/ehr/resources':
+              '[{"resourceId":"cerner-allergy-1","source":"CERNER",'
+                  '"category":"Allergies","title":"Penicillin",'
+                  '"occurredAt":"2026-09-10T00:00:00Z","status":"active"},'
+                  '{"resourceId":"epic-medication-1","source":"EPIC",'
+                  '"category":"Medications","title":"Lisinopril 10 mg",'
+                  '"occurredAt":"2026-09-01T00:00:00Z","status":"active"}]',
+          '/api/ehr/patient': '{"name":"Test Patient","birthDate":"1980-05-14",'
+              '"gender":"female"}',
+        }));
+
+    await settle(t);
+
+    // Cerner, Epic, and Medicare use the same health-history list.
+    expect(find.text('Penicillin'), findsOneWidget);
+    expect(find.text('Lisinopril 10 mg'), findsOneWidget);
+    expect(find.text('Medicare Part A (Hospital Insurance)'), findsOneWidget);
+
+    // The shared record-type filter recognizes the Cerner allergy.
+    await t.tap(find.widgetWithText(FilterChip, 'Allergies'));
+    await t.pumpAndSettle();
+
+    expect(find.text('Penicillin'), findsOneWidget);
+    expect(find.text('Lisinopril 10 mg'), findsNothing);
+    expect(find.text('Medicare Part A (Hospital Insurance)'), findsNothing);
+
+    // The existing details screen preserves the record's source.
+    final details = find.text('View details');
+    expect(details, findsOneWidget);
+    await t.tap(details);
+    await t.pumpAndSettle();
+
+    expect(find.text('Where this came from'), findsOneWidget);
+    expect(find.text('Oracle Health'), findsOneWidget);
+  });
+  testWidgets(
+      'TC-HDATA-044: the patient ID loads Cerner backend records into '
+      'the unified health history', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+
+    final adapter = RouteAdapter({
+      '/api/ehr/resources': '[]',
+      '/api/ehr/patient': '{}',
+      '/v1/api/cerner/patients/7/allergies':
+          '{"allergies":[{"source":"ORACLE_HEALTH",'
+              '"sourceRecordId":"cerner-allergy-2",'
+              '"substanceText":"Penicillin",'
+              '"clinicalStatus":"active",'
+              '"recordedDate":"2026-09-10"}]}',
+      '/v1/api/cerner/patients/7/conditions': '{"conditions":[]}',
+      '/v1/api/cerner/patients/7/encounters': '{"encounters":[]}',
+      '/v1/api/medicare/visits': envelope(const []),
+      '/v1/api/medicare/coverage': envelope(const []),
+    });
+
+    await pump(t, adapter, patientId: 7);
+    await settle(t);
+
+    expect(
+      adapter.paths,
+      contains('/v1/api/cerner/patients/7/allergies'),
+    );
+    expect(find.text('Penicillin'), findsOneWidget);
+  });
+
+  // Testing Lead (PR #364 review): the new forbidden problem must not change
+  // what a patient sees on their own screen.
+  testWidgets(
+      'TC-HDATA-039: a 403 on the patient\'s own reads still shows ERR-MCR-03, '
+      'as before PR #364 added the forbidden case', (t) async {
+    await pump(
+        t,
+        RouteAdapter(const {}, status: {
+          '/v1/api/medicare/visits': 403,
+          '/v1/api/medicare/coverage': 403,
+        }));
+    await settle(t);
+    expect(find.text(_errMcr03), findsOneWidget);
+    expect(find.text('Medicare isn\'t connected yet.'), findsNothing);
+  });
   testWidgets('athenahealth records show beside Epic and Medicare', (t) async {
     await t.binding.setSurfaceSize(const Size(800, 3000));
     addTearDown(() => t.binding.setSurfaceSize(null));
+
     await pump(
         t,
         RouteAdapter({
@@ -443,6 +852,109 @@ void main() {
     expect(find.text('Medicare Part A (Hospital Insurance)'), findsOneWidget);
     expect(find.textContaining('athenahealth isn'), findsNothing);
   });
+  testWidgets(
+      'the same athenahealth record from the unified and dedicated endpoints '
+      'is shown only once', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+
+    const athenaRecord =
+        '{"resourceType":"Condition","resourceId":"ath-1",'
+        '"source":"ATHENAHEALTH","category":"Conditions",'
+        '"title":"Type 2 diabetes","status":"active",'
+        '"occurredAt":"2026-07-01T00:00:00Z"}';
+
+    await pump(
+        t,
+        RouteAdapter({
+          '/v1/api/medicare/visits': envelope(const []),
+          '/v1/api/medicare/coverage': envelope(const []),
+          '/api/ehr/resources': '[$athenaRecord]',
+          '/api/athena/resources':
+              '{"items":[$athenaRecord],"page":0,"size":100,"hasNext":false}',
+        }));
+
+    await settle(t);
+
+    expect(find.text('Type 2 diabetes'), findsOneWidget);
+  });
+  testWidgets(
+      'the same Medicare record from the unified and dedicated endpoints '
+      'is shown only once', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+
+    await pump(
+        t,
+        RouteAdapter({
+          '/v1/api/medicare/visits':
+              envelope(fixtureResources('eob-bundle.json')),
+          '/v1/api/medicare/coverage': envelope(const []),
+          '/api/ehr/resources':
+              '[{"resourceType":"ExplanationOfBenefit",'
+                  '"resourceId":"medicare-duplicate","source":"MEDICARE",'
+                  '"category":"Claims","title":"Simple pneumonia and pleurisy with CC",'
+                  '"status":"Paid","occurredAt":"2026-04-18T00:00:00Z"}]',
+          '/api/athena/resources':
+              '{"items":[],"page":0,"size":100,"hasNext":false}',
+        }));
+
+    await settle(t);
+
+    expect(
+      find.text('Simple pneumonia and pleurisy with CC'),
+      findsOneWidget,
+    );
+  });
+  testWidgets(
+      'Medicare records from the unified endpoint remain when the '
+      'dedicated Medicare read fails', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+
+    await pump(
+        t,
+        RouteAdapter({
+          '/api/ehr/resources':
+              '[{"resourceType":"ExplanationOfBenefit",'
+                  '"resourceId":"medicare-fallback","source":"MEDICARE",'
+                  '"category":"Claims","title":"Medicare fallback claim",'
+                  '"status":"Paid","occurredAt":"2026-04-18T00:00:00Z"}]',
+          '/api/athena/resources':
+              '{"items":[],"page":0,"size":100,"hasNext":false}',
+        }, status: {
+          '/v1/api/medicare/visits': 503,
+          '/v1/api/medicare/coverage': 503,
+        }));
+
+    await settle(t);
+
+    expect(find.text('Medicare fallback claim'), findsOneWidget);
+  });
+  testWidgets(
+      'athenahealth records from the unified endpoint remain when the '
+      'dedicated athenahealth read fails', (t) async {
+    await t.binding.setSurfaceSize(const Size(800, 3000));
+    addTearDown(() => t.binding.setSurfaceSize(null));
+
+    await pump(
+        t,
+        RouteAdapter({
+          '/v1/api/medicare/visits': envelope(const []),
+          '/v1/api/medicare/coverage': envelope(const []),
+          '/api/ehr/resources':
+              '[{"resourceType":"Condition","resourceId":"athena-fallback",'
+                  '"source":"ATHENAHEALTH","category":"Conditions",'
+                  '"title":"Athena fallback condition","status":"active",'
+                  '"occurredAt":"2026-07-01T00:00:00Z"}]',
+        }, status: {
+          '/api/athena/resources': 503,
+        }));
+
+    await settle(t);
+
+    expect(find.text('Athena fallback condition'), findsOneWidget);
+  });
 
   RouteAdapter athenaNotConnected() => RouteAdapter({
         '/v1/api/medicare/visits': envelope(const []),
@@ -458,8 +970,9 @@ void main() {
       'connect it', (t) async {
     await pump(t, athenaNotConnected());
     await settle(t);
-    expect(find.text('athenahealth isn\'t connected yet.'), findsOneWidget);
-    expect(find.text('Connect athenahealth'), findsOneWidget);
+    expect(find.text('Athena Health'), findsOneWidget);
+    expect(find.text('Not connected'), findsWidgets);
+    expect(athenaConnect(), findsOneWidget);
   });
 
   group('connecting athenahealth from the banner', () {
@@ -472,11 +985,12 @@ void main() {
       final adapter = athenaNotConnected();
       await pump(t, adapter);
       await settle(t);
-      await t.tap(find.text('Connect athenahealth'));
+      await t.ensureVisible(athenaConnect());
+      await t.pumpAndSettle();
+      await t.tap(athenaConnect());
       await t.pumpAndSettle();
       return adapter;
     }
-
     Finder dialogConnect() => find.descendant(
         of: find.byType(AlertDialog),
         matching: find.widgetWithText(FilledButton, 'Connect'));
@@ -493,7 +1007,7 @@ void main() {
       await t.tap(find.text('Cancel'));
       await t.pumpAndSettle();
       expect(athena.connects, 0);
-      expect(find.text('athenahealth isn\'t connected yet.'), findsOneWidget);
+      expect(find.text('Athena Health'), findsOneWidget);
     });
 
     testWidgets('agreeing connects, says so in a snackbar and reloads the '
@@ -541,9 +1055,10 @@ void main() {
       await settle(t);
       expect(find.textContaining('couldn\'t find an athenahealth chart'),
           findsOneWidget);
-      expect(find.text('athenahealth isn\'t connected yet.'), findsOneWidget);
-      expect(find.text('Connect athenahealth'), findsOneWidget);
-    });
+      expect(find.text('Athena Health'), findsOneWidget);
+      expect(find.text('Not connected'), findsWidgets);
+      expect(athenaConnect(), findsOneWidget);
+          });
   });
 
   RouteAdapter athenaOff() => RouteAdapter({
@@ -558,8 +1073,9 @@ void main() {
       'still offered Connect, as with Epic', (t) async {
     await pump(t, athenaOff());
     await settle(t);
-    expect(find.text('athenahealth isn\'t connected yet.'), findsOneWidget);
-    expect(find.text('Connect athenahealth'), findsOneWidget);
+    expect(find.text('Athena Health'), findsOneWidget);
+    expect(find.text('Not connected'), findsWidgets);
+    expect(athenaConnect(), findsOneWidget);
   });
 
   for (final role in ['CAREGIVER', 'ADMIN', 'FAMILY_MEMBER']) {
@@ -577,8 +1093,8 @@ void main() {
     });
   }
 
-  testWidgets('a signed-in patient sees the banner when athena is off',
-      (t) async {
+  testWidgets('a signed-in patient sees the Athena Connect action when athena is off',
+    (t) async {
     ApiClient.instance.debugSetHttpClientAdapter(athenaOff());
     await t.pumpWidget(ChangeNotifierProvider<UserProvider>(
       create: (_) => UserProvider()
@@ -587,7 +1103,8 @@ void main() {
       child: const MaterialApp(home: HealthDataScreen()),
     ));
     await settle(t);
-    expect(find.text('Connect athenahealth'), findsOneWidget);
+    expect(find.text('Athena Health'), findsOneWidget);
+    expect(athenaConnect(), findsOneWidget);
   });
 
   RouteAdapter duplicates(String athenaStatus) => RouteAdapter({
@@ -749,13 +1266,14 @@ void main() {
           '/api/athena/resources': '{"error":"An unexpected error occurred"}',
         });
 
-    testWidgets('a patient still gets the banner with Connect, not a '
+    testWidgets('a patient still gets the Connect action, not a '
         '"couldn\'t load" message', (t) async {
       AthenaConnectService.instance = _StatusAthena(null);
       await pump(t, athena500());
       await settle(t);
-      expect(find.text('athenahealth isn\'t connected yet.'), findsOneWidget);
-      expect(find.text('Connect athenahealth'), findsOneWidget);
+      expect(find.text('Athena Health'), findsOneWidget);
+      expect(find.text('Not connected'), findsWidgets);
+      expect(athenaConnect(), findsOneWidget);
       expect(find.textContaining('other providers'), findsNothing);
     });
 
@@ -765,20 +1283,28 @@ void main() {
           _StatusAthena(const AthenaStatus(connected: true));
       await pump(t, athena500());
       await settle(t);
-      expect(find.textContaining('other providers'), findsOneWidget);
+      expect(
+        find.text(
+          'We couldn\'t load records from your other providers. Showing what we could.',
+        ),
+        findsOneWidget,
+      );
       expect(find.text('athenahealth isn\'t connected yet.'), findsNothing);
     });
   });
 
-  testWidgets('with no Patient Information the records use the full width '
-      '(no empty left column)', (t) async {
+  testWidgets('with no Patient Information the Connected Sources column '
+      'remains beside the records', (t) async {
     await t.binding.setSurfaceSize(const Size(1200, 3000));
     addTearDown(() => t.binding.setSurfaceSize(null));
     await pump(t, fixtures());
     await settle(t);
     expect(find.text('Patient Information'), findsNothing);
+    expect(find.text('Connected Sources'), findsOneWidget);
+
+    final sources = t.getRect(find.text('Connected Sources'));
     final history = t.getRect(find.text('Your health history'));
-    expect(history.left, lessThan(100));
+    expect(history.left, greaterThan(sources.right));
   });
 
   testWidgets('with Patient Information it sits in its own column beside the '
@@ -936,11 +1462,14 @@ void main() {
             '/v1/api/medicare/visits': envelope(const []),
             '/v1/api/medicare/coverage': envelope(const []),
             '/api/ehr/resources': '[]',
+            // The DOB screen's backend (#432): nothing pending there.
+            '/v1/api/ehr/identity-conflicts': '{"resources":[]}',
           }),
         );
 
-    testWidgets('the screen asks to confirm, keeps the current date until '
-        'then, and queues it for the DOB confirmation screen', (t) async {
+    testWidgets('TC-HDATA-069: the screen asks to confirm, keeps the '
+        'current date until then, and queues it for the DOB confirmation '
+        'screen', (t) async {
       await t.binding.setSurfaceSize(const Size(1200, 3000));
       addTearDown(() => t.binding.setSurfaceSize(null));
       await pump(t, dobs());
@@ -953,13 +1482,15 @@ void main() {
       expect(find.text('May 14, 1980'), findsOneWidget);
       expect(find.text('Needs your confirmation'), findsOneWidget);
 
-      final pending = await IdentityConflictService(useMock: false).fetchPending();
+      // Dio runs on real time, outside the fake clock.
+      final pending = (await t.runAsync(
+          IdentityConflictService(useMock: false).fetchPending))!;
       expect(pending.single.canonicalValueBefore, '05/14/1980');
       expect(pending.single.incomingValue, '05/15/1980');
     });
 
-    testWidgets('once the patient chooses, the card shows that date and '
-        'nothing asks again', (t) async {
+    testWidgets('TC-HDATA-070: once the patient chooses, the card shows '
+        'that date and nothing asks again', (t) async {
       await t.binding.setSurfaceSize(const Size(1200, 3000));
       addTearDown(() => t.binding.setSurfaceSize(null));
       await pump(t, dobs());
@@ -976,7 +1507,8 @@ void main() {
       expect(find.textContaining('different dates of birth'), findsNothing);
     });
 
-    testWidgets('the same date from both sources asks nothing', (t) async {
+    testWidgets('TC-HDATA-071: the same date from both sources asks '
+        'nothing', (t) async {
       await t.binding.setSurfaceSize(const Size(1200, 3000));
       addTearDown(() => t.binding.setSurfaceSize(null));
       final same = dobs()..athena = dobs().epic;
@@ -984,7 +1516,9 @@ void main() {
       await settle(t);
       expect(find.text('May 14, 1980'), findsOneWidget);
       expect(find.textContaining('different dates of birth'), findsNothing);
-      expect(await IdentityConflictService(useMock: false).fetchPending(),
+      expect(
+          await t.runAsync(
+              IdentityConflictService(useMock: false).fetchPending),
           isEmpty);
     });
   });
@@ -1042,7 +1576,7 @@ void main() {
       // athenahealth connects and now has a different version of Asthma.
       status.remove('/api/athena/resources');
       routes['/api/athena/resources'] = athenaPage('resolved');
-      await t.tap(find.text('Connect athenahealth'));
+      await t.tap(athenaConnect());
       await t.pumpAndSettle();
       await t.tap(find.byType(Checkbox));
       await t.pump();
@@ -1116,100 +1650,6 @@ void main() {
           findsOneWidget);
     });
   });
-
-  testWidgets(
-      'TC-HDATA-040: a Cerner allergy appears in the shared history, '
-      'uses the Allergies filter, and preserves Cerner provenance', (t) async {
-    await t.binding.setSurfaceSize(const Size(800, 3000));
-    addTearDown(() => t.binding.setSurfaceSize(null));
-
-    await pump(
-        t,
-        RouteAdapter({
-          '/v1/api/medicare/visits': envelope(const []),
-          '/v1/api/medicare/coverage':
-              envelope(fixtureResources('coverage-bundle.json')),
-          '/api/ehr/resources':
-              '[{"resourceId":"cerner-allergy-1","source":"CERNER",'
-                  '"category":"Allergies","title":"Penicillin",'
-                  '"occurredAt":"2026-09-10T00:00:00Z","status":"active"},'
-                  '{"resourceId":"epic-medication-1","source":"EPIC",'
-                  '"category":"Medications","title":"Lisinopril 10 mg",'
-                  '"occurredAt":"2026-09-01T00:00:00Z","status":"active"}]',
-          '/api/ehr/patient': '{"name":"Test Patient","birthDate":"1980-05-14",'
-              '"gender":"female"}',
-        }));
-
-    await settle(t);
-
-    // Cerner, Epic, and Medicare use the same health-history list.
-    expect(find.text('Penicillin'), findsOneWidget);
-    expect(find.text('Lisinopril 10 mg'), findsOneWidget);
-    expect(find.text('Medicare Part A (Hospital Insurance)'), findsOneWidget);
-
-    // The shared record-type filter recognizes the Cerner allergy.
-    await t.tap(find.widgetWithText(FilterChip, 'Allergies'));
-    await t.pumpAndSettle();
-
-    expect(find.text('Penicillin'), findsOneWidget);
-    expect(find.text('Lisinopril 10 mg'), findsNothing);
-    expect(find.text('Medicare Part A (Hospital Insurance)'), findsNothing);
-
-    // The existing details screen preserves the record's source.
-    final details = find.text('View details');
-    expect(details, findsOneWidget);
-    await t.tap(details);
-    await t.pumpAndSettle();
-
-    expect(find.text('Where this came from'), findsOneWidget);
-    expect(find.text('Oracle Health'), findsOneWidget);
-  });
-  testWidgets(
-      'TC-HDATA-044: the patient ID loads Cerner backend records into '
-      'the unified health history', (t) async {
-    await t.binding.setSurfaceSize(const Size(800, 3000));
-    addTearDown(() => t.binding.setSurfaceSize(null));
-
-    final adapter = RouteAdapter({
-      '/api/ehr/resources': '[]',
-      '/api/ehr/patient': '{}',
-      '/v1/api/cerner/patients/7/allergies':
-          '{"allergies":[{"source":"ORACLE_HEALTH",'
-              '"sourceRecordId":"cerner-allergy-2",'
-              '"substanceText":"Penicillin",'
-              '"clinicalStatus":"active",'
-              '"recordedDate":"2026-09-10"}]}',
-      '/v1/api/cerner/patients/7/conditions': '{"conditions":[]}',
-      '/v1/api/cerner/patients/7/encounters': '{"encounters":[]}',
-      '/v1/api/medicare/visits': envelope(const []),
-      '/v1/api/medicare/coverage': envelope(const []),
-    });
-
-    await pump(t, adapter, patientId: 7);
-    await settle(t);
-
-    expect(
-      adapter.paths,
-      contains('/v1/api/cerner/patients/7/allergies'),
-    );
-    expect(find.text('Penicillin'), findsOneWidget);
-  });
-
-  // Testing Lead (PR #364 review): the new forbidden problem must not change
-  // what a patient sees on their own screen.
-  testWidgets(
-      'TC-HDATA-039: a 403 on the patient\'s own reads still shows ERR-MCR-03, '
-      'as before PR #364 added the forbidden case', (t) async {
-    await pump(
-        t,
-        RouteAdapter(const {}, status: {
-          '/v1/api/medicare/visits': 403,
-          '/v1/api/medicare/coverage': 403,
-        }));
-    await settle(t);
-    expect(find.text(_errMcr03), findsOneWidget);
-    expect(find.text('Medicare isn\'t connected yet.'), findsNothing);
-  });
 }
 
 class _BannerAthena extends AthenaConnectService {
@@ -1256,6 +1696,62 @@ class _DobAdapter implements HttpClientAdapter {
       });
     }
     return rest.fetch(options, requestStream, cancelFuture);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+/// Counts Medicare visit reads, so a test can tell the screen reloaded.
+class _CountingAdapter implements HttpClientAdapter {
+  _CountingAdapter(this.inner, {required this.onVisits});
+  final HttpClientAdapter inner;
+  final void Function() onVisits;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) {
+    if (options.path.contains('/v1/api/medicare/visits')) onVisits();
+    return inner.fetch(options, requestStream, cancelFuture);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+/// Medicare connected until the Medicare page disconnects it (PR #428 review).
+class _ConnectedMedicare extends MedicareConnectService {
+  bool connected = true;
+  int disconnects = 0;
+
+  @override
+  Future<MedicareStatus?> status() async =>
+      MedicareStatus(connected: connected);
+
+  @override
+  Future<bool> disconnect() async {
+    disconnects++;
+    connected = false;
+    return true;
+  }
+}
+
+/// Answers the Medicare reads from [inner] while [connected] says so, then
+/// 404 (no Medicare link, AC-MCR-11-2), as the backend does after Disconnect.
+class _SwitchingAdapter implements HttpClientAdapter {
+  _SwitchingAdapter(this.inner, this.connected);
+  final HttpClientAdapter inner;
+  final bool Function() connected;
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    if (!connected() && options.path.contains('/v1/api/medicare/')) {
+      return ResponseBody.fromString('{}', 404, headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType]
+      });
+    }
+    return inner.fetch(options, requestStream, cancelFuture);
   }
 
   @override

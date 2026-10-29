@@ -258,11 +258,14 @@ class _AthenaConnectTileState extends State<AthenaConnectTile> {
     }
     return TextButton(
       onPressed: _connectWithConsent,
-      // Same style as the screen's other banner actions.
+      // Matches the action style used in the Connected Sources card.
       style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF006B80),
-          minimumSize: const Size(48, 48)),
-      child: const Text('Connect athenahealth'),
+        foregroundColor: Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).colorScheme.primary
+            : const Color(0xFF006B80),
+        minimumSize: const Size(48, 48),
+      ),
+      child: const Text('Connect'),
     );
   }
 

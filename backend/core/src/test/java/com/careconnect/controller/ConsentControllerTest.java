@@ -38,6 +38,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("ConsentController")
 class ConsentControllerTest {
 
+    private static final String MEDICARE_VIEW = "/api/v3/consent/medicare-view";
+
     @Mock
     private ConsentService consentService;
     @Mock
@@ -139,11 +141,134 @@ class ConsentControllerTest {
                 .andExpect(jsonPath("$.granteeUserId").value(20));
     }
 
+    // ---- EHR_VIEW consent endpoints ------------------------------------------------
+
+    @Test
+    @DisplayName("POST ehr-view returns 403 for non-patient caller")
+    void grantEhrView_forbiddenForCaregiver() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(20L, Role.CAREGIVER));
+
+        mockMvc.perform(post("/api/v3/consent/ehr-view")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"granteeUserId\":30}"))
+                .andExpect(status().isForbidden())
+                // I3b: the refusal names EHR view consent, not AI retrieval consent.
+                .andExpect(jsonPath("$.error").value("Only the patient may manage EHR view consent"));
+
+        verify(consentService, never()).grantEhrViewConsent(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("POST ehr-view returns 400 when granteeUserId is missing")
+    void grantEhrView_badRequestWhenGranteeMissing() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(10L, Role.PATIENT));
+
+        mockMvc.perform(post("/api/v3/consent/ehr-view")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        verify(consentService, never()).grantEhrViewConsent(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("POST ehr-view grants consent for a patient caller")
+    void grantEhrView_okForPatient() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(10L, Role.PATIENT));
+        when(consentService.grantEhrViewConsent(eq(10L), eq(20L), any(), any()))
+                .thenReturn(ConsentGrant.builder()
+                        .id(7L)
+                        .patientUserId(10L)
+                        .granteeUserId(20L)
+                        .granteeRole("CAREGIVER")
+                        .scope("EHR_VIEW")
+                        .status(ConsentGrant.STATUS_ACTIVE)
+                        .grantedAt(Instant.parse("2026-07-24T00:00:00Z"))
+                        .build());
+
+        mockMvc.perform(post("/api/v3/consent/ehr-view")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"granteeUserId\":20,\"granteeRole\":\"CAREGIVER\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.patientUserId").value(10))
+                .andExpect(jsonPath("$.granteeUserId").value(20))
+                .andExpect(jsonPath("$.scope").value("EHR_VIEW"));
+    }
+
+    @Test
+    @DisplayName("DELETE ehr-view returns 403 for non-patient caller")
+    void revokeEhrView_forbiddenForCaregiver() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(20L, Role.CAREGIVER));
+
+        mockMvc.perform(delete("/api/v3/consent/ehr-view")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"granteeUserId\":30}"))
+                .andExpect(status().isForbidden())
+                // I3b: the refusal names EHR view consent, not AI retrieval consent.
+                .andExpect(jsonPath("$.error").value("Only the patient may manage EHR view consent"));
+
+        verify(consentService, never()).revokeEhrViewConsent(any(), any());
+    }
+
+    @Test
+    @DisplayName("DELETE ehr-view returns 400 when granteeUserId is missing")
+    void revokeEhrView_badRequestWhenGranteeMissing() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(10L, Role.PATIENT));
+
+        mockMvc.perform(delete("/api/v3/consent/ehr-view")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        verify(consentService, never()).revokeEhrViewConsent(any(), any());
+    }
+
+    @Test
+    @DisplayName("DELETE ehr-view revokes and returns the count for a patient caller")
+    void revokeEhrView_okForPatient() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(10L, Role.PATIENT));
+        when(consentService.revokeEhrViewConsent(10L, 20L)).thenReturn(2);
+
+        mockMvc.perform(delete("/api/v3/consent/ehr-view")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"granteeUserId\":20}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientUserId").value(10))
+                .andExpect(jsonPath("$.granteeUserId").value(20))
+                .andExpect(jsonPath("$.revokedCount").value(2));
+    }
+
+    @Test
+    @DisplayName("GET ehr-view returns 403 when caller is neither party nor admin")
+    void checkEhrView_forbiddenForUnrelatedCaller() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(99L, Role.CAREGIVER));
+
+        mockMvc.perform(get("/api/v3/consent/ehr-view")
+                        .param("patientUserId", "10")
+                        .param("granteeUserId", "20"))
+                .andExpect(status().isForbidden());
+
+        verify(consentService, never()).isEhrViewConsentGranted(any(), any());
+    }
+
+    @Test
+    @DisplayName("GET ehr-view returns the granted flag for the patient themselves")
+    void checkEhrView_okForSelfPatient() throws Exception {
+        when(securityUtil.resolveCurrentUser()).thenReturn(user(10L, Role.PATIENT));
+        when(consentService.isEhrViewConsentGranted(20L, 10L)).thenReturn(true);
+
+        mockMvc.perform(get("/api/v3/consent/ehr-view")
+                        .param("patientUserId", "10")
+                        .param("granteeUserId", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientUserId").value(10))
+                .andExpect(jsonPath("$.granteeUserId").value(20))
+                .andExpect(jsonPath("$.granted").value(true));
+    }
+
     // ===== Medicare View (MEDICARE_VIEW) consent endpoints, PR #325 / WBS 6.2.56 =====
     // Test IDs TC-MCR-CONSENT-020 to 031, Software Test Plan §3.20. Status and body come from the
     // real GlobalExceptionHandler.
-
-    private static final String MEDICARE_VIEW = "/api/v3/consent/medicare-view";
 
     @Test
     @DisplayName("TC-MCR-CONSENT-020 POST medicare-view by the patient returns 201 with a MEDICARE_VIEW grant; the patient id comes from the token, not the body")

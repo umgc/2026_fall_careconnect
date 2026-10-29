@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/config/router/app_router.dart';
+import 'package:care_connect_app/pages/epic_resource_detail_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/features/health/health_data/pages/athena_connect_page.dart';
 import 'package:care_connect_app/features/health/health_data/pages/athena_resource_detail_page.dart';
@@ -884,14 +885,19 @@ void main() {
       _tearDownPlatformChannels();
     });
 
-    testWidgets('TC-ROUTE-114: shows Invalid user ID when no userId query param',
+    testWidgets('TC-ROUTE-114: direct patient URL uses dashboard sign-in handling',
         (tester) async {
-      final router = _createFullTestRouter('/dashboard/patient');
+      final router = GoRouter(initialLocation: '/dashboard/patient', routes: [
+        _findRoute(appRouter.configuration.routes, '/dashboard/patient')!,
+        _findRoute(appRouter.configuration.routes, '/dashboard')!,
+        GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
+      ]);
+      addTearDown(router.dispose);
       await _pumpRouterApp(tester, router);
       await tester.pumpAndSettle();
 
-      expect(find.text('Invalid user ID'), findsOneWidget);
-      expect(find.text('Go to Login'), findsOneWidget);
+      expect(find.text('Invalid user ID'), findsNothing);
+      expect(router.state.uri.path, '/login');
     });
 
     testWidgets('TC-ROUTE-115: shows Invalid user ID when userId is 0', (tester) async {
@@ -1483,6 +1489,81 @@ void main() {
       await tester.pump();
 
       expect(find.text('Redirecting...'), findsOneWidget);
+    });
+  });
+
+  group('/epic/:type/:id builder - widget tests (I3c)', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+
+    // UserProvider subscribes to the connectivity event stream; draining real
+    // async below makes that subscription fire, so the EventChannel is mocked
+    // too (the shared helper mocks only the connectivity MethodChannel).
+    const connectivityStatus =
+        EventChannel('dev.fluttercommunity.plus/connectivity_status');
+
+    setUp(() {
+      _setupPlatformChannels();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus,
+              MockStreamHandler.inline(onListen: (_, __) {}));
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus, null);
+      _tearDownPlatformChannels();
+    });
+
+    // Drives the real async (secure-storage read + mocked HTTP) to completion so
+    // the citation page's initState fetch settles and leaves no pending timers.
+    Future<void> drain(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+    }
+
+    testWidgets('TC-ROUTE-160: reads the patientUserId query param (I3c)',
+        (tester) async {
+      Uri? seen;
+      final client = MockClient((request) async {
+        seen = request.url;
+        return http.Response('x', 404);
+      });
+
+      await http.runWithClient(() async {
+        final router = _createFullTestRouter(
+            '/epic/Observation/obs-1?patientUserId=user-7');
+        await _pumpRouterApp(tester, router);
+        await drain(tester);
+      }, () => client);
+
+      expect(find.byType(EpicResourceDetailPage), findsOneWidget);
+      expect(seen, isNotNull);
+      expect(seen!.pathSegments, containsAll(<String>['Observation', 'obs-1']));
+      expect(seen!.queryParameters['patientUserId'], 'user-7');
+    });
+
+    testWidgets('TC-ROUTE-161: falls back to the legacy patientId param (I3c)',
+        (tester) async {
+      Uri? seen;
+      final client = MockClient((request) async {
+        seen = request.url;
+        return http.Response('x', 404);
+      });
+
+      await http.runWithClient(() async {
+        final router =
+            _createFullTestRouter('/epic/Observation/obs-1?patientId=legacy-5');
+        await _pumpRouterApp(tester, router);
+        await drain(tester);
+      }, () => client);
+
+      expect(find.byType(EpicResourceDetailPage), findsOneWidget);
+      expect(seen, isNotNull);
+      // The legacy ?patientId= is read and forwarded as patientUserId downstream.
+      expect(seen!.queryParameters['patientUserId'], 'legacy-5');
     });
   });
 
@@ -2097,6 +2178,11 @@ void main() {
       ('/admin/users', '/admin/users', 'CAREGIVER', '/dashboard'),
       ('/admin/users', '/admin/users', 'ADMIN', null),
       ('/taskscheduling', '/taskscheduling', null, '/login'),
+      ('/dashboard/patient', '/dashboard/patient', null, '/dashboard'),
+      ('/dashboard/patient', '/dashboard/patient', 'PATIENT', '/dashboard'),
+      ('/dashboard/patient', '/dashboard/patient?tab=messages', 'PATIENT',
+          '/dashboard?tab=messages'),
+      ('/dashboard/patient', '/dashboard/patient?userId=5', 'PATIENT', null),
       ('/taskscheduling', '/taskscheduling', 'CAREGIVER', '/dashboard?tab=tasks'),
       ('/taskscheduling', '/taskscheduling', 'PATIENT', '/dashboard?tab=home'),
       ('/chatandcalls', '/chatandcalls', null, '/login'),

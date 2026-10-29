@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -109,7 +110,8 @@ class _FormCard extends StatelessWidget {
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
+          TitledMaterialPageRoute(
+            title: 'Hiring Form Details',
             builder: (_) =>
                 _FormDetailPage(definition: definition, patientId: patientId),
           ),
@@ -199,7 +201,8 @@ class _FormDetailPageState extends State<_FormDetailPage> {
 
   Future<void> _fillOutForm() async {
     final submitted = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Complete Hiring Form',
         builder: (_) =>
             HiringFormFillPage(definition: d, patientId: widget.patientId),
       ),

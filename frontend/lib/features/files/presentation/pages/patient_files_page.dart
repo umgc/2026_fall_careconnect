@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
@@ -150,7 +151,8 @@ class _PatientFilesPageState extends State<PatientFilesPage>
                   .toUpperCase();
               final canEdit = role == 'CAREGIVER' || role == 'ADMIN';
               Navigator.of(context).push(
-                MaterialPageRoute(
+                TitledMaterialPageRoute(
+                  title: 'Compliance Checklist',
                   builder: (routeContext) => ComplianceChecklistPage(
                     subjectType: 'CARE_CIRCLE',
                     subjectId: widget.patientId,

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/fall_alert/pages/skeleton_playback_widget.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
@@ -286,7 +287,8 @@ class AlertDetailsPage extends StatelessWidget {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Patient Details',
         builder: (_) =>
             PatientDetailsPage(patientId: id, isCaregiver: isCaregiver),
         settings: const RouteSettings(name: '/patient-details'),

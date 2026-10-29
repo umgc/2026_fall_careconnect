@@ -138,6 +138,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Coverage gate regression tests
+        if: steps.mode.outputs.run_suite == 'true'
+        run: python -m unittest discover -s scripts -p 'test_coverage_gate.py'
+
       - name: Determine diff base
         if: steps.mode.outputs.run_suite == 'true'
         run: |

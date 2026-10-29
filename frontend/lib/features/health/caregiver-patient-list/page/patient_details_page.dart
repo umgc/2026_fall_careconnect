@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -332,7 +333,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     if (trimmedCallId.isEmpty || !mounted) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Call Summary',
         builder: (_) => PostCallTelemetrySummaryScreen(
           callId: trimmedCallId,
           recipientName: _patientName,
@@ -1947,7 +1949,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Dashboards',
               builder: (context) => DashboardsScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2003,7 +2006,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Audit Log',
               builder: (context) => AuditLogScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2059,7 +2063,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Daily Living Activities',
               builder: (context) => AdlIadlManagementScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2114,7 +2119,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Report Behavioral Incident',
               builder: (context) => BehavioralIncidentFormScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2169,7 +2175,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Behavioral Incident History',
               builder: (context) => BehavioralIncidentHistoryScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2223,7 +2230,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Report Incident',
               builder: (context) => IncidentReportWizardScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2277,7 +2285,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Incident Report History',
               builder: (context) => IncidentReportHistoryScreen(
                 clientId: clientId,
                 clientName: patientName,

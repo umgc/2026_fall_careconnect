@@ -137,6 +137,7 @@
   "ptdashboard_onceAtBed": "就寝時に1日1回",
   
   "login_loginFailedError": "ログインに失敗しました",
+  "login_invalidCredentials": "ユーザー名またはパスワードが正しくありません。確認してもう一度お試しください。",
 
   "settings_telemetryDefaultDialogTitle": "テレメトリが有効になっています",
   "settings_telemetryDefaultDialogDescription": "CareConnectは、信頼性向上のために、デフォルトで匿名診断データとパフォーマンス指標を収集します。\nいつでもオプトアウトできます。",

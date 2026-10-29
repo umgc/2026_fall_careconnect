@@ -186,6 +186,7 @@
   "login_e2eEncrypted": "Cifrado de extremo a extremo",
   "login_wcagAACompliant": "Cumple con WCAG AA",
   "login_loginFailedError": "Error al iniciar sesión",
+  "login_invalidCredentials": "El nombre de usuario o la contraseña son incorrectos. Revísalos e inténtalo de nuevo.",
 
   "voicecommand_wakeWordError": "Error de inicialización de la palabra de activación",
   "voicecommand_voiceCommandsUnavailable": "Reconocimiento de voz no disponible",

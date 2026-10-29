@@ -10,12 +10,12 @@ import '../services/notification_settings_service.dart';
 import '../providers/locale_provider.dart';
 import '../widgets/language/language_picker.dart';
 import '../widgets/epic_connect_tile.dart';
-import '../features/health/health_data/widgets/athena_connect_tile.dart';
 import '../widgets/oracle_health_connect_tile.dart';
 import '../utils/responsive_utils.dart';
 
 import '../features/telemetry/telemetry.dart';
 import '../features/telemetry/telemetry_settings.dart';
+import '../features/health/health_data/widgets/athena_connect_tile.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -132,6 +132,9 @@ class _SettingsPageState extends State<SettingsPage> {
       barrierDismissible: false,
       builder: (ctx) {
         return AlertDialog(
+          semanticLabel:
+              AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ??
+                  'Telemetry is enabled',
           title: Text(
               AppLocalizations.of(ctx)?.settings_telemetryDefaultDialogTitle ??
                   'Telemetry is enabled'),
@@ -245,6 +248,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        semanticLabel:
+            AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ??
+                'Opt out of telemetry?',
         title: Text(
             AppLocalizations.of(ctx)?.settings_telemetryOptOutDialogTitle ??
                 'Opt out of telemetry?'),
@@ -276,6 +282,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        semanticLabel:
+            AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ??
+                'Enable telemetry?',
         title: Text(
             AppLocalizations.of(ctx)?.settings_telemetryOptInDialogTitle ??
                 'Enable telemetry?'),
@@ -304,12 +313,15 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+      child: Semantics(
+        headingLevel: 2,
+        child: Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+        ),
       ),
     );
   }
@@ -359,7 +371,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      // One screen-reader node: the switch reads the card title and state.
+      child: MergeSemantics(child: ListTile(
         leading: Icon(
           icon,
           color: iconColor ?? Theme.of(context).colorScheme.primary,
@@ -377,7 +390,7 @@ class _SettingsPageState extends State<SettingsPage> {
           onChanged: onChanged,
           activeThumbColor: Theme.of(context).colorScheme.primary,
         ),
-      ),
+      )),
     );
   }
 
@@ -393,7 +406,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      // One screen-reader node: the switch reads the card title and state.
+      child: MergeSemantics(child: ListTile(
         leading: Icon(
           icon,
           color: iconColor ?? Theme.of(context).colorScheme.primary,
@@ -417,7 +431,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 onChanged: onChanged,
                 activeThumbColor: Theme.of(context).colorScheme.primary,
               ),
-      ),
+      )),
     );
   }
 
@@ -425,7 +439,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final t = AppLocalizations.of(context)!;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
+      // One screen-reader node: the switch reads the card title and state.
+      child: MergeSemantics(child: ListTile(
         leading: Icon(
           Icons.brightness_6,
           color: Theme.of(context).colorScheme.primary,
@@ -442,7 +457,7 @@ class _SettingsPageState extends State<SettingsPage> {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         trailing: const ThemeToggleSwitch(showIcon: false, showLabel: false),
-      ),
+      )),
     );
   }
 
@@ -451,6 +466,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        semanticLabel: t.settingsClearCache,
         title: Text(t.settingsClearCache),
         content: Text(t.settingsClearCacheDesc),
         actions: [
@@ -480,6 +496,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        semanticLabel: t.settingsSignOut,
         title: Text(t.settingsSignOut),
         content: Text(t.settingsSignOutConfirmMessage),
         actions: [
@@ -510,6 +527,7 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        semanticLabel: t.settingsDeleteAccount,
         title: Text(
           t.settingsDeleteAccount,
           style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -555,12 +573,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.settings), // use existing "Settings" key
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+        title: Semantics(headingLevel: 1, child: Text(t.settings)),
+        // BackButton, not a bare IconButton: it carries the "Back" tooltip
+        // that screen readers announce (#259, TC-HELP-058/059).
+        leading: BackButton(
           // Router-safe back: Settings can be reached via context.go(...) (a
-          // replace, e.g. from the Epic return page), leaving nothing to pop.
-          // Navigator.pop() then asserts "popped the last page off the stack".
+          // replace, e.g. from the Epic return page, or Help's Back to
+          // Settings), leaving nothing to pop. Navigator.pop() then asserts
+          // "popped the last page off the stack".
           onPressed: () =>
               context.canPop() ? context.pop() : context.go('/dashboard'),
         ),
@@ -824,6 +844,21 @@ class _SettingsPageState extends State<SettingsPage> {
 
                   // General
                   _buildSectionHeader(context, t.settingsGeneral),
+
+                  _buildSettingsCard(
+                    context,
+                    icon: Icons.help_outline,
+                    title: t.settingsHelp,
+                    subtitle: t.settingsHelpDesc,
+                    onTap: () {
+                      Telemetry.event('button_tap', {
+                        'screen': 'settings',
+                        'target': 'help',
+                        'route': '/help',
+                      });
+                      context.push('/help');
+                    },
+                  ),
 
                   // User-Controlled Persistence Toggle (BNS 5)
                   _buildToggleCard(

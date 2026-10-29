@@ -3,6 +3,7 @@ package com.careconnect.websocket;
 import com.careconnect.model.Message;
 import com.careconnect.model.User;
 import com.careconnect.repository.MessageRepository;
+import com.careconnect.service.MessagingPolicy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,8 +30,11 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
 
+    static final String MESSAGING_NOT_ALLOWED = MessagingPolicy.NOT_ALLOWED;
+
     private final MessageRepository messageRepository;
     private final WebSocketJwtAuthenticator authenticator;
+    private final MessagingPolicy messagingPolicy;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // Track active connections: userId (String) -> WebSocketSession
@@ -140,10 +144,28 @@ public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
 
         String clientMessageId = messageIdObj != null ? (String) messageIdObj : null;
 
+        Long recipientUserId;
+        try {
+            recipientUserId = Long.parseLong(recipientId);
+        } catch (NumberFormatException e) {
+            sendError(session, "Invalid recipientId");
+            return;
+        }
+        if (!messagingPolicy.canMessage(Long.parseLong(senderId), recipientUserId)) {
+            // Names the client's message so the app can mark that one bubble as not sent
+            Map<String, Object> rejected = Map.of(
+                    "type", "message-rejected",
+                    "clientMessageId", clientMessageId != null ? clientMessageId : "",
+                    "message", MESSAGING_NOT_ALLOWED
+            );
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(rejected)));
+            return;
+        }
+
         // Persist message to database
         Message message = new Message();
         message.setSenderId(Long.parseLong(senderId));
-        message.setReceiverId(Long.parseLong(recipientId));
+        message.setReceiverId(recipientUserId);
         message.setContent(content);
         message.setTimestamp(java.time.LocalDateTime.now());
         message.setRead(false);
@@ -234,7 +256,8 @@ public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
             Long messageId = Long.parseLong(messageIdObj.toString());
             Optional<Message> optionalMessage = messageRepository.findById(messageId);
 
-            if (optionalMessage.isPresent()) {
+            // Only the message's receiver can mark it read
+            if (optionalMessage.isPresent() && recipientId.equals(String.valueOf(optionalMessage.get().getReceiverId()))) {
                 Message msg = optionalMessage.get();
                 msg.setRead(true);
                 messageRepository.save(msg);
@@ -302,5 +325,40 @@ public class ChatMessageWebSocketHandler extends TextWebSocketHandler {
      */
     public int getActiveUsersCount() {
         return userSessions.size();
+    }
+
+    /**
+     * Pushes a message saved outside this socket, such as a share card from the REST API, to its
+     * receiver as a {@code message-received}, if they are connected. A receiver who is not sees it
+     * the next time their chat loads the conversation.
+     *
+     * @return true if it was sent
+     */
+    public boolean deliver(Message message) {
+        WebSocketSession receiverSession = userSessions.get(String.valueOf(message.getReceiverId()));
+        if (receiverSession == null || !receiverSession.isOpen()) {
+            return false;
+        }
+        try {
+            // A HashMap, not Map.of: a plain message has no share fields
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("type", "message-received");
+            payload.put("messageId", message.getId());
+            payload.put("clientMessageId", "");
+            payload.put("senderId", String.valueOf(message.getSenderId()));
+            payload.put("recipientId", String.valueOf(message.getReceiverId()));
+            payload.put("content", message.getContent());
+            payload.put("timestamp", message.getTimestamp().toString());
+            payload.put("delivered", true);
+            if (message.getShareKind() != null) {
+                payload.put("shareKind", message.getShareKind().name());
+                payload.put("sharePatientId", message.getSharePatientId());
+            }
+            receiverSession.sendMessage(new TextMessage(objectMapper.writeValueAsString(payload)));
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to deliver message {} to user {}: {}", message.getId(), message.getReceiverId(), e.getMessage());
+            return false;
+        }
     }
 }

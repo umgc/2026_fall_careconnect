@@ -33,7 +33,7 @@ public class EpicProperties {
     @Value("${epic.oauth.redirect-uri:http://localhost:8081/api/epic/callback}")
     private String redirectUri;
 
-    @Value("${epic.oauth.scopes:openid fhirUser offline_access patient/Patient.read}")
+    @Value("${epic.oauth.scopes:openid fhirUser offline_access patient/Patient.read patient/AllergyIntolerance.read patient/Condition.read patient/MedicationRequest.read patient/MedicationStatement.read patient/Observation.read patient/DiagnosticReport.read patient/DocumentReference.read patient/Immunization.read patient/Procedure.read patient/Encounter.read patient/CarePlan.read patient/CareTeam.read patient/Goal.read patient/FamilyMemberHistory.read patient/Coverage.read patient/Device.read patient/Appointment.read}")
     private String scopes;
 
     /** Deep link the callback redirects back to so the mobile (Android/iOS) app resumes. */

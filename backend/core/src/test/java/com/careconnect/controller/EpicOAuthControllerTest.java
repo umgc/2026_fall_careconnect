@@ -3,7 +3,9 @@ package com.careconnect.controller;
 import com.careconnect.config.EpicProperties;
 import com.careconnect.model.User;
 import com.careconnect.model.ehr.EhrCredential;
+import com.careconnect.model.ehr.EhrResource;
 import com.careconnect.repository.ehr.EhrResourceRepository;
+import com.careconnect.security.EpicAccessPolicy;
 import com.careconnect.service.consent.ConsentService;
 import com.careconnect.service.ehr.EpicAuthStateStore;
 import com.careconnect.service.ehr.EpicOAuthService;
@@ -42,15 +44,24 @@ class EpicOAuthControllerTest {
     private final EpicSyncService syncService = mock(EpicSyncService.class);
     private final EhrResourceRepository resourceRepo = mock(EhrResourceRepository.class);
     private final EpicProperties cfg = mock(EpicProperties.class);
+    private final EpicAccessPolicy accessPolicy = mock(EpicAccessPolicy.class);
 
     private EpicOAuthController newController() {
         return new EpicOAuthController(epic, stateStore, securityUtil, consentService,
-                syncService, resourceRepo, new ObjectMapper(), cfg);
+                syncService, resourceRepo, new ObjectMapper(), cfg, accessPolicy);
+    }
+
+    private User nonPatient(long id) {
+        User u = mock(User.class);
+        when(u.getId()).thenReturn(id);
+        return u; // isPatient() defaults to false
     }
 
     private User userWithId(long id) {
         User me = mock(User.class);
         when(me.getId()).thenReturn(id);
+        // resync is patient-only (EpicOAuthController gates on isPatient); these callers are the patient.
+        when(me.isPatient()).thenReturn(true);
         return me;
     }
 
@@ -189,4 +200,68 @@ class EpicOAuthControllerTest {
         assertThat(resp.getBody()).containsEntry("error", "sync_failed");
         assertThat(resp.getBody().get("correlationId")).isNotNull();
     }
+
+    // ---- patient-only gating on the connection lifecycle endpoints -------
+
+    @Test
+    void authorize_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L); // build before the outer when(), not nested in it
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, String>> resp = newController().authorize(null);
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void status_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, Object>> resp = newController().status();
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    @Test
+    void disconnect_returnsForbidden_forNonPatient() {
+        User me = nonPatient(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        ResponseEntity<Map<String, Object>> resp = newController().disconnect();
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.FORBIDDEN.value());
+    }
+
+    // ---- resource read: target resolution + access policy ----------------
+
+    @Test
+    void resource_readsTargetPatientRow_whenAccessAllowed() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        // patientUserId supplied -> target is that patient, not the caller; access policy allows.
+        EhrResource row = mock(EhrResource.class);
+        when(row.getResourceType()).thenReturn("Condition");
+        when(row.getResourceFhirId()).thenReturn("c1");
+        when(resourceRepo.findByUserIdAndSourceAndResourceTypeAndResourceFhirId(
+                42L, EpicProperties.SOURCE_EPIC, "Condition", "c1"))
+                .thenReturn(java.util.Optional.of(row));
+
+        ResponseEntity<Map<String, Object>> resp =
+                newController().resource("Condition", "c1", 42L);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.OK.value());
+        assertThat(resp.getBody()).containsEntry("resourceType", "Condition");
+        assertThat(resp.getBody()).containsEntry("resourceId", "c1");
+        verify(accessPolicy).requireEhrReadAccess(me, 42L);
+    }
+
+    @Test
+    void resource_returnsNotFound_whenNoRowForTarget() {
+        User me = userWithId(7L);
+        when(securityUtil.resolveCurrentUser()).thenReturn(me);
+        when(resourceRepo.findByUserIdAndSourceAndResourceTypeAndResourceFhirId(
+                7L, EpicProperties.SOURCE_EPIC, "Observation", "o9"))
+                .thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<Map<String, Object>> resp =
+                newController().resource("Observation", "o9", null);
+
+        assertThat(resp.getStatusCode().value()).isEqualTo(HttpStatus.NOT_FOUND.value());
+    }
+
 }

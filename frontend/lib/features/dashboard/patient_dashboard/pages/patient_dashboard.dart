@@ -1156,10 +1156,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: DashboardAppHeader(
+        context: context,
         userName: user?.name ?? '',
         role: user?.role ?? '',
       ),
       floatingActionButton: FloatingActionButton(
+        tooltip: t.settingsAIAssistant,
         backgroundColor: Theme.of(context).primaryColor,
         child: Icon(
           Icons.chat_bubble_outline,
@@ -1600,6 +1602,8 @@ class _PatientDashboardState extends State<PatientDashboard> {
               ),
               const Spacer(),
               IconButton(
+                tooltip: MaterialLocalizations.of(context)
+                    .refreshIndicatorSemanticLabel,
                 onPressed: _loadEvvSections,
                 icon: const Icon(Icons.refresh),
               ),
