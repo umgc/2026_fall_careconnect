@@ -473,6 +473,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     bool sent = false;
     bool queuedOffline = false;
+    bool refused = false;
     try {
       if (widget.messageSender != null) {
         await widget.messageSender!.call(
@@ -488,11 +489,32 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           content: pendingMessage.content,
         );
         queuedOffline = response.headers['x-offline-queued'] == 'true';
+        refused = response.statusCode == 403;
         sent = !queuedOffline &&
             response.statusCode >= 200 &&
             response.statusCode < 300;
       }
     } catch (_) {}
+
+    // The server will never accept this message, so retrying it would only repeat the 403
+    if (refused) {
+      if (mounted) {
+        setState(() {
+          _pendingMessages.removeWhere((m) => m.id == pendingMessage.id);
+          messages.removeWhere((m) => m.id == pendingMessage.id);
+        });
+      }
+      _pendingInFlightIds.remove(pendingMessage.id);
+      _persistPendingMessagesToCache();
+      await _persistPendingMessagesToDisk();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("You can't send messages to this user.")),
+        );
+      }
+      return;
+    }
 
     if (!sent) {
       if (queuedOffline) {

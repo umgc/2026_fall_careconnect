@@ -172,6 +172,10 @@ public class SecurityConfig {
                                 // Epic SMART redirect target — unauthenticated; user is recovered
                                 // from the signed, single-use state (Epic Phase 0).
                                 "/api/epic/callback",
+                                // Oracle Health SMART redirect target. The external authorization
+                                // server cannot send CareConnect's JWT, so only this callback is
+                                // public; the controller validates the signed, single-use state.
+                                "/api/oracle-health/callback",
                                 "/api/internal/ws/**"
                         ).permitAll()
 

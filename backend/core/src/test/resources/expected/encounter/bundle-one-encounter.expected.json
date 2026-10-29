@@ -1,0 +1,42 @@
+{
+  "source": "ORACLE_HEALTH",
+  "sourceRecordId": "synthetic-encounter-1",
+  "status": "finished",
+  "classSystem": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+  "classCode": "AMB",
+  "classDisplay": "ambulatory",
+  "encounterTypes": [
+    {
+      "system": "http://terminology.hl7.org/CodeSystem/v2-0004",
+      "code": "O",
+      "display": "Outpatient",
+      "text": "Outpatient"
+    }
+  ],
+  "periodStart": "2026-09-18T14:00:00Z",
+  "periodStartPrecision": "INSTANT",
+  "periodEnd": "2026-09-18T15:00:00Z",
+  "periodEndPrecision": "INSTANT",
+  "participants": [
+    {
+      "types": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+          "code": "PPRF",
+          "display": "primary performer",
+          "text": null
+        }
+      ],
+      "reference": "Practitioner/synthetic-practitioner-1",
+      "display": "Synthetic Clinician",
+      "periodStart": null,
+      "periodEnd": null
+    }
+  ],
+  "serviceProviderReference": "Organization/synthetic-organization-1",
+  "serviceProviderDisplay": "Synthetic Clinic",
+  "locations": [],
+  "reasonCodes": [],
+  "diagnosisReferences": [],
+  "appointmentReferences": []
+}

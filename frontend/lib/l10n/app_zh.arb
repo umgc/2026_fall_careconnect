@@ -137,6 +137,7 @@
   "ptdashboard_onceAtBed": "每天睡前运行一次",
   
   "login_loginFailedError": "登录失败",
+  "login_invalidCredentials": "用户名或密码不正确。请检查后重试。",
 
   "settings_telemetryDefaultDialogTitle": "遥测功能已启用",
   "settings_telemetryDefaultDialogDescription": "CareConnect 默认收集匿名诊断和性能指标，以帮助提高可靠性。\n您可以随时选择退出。",

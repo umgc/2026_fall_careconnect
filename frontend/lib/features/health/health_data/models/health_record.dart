@@ -15,9 +15,10 @@ enum RecordSource {
       case RecordSource.epic:
         return 'Epic';
       case RecordSource.cerner:
-        return 'Cerner';
+        return 'Oracle Health';
       case RecordSource.athena:
-        return 'Athena';
+        // The brand's own spelling, as everywhere else in the app.
+        return 'athenahealth';
       case RecordSource.medicare:
         return 'Medicare';
     }
@@ -78,6 +79,10 @@ class HealthRecord {
   final List<RecordDetail> details;
   final String? status;
 
+  /// FHIR resource type of an EHR record (e.g. `Condition`), when known. With
+  /// [id] it addresses the full record on the source's detail endpoint.
+  final String? resourceType;
+
   const HealthRecord({
     required this.id,
     required this.sources,
@@ -86,6 +91,7 @@ class HealthRecord {
     this.date,
     this.details = const [],
     this.status,
+    this.resourceType,
   });
 
   factory HealthRecord.single({
@@ -96,6 +102,7 @@ class HealthRecord {
     DateTime? date,
     List<RecordDetail> details = const [],
     String? status,
+    String? resourceType,
   }) {
     return HealthRecord(
       id: id,
@@ -105,6 +112,7 @@ class HealthRecord {
       date: date,
       details: details,
       status: status,
+      resourceType: resourceType,
     );
   }
 
@@ -119,6 +127,7 @@ class HealthRecord {
     DateTime? date,
     List<RecordDetail>? details,
     String? status,
+    String? resourceType,
   }) {
     return HealthRecord(
       id: id ?? this.id,
@@ -128,6 +137,7 @@ class HealthRecord {
       date: date ?? this.date,
       details: details ?? this.details,
       status: status ?? this.status,
+      resourceType: resourceType ?? this.resourceType,
     );
   }
 
@@ -139,6 +149,7 @@ class HealthRecord {
         'date': date?.toIso8601String(),
         'details': details.map((d) => d.toJson()).toList(),
         'status': status,
+        if (resourceType != null) 'resourceType': resourceType,
       };
 
   factory HealthRecord.fromJson(Map<String, dynamic> json) {
@@ -162,6 +173,7 @@ class HealthRecord {
           .map((d) => RecordDetail.fromJson(d as Map<String, dynamic>))
           .toList(),
       status: json['status'] as String?,
+      resourceType: json['resourceType'] as String?,
     );
   }
 }

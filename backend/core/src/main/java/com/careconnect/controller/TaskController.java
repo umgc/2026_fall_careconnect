@@ -33,29 +33,24 @@ public class TaskController {
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllTasks() throws UnauthorizedException {
-        // RBAC: Only admins and caregivers can view all tasks
+        // Every patient's tasks: admin only.
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireAdmin(currentUser);
         return ResponseEntity.ok(taskService.getAllTasks().stream().map(this::toResponse).toList());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getTaskById(@PathVariable Long id) throws UnauthorizedException {
-        // RBAC: Only admins and caregivers can view individual tasks
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
         Task task = taskService.getTaskById(id);
-        if (task != null) {
-            return ResponseEntity.ok(toResponse(task));
-        } else {
-            return ResponseEntity.notFound().build();
-        }
+        authorizationService.requireTaskAccess(currentUser, task);
+        return ResponseEntity.ok(toResponse(task));
     }
 
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<List<Map<String, Object>>> getTasksByPatient(@PathVariable Long patientId) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         List<Map<String, Object>> tasks = taskService.getTasksByPatient(patientId).stream().map(this::toResponse).toList();
         return ResponseEntity.ok(tasks);
     }
@@ -63,7 +58,8 @@ public class TaskController {
     @PostMapping("/patient/{patientId}")
     public ResponseEntity<Map<String, Object>> createTask(@PathVariable Long patientId, @RequestBody TaskDto task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
+        authorizationService.requireWriteAccess(currentUser);
         Task created = taskService.createTask(patientId, task);
         return ResponseEntity.ok(toResponse(created));
     }
@@ -71,14 +67,15 @@ public class TaskController {
     @PostMapping("/patient/{patientId}/preview-notification")
     public ResponseEntity<Map<String, Object>> previewTaskNotification(@PathVariable Long patientId, @RequestBody TaskDto task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         return ResponseEntity.ok(taskService.previewTaskNotification(patientId, task));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> updateTask(@PathVariable Long id, @RequestBody TaskDto task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
+        authorizationService.requireWriteAccess(currentUser);
         Task updated = taskService.updateTask(id, task);
         if (updated != null) {
             return ResponseEntity.ok(toResponse(updated));
@@ -90,7 +87,8 @@ public class TaskController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(@PathVariable Long id) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
+        authorizationService.requireWriteAccess(currentUser);
         if (taskService.deleteTask(id)) {
             return ResponseEntity.noContent().build();
         } else {

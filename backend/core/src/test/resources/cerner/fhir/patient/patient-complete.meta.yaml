@@ -1,0 +1,19 @@
+requirements: [M3-REQ-01, M3-REQ-02, M3-REQ-16]
+scenarios: [M3-SC-PAT-001]
+origin: derived
+capturedAtUtc: 2026-10-21T18:20:00Z
+sandboxPersona: open
+requestPattern: GET {openBase}/Patient/{syntheticPatientId}
+httpStatus: 200
+bundleEntryCount: null
+nextLinkPresent: false
+derivedFrom: open-sandbox Patient read for approved synthetic alias open-patient-a
+changes:
+  - replaced patient, version, identifier, name, telecom, address, and contact values
+  - removed narrative and environment-specific extensions
+  - retained representative Patient field shapes for mapping tests
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+consumers: [CernerFiveResourceFixtureStructureTest.patientFixturesHaveSyntheticIdentity, EhrPatientIdentityMapperTest.completePatientMapsIntoSharedSourceIdentityWithoutInventingValues, CernerPatientAppointmentExpectedOutputTest.completePatientMatchesPairedExpectedOutput]
+expectedBehavior: every working-baseline Patient field maps while source identity and provenance are retained
+contractDependency: external response envelope and final field names remain pending unified OpenAPI approval

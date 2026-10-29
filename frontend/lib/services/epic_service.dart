@@ -58,21 +58,32 @@ class EpicService {
     final headers = await ApiService.getAuthHeaders();
     final resp = await http.get(Uri.parse('$_base/status'), headers: headers);
     if (resp.statusCode != 200) {
-      return {'connected': false};
+      throw Exception(
+        'Epic connection status unavailable (${resp.statusCode})',
+      );
     }
+
     return (jsonDecode(resp.body) as Map).cast<String, dynamic>();
   }
 
-  /// Fetch one mirrored Epic resource for the current user (Epic citation detail).
-  /// Returns null on 404 / error. Scoped server-side to the caller's own records.
-  static Future<Map<String, dynamic>?> getResource(
-      String type, String id) async {
+  /// Fetch one mirrored Epic resource for the Epic citation detail page.
+  ///
+  /// When [patientUserId] is given (a caregiver opening a linked patient's citation) it is sent as
+  /// the `patientUserId` query parameter so the backend targets that patient; without it the
+  /// backend defaults to the caller's own records. Either way the server enforces EHR_VIEW access
+  /// (EpicAccessPolicy) — a caregiver with no active link and consent still gets null (uniform 404).
+  /// Returns null on 404 / error.
+  static Future<Map<String, dynamic>?> getResource(String type, String id,
+      {String? patientUserId}) async {
     final headers = await ApiService.getAuthHeaders();
-    final resp = await http.get(
-      Uri.parse(
-          '$_base/resource/${Uri.encodeComponent(type)}/${Uri.encodeComponent(id)}'),
-      headers: headers,
+    final uri = Uri.parse(
+            '$_base/resource/${Uri.encodeComponent(type)}/${Uri.encodeComponent(id)}')
+        .replace(
+      queryParameters: (patientUserId != null && patientUserId.isNotEmpty)
+          ? {'patientUserId': patientUserId}
+          : null,
     );
+    final resp = await http.get(uri, headers: headers);
     if (resp.statusCode != 200) {
       return null;
     }

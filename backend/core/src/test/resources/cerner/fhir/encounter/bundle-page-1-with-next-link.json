@@ -1,0 +1,40 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-encounter-page-1",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/Encounter?patient=synthetic-patient-1"
+    },
+    {
+      "relation": "next",
+      "url": "https://example.test/fhir/Encounter?patient=synthetic-patient-1&pageToken=synthetic-encounter-page-2"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://example.test/fhir/Encounter/synthetic-encounter-page-1-record",
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "synthetic-encounter-page-1-record",
+        "status": "finished",
+        "class": {
+          "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+          "code": "AMB",
+          "display": "ambulatory"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-1"
+        },
+        "period": {
+          "start": "2026-08-01T14:00:00Z",
+          "end": "2026-08-01T15:00:00Z"
+        }
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

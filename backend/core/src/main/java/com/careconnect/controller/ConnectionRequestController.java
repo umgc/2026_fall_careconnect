@@ -3,6 +3,7 @@ package com.careconnect.controller;
 import com.careconnect.security.Permission;
 import com.careconnect.security.RequirePermission;
 
+import com.careconnect.dto.ConnectionRequestSummary;
 import com.careconnect.model.ConnectionRequest;
 import com.careconnect.model.User;
 import com.careconnect.security.AuthorizationService;
@@ -10,18 +11,14 @@ import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.ConnectionRequestService;
 import com.careconnect.util.SecurityUtil;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.careconnect.dto.ConnectionRequestDto;
 
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -36,19 +33,21 @@ public class ConnectionRequestController {
     private final AuthorizationService authorizationService;
 
     @RequirePermission(Permission.CREATE_TASKS)
-
-
     @PostMapping("/create")
     @Operation(
             summary = "Create connection request",
-            description = "Create a new connection request from caregiver to patient by email"
+            description = "Ask a patient, by email, to accept the calling caregiver. The caregiver "
+                    + "gets no access until the patient accepts."
     )
     public ResponseEntity<?> createConnectionRequest(@RequestBody ConnectionRequestDto request) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         authorizationService.requireCaregiver(currentUser);
+
         try {
+            // The requester is always the caller; a caregiverId in the body is ignored so a
+            // caregiver cannot send requests in someone else's name.
             ConnectionRequest createdRequest = connectionRequestService.createRequest(
-                    request.getCaregiverId(),
+                    currentUser.getId(),
                     request.getPatientEmail(),
                     request.getRelationshipType(),
                     request.getMessage()
@@ -58,66 +57,63 @@ public class ConnectionRequestController {
                     "message", "Connection request sent successfully",
                     "requestId", createdRequest.getId()
             ));
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
+    @GetMapping("/incoming")
+    @Operation(summary = "Pending requests for me", description = "Pending connection requests addressed to the calling patient")
+    public ResponseEntity<List<ConnectionRequestSummary>> getIncoming() {
+        User currentUser = securityUtil.resolveCurrentUser();
+        if (!currentUser.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(connectionRequestService.getPendingRequestsForPatient(currentUser).stream()
+                .map(connectionRequestService::toSummary)
+                .toList());
+    }
 
+    @GetMapping("/outgoing")
+    @Operation(summary = "Pending requests I sent", description = "Pending connection requests sent by the calling caregiver")
+    public ResponseEntity<List<ConnectionRequestSummary>> getOutgoing() {
+        User currentUser = securityUtil.resolveCurrentUser();
+        if (!currentUser.isCaregiver()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        return ResponseEntity.ok(connectionRequestService.getPendingRequestsByCaregiver(currentUser).stream()
+                .map(connectionRequestService::toSummary)
+                .toList());
+    }
 
-    @GetMapping("/process")
-    @Operation(
-            summary = "Process connection request",
-            description = "Process a patient's response to a connection request",
-            security = {} // No auth needed for this endpoint
-    )
-    public ResponseEntity<?> processConnectionRequest(
-            @RequestParam String token,
-            @RequestParam boolean accept) {
+    @PostMapping("/{requestId}/accept")
+    @Operation(summary = "Accept a request", description = "The calling patient accepts one of their pending requests")
+    public ResponseEntity<?> accept(@PathVariable Long requestId) {
+        return respond(requestId, true);
+    }
+
+    @PostMapping("/{requestId}/reject")
+    @Operation(summary = "Decline a request", description = "The calling patient declines one of their pending requests")
+    public ResponseEntity<?> reject(@PathVariable Long requestId) {
+        return respond(requestId, false);
+    }
+
+    private ResponseEntity<?> respond(Long requestId, boolean accept) {
+        User currentUser = securityUtil.resolveCurrentUser();
+        if (!currentUser.isPatient()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         try {
-            connectionRequestService.processResponse(token, accept);
+            connectionRequestService.respond(requestId, currentUser, accept);
             return ResponseEntity.ok(Map.of(
-                    "message", accept ?
-                            "Connection request accepted successfully" :
-                            "Connection request rejected successfully"
+                    "message", accept
+                            ? "Connection request accepted successfully"
+                            : "Connection request rejected successfully"
             ));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
-
-
-    @GetMapping("/pending/patient/{patientId}")
-    @Operation(
-            summary = "Get pending requests for patient",
-            description = "Get all pending connection requests for a patient"
-    )
-    public ResponseEntity<List<ConnectionRequest>> getPendingForPatient(@PathVariable Long patientId) {
-        try {
-            List<ConnectionRequest> requests = connectionRequestService.getPendingRequestsForPatient(patientId);
-            return ResponseEntity.ok(requests);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Collections.emptyList());
-        }
-    }
-
-    @RequirePermission(Permission.VIEW_ASSIGNED_PATIENTS)
-
-
-    @GetMapping("/pending/caregiver/{caregiverId}")
-    @Operation(
-            summary = "Get pending requests by caregiver",
-            description = "Get all pending connection requests sent by a caregiver"
-    )
-    public ResponseEntity<List<ConnectionRequest>> getPendingByCaregiver(@PathVariable Long caregiverId) {
-        try {
-            List<ConnectionRequest> requests = connectionRequestService.getPendingRequestsByCaregiver(caregiverId);
-            return ResponseEntity.ok(requests);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Collections.emptyList());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", e.getMessage()));
         }
     }
 }

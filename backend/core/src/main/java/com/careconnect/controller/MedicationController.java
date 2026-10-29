@@ -169,9 +169,9 @@ public class MedicationController {
     }
 
     // ================================================================
-    // 5. Hard delete medication (Caregiver-side)
+    // 5. Archive medication (Caregiver-side)
     // ================================================================
-    @RequirePermission(Permission.DELETE_PATIENTS)
+    @RequirePermission(Permission.MANAGE_MEDICATIONS)
 
     @DeleteMapping("/{patientId}/medications/{medicationId}/caregiver/{caregiverId}")
     public ResponseEntity<?> deleteMedicationByCaregiver(

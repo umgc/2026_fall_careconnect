@@ -1,0 +1,37 @@
+{
+  "source": "ORACLE_HEALTH",
+  "sourceRecordId": "synthetic-condition-1",
+  "clinicalStatus": "active",
+  "verificationStatus": "confirmed",
+  "severity": null,
+  "categories": [
+    {
+      "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+      "code": "problem-list-item",
+      "display": "Problem List Item",
+      "text": null
+    }
+  ],
+  "conditionCodes": [
+    {
+      "system": "http://snomed.info/sct",
+      "code": "38341003",
+      "display": "Hypertensive disorder, systemic arterial",
+      "text": "Synthetic hypertension"
+    }
+  ],
+  "conditionText": "Synthetic hypertension",
+  "bodySites": [],
+  "onsetType": "onsetDateTime",
+  "onsetValue": "2020-04-15",
+  "onsetPrecision": "DAY",
+  "abatementType": null,
+  "abatementValue": null,
+  "abatementPrecision": null,
+  "recordedDate": "2026-09-15T10:00:00Z",
+  "recordedDatePrecision": "INSTANT",
+  "encounterReference": "Encounter/synthetic-encounter-1",
+  "recorderReference": "Practitioner/synthetic-practitioner-1",
+  "recorderDisplay": "Synthetic Clinician",
+  "hiddenFromActiveList": false
+}

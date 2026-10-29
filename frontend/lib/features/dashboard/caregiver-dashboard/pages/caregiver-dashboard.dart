@@ -36,6 +36,7 @@ class CaregiverDashboard extends StatelessWidget {
 
     return Scaffold(
       appBar: DashboardAppHeader(
+        context: context,
         userName: user?.name ?? '',
         role: user?.role ?? '',
       ),

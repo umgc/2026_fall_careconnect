@@ -14,10 +14,13 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+@Tag("M3-REQ-16")
+@Tag("M3-REQ-19")
 class CernerResourceMapperTest {
   private final ObjectMapper json = new ObjectMapper();
   private final CernerResourceMapper mapper =

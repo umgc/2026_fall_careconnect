@@ -58,8 +58,8 @@ public class LinkManagementController {
 
         User currentUser = getCurrentUser();
 
-        // Only caregivers and admins can create temporary links
-        if (currentUser.getRole() != Role.CAREGIVER && currentUser.getRole() != Role.ADMIN) {
+        // Only admins link directly; caregivers send a connection request the patient accepts.
+        if (currentUser.getRole() != Role.ADMIN) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 

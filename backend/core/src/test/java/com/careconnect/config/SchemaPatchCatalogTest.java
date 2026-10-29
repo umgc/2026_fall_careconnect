@@ -47,7 +47,8 @@ class SchemaPatchCatalogTest {
                 "2607251300-ai-held-item-open-unique",
                 "2607251310-user-files-extracted-text",
                 "2607271430-ai-ask-conversation-share",
-                "2607271830-ask-ai-share-recipient-ocr-outbox");
+                "2607271830-ask-ai-share-recipient-ocr-outbox",
+                "2610071700-condition-detection");
     }
 
     @Test
@@ -155,5 +156,34 @@ class SchemaPatchCatalogTest {
                         SchemaPatchCatalog.PATCHES.stream()
                                 .map(SchemaPatchLedger.Patch::id)
                                 .toList());
+    }
+
+    /**
+     * Scenario: the condition-detection patch is run by the ledger runner, which cannot parse
+     * dollar-quoted blocks. Asserts the shape the worker's claim query and data integrity depend
+     * on (partial claim index, unique key, re-addable foreign key) and that the Flyway twin ships.
+     */
+    @Test
+    void conditionDetectionPatch_hasClaimIndexUniqueKeyAndIdempotentForeignKey() throws Exception {
+        // Arrange
+        final String sql = new ClassPathResource(
+                "db/schema-patches/2610071700_create_condition_detection.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+        final java.nio.file.Path moduleRelative = java.nio.file.Path.of(
+                "src/main/resources/db/migration/V2610071700__create_condition_detection.sql");
+        final java.nio.file.Path repoRelative = java.nio.file.Path.of(
+                "backend/core/src/main/resources/db/migration/V2610071700__create_condition_detection.sql");
+
+        // Assert
+        assertThat(sql)
+                .contains("WHERE state IN ('READY', 'RETRYABLE', 'CLAIMED', 'RUNNING')")
+                .contains("UNIQUE (call_id, model_id)")
+                .contains("DROP CONSTRAINT IF EXISTS fk_condition_flags_run")
+                .contains("ADD CONSTRAINT fk_condition_flags_run")
+                .doesNotContain("DO $$");
+        assertThat(sql.indexOf("DROP CONSTRAINT IF EXISTS fk_condition_flags_run"))
+                .isLessThan(sql.lastIndexOf("ADD CONSTRAINT fk_condition_flags_run"));
+        assertThat(java.nio.file.Files.exists(moduleRelative) || java.nio.file.Files.exists(repoRelative))
+                .as("Flyway twin V2610071700 exists").isTrue();
     }
 }

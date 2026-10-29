@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../config/theme/sentiment_colors.dart';
@@ -622,7 +623,8 @@ class _SentimentDashboardWidgetState extends State<SentimentDashboardWidget>
     IconData icon,
   ) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Sentiment Details',
         builder: (_) => _SentimentDetailScreen(
           channel: channel,
           icon: icon,

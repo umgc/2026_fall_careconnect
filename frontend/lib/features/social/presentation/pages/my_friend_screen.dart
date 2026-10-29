@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 
 import 'package:care_connect_app/config/env_constant.dart';
@@ -188,7 +189,8 @@ class _MyFriendsScreenState extends State<MyFriendsScreen> {
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(
+                          TitledMaterialPageRoute(
+                            title: 'Conversation',
                             builder: (_) => ChatRoomScreen(
                               peerUserId: contact.userId,
                               peerName: contact.name,

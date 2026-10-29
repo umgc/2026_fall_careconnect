@@ -168,29 +168,23 @@ final _defaultIntents = [
     requiresConfirmation: true,
     entityKey: 'person',
   ),
+  
   IntentDefinition(
     intentName: 'sos',
     displayLabel: 'SOS Emergency Alert',
     riskLevel: IntentRiskLevel.high,
     requiresConfirmation: true,
     handler: (Map<String, String> entities) async {
-      // Builds the emergency payload
-      final payload = {
-        'patientId':
-            'patient-123', // Stub: will eventually be current logged-in patient ID
-        'eventType': 'EMERGENCY_SOS',
-        'timestamp': DateTime.now()
-            .toUtc()
-            .toIso8601String(), // Precise UTC ISO-8601 timestamp
-        'location': entities['location'] ??
-            <String, dynamic>{}, // Fallback coordinates container
-        'isUrgent': true,
-      };
-
-      // Output proof of execution
-      print('SOS HANDLER EXECUTED: Dispatched emergency payload -> $payload');
+      // TODO: Replace with real emergency dispatch: 
+      // reveal contact associated with account that triggered the SOS, send alert to them.
+      //for now, show a debug message in the console.
+      if (kDebugMode) {
+        debugPrint('SOS emergency command triggered');
+      }
     },
   ),
+
+    
   IntentDefinition(
     intentName: 'start_video_call',
     displayLabel: 'Start Video Call',

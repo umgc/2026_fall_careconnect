@@ -1,0 +1,16 @@
+requirements: [M3-REQ-18]
+scenarios: [M3-SC-ENCOUNTER-003]
+origin: synthetic
+capturedAtUtc: null
+sandboxPersona: null
+requestPattern: GET {openBase}/Encounter?patient={syntheticPatientId}
+httpStatus: 200
+bundleEntryCount: 0
+nextLinkPresent: false
+derivedFrom: bundle-one-encounter.json
+changes: [removed all Bundle entries]
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.emptyBundlesAreValidSearchsets, TBD Encounter empty-Bundle test]
+expectedBehavior: returns a successful empty result without fabricating an Encounter
+contractDependency: final CareConnect empty-response shape pending OpenAPI approval

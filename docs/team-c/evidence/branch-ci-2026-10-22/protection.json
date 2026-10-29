@@ -1,0 +1,11 @@
+{
+  "fetched_utc": "2026-10-22T20:15:03.121147+00:00",
+  "endpoint": "repos/umgc/2026_fall_careconnect/branches/team-c-develop/protection",
+  "exit_code": 1,
+  "stderr": "gh: Not Found (HTTP 404)\n",
+  "response": {
+    "message": "Not Found",
+    "documentation_url": "https://docs.github.com/rest/branches/branch-protection#get-branch-protection",
+    "status": "404"
+  }
+}

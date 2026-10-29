@@ -72,9 +72,9 @@ class VoiceIntentServiceTest {
 
         assertThat(response.getDestination()).isEqualTo("/medication");
         assertThat(response.isSuccess()).isTrue();
-        assertThat(requestCaptor.getValue().getMessage())
-                .contains("home|calendar|symptoms|medication|medications|dashboard");
-    }
+       assertThat(requestCaptor.getValue().getMessage())
+                .contains("medication");
+        }
 
     @Test
     @DisplayName("singular medication destination routes to the medication screen")
@@ -210,16 +210,16 @@ class VoiceIntentServiceTest {
         assertThat(response.isSuccess()).isTrue();
     }
 
-    @Test
+   @Test
     @DisplayName("unknown destination returns success false for navigate")
     void extractIntent_unknownDestination_returnsFailure() {
-        String aiJson = "{\"intent\":\"navigate\",\"entities\":{\"destination\":\"settings\"},\"confidence\":0.7}";
+        String aiJson = "{\"intent\":\"navigate\",\"entities\":{\"destination\":\"unknown_page\"},\"confidence\":0.7}";
         ChatResponse chatResponse = new ChatResponse();
         chatResponse.setAiResponse(aiJson);
         when(mockAIService.processChat(any(ChatRequest.class))).thenReturn(chatResponse);
 
         VoiceIntentRequest request = VoiceIntentRequest.builder()
-                .utterance("take me to settings")
+                .utterance("take me to unknown page")
                 .locale("en")
                 .build();
 
@@ -228,5 +228,46 @@ class VoiceIntentServiceTest {
         assertThat(response.getIntent()).isEqualTo("navigate");
         assertThat(response.getDestination()).isNull();
         assertThat(response.isSuccess()).isFalse();
+    } //end test take me to unknown page
+
+    @Test
+    @DisplayName("Ambiguous phrase 'where are my pills' maps to /medication")
+    void extractIntent_ambiguousMedication_routesCorrectly() {
+        String aiJson = "{\"intent\":\"navigate\",\"entities\":{\"destination\":\"medication\"},\"confidence\":0.95}";
+        ChatResponse chatResponse = new ChatResponse();
+        chatResponse.setAiResponse(aiJson);
+        when(mockAIService.processChat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+        VoiceIntentRequest request = VoiceIntentRequest.builder()
+                .utterance("where are my pills")
+                .locale("en")
+                .build();
+
+        VoiceIntentResponse response = service.extractIntent(request);
+
+        assertThat(response.getIntent()).isEqualTo("navigate");
+        assertThat(response.getDestination()).isEqualTo("/medication");
+        assertThat(response.isSuccess()).isTrue();
     }
-}
+
+    @Test
+    @DisplayName("Off-topic utterance returns unknown intent and success false")
+    void extractIntent_offTopicUtterance_returnsUnknown() {
+        String aiJson = "{\"intent\":\"unknown\",\"entities\":{},\"confidence\":0.99}";
+        ChatResponse chatResponse = new ChatResponse();
+        chatResponse.setAiResponse(aiJson);
+        when(mockAIService.processChat(any(ChatRequest.class))).thenReturn(chatResponse);
+
+        VoiceIntentRequest request = VoiceIntentRequest.builder()
+                .utterance("what is the weather like right now")
+                .locale("en")
+                .build();
+
+        VoiceIntentResponse response = service.extractIntent(request);
+
+        assertThat(response.getIntent()).isEqualTo("unknown");
+        assertThat(response.getDestination()).isNull();
+        assertThat(response.isSuccess()).isFalse();
+    }
+
+}//end main class

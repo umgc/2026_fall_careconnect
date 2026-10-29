@@ -41,7 +41,7 @@ must not establish identity.
 | Source value | Current allergy output | Limit |
 | --- | --- | --- |
 | Resource ID | `sourceRecordId` | Missing ID skips the record. |
-| Source name | `CERNER` | Approve its relation to the shared registry name `ORACLE_HEALTH`. |
+| Source name | `ORACLE_HEALTH` | Adopted as the canonical persistence and normalized-record source identifier; verify the final public OpenAPI enum uses the same value. |
 | Substance text and first code | `substanceText`, `substanceCode` | Coding system and later codes are not in the DTO. |
 | Status | First clinical and verification code | Entered-in-error is excluded. |
 | Reaction | Text, or first coding display | Missing reactions yield an empty list. |

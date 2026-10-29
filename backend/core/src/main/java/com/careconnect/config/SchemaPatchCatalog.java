@@ -73,7 +73,10 @@ final class SchemaPatchCatalog {
                     "db/schema-patches/2607271430_create_ai_ask_conversation_share.sql"),
             new SchemaPatchLedger.Patch(
                     "2607271830-ask-ai-share-recipient-ocr-outbox",
-                    "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"));
+                    "db/schema-patches/2607271830_ask_ai_share_recipient_and_ocr_outbox.sql"),
+            new SchemaPatchLedger.Patch(
+                    "2610071700-condition-detection",
+                    "db/schema-patches/2610071700_create_condition_detection.sql"));
 
     private SchemaPatchCatalog() {
     }

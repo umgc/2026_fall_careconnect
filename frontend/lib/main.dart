@@ -19,6 +19,7 @@ import 'services/api_service.dart';
 import 'services/messaging_service.dart';
 import 'services/local_db/local_db_startup.dart';
 import 'config/theme/app_theme.dart';
+import 'config/theme/app_text_scaling.dart';
 import 'config/utils/responsive_utils.dart';
 import 'config/utils/web_utils.dart';
 import 'features/tasks/utils/task_type_manager.dart';
@@ -121,6 +122,7 @@ class _CareConnectAppWithErrorBoundaryState
     ErrorWidget.builder = (FlutterErrorDetails details) {
       // You can customize this error UI as needed
       return MaterialApp(
+        title: 'Application Error | CareConnect',
         home: Scaffold(
           body: Center(
             child: Padding(
@@ -314,7 +316,7 @@ class _CareConnectAppState extends State<CareConnectApp>
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      supportedLocales: AppLocalizations.supportedLocales,
+      supportedLocales: const <Locale>[Locale('en'), Locale('es')],
       //  set this to the chosen locale
       locale: localeProvider.locale,
 
@@ -362,7 +364,6 @@ class _CareConnectAppState extends State<CareConnectApp>
       routerConfig: appRouter,
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
-        final textScaleFactor = mediaQuery.textScaleFactor.clamp(0.8, 1.2);
         Widget updatedChild = child!;
         updatedChild = SafeArea(
           bottom: !ResponsiveUtils.isWeb,
@@ -370,12 +371,11 @@ class _CareConnectAppState extends State<CareConnectApp>
         );
         return MediaQuery(
           data: mediaQuery.copyWith(
-            textScaler: TextScaler.linear(textScaleFactor),
             devicePixelRatio: ResponsiveUtils.isWeb
                 ? mediaQuery.devicePixelRatio
                 : mediaQuery.devicePixelRatio.clamp(1.0, 3.0),
           ),
-          child: updatedChild,
+          child: AppTextScaling(router: appRouter, child: updatedChild),
         );
       },
     );

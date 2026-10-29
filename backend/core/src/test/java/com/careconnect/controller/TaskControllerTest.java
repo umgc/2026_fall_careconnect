@@ -1,8 +1,10 @@
 package com.careconnect.controller;
 
 import com.careconnect.dto.TaskDto;
+import com.careconnect.exception.AppException;
 import com.careconnect.model.Task;
 import com.careconnect.security.AuthorizationService;
+import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.TaskService;
 import com.careconnect.util.SecurityUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,11 +18,15 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -128,17 +134,18 @@ class TaskControllerTest {
 
         @Test
         @WithMockUser(username = "caregiver@test.com")
-        @DisplayName("Returns 404 when task is null")
+        @DisplayName("Returns 404 when task does not exist")
         void returns404WhenTaskMissing() throws Exception {
-            // Arrange
-            when(taskService.getTaskById(999L)).thenReturn(null);
+            // Match the real service: missing tasks throw a 404 exception.
+            when(taskService.getTaskById(999L))
+                .thenThrow(new AppException(HttpStatus.NOT_FOUND, "Task not found"));
 
-            // Act + Assert
-            mockMvc.perform(get("/v3/api/tasks/999"))
-                    .andExpect(status().isNotFound());
+            mockMvc.perform(get("/v3/api/tasks/999")).andExpect(status().isNotFound());
 
-            // Assert
             verify(taskService).getTaskById(999L);
+
+            // Lookup failed, so task authorization must never run.
+            verify(authorizationService, never()).requireTaskAccess(any(), any());
         }
     }
 
@@ -272,6 +279,69 @@ class TaskControllerTest {
 
             // Assert
             verify(taskService).deleteTask(999L);
+        }
+
+        @Test
+        @WithMockUser(username = "caregiver@test.com")
+        @DisplayName("Returns 403 and deletes nothing when the caller cannot access the task's patient")
+        void returns403WhenCallerCannotAccessTask() throws Exception {
+            // Arrange: an unlinked caregiver targets another patient's task
+            when(taskService.getTaskById(1L)).thenReturn(sampleTask);
+            doThrow(new UnauthorizedException("Caregiver is not assigned to patient 5"))
+                    .when(authorizationService).requireTaskAccess(any(), eq(sampleTask));
+
+            // Act + Assert
+            mockMvc.perform(delete("/v3/api/tasks/1").with(csrf()))
+                    .andExpect(status().isForbidden());
+
+            // Assert
+            verify(taskService, never()).deleteTask(anyLong());
+        }
+    }
+
+    @Nested
+    @DisplayName("Family members are read-only")
+    class ReadOnlyFamilyMember {
+
+        @Test
+        @WithMockUser(username = "family@test.com")
+        @DisplayName("POST returns 403 and creates nothing")
+        void createReturns403() throws Exception {
+            // Arrange: the patient check passes, the write check refuses
+            doThrow(new UnauthorizedException("read-only")).when(authorizationService).requireWriteAccess(any());
+
+            // Act + Assert
+            mockMvc.perform(post("/v3/api/tasks/patient/10").with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(sampleTaskDto)))
+                    .andExpect(status().isForbidden());
+            verify(taskService, never()).createTask(anyLong(), any(TaskDto.class));
+        }
+
+        @Test
+        @WithMockUser(username = "family@test.com")
+        @DisplayName("PUT returns 403 and changes nothing")
+        void updateReturns403() throws Exception {
+            when(taskService.getTaskById(1L)).thenReturn(sampleTask);
+            doThrow(new UnauthorizedException("read-only")).when(authorizationService).requireWriteAccess(any());
+
+            mockMvc.perform(put("/v3/api/tasks/1").with(csrf())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(sampleTaskDto)))
+                    .andExpect(status().isForbidden());
+            verify(taskService, never()).updateTask(anyLong(), any(TaskDto.class));
+        }
+
+        @Test
+        @WithMockUser(username = "family@test.com")
+        @DisplayName("DELETE returns 403 and deletes nothing")
+        void deleteReturns403() throws Exception {
+            when(taskService.getTaskById(1L)).thenReturn(sampleTask);
+            doThrow(new UnauthorizedException("read-only")).when(authorizationService).requireWriteAccess(any());
+
+            mockMvc.perform(delete("/v3/api/tasks/1").with(csrf()))
+                    .andExpect(status().isForbidden());
+            verify(taskService, never()).deleteTask(anyLong());
         }
     }
 }

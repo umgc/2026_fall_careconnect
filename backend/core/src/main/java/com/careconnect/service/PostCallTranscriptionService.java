@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -79,8 +80,11 @@ public class PostCallTranscriptionService {
   /** Maximum wall-clock time to wait for a Transcribe job to finish (ms). */
   private static final long MAX_WAIT_MS = 15 * 60_000L;
 
-  /** Source label for direct per-attendee KVS transcripts. */
-  private static final String KVS_TRANSCRIPT_SOURCE = "POST_CALL_KVS_ATTENDEE";
+  /**
+   * Source label for direct per-attendee KVS transcripts: the only segments whose actor user id
+   * is the speaker (live captions carry the uploader; the mixed-MP4 fallback carries none).
+   */
+  public static final String KVS_TRANSCRIPT_SOURCE = "POST_CALL_KVS_ATTENDEE";
 
   /** Source label for mixed MP4 transcripts used as fallback or completeness supplement. */
   private static final String MP4_TRANSCRIPT_SOURCE = "POST_CALL_MP4_MIXED";
@@ -416,30 +420,36 @@ public class PostCallTranscriptionService {
       return new KvsTranscriptionResult(List.of(), List.of(), 0);
     }
 
-    final List<CallAttendee> attendees =
-        callAttendeeRepository.findByCallId(callId).stream()
-            .filter(attendee -> attendee.getKvsStreamArn() != null)
-            .filter(attendee -> !attendee.getKvsStreamArn().isBlank())
-            .filter(attendee -> attendee.getUserId() != null)
-            .toList();
-    if (attendees.isEmpty()) {
+    // Each row is read only between its own join and leave: pool streams are reused across calls.
+    final List<AttendeeAudioWindows.Window> windows =
+        AttendeeAudioWindows.forCall(
+            callAttendeeRepository.findByCallId(callId).stream()
+                .filter(attendee -> attendee.getKvsStreamArn() != null)
+                .filter(attendee -> !attendee.getKvsStreamArn().isBlank())
+                .filter(attendee -> attendee.getUserId() != null)
+                .toList(),
+            rec.getStartedAt(),
+            rec.getEndedAt());
+    if (windows.isEmpty()) {
       if (log.isInfoEnabled()) {
         log.info("No KVS attendee stream mappings found for call {}; falling back to MP4", callId);
       }
       return new KvsTranscriptionResult(List.of(), List.of(), 0);
     }
     final List<AttendeeIdentity> attendeeIdentities =
-        attendees.stream()
+        windows.stream()
+            .map(AttendeeAudioWindows.Window::attendee)
             .map(attendee -> new AttendeeIdentity(attendee.getUserId(), roleLabel(attendee.getRole())))
             .toList();
     if (log.isInfoEnabled()) {
-      log.info("Processing {} KVS attendee streams for call {}", attendees.size(), callId);
+      log.info("Processing {} KVS attendee streams for call {}", windows.size(), callId);
     }
 
     final List<AttendeeSegments> pendingSegments = new ArrayList<>();
     try {
-      for (final CallAttendee attendee : attendees) {
-        final List<TranscriptSegmentInput> segments = transcribeSingleAttendee(callId, rec, attendee, start, end);
+      for (final AttendeeAudioWindows.Window window : windows) {
+        final CallAttendee attendee = window.attendee();
+        final List<TranscriptSegmentInput> segments = transcribeSingleAttendee(callId, rec, window);
         if (segments.isEmpty()) {
           if (log.isInfoEnabled()) {
             log.info(
@@ -525,19 +535,23 @@ public class PostCallTranscriptionService {
     return true;
   }
 
+  /**
+   * Transcribes one attendee window. The WAV starts at {@code window.from()}, so segment times are
+   * shifted back onto the recording timeline that the rest of the transcript uses.
+   */
   private List<TranscriptSegmentInput> transcribeSingleAttendee(
       final String callId,
       final CallRecording rec,
-      final CallAttendee attendee,
-      final Instant start,
-      final Instant end) throws Exception {
+      final AttendeeAudioWindows.Window window) throws Exception {
+    final CallAttendee attendee = window.attendee();
     Path rawPath = null;
     Path wavPath = null;
     try {
-      rawPath =
+      final KvsAudioClip clip =
           kvsArchivedMediaExportService.exportAttendeeRange(
-              attendee.getKvsStreamArn(), start, end);
-      wavPath = kvsAudioTranscodeService.toWav(rawPath);
+              attendee.getKvsStreamArn(), window.fromInstant(), window.toInstant());
+      rawPath = clip.file();
+      wavPath = kvsAudioTranscodeService.toWav(clip);
       final String wavKey = buildAttendeeWavKey(rec, attendee);
       s3Client.putObject(
           PutObjectRequest.builder()
@@ -568,15 +582,39 @@ public class PostCallTranscriptionService {
       if (!pollForCompletion(jobName)) {
         throw new IllegalStateException("Attendee Transcribe job did not complete: " + jobName);
       }
-      return downloadAndParseSingleAttendee(
-          rec.getS3Bucket(),
-          outputKey,
-          rec.getStartedAt(),
-          roleLabel(attendee.getRole()));
+      final List<TranscriptSegmentInput> segments =
+          downloadAndParseSingleAttendee(
+              rec.getS3Bucket(),
+              outputKey,
+              rec.getStartedAt(),
+              roleLabel(attendee.getRole()));
+      return shiftSegments(
+          segments,
+          Duration.between(rec.getStartedAt(), window.from()).toMillis(),
+          rec.getStartedAt());
     } finally {
       deleteTempFile(rawPath);
       deleteTempFile(wavPath);
     }
+  }
+
+  /** Moves window-relative segment times onto the recording timeline. */
+  private static List<TranscriptSegmentInput> shiftSegments(
+      final List<TranscriptSegmentInput> segments,
+      final long offsetMs,
+      final LocalDateTime recordingStartedAt) {
+    if (offsetMs == 0L) {
+      return segments;
+    }
+    return segments.stream()
+        .map(segment -> buildSegment(
+            segment.speakerLabel(),
+            segment.text(),
+            segment.startMs() == null ? null : segment.startMs() + offsetMs,
+            segment.endMs() == null ? null : segment.endMs() + offsetMs,
+            recordingStartedAt,
+            segment.source()))
+        .toList();
   }
 
   private void startAttendeeTranscribeJob(

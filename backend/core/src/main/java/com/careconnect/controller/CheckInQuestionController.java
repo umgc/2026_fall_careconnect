@@ -66,7 +66,7 @@ public class CheckInQuestionController {
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
 
         String uri = request.getRequestURI();
         String contextPath = request.getContextPath();
@@ -91,7 +91,7 @@ public class CheckInQuestionController {
             @PathVariable("patientId") Long patientId
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         return ResponseEntity.ok(checkInSnapshotService.listCheckInsForPatient(patientId));
     }
 
@@ -112,7 +112,7 @@ public class CheckInQuestionController {
             @RequestParam(name = "size", defaultValue = "20") Integer size
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         return ResponseEntity.ok(
                 checkInSnapshotService.listCheckInsForPatientFiltered(
                         patientId,
@@ -135,7 +135,7 @@ public class CheckInQuestionController {
             @PathVariable("patientId") Long patientId
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         Optional<CheckInSummaryDTO> latest = checkInSnapshotService.getLatestCheckInForPatient(patientId);
         return latest.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.noContent().build());
     }
@@ -151,7 +151,7 @@ public class CheckInQuestionController {
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         return ResponseEntity.ok(checkInSnapshotService.getCheckInDetail(checkInId));
     }
 
@@ -166,7 +166,8 @@ public class CheckInQuestionController {
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
+        authorizationService.requireWriteAccess(currentUser);
         return ResponseEntity.ok(checkInSnapshotService.markCheckInReviewed(checkInId, currentUser));
     }
 
@@ -180,7 +181,7 @@ public class CheckInQuestionController {
             @Valid @RequestBody CheckInCreateRequestDTO request
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, request.patientId());
+        authorizationService.requirePatientRecordAccess(currentUser, request.patientId());
         CheckInCreateResponseDTO created = checkInSnapshotService.createCheckInWithSnapshot(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -197,7 +198,7 @@ public class CheckInQuestionController {
     ) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
         Long patientId = checkInSnapshotService.getPatientIdForCheckIn(checkInId);
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
 
         SubmitAnswersResponseDTO result = answerSubmissionService.submitAnswers(checkInId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);

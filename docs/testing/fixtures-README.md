@@ -9,6 +9,14 @@ input, and wrong-patient rejection without a source call or database. It does
 not approve the public API or verify the original sandbox captures. Existing
 fixture metadata and authorship are unchanged. See [the review](team-c-docs-fixtures-review-2026-10-17.md).
 
+The existing `cerner/expected/allergy-mapper.json` path is a compatibility artifact consumed by the current test. New paired expected outputs should use the standard top-level `expected/<resource>/` layout below. Move or split the compatibility artifact only in the same change that updates its consuming test; do not duplicate two files and allow them to drift.
+
+As of October 21, `expected/condition/bundle-one-condition.expected.json` and
+`expected/encounter/bundle-one-encounter.expected.json` are executable **candidate** outputs, not
+approved contract artifacts. Their sidecars record `approvalStatus: candidate` and no contract
+reference. They make the current mapper/DTO assumptions reviewable and must be revised or promoted
+only after the canonical-model and OpenAPI owners approve those assumptions.
+
 ## Fixture root
 
 Place backend M3 fixtures under the repository's Spring Boot test-resource root:
@@ -26,6 +34,12 @@ backend/core/src/test/resources/
         bundle-page-1-with-next-link.json
       patient/
         ...
+      condition/
+        ...
+      encounter/
+        ...
+      appointment/
+        ...
     oauth/
       token-success.json
       token-error-invalid-grant.json
@@ -38,7 +52,7 @@ backend/core/src/test/resources/
     __files/
 ```
 
-Create files only when a test consumes them. Avoid empty placeholder directories. Java test helpers should follow `TESTING_NORMS.md` and live under `backend/core/src/test/java/com/careconnect/testsupport/fixtures` when shared.
+Create a fixture before implementation only when it has an assigned requirement/scenario and an immediate mapper/client pairing plan. Record the planned consumer in metadata, then replace it with the exact test method when implementation lands. Avoid unused speculative fixtures and empty placeholder directories. Java test helpers should follow `TESTING_NORMS.md` and live under `backend/core/src/test/java/com/careconnect/testsupport/fixtures` when shared.
 
 ## Purpose by directory
 
@@ -49,6 +63,22 @@ Create files only when a test consumes them. Avoid empty placeholder directories
 | `expected/` | Paired canonical mapper outputs; API outputs are not final until OpenAPI 1.0 approval |
 | `wiremock/mappings/` | WireMock stub definitions for success and failure flows |
 | `wiremock/__files/` | Response bodies returned by WireMock stubs |
+
+JSON files contain request/response bodies that application or test code parses. Sidecar `.meta.yaml` files contain human-readable fixture provenance, sanitization, scenario IDs, and consumers; they are not expected application responses and are not sent to Cerner or CareConnect.
+
+## Five-resource fixture backlog
+
+Create only the files consumed by an implemented test or prepared for an immediate developer/QA pairing session. The minimum planned set is:
+
+| Resource/boundary | First fixtures to capture or synthesize | Expected-output status |
+|---|---|---|
+| Patient | complete authorized read; missing optional fields; wrong patient/resource type | Pair mapper inputs after canonical field rules are approved. |
+| AllergyIntolerance | current complete, empty, missing reaction, entered-in-error, text-only, malformed, and paging cases | Current compatibility expectation exists; split into same-base-name pairs when mapper contract is approved. |
+| Condition | complete result; empty Bundle; missing optional onset/encounter; unknown status/category; malformed entry; two-page search | Complete-result candidate pair exists; approval and remaining pairs are pending. |
+| Encounter | complete result; empty Bundle; missing participant/end; malformed period/linkage; two-page search | Complete-result candidate pair exists; approval and remaining pairs are pending. |
+| Appointment | complete result; proposed/no-times; empty Bundle; bounded date search; two-page search | Existing compatibility fixture is limited; paired canonical output remains pending. |
+| OAuth | token success with unmistakably fake token; `invalid_token`; `invalid_grant`; insufficient scope; denied/invalid launch | Behavioral assertions rather than normalized clinical output. |
+| Transport | timeout; 429 with `Retry-After`; 5xx then success/failure; malformed JSON; cross-host/looping next link | Behavioral assertions rather than normalized clinical output. |
 
 ## Naming convention
 
@@ -102,6 +132,8 @@ consumers:
   - TBD test method
 ```
 
+Use [fixture-meta-template.yaml](fixture-meta-template.yaml) when creating a new sidecar so the five-resource fixture set records the same fields consistently.
+
 Do not add contract-dependent expected API JSON before OpenAPI 1.0 approval. A source FHIR fixture may be created now; its expected canonical file should be added or updated after the canonical model is approved and pinned.
 
 ## Synthetic data and sanitization rules
@@ -127,6 +159,16 @@ git diff --cached -- backend/core/src/test/resources
 ```
 
 Matches in intentional synthetic OAuth field names still require a human value review.
+
+## Sandbox capture workflow
+
+1. Use the approved secure sandbox and a known synthetic patient. Keep the provider or patient persona consistent across authorization, token, audience, and FHIR base.
+2. Send a read-only request for one resource case. For Appointment, include an approved bounded date or request-period range.
+3. Record the HTTP status, UTC capture time, persona/base alias, resource/search pattern, Bundle entry count, and whether a next link was present. Never record a bearer value.
+4. Save a working copy outside Git, remove headers/tokens/cookies and replace stable patient, provider, tenant, request, and free-text identifiers not required by the case.
+5. Validate that the sanitized JSON still parses and retains the exact structure needed by the scenario.
+6. Save the JSON in the resource directory and add the `.meta.yaml` sidecar. A second reviewer verifies sanitization before commit.
+7. Pair with an expected output only after the canonical rule is approved. Name the consuming test and traceability row before merging.
 
 ## Expected-output rules
 
@@ -159,3 +201,5 @@ Matches in intentional synthetic OAuth field names still require a human value r
 - [ ] Contract-dependent fields cite the approved OpenAPI commit/checksum.
 - [ ] At least one named automated test consumes the fixture.
 - [ ] No live network call is required outside the documented manual smoke test.
+
+Track planned and completed fixture work in [cerner-fixture-capture-register.md](cerner-fixture-capture-register.md). Use [cerner-secure-sandbox-smoke-checklist.md](cerner-secure-sandbox-smoke-checklist.md) for the separate manual live check.

@@ -1,0 +1,65 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-appointment-bundle-1",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/Appointment?patient=synthetic-patient-1&-date-or-req-period=ge2010-01-01T00:00:00Z&-date-or-req-period=lt2027-01-01T00:00:00Z"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://example.test/fhir/Appointment/synthetic-appointment-1",
+      "resource": {
+        "resourceType": "Appointment",
+        "id": "synthetic-appointment-1",
+        "meta": {
+          "versionId": "synthetic-appointment-version-1",
+          "lastUpdated": "2026-09-20T12:00:00Z"
+        },
+        "status": "booked",
+        "serviceType": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "185389009",
+                "display": "Follow-up visit"
+              }
+            ],
+            "text": "Synthetic follow-up visit"
+          }
+        ],
+        "start": "2026-10-15T14:00:00Z",
+        "end": "2026-10-15T14:30:00Z",
+        "requestedPeriod": [
+          {
+            "start": "2026-10-15T14:00:00Z",
+            "end": "2026-10-15T14:30:00Z"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "reference": "Patient/synthetic-patient-1"
+            },
+            "required": "required",
+            "status": "accepted"
+          },
+          {
+            "actor": {
+              "reference": "Practitioner/synthetic-practitioner-1",
+              "display": "Synthetic Clinician"
+            },
+            "required": "required",
+            "status": "accepted"
+          }
+        ]
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

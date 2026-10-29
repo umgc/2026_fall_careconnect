@@ -1,3 +1,5 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 
@@ -16,6 +18,7 @@ class DefaultAppHeader extends StatelessWidget implements PreferredSizeWidget {
         children: [
           if (showBackButton)
             IconButton(
+              tooltip: MaterialLocalizations.of(context).backButtonTooltip,
               onPressed: () => Navigator.pop(context),
               icon: const Icon(Icons.arrow_back),
             )
@@ -25,15 +28,19 @@ class DefaultAppHeader extends StatelessWidget implements PreferredSizeWidget {
             child: Center(
               child: Image.asset(
                 'assets/images/CareConnectLogo.png',
+                semanticLabel: 'CareConnect',
                 height: 32,
               ),
             ),
           ),
           IconButton(
+            tooltip: AppLocalizations.of(context)?.settings ?? 'Settings',
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const SettingsPage()),
+                TitledMaterialPageRoute(
+                  title: 'Settings',
+                  builder: (context) => const SettingsPage()),
               );
             },
             icon: Icon(

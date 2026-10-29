@@ -1,0 +1,19 @@
+requirements: [M3-REQ-06, M3-REQ-17]
+scenarios: [M3-SC-CONDITION-004]
+origin: derived
+capturedAtUtc: 2026-10-21T18:48:00Z
+sandboxPersona: open
+requestPattern: GET {openBase}/Condition/{documentedSyntheticConditionId}
+httpStatus: 200
+bundleEntryCount: 1
+nextLinkPresent: false
+derivedFrom: direct open-sandbox Condition read whose subject was approved synthetic alias open-patient-b
+changes:
+  - wrapped the direct Condition in a deterministic searchset Bundle
+  - replaced patient, condition, encounter, Bundle, clinical text, and URL values
+  - retained the entered-in-error verification shape and absent clinical status
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, TBD Condition entered-in-error mapper test]
+expectedBehavior: follows the approved exclusion or isolation rule and never presents the record as an active confirmed condition
+contractDependency: Condition entered-in-error mapping rule requires team approval

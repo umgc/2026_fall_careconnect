@@ -48,8 +48,8 @@ public class CaregiverPatientLinkController {
 
         User currentUser = getCurrentUser();
 
-        // Only admins and the caregiver themselves can create links
-        if (currentUser.getRole() != Role.ADMIN && !currentUser.getId().equals(caregiverId)) {
+        // Only admins link directly; caregivers send a connection request the patient accepts.
+        if (currentUser.getRole() != Role.ADMIN) {
             throw new AppException(HttpStatus.FORBIDDEN, "Access denied");
         }
 

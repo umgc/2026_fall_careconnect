@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/analytics/analytics_page.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
+Widget _analyticsApp(Widget child) => MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: child,
+    );
 void main() {
   group('AI Analytics Integration Tests', () {
     testWidgets('AnalyticsPage contains loading state initially', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(home: AnalyticsPage(patientId: 123)),
+        _analyticsApp(const AnalyticsPage(patientId: 123)),
       );
 
       // Don't use pumpAndSettle — it times out due to ongoing animations.
@@ -23,7 +30,7 @@ void main() {
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(home: AnalyticsPage(patientId: 123)),
+        _analyticsApp(const AnalyticsPage(patientId: 123)),
       );
 
       // Pump to trigger initial frame
@@ -48,21 +55,22 @@ void main() {
 
     testWidgets('AnalyticsPage shows Scaffold', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: AnalyticsPage(patientId: 123)),
+        _analyticsApp(const AnalyticsPage(patientId: 123)),
       );
       expect(find.byType(Scaffold), findsWidgets);
     });
 
     testWidgets('AnalyticsPage shows AppBar', (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: AnalyticsPage(patientId: 123)),
+        _analyticsApp(const AnalyticsPage(patientId: 123)),
       );
       expect(find.byType(AppBar), findsOneWidget);
     });
 
-    testWidgets('AnalyticsPage renders with different patientId', (WidgetTester tester) async {
+    testWidgets('AnalyticsPage renders with different patientId',
+        (WidgetTester tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: AnalyticsPage(patientId: 456)),
+        _analyticsApp(const AnalyticsPage(patientId: 456)),
       );
       expect(find.byType(AnalyticsPage), findsOneWidget);
     });

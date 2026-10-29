@@ -1,5 +1,6 @@
 package com.careconnect.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -34,9 +35,15 @@ public class User {
     @Column(unique = true, nullable = false)
     private String email;
 
+    // Credentials never leave the server. Patient, Caregiver and ConnectionRequest
+    // embed User, so without this every endpoint returning one of them served these
+    // fields; ignoring them on input too stops a password being set through a
+    // request body such as PUT /v1/api/patients/{id}.
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
+    @JsonIgnore
     @Column(name = "password_hash")
     private String passwordHash;
 
@@ -59,6 +66,7 @@ public class User {
     @Column(name = "email_verified", nullable = false)
     private Boolean isVerified = false;
 
+    @JsonIgnore
     private String verificationToken;
 
     @Column(name = "payment_customer_id")

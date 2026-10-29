@@ -4,9 +4,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.careconnect.service.ai.RetrievalRecordChangeListener;
+
 import io.micrometer.common.lang.Nullable;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -48,6 +51,7 @@ import lombok.Setter;
 @Builder
 @Entity
 @Table(name = "tasks")
+@EntityListeners(RetrievalRecordChangeListener.class)
 public class Task {
 
     /**

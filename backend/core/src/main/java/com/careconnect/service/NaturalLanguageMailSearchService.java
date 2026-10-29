@@ -212,7 +212,7 @@ public class NaturalLanguageMailSearchService {
             final Long patientId,
             final String query,
             final int limit) throws UnauthorizedException, ForbiddenScopeException {
-        authorizationService.requirePatientAccess(caller, patientId);
+        authorizationService.requirePatientRecordAccess(caller, patientId);
         final String normalizedQuery = query == null ? "" : query.trim();
         if (normalizedQuery.isBlank()) {
             return new NaturalLanguageMailSearchResponse(patientId, "", List.of(), 0, List.of());

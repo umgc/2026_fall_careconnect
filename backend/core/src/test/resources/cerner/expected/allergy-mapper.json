@@ -6,7 +6,7 @@
     "bundle-entered-in-error.json": [],
     "bundle-missing-reaction.json": [
       {
-        "source": "CERNER",
+        "source": "ORACLE_HEALTH",
         "sourceRecordId": "synthetic-missing-reaction-allergy",
         "substanceText": "Atrophic-hyperplastic gastritis",
         "substanceCode": "3308008",
@@ -19,7 +19,7 @@
     ],
     "bundle-one-active-confirmed-allergy.json": [
       {
-        "source": "CERNER",
+        "source": "ORACLE_HEALTH",
         "sourceRecordId": "synthetic-active-allergy",
         "substanceText": "aspirin",
         "substanceCode": "1191",
@@ -34,7 +34,7 @@
     ],
     "bundle-text-only-substance.json": [
       {
-        "source": "CERNER",
+        "source": "ORACLE_HEALTH",
         "sourceRecordId": "synthetic-text-only-allergy",
         "substanceText": "Sulfamethoxazole",
         "substanceCode": null,
@@ -49,7 +49,7 @@
     ],
     "bundle-three-allergies.json": [
       {
-        "source": "CERNER",
+        "source": "ORACLE_HEALTH",
         "sourceRecordId": "synthetic-allergy-medication-1",
         "substanceText": "amoxapine",
         "substanceCode": "722",
@@ -62,7 +62,7 @@
         ]
       },
       {
-        "source": "CERNER",
+        "source": "ORACLE_HEALTH",
         "sourceRecordId": "synthetic-allergy-environment-1",
         "substanceText": "Saccharin",
         "substanceCode": "27138006",
@@ -76,7 +76,7 @@
         ]
       },
       {
-        "source": "CERNER",
+        "source": "ORACLE_HEALTH",
         "sourceRecordId": "synthetic-allergy-food-1",
         "substanceText": "Mustard",
         "substanceCode": "51905005",

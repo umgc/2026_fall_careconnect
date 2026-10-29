@@ -186,6 +186,7 @@
   "login_e2eEncrypted": "Cifrado de extremo a extremo",
   "login_wcagAACompliant": "Cumple con WCAG AA",
   "login_loginFailedError": "Error al iniciar sesión",
+  "login_invalidCredentials": "El nombre de usuario o la contraseña son incorrectos. Revísalos e inténtalo de nuevo.",
 
   "voicecommand_wakeWordError": "Error de inicialización de la palabra de activación",
   "voicecommand_voiceCommandsUnavailable": "Reconocimiento de voz no disponible",
@@ -1304,6 +1305,28 @@
     "placeholders": {
       "patient": {"type": "String"}
     }
-  }
-
+  },
+  "healthEventDetailsTitle": "Detalles del evento de salud",
+  "healthDataDate": "Fecha",
+  "healthEventDetailsSource": "De dónde proviene",
+  "healthDataRecordTypeMedication": "Medicamento",
+  "healthDataRecordTypeCondition": "Afección",
+  "healthDataRecordTypeAllergy": "Alergia",
+  "healthDataRecordTypeVisit": "Visita",
+  "healthDataRecordTypeClinicalRecord": "Registro clínico",
+  "healthDataRecordTypeClaimService": "Reclamación / Servicio",
+  "healthDataRecordTypeRecord": "Registro",
+  "analyticsPatientAnalytics": "Análisis del paciente",
+  "analyticsRetry": "Reintentar",
+  "analyticsAskAiTooltip": "Preguntar a la IA sobre los análisis",
+  "analyticsDownloadCsv": "Descargar CSV",
+  "analyticsDownloadPdf": "Descargar PDF",
+  "analyticsOverview": "Resumen de análisis",
+  "analyticsMetricsAndTrends": "Métricas y tendencias de salud del paciente",
+  "analyticsTimeRange": "Intervalo de tiempo:",
+  "analyticsHealthSummary": "Resumen de salud",
+  "analyticsLastDaysShort": "Últimos {days} d",
+  "analyticsLastDaysOverview": "Resumen de los últimos {days} días",
+  "analyticsDetailedCharts": "Gráficos detallados",
+  "analyticsLoadingData": "Cargando datos de análisis..."
 }
