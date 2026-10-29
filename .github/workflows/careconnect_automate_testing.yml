@@ -137,8 +137,26 @@ jobs:
           fi
       - name: Flutter devices
         run: flutter devices
+      # Run each file in its own `flutter test` process. Running the whole
+      # directory in one invocation launches the desktop app once per file, and
+      # every launch after the first fails with "Error waiting for a debug
+      # connection: The log reader stopped unexpectedly" (Flutter desktop limitation).
       - name: Run integration and E2E tests on Windows desktop
-        run: flutter test integration_test/ -d windows --reporter expanded
+        run: |
+          failed=()
+          for test_file in integration_test/*_test.dart; do
+            echo "::group::$test_file"
+            if ! flutter test "$test_file" -d windows --reporter expanded; then
+              failed+=("$test_file")
+            fi
+            # Make sure the previous app instance is gone before the next launch.
+            taskkill //F //IM care_connect_app.exe > /dev/null 2>&1 || true
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -ne 0 ]; then
+            printf '::error::Integration test failed: %s\n' "${failed[@]}"
+            exit 1
+          fi
 
   create-pull-request:
     name: Open PR to develop (manual opt-in)
