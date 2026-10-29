@@ -142,6 +142,7 @@ extension TaskCopyWith on Task {
     int? id,
     String? name,
     String? description,
+    int? createdAt,
     DateTime? date,
     TimeOfDay? timeOfDay,
     int? assignedPatientId,
@@ -151,11 +152,14 @@ extension TaskCopyWith on Task {
     int? count,
     List<bool>? daysOfWeek,
     String? taskType,
+    bool? applyToSeries,
+    int? parentTaskId,
   }) {
     return Task(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
+      createdAt: createdAt ?? this.createdAt,
       date: date ?? this.date,
       timeOfDay: timeOfDay ?? this.timeOfDay,
       assignedPatientId: assignedPatientId ?? this.assignedPatientId,
@@ -166,6 +170,8 @@ extension TaskCopyWith on Task {
       count: count ?? this.count,
       daysOfWeek: daysOfWeek ?? this.daysOfWeek,
       taskType: taskType ?? this.taskType,
+      applyToSeries: applyToSeries ?? this.applyToSeries,
+      parentTaskId: parentTaskId ?? this.parentTaskId,
     );
   }
 }

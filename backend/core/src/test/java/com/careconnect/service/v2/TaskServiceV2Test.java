@@ -1422,7 +1422,7 @@ class TaskServiceV2Test {
 
                 service.updateTask(1L, dto);
 
-                assertThat(parentTask.getTaskInterval()).isEqualTo(1); // restored back
+                assertThat(parentTask.getTaskInterval()).isEqualTo(3);
             }
 
             @Test
@@ -1444,7 +1444,7 @@ class TaskServiceV2Test {
 
                 service.updateTask(1L, dto);
 
-                assertThat(parentTask.getDoCount()).isEqualTo(5); // restored
+                assertThat(parentTask.getDoCount()).isEqualTo(10);
             }
 
             @Test
@@ -1468,8 +1468,9 @@ class TaskServiceV2Test {
 
                 service.updateTask(1L, dto);
 
-                // Should go through the weekly daysChanged branch (save at line 282 + save at line 345)
-                verify(taskRepository, times(2)).save(any(Task.class));
+                assertThat(parentTask.getDaysOfWeek())
+                        .isEqualTo("[true,true,true,false,false,false,false]");
+                verify(taskRepository).save(parentTask);
             }
 
             @Test

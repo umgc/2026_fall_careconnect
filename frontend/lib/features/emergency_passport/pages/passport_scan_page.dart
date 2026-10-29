@@ -263,8 +263,7 @@ class _PassportScanPageState extends State<PassportScanPage> {
 
   Widget _allergy(PassportAllergy a) {
     final severity = severityLabel(a.severity);
-    final serious =
-        a.severity == 'SEVERE' || a.severity == 'LIFE_THREATENING';
+    final serious = a.severity == 'SEVERE' || a.severity == 'LIFE_THREATENING';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       // DEF-EMG-10: at large text sizes the badge wraps inside its share of
@@ -420,8 +419,8 @@ class _PassportScanPageState extends State<PassportScanPage> {
                       side: const BorderSide(color: _muted),
                     ),
                     onPressed: _load,
-                    child: const Text('Try again',
-                        style: TextStyle(fontSize: 16)),
+                    child:
+                        const Text('Try again', style: TextStyle(fontSize: 16)),
                   ),
                 ),
               ],
@@ -481,8 +480,8 @@ class _PassportScanPageState extends State<PassportScanPage> {
             onPressed: onPressed,
             icon: Icon(icon),
             label: Text(label,
-                style: const TextStyle(
-                    fontSize: 17, fontWeight: FontWeight.w700)),
+                style:
+                    const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
           ),
         ),
       );

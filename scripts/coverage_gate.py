@@ -16,7 +16,9 @@ Usage:
 Only changed lines are scored, so a small edit to a large, poorly covered
 file is judged on the edit, and a file whose diff only deletes lines is not
 scored at all. Lines the coverage tool does not instrument (comments, blank
-lines, declarations) are ignored.
+lines, declarations) are ignored. A Dart file whose before/after versions
+produce identical output from the Dart formatter is also ignored; the gate
+still scores every changed line if that file has any substantive edit.
 
 Files listed in scripts/test-exemptions.txt, and files with no executable
 code, are skipped. A changed source file missing from its coverage report
@@ -28,7 +30,10 @@ Exit codes:
 """
 
 import argparse
+import json
+import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -135,6 +140,61 @@ def check_diff_coverage(
     return failures
 
 
+def is_formatter_only_dart_change(file_path: str, diff_base: str, repo_root: str) -> bool:
+    """Skip only a whole-file Dart diff proven equivalent by the installed formatter.
+
+    Git's whitespace-ignore options also ignore whitespace *inside string literals*, so
+    they are not safe evidence that a source change is formatting-only. A new file,
+    formatter error, or missing Dart SDK must fail closed and retain normal coverage.
+    """
+    if not (file_path.startswith("frontend/lib/") and file_path.endswith(".dart")):
+        return False
+
+    before = subprocess.run(
+        ["git", "show", f"{diff_base}:{file_path}"],
+        cwd=repo_root, capture_output=True, check=False,
+    )
+    if before.returncode != 0:  # New file, or an invalid base/path.
+        return False
+    try:
+        after = (Path(repo_root) / file_path).read_bytes()
+    except OSError:
+        return False
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="careconnect-dart-format-") as temp_dir:
+            formatted = []
+            for name, source in (("before", before.stdout), ("after", after)):
+                source_path = Path(temp_dir) / f"{name}.dart"
+                source_path.write_bytes(source)
+                result = subprocess.run(
+                    ["dart", "format", "--output=json", str(source_path)],
+                    cwd=repo_root, capture_output=True, text=True, check=False,
+                    timeout=30,
+                )
+                if result.returncode != 0:
+                    return False
+                formatted.append(json.loads(result.stdout)["source"])
+            return formatted[0] == formatted[1]
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        return False
+
+
+def exclude_formatter_only_failures(
+    failures: list[tuple[str, float, int, int]], diff_base: str, repo_root: str
+) -> tuple[list[tuple[str, float, int, int]], list[str]]:
+    """Remove only formatter-proven Dart files from coverage failures."""
+    remaining = []
+    skipped = []
+    for failure in failures:
+        file_path = failure[0]
+        if is_formatter_only_dart_change(file_path, diff_base, repo_root):
+            skipped.append(file_path)
+        else:
+            remaining.append(failure)
+    return remaining, skipped
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -177,6 +237,11 @@ def main():
     failures = check_diff_coverage(
         changed, added, {**jacoco, **lcov}, threshold, args.repo_root, exemptions
     )
+    failures, formatter_only = exclude_formatter_only_failures(
+        failures, args.diff_base, args.repo_root
+    )
+    for file_path in formatter_only:
+        print(f"Skipping formatter-only Dart changes: {file_path}")
 
     if not failures:
         print(f"✅ Changed lines in every changed source file meet the {threshold:.0%} threshold.")

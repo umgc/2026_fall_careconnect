@@ -18,6 +18,7 @@ final class ClinicalEntityExtractor {
     private static final Pattern TOKEN = Pattern.compile(
             "[<>]=?|\\b\\d+(?:\\.\\d+)?%|\\b\\d+(?:\\.\\d+)?\\b|[\\p{L}\\p{N}]+",
             Pattern.UNICODE_CHARACTER_CLASS);
+    private static final Pattern ORDINAL_DAY = Pattern.compile("(\\d{1,2})(?:st|nd|rd|th)");
     private static final Set<String> SHORT_CLINICAL = Set.of(
             "bp", "hr", "inr", "a1c", "o2", "spo2", "bmi", "wbc", "rbc", "hgb", "hct",
             "egfr", "ldl", "hdl", "tsh");
@@ -36,7 +37,7 @@ final class ClinicalEntityExtractor {
             "had", "has", "have", "is", "may", "might", "must", "shall", "should",
             "was", "were", "will", "would");
     private static final Set<String> NON_ENTITY_STOP = Set.of(
-            "about", "and", "compare", "for", "from", "how", "my", "of", "or",
+            "about", "and", "compare", "for", "from", "how", "my", "need", "needs", "needed", "of", "or",
             "please", "show", "tell", "that", "the", "these", "this", "what",
             "when", "where", "which", "with", "your");
     /**
@@ -51,7 +52,11 @@ final class ClinicalEntityExtractor {
             "latest", "level", "levels", "list", "medication", "medications",
             "medicine", "medicines", "meds", "most", "newest", "now", "patient",
             "pain", "recent", "recently", "record", "records", "status", "tablet",
-            "tablets", "taking", "today", "update", "updates");
+            "tablets", "take", "takes", "taking", "today", "update", "updates",
+            // Task wording: a question about "my tasks" or "my schedule" names the
+            // record kind, not a specific clinical entity the quote must contain.
+            "task", "tasks", "schedule", "scheduled", "reminder", "reminders", "due",
+            "upcoming", "pending", "remaining", "outstanding", "incomplete");
 
     private ClinicalEntityExtractor() {
     }
@@ -121,6 +126,11 @@ final class ClinicalEntityExtractor {
         }
         if ("a1c".equals(token) || "hba1c".equals(token)) {
             return "a1c";
+        }
+        // "October 19th" asks about a date written "October 19" in records.
+        final Matcher ordinal = ORDINAL_DAY.matcher(token);
+        if (ordinal.matches()) {
+            return ordinal.group(1);
         }
         return token;
     }

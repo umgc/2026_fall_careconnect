@@ -13,6 +13,7 @@ class MedicationAppHeader extends StatelessWidget
       child: Row(
         children: [
           IconButton(
+            tooltip: MaterialLocalizations.of(context).backButtonTooltip,
             onPressed: () => Navigator.pop(context),
             icon: Icon(
               Icons.arrow_back,

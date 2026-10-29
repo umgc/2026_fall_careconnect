@@ -21,6 +21,14 @@ Parameters:
     Type: String
     Description: Full ECR image URI including tag
 
+  # Full ECR image URI (with tag) for the AI condition detection (DAM) inference sidecar.
+  # Leave empty to run without it: the task keeps its single container and voice
+  # screening (depression/anxiety) is switched off; transcript screening still runs.
+  SidecarImageUri:
+    Type: String
+    Default: ''
+    Description: Full ECR image URI including tag for the DAM sidecar, or empty to omit it
+
   # Spring profile: use prod for cfdemo/staging/prod (SSM, SendGrid, AI); dev for local cloud experiments.
   SpringProfile:
     Type: String
@@ -139,6 +147,8 @@ Conditions:
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
+  # Run the DAM inference sidecar only when an image has been pushed for it.
+  HasConditionSidecar: !Not [!Equals [!Ref SidecarImageUri, '']]
 
 Resources:
   # ---------------------------------------------------------------------------
@@ -520,10 +530,19 @@ Resources:
       RuntimePlatform:
         OperatingSystemFamily: LINUX
         CpuArchitecture: X86_64
+      # The sidecar image (PyTorch + ~1.7 GB of model weights) needs more than the 20 GiB default.
+      EphemeralStorage: !If
+        - HasConditionSidecar
+        - SizeInGiB: 40
+        - !Ref AWS::NoValue
       ContainerDefinitions:
         - Name: cc-backend
           Image: !Ref BackendImageUri
           Essential: true
+          # With the sidecar, pin the backend to its pre-sidecar 3 GB and give it priority on
+          # the shared vCPU (CPU units are soft shares; idle CPU stays usable by either).
+          Memory: !If [HasConditionSidecar, 3072, !Ref AWS::NoValue]
+          Cpu: !If [HasConditionSidecar, 768, !Ref AWS::NoValue]
           PortMappings:
             - ContainerPort: !Ref ContainerPort
               HostPort: !Ref ContainerPort
@@ -534,6 +553,18 @@ Resources:
               HostPort: !Ref InternalWebSocketPort
               Protocol: tcp
               Name: websocket-callback-port
+          # Cloud Map (HealthCheckCustomConfig) takes its health from ECS task health, which
+          # counts only essential containers' health checks. Once the non-essential sidecar
+          # defines one, a backend without its own never reports HEALTHY, the Cloud Map
+          # instance stays UNHEALTHY, and the deployment never stabilizes.
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - !Sub 'curl -fsS http://localhost:${ContainerPort}${HealthCheckPath} || exit 1'
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 180
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -601,6 +632,11 @@ Resources:
             # Must match ChimeKvsStreamDiscoveryConnection ApiKeyValue (X-EventBridge-Connection).
             - Name: CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET
               Value: !Sub 'careconnect-${Environment}-kvs-discovery'
+            # AI condition detection. Voice screening needs the sidecar on localhost.
+            - Name: CARECONNECT_CONDITION_DETECTION_DAM_ENABLED
+              Value: !If [HasConditionSidecar, 'true', 'false']
+            - Name: CARECONNECT_DAM_URL
+              Value: http://localhost:8000
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
@@ -609,6 +645,84 @@ Resources:
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
+        # DAM depression/anxiety inference (CPU). Not essential: if it stops, the API keeps
+        # serving and voice screening runs retry. Reachable only from cc-backend on localhost.
+        - !If
+          - HasConditionSidecar
+          - Name: dam-sidecar
+            Image: !Ref SidecarImageUri
+            Essential: false
+            # The sidecar exits after its model-load retries are exhausted; ECS restarts it in
+            # place (the API keeps serving). It must have run 300 s before a restart is attempted
+            # again, so a permanently broken image doesn't restart in a tight loop.
+            RestartPolicy:
+              Enabled: true
+              RestartAttemptPeriod: 300
+            Memory: 4096
+            Cpu: 256
+            PortMappings:
+              - ContainerPort: 8000
+                HostPort: 8000
+                Protocol: tcp
+                Name: dam-port
+            Environment:
+              - Name: TORCH_NUM_THREADS
+                Value: '1'
+              - Name: MIN_SPEECH_SECONDS
+                Value: '30'
+              - Name: MAX_SPEECH_SECONDS
+                Value: '600'
+            HealthCheck:
+              Command:
+                - CMD
+                - python
+                - -c
+                - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"
+              Interval: 30
+              Timeout: 5
+              Retries: 3
+              # Model load takes about 90 s on one vCPU.
+              StartPeriod: 240
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group:
+                  Fn::ImportValue: !Sub careconnect-${Environment}-BackendLogGroupName
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: dam
+          - !Ref AWS::NoValue
+
+  # Voice screening is unavailable while the sidecar can't load its model. Count each failed
+  # load and raise a console-only alarm (no notification actions by design).
+  SidecarModelLoadFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: HasConditionSidecar
+    Properties:
+      LogGroupName:
+        Fn::ImportValue: !Sub careconnect-${Environment}-BackendLogGroupName
+      FilterPattern: '"model load failed"'
+      MetricTransformations:
+        - MetricNamespace: CareConnect/ConditionDetection
+          MetricName: !Sub SidecarModelLoadFailures-${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+
+  SidecarModelLoadFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasConditionSidecar
+    Properties:
+      AlarmName: !Sub careconnect-${Environment}-dam-sidecar-model-load-failed
+      AlarmDescription: >-
+        The DAM sidecar failed to load its model, so voice (depression/anxiety) screening is
+        paused. The sidecar retries, then exits and ECS restarts it; check the dam/ log streams.
+      Namespace: CareConnect/ConditionDetection
+      MetricName: !Sub SidecarModelLoadFailures-${Environment}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
 
   # ECS Fargate service registered with Cloud Map for API Gateway discovery
   # and with the websocket NLB target group for the WebSocket API.
@@ -624,6 +738,13 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       # Spring Boot startup takes a while; don't let NLB health checks kill new tasks.
       HealthCheckGracePeriodSeconds: 240
+      # Fail a deployment whose tasks keep crashing or failing health checks instead of
+      # leaving CloudFormation waiting for up to 3 hours; roll back to the last working
+      # task definition when there is one.
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
       LoadBalancers:
         - ContainerName: cc-backend
           ContainerPort: !Ref InternalWebSocketPort

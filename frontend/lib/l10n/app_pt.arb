@@ -138,6 +138,7 @@
   "ptdashboard_onceAtBed": "Uma vez por dia , na hora de dormir",
   
   "login_loginFailedError": "Falha no login",
+  "login_invalidCredentials": "O nome de usuário ou a senha estão incorretos. Verifique-os e tente novamente.",
 
   "settings_telemetryDefaultDialogTitle": "A telemetria está ativada",
   "settings_telemetryDefaultDialogDescription": "O CareConnect coleta diagnósticos anônimos e métricas de desempenho por padrão para ajudar a melhorar a confiabilidade.\nVocê pode optar por não participar a qualquer momento.",

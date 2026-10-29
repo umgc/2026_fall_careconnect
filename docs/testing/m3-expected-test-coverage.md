@@ -2,7 +2,7 @@
 
 **Audience:** Team C developers, QA, frontend contributors, and integration reviewers
 **Owner:** Team C QA Lead
-**Status:** Working execution guide for the AllergyIntolerance QA baseline; exact API assertions remain pending OpenAPI 1.0 approval
+**Status:** Working execution guide for the confirmed five-resource Cerner scope; exact CareConnect API assertions remain pending OpenAPI 1.0 approval
 **Applies to:** WBS 4.7 Cerner mapping and WBS 4.8 Cerner endpoint development
 **Boundary:** Synthetic data only, retrieval only, no EHR write-back
 
@@ -10,7 +10,7 @@
 
 This document tells the implementation and testing teams which automated and manual tests are expected for the complete M3 Cerner integration, who creates them, and when work is considered test-complete. It supplements the M3 test plan, scenario catalog, traceability matrix, and fixture guide.
 
-AllergyIntolerance is the first reference workflow. It must pass through every testing level so the team can establish reusable fixture loading, expected-output comparison, controller testing, contract validation, WireMock configuration, frontend unit/widget testing, E2E setup, and evidence collection. The same pattern then applies to Patient and every other resource approved for the final M3 scope, such as Condition, Encounter, and Appointment.
+AllergyIntolerance is the first reference workflow. It must pass through every testing level so the team can establish reusable fixture loading, expected-output comparison, controller testing, contract validation, WireMock configuration, frontend unit/widget testing, E2E setup, and evidence collection. The same pattern then applies to the confirmed scope: Patient, Condition, Encounter, and provisional Appointment.
 
 The AllergyIntolerance example does not limit the overall test scope to allergies.
 
@@ -115,7 +115,7 @@ Validate:
 - Every approved authorization/error envelope.
 - Empty and partial-result responses.
 - CamelCase field names and required/optional field behavior.
-- Approved source values, including `CERNER`.
+- Approved source values, including the Team C canonical identifier `ORACLE_HEALTH`.
 - `sourceRecordId` and date/date-time formats.
 - The standard error fields: `code`, `message`, `source`, and `retryable`.
 - Frontend mock fixtures and backend responses against the same contract path, version, and checksum.
@@ -154,7 +154,7 @@ Create unit tests for frontend models, parsing, services, repositories, and stat
 - Approved success fixtures deserialize every required normalized field.
 - Optional and nullable fields deserialize without crashes or invented clinical values.
 - Unknown future enum/code values follow the approved safe fallback rather than breaking the screen.
-- `source: CERNER` and `sourceRecordId` are preserved in frontend models where required.
+- `source: ORACLE_HEALTH` and `sourceRecordId` are preserved in frontend models where required.
 - UTC date-time values and partial dates are displayed according to approved presentation rules.
 - An empty successful response becomes an empty-data state, not an error.
 - Source authorization expiry becomes the reconnect-required state.
@@ -210,15 +210,15 @@ Run once per week while integration is active and again within the week before s
 
 ## 5. Resource coverage matrix
 
-Complete this table when the final M3 resource scope is approved. A resource is not test-complete until every applicable column has passing evidence.
+A resource is not test-complete until every applicable column has passing evidence. “Partly implemented” means focused code/tests exist; it does not mean secure retrieval or the complete test stack has passed.
 
 | Resource/workflow | Mapper unit | Service/client unit | Controller slice | Contract | WireMock integration | E2E if distinct | Live smoke | Status |
 |---|---|---|---|---|---|---|---|---|
 | AllergyIntolerance | Required; first reference workflow | Required | Required | Required | Required | Three critical workflows | Required | Planned |
-| Patient | Required | Shared + resource-specific | If endpoint is in scope | If endpoint is in scope | Resource-specific happy path | Only if distinct | Required if in scope | Scope confirmation pending |
-| Condition | Required if approved | Shared + resource-specific | If endpoint is in scope | If endpoint is in scope | Resource-specific happy path | Only if distinct | Required if in scope | Scope confirmation pending |
-| Encounter | Required if approved | Shared + resource-specific | If endpoint is in scope | If endpoint is in scope | Resource-specific happy path | Only if distinct | Required if in scope | Scope confirmation pending |
-| Appointment | Required if approved | Shared + resource-specific | If endpoint is in scope | If endpoint is in scope | Resource-specific happy path | Only if distinct | Required if in scope | Scope confirmation pending |
+| Patient | Required | Shared + resource-specific | Required when exposed | Required when exposed | Direct read/search happy path plus identity failure | Only if distinct | Required | Partly implemented; secure retrieval stack open |
+| Condition | Required | Shared + resource-specific | Required when exposed | Required when exposed | Search, empty, malformed, and paging cases | Only if distinct | Required | Not implemented for Cerner |
+| Encounter | Required | Shared + resource-specific | Required when exposed | Required when exposed | Search, empty, malformed, and paging cases | Only if distinct | Required | Not implemented for Cerner |
+| Appointment (provisional) | Required | Shared + resource-specific | Required when exposed | Required when exposed | Bounded search, empty, proposed/no-times, and paging | Only if distinct | Required while in scope | Mapper/storage partly implemented; secure retrieval open |
 | Additional approved M3 resource | Required | Shared + resource-specific | Required when exposed | Required when exposed | As behavior requires | Only if distinct | Required if in scope | TBD |
 
 “Shared + resource-specific” means common OAuth, timeout, retry, pagination, and error behavior is proven once in the shared client/service suite; the resource adds only tests needed for a distinct request, parsing, or mapping behavior.
@@ -234,7 +234,18 @@ Complete this matrix as frontend implementation lands. “Required when displaye
 | Empty results | Required | Required | Required | Required | Lower-level coverage normally sufficient | Planned |
 | Source reconnect state | Required | Required | Required | Required | Covered by reconnect E2E | Planned |
 | Partial results | Required | Required | Required | Required | Covered by partial-results E2E | Planned |
-| Patient/Condition/Encounter/Appointment | Required when displayed | Required when displayed | Required when displayed | Required when displayed | Only if behavior is distinct | Scope confirmation pending |
+| Patient/Condition/Encounter/Appointment | Required when displayed | Required when displayed | Required when displayed | Required when displayed | Only if behavior is distinct | Confirmed backend scope; UI exposure/contract pending |
+
+## 5.1 Recommended implementation and QA sequence
+
+1. **Complete the AllergyIntolerance vertical slice.** Backend implements the concrete service/wiring and shared auth/client behavior; developers finish unit and slice tests; QA adds WireMock success/failure coverage and evidence.
+2. **Agree on canonical mapping rules before writing final expected JSON.** Record required/optional fields, missing-field behavior, excluded/inactive statuses, date precision, source identity, local-to-Cerner patient linkage, and raw-payload retention.
+3. **Add Patient.** Reuse the shared auth/client stack and prove direct read/identity binding before adding additional search resources.
+4. **Add Condition and Encounter.** Create sanitized/synthetic fixtures, mapper tests, endpoint/slice coverage, then resource-specific WireMock happy/empty/malformed/paging cases.
+5. **Add provisional Appointment.** Require a bounded date or `-date-or-req-period` request and preserve proposed/no-time semantics; keep the entire workflow read-only.
+6. **Finish the shared failure suite once.** OAuth expiration/refresh, insufficient scope, timeout, retry, 429, malformed body, pagination loops, duplicates, and partial results belong primarily in shared client/service integration tests.
+7. **Activate contract and frontend assertions only after approval.** Pin the OpenAPI version/checksum, validate backend responses and frontend fixtures, then automate the three critical E2E journeys.
+8. **Run the live secure-sandbox smoke and sign-off gates.** Test all in-scope resource reads with synthetic data, sanitize evidence, run the relevant regression/coverage/CI gates, and complete traceability.
 
 ## 6. Test and fixture conventions
 
@@ -284,3 +295,5 @@ Coverage numbers do not replace meaningful assertions. QA review must confirm th
 - [M3 scenario catalog](m3-scenario-catalog.md)
 - [M3 traceability matrix](m3-traceability-matrix.md)
 - [Fixture guide](fixtures-README.md)
+- [Cerner fixture capture register](cerner-fixture-capture-register.md)
+- [Cerner secure-sandbox smoke checklist](cerner-secure-sandbox-smoke-checklist.md)

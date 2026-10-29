@@ -1,0 +1,66 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-1",
+  "meta": {
+    "versionId": "synthetic-version-1",
+    "lastUpdated": "2026-10-01T12:00:00Z"
+  },
+  "active": true,
+  "identifier": [
+    {
+      "system": "https://example.test/identifier/mrn",
+      "value": "synthetic-mrn-1"
+    }
+  ],
+  "name": [
+    {
+      "use": "official",
+      "family": "Patient",
+      "given": ["Synthetic"]
+    }
+  ],
+  "telecom": [
+    {
+      "system": "email",
+      "value": "synthetic.patient@example.test"
+    }
+  ],
+  "gender": "unknown",
+  "birthDate": "1980-02-29",
+  "deceasedBoolean": false,
+  "address": [
+    {
+      "use": "home",
+      "line": ["100 Test Way"],
+      "city": "Example City",
+      "state": "MD",
+      "postalCode": "00000",
+      "country": "US"
+    }
+  ],
+  "maritalStatus": {
+    "text": "Unknown"
+  },
+  "communication": [
+    {
+      "language": {
+        "coding": [
+          {
+            "system": "urn:ietf:bcp:47",
+            "code": "en",
+            "display": "English"
+          }
+        ]
+      },
+      "preferred": true
+    }
+  ],
+  "contact": [
+    {
+      "name": {
+        "family": "Contact",
+        "given": ["Synthetic"]
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@ import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'calendar_reflow_layout.dart';
 
 /// =============================
 /// FiltersPanel Widget
@@ -84,15 +85,14 @@ class FiltersPanel extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final isCaregiver =
         Provider.of<UserProvider>(context, listen: false).user?.isCaregiver ??
-        false;
+            false;
 
     final manager = context.watch<TaskTypeManager>();
     final types = manager.taskTypeColors.keys.toList();
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: CalendarFilterLayout(
         children: [
           // -----------------------
           // Left side: filter card
@@ -106,6 +106,7 @@ class FiltersPanel extends StatelessWidget {
                   ListTile(
                     title: Text(t.calendarFilters),
                     trailing: IconButton(
+                      tooltip: expanded ? 'Collapse filters' : 'Expand filters',
                       icon: Icon(
                         expanded ? Icons.expand_more : Icons.chevron_right,
                       ),
@@ -121,8 +122,8 @@ class FiltersPanel extends StatelessWidget {
                       child: Text(
                         t.calendarTaskTypes,
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                     ),
                     Padding(
@@ -138,11 +139,6 @@ class FiltersPanel extends StatelessWidget {
                             avatar: Icon(icon, color: color, size: 18),
                             label: Text(
                               _localizedTypeName(t, type),
-                              style: TextStyle(
-                                color: selectedTypes.contains(type)
-                                    ? color
-                                    : null,
-                              ),
                             ),
                             selected: selectedTypes.contains(type),
                             selectedColor: color.withOpacity(0.2),
@@ -161,7 +157,9 @@ class FiltersPanel extends StatelessWidget {
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
                         child: Text(
                           t.calendarPatients,
-                          style: Theme.of(context).textTheme.labelLarge
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelLarge
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),

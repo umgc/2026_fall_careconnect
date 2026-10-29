@@ -9,7 +9,10 @@ import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Explicitly constructed, single-page client. No Spring bean or app wiring enables it.
@@ -19,6 +22,7 @@ import java.util.List;
 public final class CernerAllergyHttpClient {
   private static final String INVALID_RESPONSE = "CERNER_INVALID_RESPONSE";
   private static final int MAX_BYTES = 1_048_576;
+  private static final int MAX_PAGES = 20;
   private static final int TOO_MANY_REQUESTS = 429;
   private final URI base;
   private final int timeoutMillis;
@@ -54,18 +58,52 @@ public final class CernerAllergyHttpClient {
     return "localhost".equals(host) || "127.0.0.1".equals(host) || "[::1]".equals(host);
   }
 
-  /** Does not refresh tokens, retry, follow redirects, or return incomplete paginated results. */
+  public record Result(List<CernerAllergyMapper.Allergy> allergies, List<JsonNode> rawResources) {
+    public Result {
+      allergies = List.copyOf(allergies);
+      rawResources = rawResources.stream()
+          .map(node -> (JsonNode) node.deepCopy())
+          .toList();
+    }
+  }
+
+  /** Does not refresh tokens, retry failed requests, follow redirects, or return partial results. */
   // Upstream exception messages may contain credentials; expose only fixed domain errors.
   @SuppressWarnings("PMD.PreserveStackTrace")
   public List<CernerAllergyMapper.Allergy> getAllergies(
       final String trustedPatientId, final String token) {
+    return getAllergyResult(trustedPatientId, token).allergies();
+  }
+
+  /** Fetches all bounded Bundle pages and returns mapped records plus validated raw resources. */
+  public Result getAllergyResult(final String trustedPatientId, final String token) {
     if (trustedPatientId == null || !trustedPatientId.matches("[A-Za-z0-9.-]{1,64}")) {
       throw new IllegalArgumentException("Trusted FHIR patient ID required");
     }
     if (token == null || token.isBlank() || token.contains("\r") || token.contains("\n")) {
       throw failure("CERNER_AUTH_EXPIRED", false);
     }
-    final HttpURLConnection connection = openConnection(trustedPatientId);
+    URI pageUri = base.resolve("AllergyIntolerance?patient=" + trustedPatientId);
+    List<CernerAllergyMapper.Allergy> allergies = new ArrayList<>();
+    List<JsonNode> rawResources = new ArrayList<>();
+    Set<URI> visited = new HashSet<>();
+    for (int pageNumber = 0; pageNumber < MAX_PAGES; pageNumber++) {
+      if (!visited.add(pageUri)) {
+        throw failure(INVALID_RESPONSE, false);
+      }
+      Page page = fetchPage(pageUri, trustedPatientId, token);
+      allergies.addAll(page.allergies());
+      rawResources.addAll(page.rawResources());
+      if (page.next() == null) {
+        return new Result(allergies, rawResources);
+      }
+      pageUri = trustedNext(page.next());
+    }
+    throw failure("CERNER_PAGINATION_LIMIT", false);
+  }
+
+  private Page fetchPage(final URI pageUri, final String trustedPatientId, final String token) {
+    final HttpURLConnection connection = openConnection(pageUri);
     try {
       connection.setInstanceFollowRedirects(false);
       connection.setConnectTimeout(timeoutMillis);
@@ -105,10 +143,9 @@ public final class CernerAllergyHttpClient {
 
   // Do not retain a cause containing a server URL or patient query.
   @SuppressWarnings("PMD.PreserveStackTrace")
-  private HttpURLConnection openConnection(final String trustedPatientId) {
+  private HttpURLConnection openConnection(final URI pageUri) {
     try {
-      return (HttpURLConnection) base.resolve("AllergyIntolerance?patient=" + trustedPatientId)
-          .toURL().openConnection();
+      return (HttpURLConnection) pageUri.toURL().openConnection();
     } catch (IOException e) {
       throw failure("CERNER_UNAVAILABLE", true);
     }
@@ -116,7 +153,7 @@ public final class CernerAllergyHttpClient {
 
   // Parser causes can contain clinical source text; keep them out of the error envelope.
   @SuppressWarnings("PMD.PreserveStackTrace")
-  private List<CernerAllergyMapper.Allergy> mapResponse(
+  private Page mapResponse(
       final byte[] body, final String trustedPatientId) {
     try {
       // Parse bytes directly so malformed UTF-8 is rejected rather than silently replaced.
@@ -127,17 +164,58 @@ public final class CernerAllergyHttpClient {
           || bundle.has("link") && !bundle.path("link").isArray()) {
         throw failure(INVALID_RESPONSE, false);
       }
+      URI next = null;
       for (final JsonNode link : bundle.path("link")) {
         if ("next".equals(link.path("relation").asText())) {
-          throw failure("CERNER_PAGINATION_UNSUPPORTED", false);
+          String value = link.path("url").asText(null);
+          if (value == null || next != null) {
+            throw failure(INVALID_RESPONSE, false);
+          }
+          next = URI.create(value);
         }
       }
-      return CernerAllergyMapper.map(bundle, trustedPatientId);
+      List<CernerAllergyMapper.Allergy> allergies = CernerAllergyMapper.map(bundle, trustedPatientId);
+      List<JsonNode> rawResources = new ArrayList<>();
+      for (JsonNode entry : bundle.path("entry")) {
+        JsonNode resource = entry.path("resource");
+        if ("AllergyIntolerance".equals(resource.path("resourceType").asText())
+            && !resource.path("id").asText("").isBlank()
+            && ("Patient/" + trustedPatientId)
+                .equals(resource.path("patient").path("reference").asText())) {
+          rawResources.add(resource.deepCopy());
+        }
+      }
+      return new Page(allergies, rawResources, next);
     } catch (IOException | IllegalArgumentException e) {
       // Byte-array parsing cannot perform a network read; all decoding failures are invalid data.
       throw failure(INVALID_RESPONSE, false);
     }
   }
+
+  private URI trustedNext(final URI next) {
+    URI resolved = next.isAbsolute() ? next : base.resolve(next);
+    int basePort = effectivePort(base);
+    int nextPort = effectivePort(resolved);
+    if (!base.getScheme().equalsIgnoreCase(resolved.getScheme())
+        || !base.getHost().equalsIgnoreCase(resolved.getHost())
+        || basePort != nextPort
+        || resolved.getUserInfo() != null
+        || resolved.getFragment() != null
+        || !resolved.getPath().startsWith(base.getPath())) {
+      throw failure(INVALID_RESPONSE, false);
+    }
+    return resolved;
+  }
+
+  private static int effectivePort(final URI uri) {
+    if (uri.getPort() >= 0) {
+      return uri.getPort();
+    }
+    return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+  }
+
+  private record Page(
+      List<CernerAllergyMapper.Allergy> allergies, List<JsonNode> rawResources, URI next) { }
 
   private static CernerSourceException failure(final String code, final boolean retryable) {
     // Deliberately discard upstream causes: their messages can contain tokens or patient data.

@@ -1,0 +1,11 @@
+requirements: [M3-REQ-01, M3-REQ-02, M3-REQ-19]
+scenario: M3-SC-APPOINTMENT-001
+input: cerner/fhir/appointment/bundle-one-appointment.json
+status: team-c-working-baseline
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+notes:
+  - date-times are normalized to ISO 8601 UTC strings
+  - sourceRecordId is the FHIR Appointment id
+  - database identifiers and raw payload identifiers are not exposed
+  - final field names and response envelope remain pending unified OpenAPI approval

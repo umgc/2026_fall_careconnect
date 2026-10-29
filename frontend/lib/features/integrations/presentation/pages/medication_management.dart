@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -219,6 +220,7 @@ class _MedicationManagementScreenState
               onPressed: _generateAndSharePDF,
             ),
           IconButton(
+            tooltip: 'Add medication',
             icon: const Icon(Icons.add),
             onPressed: () {
               _navigateToAddMedication();
@@ -274,14 +276,10 @@ class _MedicationManagementScreenState
                   onPressed: () {
                     _scanMedicationCode();
                   },
-                  icon: Icon(
-                    Icons.qr_code_scanner,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),
+                  icon: const Icon(Icons.qr_code_scanner),
                   label: const Text(
                     'Scan Medication Barcode',
                     style: TextStyle(
-                      color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -300,11 +298,10 @@ class _MedicationManagementScreenState
                   onPressed: () {
                     _enterMedicationCode();
                   },
-                  icon: Icon(Icons.keyboard, color: AppTheme.primary),
+                  icon: const Icon(Icons.keyboard),
                   label: Text(
                     'Enter NDC Code',
                     style: TextStyle(
-                      color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -323,11 +320,10 @@ class _MedicationManagementScreenState
                   onPressed: () {
                     _addMedicationManually();
                   },
-                  icon: Icon(Icons.edit, color: AppTheme.primary),
+                  icon: const Icon(Icons.edit),
                   label: Text(
                     'Add Medication Manually',
                     style: TextStyle(
-                      color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
@@ -383,6 +379,7 @@ class _MedicationManagementScreenState
                     tooltip: 'Share medication list',
                   ),
                   IconButton(
+                    tooltip: 'Add medication',
                     onPressed: _navigateToAddMedication,
                     icon: const Icon(Icons.add_circle,
                         color: Colors.indigo, size: 32),
@@ -553,7 +550,8 @@ class _MedicationManagementScreenState
 
     Navigator.push(
       context,
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Barcode Scanner',
         builder: (context) => BarcodeScannerScreen(
           onCodeScanned: (String code) async {
             Navigator.pop(context);

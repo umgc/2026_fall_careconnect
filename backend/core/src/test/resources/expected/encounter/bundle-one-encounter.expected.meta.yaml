@@ -1,0 +1,11 @@
+requirements: [M3-REQ-01, M3-REQ-02, M3-REQ-18]
+scenarios: [M3-SC-ENCOUNTER-001]
+origin: synthetic
+approvalStatus: candidate
+contractReference: null
+reviewedBy: TBD canonical-model and OpenAPI owners
+consumers:
+  - CernerClinicalExpectedOutputTest.encounterMatchesPairedCandidateExpectedOutput
+notes:
+  - Executable candidate derived from the current source-neutral mapper and provisional DTO.
+  - Must not be represented as approved until the canonical model and OpenAPI contract are approved.

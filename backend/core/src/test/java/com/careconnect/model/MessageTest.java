@@ -1,5 +1,6 @@
 package com.careconnect.model;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -11,6 +12,7 @@ class MessageTest {
     // ─── Default constructor ──────────────────────────────────────────────────
 
     @Test
+    @DisplayName("TC-MSG-MDL-001 a new Message has no fields set and is unread")
     void defaultConstructor_createsInstance() throws Exception {
         final Message msg = new Message();
 
@@ -26,6 +28,7 @@ class MessageTest {
     // ─── 3-arg constructor ────────────────────────────────────────────────────
 
     @Test
+    @DisplayName("TC-MSG-MDL-002 the sender, receiver and content constructor sets them, stamps the time and leaves the message unread")
     void threeArgConstructor_setsFields() throws Exception {
         final Message msg = new Message(1L, 2L, "Hello there!");
 
@@ -39,6 +42,22 @@ class MessageTest {
     // ─── Setters / Getters ────────────────────────────────────────────────────
 
     @Test
+    @DisplayName("TC-MSG-MDL-003 a message has no share fields until set, and keeps the share kind and patient record id it is given")
+    void shareFields_defaultToNull_andRoundTrip() {
+        final Message msg = new Message(1L, 2L, "Shared my Medicare records");
+
+        assertThat(msg.getShareKind()).isNull();
+        assertThat(msg.getSharePatientId()).isNull();
+
+        msg.setShareKind(Message.ShareKind.MEDICARE);
+        msg.setSharePatientId(10L);
+
+        assertThat(msg.getShareKind()).isEqualTo(Message.ShareKind.MEDICARE);
+        assertThat(msg.getSharePatientId()).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("TC-MSG-MDL-004 every setter is read back by its getter")
     void settersAndGetters_updateFields() throws Exception {
         final Message msg = new Message();
         final LocalDateTime now = LocalDateTime.now();

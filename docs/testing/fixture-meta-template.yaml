@@ -1,0 +1,18 @@
+# Copy this file beside a JSON fixture as <fixture-name>.meta.yaml.
+# This YAML is fixture documentation; it is not an expected API response.
+requirements: []
+scenarios: []
+origin: synthetic # synthetic | derived | sanitized-secure-sandbox-capture
+capturedAtUtc: null
+sandboxPersona: null # provider | patient | null
+requestPattern: null # omit token, launch, stable identifiers, and session values
+httpStatus: null
+bundleEntryCount: null
+nextLinkPresent: null
+derivedFrom: null
+changes: []
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: []
+expectedBehavior: TBD
+contractDependency: null

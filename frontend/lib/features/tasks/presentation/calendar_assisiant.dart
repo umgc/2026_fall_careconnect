@@ -20,6 +20,8 @@ import 'package:provider/provider.dart';
 
 import 'widgets/add_task_button.dart';
 import 'widgets/calendar_cell.dart';
+import 'widgets/calendar_keyboard_scroll_behavior.dart';
+import 'widgets/calendar_reflow_layout.dart';
 import 'widgets/event_tile.dart';
 import 'widgets/filters_panel.dart';
 import 'widgets/import_ics_button.dart';
@@ -254,7 +256,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    return CalendarControllerProvider<Task>(
+    final calendar = CalendarControllerProvider<Task>(
       controller: _eventController,
       child: Scaffold(
         drawer: const CommonDrawer(currentRoute: '/calendar'),
@@ -270,7 +272,8 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
           ],
         ),
         body: SafeArea(
-          child: Column(
+          child: CalendarReflowLayout(
+            isMonth: _currentView == CalendarViewType.month,
             children: [
               // ------------------
               // Filters Row
@@ -368,8 +371,6 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
               // Calendar widget
               // ------------------
               Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 500),
                   child: Builder(
                     builder: (context) {
                       final theme = Theme.of(context);
@@ -381,6 +382,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
                             controller: _eventController,
                             initialMonth: _selectedDay,
                             cellAspectRatio: 1.5,
+                            useAvailableVerticalSpace: true,
                             cellBuilder:
                                 (date, events, isToday, isInMonth, isWeekend) {
                               return CalendarCell(
@@ -425,6 +427,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
                                 children: [
                                   // Left arrow (previous month)
                                   IconButton(
+                                    tooltip: 'Previous month',
                                     icon: const Icon(Icons.chevron_left),
                                     color: theme.colorScheme.onSurface,
                                     onPressed: () {
@@ -433,17 +436,22 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
                                   ),
 
                                   // Month title
-                                  Text(
-                                    formatted,
-                                    style:
-                                        theme.textTheme.titleMedium?.copyWith(
-                                      color: theme.colorScheme.onSurface,
-                                      fontWeight: FontWeight.bold,
+                                  Expanded(
+                                    child: Text(
+                                      formatted,
+                                      textAlign: TextAlign.center,
+                                      softWrap: true,
+                                      style:
+                                          theme.textTheme.titleMedium?.copyWith(
+                                        color: theme.colorScheme.onSurface,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
 
                                   // Right arrow (next month)
                                   IconButton(
+                                    tooltip: 'Next month',
                                     icon: const Icon(Icons.chevron_right),
                                     color: theme.colorScheme.onSurface,
                                     onPressed: () {
@@ -646,7 +654,6 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
                       }
                     },
                   ),
-                ),
               ),
 
               const SizedBox(height: 16),
@@ -714,6 +721,10 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
           ),
         ),
       ),
+    );
+    return ScrollConfiguration(
+      behavior: CalendarKeyboardScrollBehavior(label: t.calendarAssistant),
+      child: calendar,
     );
   }
 
@@ -795,7 +806,7 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
       var queuedCount = 0;
       var savedCount = 0;
       for (final Task newTask in expandedTasks) {
-        final response = await ApiService.createTask(
+        final response = await ApiService.createTaskV2(
           newTask.assignedPatientId!,
           jsonEncode(newTask.toJson()),
         );
@@ -1009,7 +1020,40 @@ class _CalendarAssistantScreenState extends State<CalendarAssistantScreen> {
 
     if (result == null) return;
 
-    final applyToSeries = result['applyToSeries'] as bool? ?? false;
+    var applyToSeries = result['applyToSeries'] as bool? ?? false;
+    if (task.frequency != null || task.parentTaskId != null) {
+      if (!mounted) return;
+      var applyToEntireSeries = true;
+      final confirmedApplyToSeries = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text("Update recurring task"),
+            content: CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("Apply changes to entire series"),
+              value: applyToEntireSeries,
+              onChanged: (value) {
+                setDialogState(() => applyToEntireSeries = value ?? false);
+              },
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () =>
+                    Navigator.pop(dialogContext, applyToEntireSeries),
+                child: const Text("Continue"),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (confirmedApplyToSeries == null) return;
+      applyToSeries = confirmedApplyToSeries;
+    }
     final Object? returned = result['task'];
 
     // Normalize into a list of Task objects (dialog always returns a list)

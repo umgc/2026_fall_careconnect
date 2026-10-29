@@ -20,6 +20,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -124,6 +125,27 @@ class SecurityConfigFilterChainTest {
         // Only the callback is public; the general /api/** matcher protects
         // all remaining Epic endpoints.
         mockMvc.perform(get("/api/epic/protected"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void oracleHealthCallback_IsAccessibleWithoutJwt() throws Exception {
+        // Oracle Health redirects the user's browser here and therefore cannot
+        // provide the CareConnect JWT. Signed, single-use OAuth state protects
+        // this callback in the controller flow.
+        mockMvc.perform(get("/api/oracle-health/callback"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void otherOracleHealthEndpoints_RequireAuthentication() throws Exception {
+        // Keep the exception narrowly scoped: starting, inspecting, or removing
+        // a connection still requires an authenticated CareConnect user.
+        mockMvc.perform(get("/api/oracle-health/authorize"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/oracle-health/status"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/oracle-health/disconnect"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -270,6 +292,26 @@ class SecurityConfigFilterChainTest {
 
         @GetMapping("/api/epic/protected")
         String protectedEpicEndpoint() {
+            return "ok";
+        }
+
+        @GetMapping("/api/oracle-health/callback")
+        String oracleHealthCallback() {
+            return "ok";
+        }
+
+        @GetMapping("/api/oracle-health/authorize")
+        String protectedOracleHealthAuthorize() {
+            return "ok";
+        }
+
+        @GetMapping("/api/oracle-health/status")
+        String protectedOracleHealthStatus() {
+            return "ok";
+        }
+
+        @PostMapping("/api/oracle-health/disconnect")
+        String protectedOracleHealthDisconnect() {
             return "ok";
         }
     }

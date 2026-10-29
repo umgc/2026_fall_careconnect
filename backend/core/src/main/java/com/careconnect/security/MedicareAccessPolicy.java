@@ -86,12 +86,22 @@ public class MedicareAccessPolicy {
      * @throws AppException with status 404 for every refusal, with the same message
      */
     public void requireMedicareAccess(final User caller, final Long patientId) {
+        if (!canAccess(caller, patientId)) {
+            throw new AppException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
+        }
+    }
+
+    /**
+     * The same rule as {@link #requireMedicareAccess}, as a yes or no, for a caller who needs to
+     * know without being refused: a patient sharing a chat card asks whether the caregiver can open
+     * it yet. Never use it to decide what data to return; guard reads with
+     * {@link #requireMedicareAccess}.
+     */
+    public boolean canAccess(final User caller, final Long patientId) {
         final Long patientUserId = patientId == null
                 ? null
                 : patients.findById(patientId).map(Patient::getUser).map(User::getId).orElse(null);
-        if (!mayAccess(caller, patientUserId)) {
-            throw new AppException(HttpStatus.NOT_FOUND, NOT_FOUND_MESSAGE);
-        }
+        return mayAccess(caller, patientUserId);
     }
 
     private boolean mayAccess(final User caller, final Long patientUserId) {

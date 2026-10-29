@@ -1,0 +1,38 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-appointment-bundle-proposed",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "https://example.test/fhir/Appointment/synthetic-appointment-proposed",
+      "resource": {
+        "resourceType": "Appointment",
+        "id": "synthetic-appointment-proposed",
+        "status": "proposed",
+        "serviceType": [
+          {
+            "text": "Synthetic consultation"
+          }
+        ],
+        "requestedPeriod": [
+          {
+            "start": "2026-11-01T13:00:00Z",
+            "end": "2026-11-05T17:00:00Z"
+          }
+        ],
+        "participant": [
+          {
+            "actor": {
+              "reference": "Patient/synthetic-patient-1"
+            },
+            "required": "required",
+            "status": "needs-action"
+          }
+        ]
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

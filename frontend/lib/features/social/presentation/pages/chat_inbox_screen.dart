@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -76,7 +77,9 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => MyFriendsScreen()),
+                TitledMaterialPageRoute(
+                  title: 'My Friends',
+                  builder: (_) => MyFriendsScreen()),
               );
             },
           ),
@@ -162,7 +165,8 @@ class _ChatInboxScreenState extends State<ChatInboxScreen> {
                       onTap: () async {
                         await Navigator.push(
                           context,
-                          MaterialPageRoute(
+                          TitledMaterialPageRoute(
+                            title: 'Conversation',
                             builder: (_) => ChatRoomScreen(
                               peerUserId: convo.peerId,
                               peerName: convo.peerName,

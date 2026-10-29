@@ -1,0 +1,13 @@
+{
+  "source": "ORACLE_HEALTH",
+  "sourceRecordId": "synthetic-appointment-1",
+  "status": "booked",
+  "startTime": "2026-10-15T14:00:00Z",
+  "endTime": "2026-10-15T14:30:00Z",
+  "providerName": "Synthetic Clinician",
+  "location": null,
+  "serviceType": "Follow-up visit",
+  "reason": null,
+  "sourceCreatedAt": null,
+  "sourceUpdatedAt": "2026-09-20T12:00:00Z"
+}

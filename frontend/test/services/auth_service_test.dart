@@ -827,6 +827,32 @@ void main() {
 
       expect(result.email, 'login@example.com');
       expect(result.role, 'PATIENT');
+      expect(secureStorage['jwt_token'], 'login-jwt-token');
+      expect(await AuthService.isUserAuthenticated(), isTrue);
+    });
+
+    test('stores no session when the email is not verified', () async {
+      // Web storage is shared across tabs, so an unverified login must leave
+      // nothing behind that another tab could use to open the dashboard.
+      final t = await AppLocalizations.delegate.load(Locale('en'));
+      handlers['/v1/api/auth/login'] = (HttpRequest request) async {
+        request.response.statusCode = HttpStatus.ok;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(jsonEncode(<String, dynamic>{
+          'id': 2,
+          'email': 'pending@example.com',
+          'role': 'PATIENT',
+          'emailVerified': false,
+        }));
+      };
+
+      final result =
+          await AuthService.login('pending@example.com', 'password123', t);
+
+      expect(result.email, 'pending@example.com');
+      expect(result.emailVerified, isFalse);
+      expect(secureStorage, isEmpty);
+      expect(await AuthService.isUserAuthenticated(), isFalse);
     });
 
     test('throws on failed login', () async {

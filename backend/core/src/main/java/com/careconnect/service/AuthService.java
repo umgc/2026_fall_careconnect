@@ -439,6 +439,19 @@ public class AuthService {
         if (!user.isActive())
             throw new AuthenticationException("Account suspended");
 
+        /* ---------------- Email not verified: no session -------------------- */
+        // No token, no AUTH cookie and no login side effects until the email is
+        // verified. emailVerified=false tells the client to show the verify prompt.
+        if (!Boolean.TRUE.equals(user.getIsVerified())) {
+            return LoginResponse.builder()
+                    .id(user.getId())
+                    .email(user.getEmail())
+                    .role(user.getRole())
+                    .status(user.getStatus())
+                    .emailVerified(false)
+                    .build();
+        }
+
         /* ---------------- Gamification: First Login & 5-Day Streak ---------------- */
         gamificationService.unlockAchievement(user.getId(), "First Login", 50);
 

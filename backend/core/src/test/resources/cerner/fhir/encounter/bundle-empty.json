@@ -1,0 +1,12 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-encounter-bundle-empty",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/Encounter?patient=synthetic-patient-empty"
+    }
+  ],
+  "entry": []
+}

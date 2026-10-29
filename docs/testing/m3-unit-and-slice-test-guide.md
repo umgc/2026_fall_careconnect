@@ -52,12 +52,12 @@ The mapper and controller are placeholders so the tests could run. Replace them 
 
 | Case | Status | Requirement |
 |---|---|---|
-| Authorized request returns camelCase fields and `source: CERNER` | 200 | REQ-04 |
+| Authorized request returns camelCase fields and `source: ORACLE_HEALTH` | 200 | REQ-04 |
 | No login | 401, service not called | REQ-09 |
 | No patient permission | 403, service not called | REQ-03 |
 | Unknown local patient | 404 | n/a |
 | Non-numeric patient id | 400, no collaborators called | n/a |
-| Cerner authorization expired | 409, `retryable=false`, `source=CERNER` | REQ-09 |
+| Cerner authorization expired | 409, `retryable=false`, `source=ORACLE_HEALTH` | REQ-09 |
 | Cerner unavailable | 502, `retryable=true`, no stack trace | n/a |
 | Empty result | 200, empty list | REQ-04 |
 

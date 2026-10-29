@@ -1,0 +1,16 @@
+requirements: [M3-REQ-19]
+scenarios: [M3-SC-APPOINTMENT-004]
+origin: synthetic
+capturedAtUtc: null
+sandboxPersona: null
+requestPattern: GET {openBase}/Appointment?patient={syntheticPatientId}&-date-or-req-period={approvedBoundedRange}
+httpStatus: 200
+bundleEntryCount: 0
+nextLinkPresent: false
+derivedFrom: bundle-one-appointment.json
+changes: [removed all Bundle entries]
+reviewedBy: TBD
+reviewedAtUtc: null
+consumers: [CernerFiveResourceFixtureStructureTest.emptyBundlesAreValidSearchsets, TBD Appointment empty-Bundle test]
+expectedBehavior: returns a successful empty result without fabricating an Appointment
+contractDependency: final CareConnect empty-response shape pending OpenAPI approval

@@ -1,0 +1,12 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-condition-bundle-empty",
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://example.test/fhir/Condition?patient=synthetic-patient-empty"
+    }
+  ],
+  "entry": []
+}

@@ -110,6 +110,11 @@ class PostCallTranscriptionServiceTest {
         return attendee;
     }
 
+    /** Export result for a raw file; the trim window is irrelevant once export is mocked. */
+    private static KvsAudioClip clip(final Path raw) {
+        return new KvsAudioClip(raw, 0L, 60_000L);
+    }
+
     private static GetTranscriptionJobResponse completedJob() {
         return GetTranscriptionJobResponse.builder()
                 .transcriptionJob(
@@ -174,8 +179,8 @@ class PostCallTranscriptionServiceTest {
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
                 any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
-                .thenReturn(raw);
-        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+                .thenReturn(clip(raw));
+        when(kvsAudioTranscodeService.toWav(clip(raw))).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
@@ -219,8 +224,8 @@ class PostCallTranscriptionServiceTest {
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
                         any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
-                .thenReturn(raw);
-        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+                .thenReturn(clip(raw));
+        when(kvsAudioTranscodeService.toWav(clip(raw))).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
@@ -246,6 +251,61 @@ class PostCallTranscriptionServiceTest {
                 .extracting(TranscriptSegmentInput::speakerLabel)
                 .containsOnly("Caregiver")
                 .noneMatch(label -> label.startsWith("Speaker "));
+
+        Files.deleteIfExists(raw);
+        Files.deleteIfExists(wav);
+    }
+
+    /**
+     * Scenario: the attendee joined 30 s into a 2-minute recording and left at 1:30. Their pool
+     * stream may carry someone else's audio outside that, so only their join→leave window is
+     * exported, and the WAV-relative segment times are moved back onto the recording timeline.
+     */
+    @Test
+    @DisplayName("KVS attendee path exports only the join→leave window and shifts segment times")
+    void transcribeAndCleanup_kvsAttendee_exportsJoinLeaveWindowAndShiftsSegments() throws Exception {
+        // Arrange: join/leave strictly inside the recording (17:00–17:02).
+        final CallRecording recording = recording();
+        final CallAttendee attendee = attendee();
+        attendee.setJoinedAt(LocalDateTime.of(2026, 7, 3, 17, 0, 30));
+        attendee.setLeftAt(LocalDateTime.of(2026, 7, 3, 17, 1, 30));
+        final Path raw = Files.createTempFile("kvs-window", ".mkv");
+        final Path wav = Files.createTempFile("kvs-window", ".wav");
+        when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
+        when(kvsArchivedMediaExportService.exportAttendeeRange(
+                any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
+                .thenReturn(clip(raw));
+        when(kvsAudioTranscodeService.toWav(clip(raw))).thenReturn(wav);
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+        when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
+                .thenReturn(StartTranscriptionJobResponse.builder().build());
+        when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
+                .thenReturn(completedJob());
+        when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(transcriptStream());
+        when(callTranscriptService.recordSegments(
+                any(String.class),
+                any(Long.class),
+                org.mockito.ArgumentMatchers.<List<TranscriptSegmentInput>>any()))
+                .thenReturn(1);
+        when(recordingRepository.findById(1L)).thenReturn(Optional.of(recording));
+
+        // Act
+        runExecuteTranscription(recording);
+
+        // Assert: export bounded by join/leave, not the recording.
+        verify(kvsArchivedMediaExportService).exportAttendeeRange(
+                STREAM_ARN,
+                java.time.Instant.parse("2026-07-03T17:00:30Z"),
+                java.time.Instant.parse("2026-07-03T17:01:30Z"));
+        // "hello" is at 0.10 s in the WAV, i.e. 30.10 s into the recording.
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<List<TranscriptSegmentInput>> segmentsCaptor =
+                ArgumentCaptor.forClass(List.class);
+        verify(callTranscriptService).recordSegments(eq(CALL_ID), eq(2L), segmentsCaptor.capture());
+        final TranscriptSegmentInput first = segmentsCaptor.getValue().get(0);
+        assertThat(first.startMs()).isEqualTo(30_100L);
+        assertThat(first.occurredAt()).isEqualTo(LocalDateTime.of(2026, 7, 3, 17, 0, 30, 100_000_000));
 
         Files.deleteIfExists(raw);
         Files.deleteIfExists(wav);
@@ -296,9 +356,9 @@ class PostCallTranscriptionServiceTest {
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(emptyAttendee, speakingAttendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
                 any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
-                .thenReturn(raw1, raw2);
-        when(kvsAudioTranscodeService.toWav(raw1)).thenReturn(wav1);
-        when(kvsAudioTranscodeService.toWav(raw2)).thenReturn(wav2);
+                .thenReturn(clip(raw1), clip(raw2));
+        when(kvsAudioTranscodeService.toWav(clip(raw1))).thenReturn(wav1);
+        when(kvsAudioTranscodeService.toWav(clip(raw2))).thenReturn(wav2);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
@@ -393,8 +453,8 @@ class PostCallTranscriptionServiceTest {
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
                 any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
-                .thenReturn(raw);
-        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+                .thenReturn(clip(raw));
+        when(kvsAudioTranscodeService.toWav(clip(raw))).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))
@@ -447,8 +507,8 @@ class PostCallTranscriptionServiceTest {
         when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(attendee));
         when(kvsArchivedMediaExportService.exportAttendeeRange(
                 any(String.class), any(java.time.Instant.class), any(java.time.Instant.class)))
-                .thenReturn(raw);
-        when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+                .thenReturn(clip(raw));
+        when(kvsAudioTranscodeService.toWav(clip(raw))).thenReturn(wav);
         when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
                 .thenReturn(PutObjectResponse.builder().build());
         when(transcribeClient.startTranscriptionJob(any(StartTranscriptionJobRequest.class)))

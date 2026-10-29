@@ -35,9 +35,6 @@ class MedicationServiceTest {
     @Mock
     private NotificationService notificationService;
 
-    @Mock
-    private CaregiverPatientLinkService caregiverPatientLinkService;
-
     @InjectMocks
     private MedicationService medicationService;
 
@@ -493,15 +490,18 @@ class MedicationServiceTest {
     // -------------------------------------------------------
 
     @Test
-    @DisplayName("hardDeleteMedication - valid params with active link - deletes and notifies")
-    void hardDeleteMedication_validParamsWithActiveLink_deletesAndNotifies() throws Exception {
+    @DisplayName("hardDeleteMedication - valid params - archives and notifies")
+    void hardDeleteMedication_validParams_archivesAndNotifies() throws Exception {
         final Long caregiverId = 50L;
         when(medicationRepository.findById(10L)).thenReturn(Optional.of(medication));
-        when(caregiverPatientLinkService.hasActiveLink(caregiverId, 1L)).thenReturn(true);
 
         medicationService.hardDeleteMedication(1L, 10L, caregiverId);
 
-        verify(medicationRepository).delete(medication);
+        assertFalse(medication.getIsActive());
+        assertEquals("REMOVED", medication.getApprovalStatus());
+        assertNotNull(medication.getUpdatedAt());
+        verify(medicationRepository).save(medication);
+        verify(medicationRepository, never()).delete(medication);
         verify(notificationService).sendNotificationToUser(
                 eq(1L),
                 eq("Medication Deleted"),
@@ -524,25 +524,10 @@ class MedicationServiceTest {
     }
 
     @Test
-    @DisplayName("hardDeleteMedication - caregiver has no active link - throws FORBIDDEN")
-    void hardDeleteMedication_noActiveLink_throwsForbidden() throws Exception {
-        final Long caregiverId = 50L;
-        when(medicationRepository.findById(10L)).thenReturn(Optional.of(medication));
-        when(caregiverPatientLinkService.hasActiveLink(caregiverId, 1L)).thenReturn(false);
-
-        final AppException ex = assertThrows(AppException.class,
-                () -> medicationService.hardDeleteMedication(1L, 10L, caregiverId));
-
-        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
-        assertEquals("Caregiver does not have active link to patient", ex.getMessage());
-    }
-
-    @Test
     @DisplayName("hardDeleteMedication - medication does not belong to patient - throws FORBIDDEN")
     void hardDeleteMedication_medicationNotBelongingToPatient_throwsForbidden() throws Exception {
         final Long caregiverId = 50L;
         when(medicationRepository.findById(10L)).thenReturn(Optional.of(medication));
-        when(caregiverPatientLinkService.hasActiveLink(caregiverId, 999L)).thenReturn(true);
 
         final AppException ex = assertThrows(AppException.class,
                 () -> medicationService.hardDeleteMedication(999L, 10L, caregiverId));

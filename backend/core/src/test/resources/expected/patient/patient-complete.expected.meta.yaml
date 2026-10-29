@@ -1,0 +1,10 @@
+requirements: [M3-REQ-01, M3-REQ-02, M3-REQ-16]
+scenario: M3-SC-PAT-001
+input: cerner/fhir/patient/patient-complete.json
+status: team-c-working-baseline
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+notes:
+  - sourceRecordId comes from the authorized FHIR Patient id and is linked through EhrPatientCrosswalk
+  - database identifiers and raw payload identifiers are not exposed
+  - final field names and response envelope remain pending unified OpenAPI approval

@@ -1,0 +1,192 @@
+# File: quality/ci/gate/policy.yaml
+# ==========================================================
+# CareConnect CI Quality & Security Enforcement Policy
+# ==========================================================
+# This file is the governance contract for the CI Quality Gate.
+#
+# It defines:
+# - Which tools are allowed to block merges (blocking: true/false)
+# - What conditions constitute a policy violation (fail_on rules)
+#
+# How enforcement works (high-level):
+# 1) Tools run in CI and emit raw artifacts into:
+#      quality/analysis/raw/
+# 2) normalize.py parses raw artifacts into a unified schema:
+#      quality/analysis/normalized/normalized.json
+# 3) policy_engine.py reads normalized.json + this policy.yaml and decides:
+#      - policy_violation per tool
+#      - overall_block for the pipeline
+#
+# GLOBAL RULES (enforced by policy_engine.py):
+# - Any tool marked `blocking: true` that violates its policy will BLOCK the merge.
+# - Any runtime error, missing artifact, skipped execution, or misconfiguration
+#   is treated as a violation and will also BLOCK (if blocking is true).
+#
+# NOTE:
+# The gate runs in ENFORCE mode. When violations occur, the CI job exits
+# with a non-zero status. GitHub branch protection rules determine whether
+# that failed check blocks the merge.
+#
+# CHANGE CONTROL:
+# - Treat this file like production governance configuration.
+# - Modify thresholds carefully and commit changes via PR review.
+# ==========================================================
+
+# ----------------------------------------------------------
+# Global Gate Mode
+# ----------------------------------------------------------
+# mode:
+#   enforce     : Gate exits with failure on violations.
+#   report_only : Gate reports violations but never fails CI.
+#
+# enforce is the correct default for production pipelines.
+# ----------------------------------------------------------
+gate:
+  mode: report_only
+
+tools:
+
+  # ----------------------------------------------------------
+  # TruffleHog (Secrets Scan)
+  # ----------------------------------------------------------
+  # Intent: Block on ANY secret finding.
+  # ----------------------------------------------------------
+  trufflehog:
+    blocking: true
+    description: "TruffleHog (Secrets Scan)"
+    fail_on:
+      any_finding: true
+
+  # ----------------------------------------------------------
+  # Gitleaks (Secrets Scan)
+  # ----------------------------------------------------------
+  # Intent: Block on ANY secret finding.
+  # ----------------------------------------------------------
+  gitleaks:
+    blocking: true
+    description: "Gitleaks (Secrets Scan)"
+    fail_on:
+      any_finding: true
+
+  # ----------------------------------------------------------
+  # Flutter Analyze (Dart Analyzer)
+  # ----------------------------------------------------------
+  # Intent: Block on analyzer errors.
+  # ----------------------------------------------------------
+  flutter_analyze:
+    blocking: true
+    description: "Flutter/Dart static analysis"
+    fail_on:
+      error_count: ">0"
+
+  # ----------------------------------------------------------
+  # Checkstyle (Java Style)
+  # ----------------------------------------------------------
+  # Intent: Block on any style violation.
+  # ----------------------------------------------------------
+  checkstyle:
+    blocking: true
+    description: "Java style enforcement"
+    fail_on:
+      violation_count: ">0"
+
+  # ----------------------------------------------------------
+  # PMD (Java Source Analysis)
+  # ----------------------------------------------------------
+  # Intent: Block on medium severity and above.
+  # ----------------------------------------------------------
+  pmd:
+    blocking: true
+    description: "Java source static analysis"
+    fail_on:
+      severity: "medium_and_above"
+
+  # ----------------------------------------------------------
+  # SpotBugs (Java Bytecode Analysis)
+  # ----------------------------------------------------------
+  # Intent: Block on medium severity and above.
+  # ----------------------------------------------------------
+  spotbugs:
+    blocking: true
+    description: "Java bytecode analysis"
+    fail_on:
+      severity: "medium_and_above"
+
+  # ----------------------------------------------------------
+  # Semgrep (Multi-language SAST)
+  # ----------------------------------------------------------
+  # Intent: Block on high severity and above.
+  # ----------------------------------------------------------
+  semgrep:
+    blocking: true
+    description: "Multi-language security analysis"
+    fail_on:
+      severity: "high_and_above"
+
+  # ----------------------------------------------------------
+  # Pylint (Python Static Analysis)
+  # ----------------------------------------------------------
+  # Intent: Block on errors and fatal issues only.
+  # ----------------------------------------------------------
+  pylint:
+    blocking: true
+    description: "Python static analysis (style + correctness)"
+    fail_on:
+      severity: "high_and_above"
+
+  # ----------------------------------------------------------
+  # Bandit (Python Security SAST)
+  # ----------------------------------------------------------
+  # Intent: Block on medium severity and above.
+  # ----------------------------------------------------------
+  bandit:
+    blocking: true
+    description: "Python security analysis"
+    fail_on:
+      severity: "medium_and_above"
+
+  # ----------------------------------------------------------
+  # HTMLHint (HTML Static Analysis)
+  # ----------------------------------------------------------
+  # Intent: Block on any HTML violation.
+  # ----------------------------------------------------------
+  htmlhint:
+    blocking: true
+    description: "HTML static analysis"
+    fail_on:
+      violation_count: ">0"
+
+  # ----------------------------------------------------------
+  # Stylelint (CSS/SCSS Static Analysis)
+  # ----------------------------------------------------------
+  # Intent: Block on any CSS/SCSS violation.
+  # ----------------------------------------------------------
+  stylelint:
+    blocking: true
+    description: "CSS/SCSS static analysis"
+    fail_on:
+      violation_count: ">0"
+
+  # ----------------------------------------------------------
+  # OWASP Dependency-Check (SCA)
+  # ----------------------------------------------------------
+  # Intent: Block on any known vulnerability.
+  # ----------------------------------------------------------
+  dependency_check:
+    blocking: true
+    description: "OWASP Dependency-Check (SCA)"
+    fail_on:
+      any_vulnerability: true
+
+  # ----------------------------------------------------------
+  # Trivy (Container + Filesystem SCA)
+  # ----------------------------------------------------------
+  # Intent: Block on medium severity and above.
+  # Scans filesystem for CVEs across all ecosystems
+  # (Java, Python, Flutter/Dart, Node, OS packages).
+  # ----------------------------------------------------------
+  trivy:
+    blocking: true
+    description: "Trivy container and filesystem vulnerability scan"
+    fail_on:
+      severity: "medium_and_above"

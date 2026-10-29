@@ -1,0 +1,245 @@
+{
+  "snapshot": "2026-10-22 14:42:21 EDT",
+  "status": "working package; not approved/delivered",
+  "final_candidate": null,
+  "receiver": null,
+  "receipt": null,
+  "pull_requests": [
+    {
+      "headRefOid": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "isDraft": false,
+      "mergeCommit": null,
+      "number": 391,
+      "state": "OPEN",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T16:42:09Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39815432440/job/119952653788",
+          "name": "quality-gate",
+          "startedAt": "2026-10-22T16:36:41Z",
+          "status": "COMPLETED",
+          "workflowName": "Build and Analyze"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T16:42:31Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39815432431/job/119952654274",
+          "name": "Feature Branch \u2014 Build & Test",
+          "startedAt": "2026-10-22T16:36:41Z",
+          "status": "COMPLETED",
+          "workflowName": "Feature Branch CI"
+        }
+      ],
+      "title": "Feature/team c cerner qa implementation",
+      "url": "https://github.com/umgc/2026_fall_careconnect/pull/391"
+    },
+    {
+      "headRefOid": "76a4c53a1aa0b573b63d79acb7acceec9686aab9",
+      "isDraft": false,
+      "mergeCommit": null,
+      "number": 395,
+      "state": "OPEN",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T15:21:12Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39802691719/job/119907475372",
+          "name": "quality-gate",
+          "startedAt": "2026-10-22T15:12:58Z",
+          "status": "COMPLETED",
+          "workflowName": "Build and Analyze"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T15:16:57Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39802691727/job/119907475632",
+          "name": "Feature Branch \u2014 Build & Test",
+          "startedAt": "2026-10-22T15:12:58Z",
+          "status": "COMPLETED",
+          "workflowName": "Feature Branch CI"
+        }
+      ],
+      "title": "docs: inventory current FHIR storage for Team B review",
+      "url": "https://github.com/umgc/2026_fall_careconnect/pull/395"
+    },
+    {
+      "headRefOid": "fa8a253d2c4f4d147cbc000b102e3b04273ab792",
+      "isDraft": false,
+      "mergeCommit": null,
+      "number": 396,
+      "state": "OPEN",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T15:20:29Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39802683563/job/119907441765",
+          "name": "quality-gate",
+          "startedAt": "2026-10-22T15:12:55Z",
+          "status": "COMPLETED",
+          "workflowName": "Build and Analyze"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T15:16:12Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39802683459/job/119907442380",
+          "name": "Feature Branch \u2014 Build & Test",
+          "startedAt": "2026-10-22T15:12:55Z",
+          "status": "COMPLETED",
+          "workflowName": "Feature Branch CI"
+        }
+      ],
+      "title": "docs: trace M4 requirements to evidence and closure gates",
+      "url": "https://github.com/umgc/2026_fall_careconnect/pull/396"
+    },
+    {
+      "headRefOid": "8d98babfb64ce714cdf3f41dfdf134ccc421888e",
+      "isDraft": false,
+      "mergeCommit": null,
+      "number": 399,
+      "state": "OPEN",
+      "statusCheckRollup": [
+        {
+          "__typename": "CheckRun",
+          "completedAt": "0001-01-01T00:00:00Z",
+          "conclusion": "",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39832523079/job/120012113770",
+          "name": "quality-gate",
+          "startedAt": "2026-10-22T18:34:02Z",
+          "status": "IN_PROGRESS",
+          "workflowName": "Build and Analyze"
+        },
+        {
+          "__typename": "CheckRun",
+          "completedAt": "2026-10-22T18:39:20Z",
+          "conclusion": "SUCCESS",
+          "detailsUrl": "https://github.com/umgc/2026_fall_careconnect/actions/runs/39832522873/job/120012111651",
+          "name": "Feature Branch \u2014 Build & Test",
+          "startedAt": "2026-10-22T18:34:02Z",
+          "status": "COMPLETED",
+          "workflowName": "Feature Branch CI"
+        }
+      ],
+      "title": "docs: M4 consent disconnect and retention decision brief",
+      "url": "https://github.com/umgc/2026_fall_careconnect/pull/399"
+    }
+  ],
+  "pinned_sources": [
+    {
+      "key": "qa-plan",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/m4-test-plan.md"
+    },
+    {
+      "key": "qa-trace",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/m4-traceability-matrix.md"
+    },
+    {
+      "key": "qa-summary",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/m4-test-summary.md"
+    },
+    {
+      "key": "qa-scenarios",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/m4-scenario-catalog.md"
+    },
+    {
+      "key": "qa-l10n",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/m4-localization-qa-checklist.md"
+    },
+    {
+      "key": "qa-smoke",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/cerner-secure-sandbox-smoke-checklist.md"
+    },
+    {
+      "key": "qa-fixtures",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "docs/testing/cerner-fixture-capture-register.md"
+    },
+    {
+      "key": "backend",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "backend/core/README.md"
+    },
+    {
+      "key": "environment",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "backend/core/README-ENV.md"
+    },
+    {
+      "key": "database",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "backend/core/pg_docker/README.md"
+    },
+    {
+      "key": "frontend",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "frontend/README.md"
+    },
+    {
+      "key": "configuration",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "backend/core/src/main/java/com/careconnect/config/CernerProperties.java"
+    },
+    {
+      "key": "controller",
+      "sha": "0c991bb525fefbdbbed478441450f56fe828d4e9",
+      "path": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerPatientAppointmentController.java"
+    },
+    {
+      "key": "inventory",
+      "sha": "76a4c53a1aa0b573b63d79acb7acceec9686aab9",
+      "path": "docs/team-c/FHIR_STORAGE_INVENTORY_2026-10-22.md"
+    },
+    {
+      "key": "evidence",
+      "sha": "fa8a253d2c4f4d147cbc000b102e3b04273ab792",
+      "path": "docs/team-c/M4_REQUIREMENTS_EVIDENCE_MATRIX_2026-10-22.md"
+    },
+    {
+      "key": "decisions",
+      "sha": "8d98babfb64ce714cdf3f41dfdf134ccc421888e",
+      "path": "docs/team-c/M4_CONSENT_DISCONNECT_RETENTION_DECISION_BRIEF_2026-10-22.md"
+    }
+  ],
+  "course_local_snapshot_files_not_in_pr": [
+    {
+      "path": "M4_Handoff_Package_Index_2026-10-22.md",
+      "bytes": 12870,
+      "sha256": "139ad8e0a718406999da5df3e8c30efb474a3f2e6ea0ee7c17659ee90082de40"
+    },
+    {
+      "path": "FHIR_STORAGE_INVENTORY_2026-10-22_v2.md",
+      "bytes": 35096,
+      "sha256": "69e1d8e841d774d701e19cfc4376fcbd772ea6ad92ce9ddea250c25d67975431"
+    },
+    {
+      "path": "M4_REQUIREMENTS_EVIDENCE_MATRIX_2026-10-22_v2.md",
+      "bytes": 33349,
+      "sha256": "b8f9952b3aa05a57e4ee9afc0931eb81c8a29a4c983193727a559caba1774c84"
+    },
+    {
+      "path": "M4_Consent_Disconnect_Retention_Decision_Brief_2026-10-22.md",
+      "bytes": 16939,
+      "sha256": "b893999c77496023b218e5970c409a3ee3af939a11216f039ed3bc738b919961"
+    }
+  ],
+  "published_files": [
+    {
+      "path": "docs/team-c/M4_HANDOFF_PACKAGE_INDEX_2026-10-22.md",
+      "bytes": 13193,
+      "sha256": "4c6e8deacaecd003f78214ce8a5d1e09a78ecfcdfff2aa097468422ea0878db8"
+    }
+  ],
+  "publication_note": "Documentation PR publication only. Snapshot PR states retain their preparation timestamp. No release delivery or receipt established."
+}

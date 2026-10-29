@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/config/theme/app_theme.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/widgets/caregiver_medicare_tab.dart';
 import 'package:care_connect_app/features/health/health_data/pages/health_event_details_screen.dart';
 import 'package:care_connect_app/services/api_client.dart';
@@ -42,16 +43,18 @@ void main() {
 
   RouteAdapter fixtures({bool synthetic = true, Completer<void>? gate}) =>
       RouteAdapter({
-        _visits: envelope(fixtureResources('eob-bundle.json'),
-            synthetic: synthetic),
+        _visits:
+            envelope(fixtureResources('eob-bundle.json'), synthetic: synthetic),
         _coverage: envelope(fixtureResources('coverage-bundle.json'),
             synthetic: synthetic),
       }, gate: gate);
 
-  Future<void> pump(WidgetTester t, RouteAdapter a,
-      {ThemeData? theme}) async {
+  Future<void> pump(WidgetTester t, RouteAdapter a, {ThemeData? theme}) async {
     ApiClient.instance.debugSetHttpClientAdapter(a);
     await t.pumpWidget(MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: theme,
       home: const Scaffold(body: CaregiverMedicareTab(patientId: 3)),
     ));
@@ -89,7 +92,8 @@ void main() {
     ]);
   });
 
-  testWidgets('TC-MCR-CG-002: a labelled loading state shows until Medicare '
+  testWidgets(
+      'TC-MCR-CG-002: a labelled loading state shows until Medicare '
       'answers', (t) async {
     final handle = t.ensureSemantics();
     final gate = Completer<void>();
@@ -112,12 +116,11 @@ void main() {
     expect(find.text('Visits and claims'), findsOneWidget);
     expect(find.text('Medicare Part A (Hospital Insurance)'), findsOneWidget);
     expect(find.text('Medicare Part B (Medical Insurance)'), findsOneWidget);
-    expect(
-        find.text('Medicare Part D (Prescription Drug Coverage)'),
+    expect(find.text('Medicare Part D (Prescription Drug Coverage)'),
         findsOneWidget);
 
-    final office = find.text(
-        'Office or other outpatient visit, established patient');
+    final office =
+        find.text('Office or other outpatient visit, established patient');
     final pneumonia = find.text('Simple pneumonia and pleurisy with CC');
     expect(t.getTopLeft(office).dy, lessThan(t.getTopLeft(pneumonia).dy));
     expect(find.text('July 14, 2026 · Paid'), findsOneWidget);
@@ -126,7 +129,8 @@ void main() {
     expect(find.byType(ListTile), findsNWidgets(5));
   });
 
-  testWidgets('TC-MCR-CG-004: a 404 shows the one unavailable message and no '
+  testWidgets(
+      'TC-MCR-CG-004: a 404 shows the one unavailable message and no '
       'records', (t) async {
     await pump(t, RouteAdapter({}, status: {_visits: 404, _coverage: 404}));
     await settle(t);
@@ -243,7 +247,8 @@ void main() {
       RouteAdapter({}, status: {_visits: 404, _coverage: 404}),
       RouteAdapter({}, status: {_visits: 409, _coverage: 409}),
       RouteAdapter({}, status: {_visits: 503, _coverage: 503}),
-      RouteAdapter({_visits: envelope(const []), _coverage: envelope(const [])}),
+      RouteAdapter(
+          {_visits: envelope(const []), _coverage: envelope(const [])}),
     ];
     for (final a in states) {
       await t.pumpWidget(const SizedBox());
@@ -255,8 +260,10 @@ void main() {
       expect(find.byType(ElevatedButton), findsNothing);
       expect(find.byType(FilledButton), findsNothing);
       expect(find.byType(Switch), findsNothing);
-      expect(find.textContaining(RegExp('share|disconnect|unlink',
-          caseSensitive: false)), findsNothing);
+      expect(
+          find.textContaining(
+              RegExp('share|disconnect|unlink', caseSensitive: false)),
+          findsNothing);
     }
   });
 
@@ -482,6 +489,9 @@ void main() {
       await t.pumpWidget(const SizedBox());
       ApiClient.instance.debugSetHttpClientAdapter(s.value);
       await t.pumpWidget(MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: AppTheme.lightTheme,
         home: const MediaQuery(
           data: MediaQueryData(

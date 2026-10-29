@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/invoices/models/invoice_models.dart';
 import 'package:care_connect_app/features/invoices/screens/dashboard/utilis/format.dart';
 import 'package:care_connect_app/features/invoices/screens/dashboard/widgets/activity_and_charts.dart';
@@ -137,7 +138,8 @@ class OverdueTile extends StatelessWidget {
           FilledButton.tonalIcon(
             onPressed: () {
               Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(
+                TitledMaterialPageRoute(
+                  title: 'Invoice Details',
                     builder: (_) => InvoiceDetailPage(invoice: invoice)),
               );
             },

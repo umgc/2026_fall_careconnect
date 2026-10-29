@@ -91,7 +91,7 @@ class AiSymptomControllerTest {
 
         final ResponseEntity<?> response = controller.analyze(request);
 
-        verify(authorizationService).requirePatientAccess(adminUser, 2L);
+        verify(authorizationService).requirePatientRecordAccess(adminUser, 2L);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
@@ -113,7 +113,7 @@ class AiSymptomControllerTest {
 
         final ResponseEntity<?> response = controller.analyze(request);
 
-        verify(authorizationService, never()).requirePatientAccess(any(), any());
+        verify(authorizationService, never()).requirePatientRecordAccess(any(), any());
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 

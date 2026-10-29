@@ -41,7 +41,7 @@ class CernerAllergyMapperTest {
 
         final List<Allergy> out = CernerAllergyMapper.map(bundle(allergy("a1", PATIENT, extra)), PATIENT);
 
-        assertThat(out).containsExactly(new Allergy("CERNER", "a1", "Penicillin", "7980", "active",
+        assertThat(out).containsExactly(new Allergy("ORACLE_HEALTH", "a1", "Penicillin", "7980", "active",
                 "confirmed", "severe", "2024-03-01T15:00:00Z", List.of("Hives", "Wheezing")));
     }
 

@@ -1,0 +1,19 @@
+{
+  "resourceType": "Patient",
+  "id": "synthetic-patient-minimal",
+  "active": true,
+  "identifier": [
+    {
+      "system": "https://example.test/identifier/mrn",
+      "value": "synthetic-mrn-minimal"
+    }
+  ],
+  "name": [
+    {
+      "family": "Patient",
+      "given": ["Minimal"]
+    }
+  ],
+  "gender": "unknown",
+  "birthDate": "1990-01-01"
+}

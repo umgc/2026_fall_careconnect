@@ -1,31 +1,31 @@
 # Milestone 3 Cerner Integration Test Plan
 
 **Owner:** Team C QA Lead (Tiffany Obi)
-**Status:** Working QA baseline for the Cerner AllergyIntolerance workflow; contract-dependent details remain provisional
+**Status:** Working QA baseline for the five-resource Cerner scope; AllergyIntolerance remains the reference workflow and contract-dependent details remain provisional
 **Work packages:** WBS 4.7 (Cerner mapping/normalization), WBS 4.8 (Cerner API endpoint development)
 **Data boundary:** Synthetic data only; retrieval only; no write-back
 
 ## 1. Purpose
 
-This plan defines how Team C will verify Cerner FHIR R4 retrieval, mapping, API behavior, and the critical frontend-to-backend workflow for Milestone 3. It applies the approved six-level testing strategy and assigns each scenario to the lowest level that proves the behavior. A scenario is repeated at a higher level only when that level proves a new boundary, such as HTTP serialization, the approved API contract, or actual sandbox interoperability.
+This plan defines how Team C will verify Cerner FHIR R4 retrieval, mapping, API behavior, and the critical frontend-to-backend workflow for Milestone 3. The confirmed Cerner retrieval scope is Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment. It applies the approved six-level testing strategy and assigns each scenario to the lowest level that proves the behavior. A scenario is repeated at a higher level only when that level proves a new boundary, such as HTTP serialization, the approved API contract, or actual sandbox interoperability.
 
-The initial repeatable example is AllergyIntolerance. As of October 17, Team C contains the pure allergy mapper, provisional controller, six shared fixtures, fixed expected outputs, and offline tests. The response shape remains provisional until the canonical model and OpenAPI contract are approved. See [the current validation report](team-c-task-validation-2026-10-17.md) for executed results and [the Test Lead packet](team-c-m1-test-lead-review-2026-10-17.md) for review decisions. The September 26 snapshot below is retained as history.
+The initial repeatable example is AllergyIntolerance. As of October 21, Team C contains the pure allergy mapper, provisional controller, shared fixtures, fixed mapper expectations, Oracle Health SMART OAuth/PKCE and encrypted-credential services, canonical patient-crosswalk linking, a live allergy service, bounded same-source pagination, one-time token refresh after a 401, raw AllergyIntolerance retention, and focused offline tests. Patient and Appointment have limited mapper/storage coverage. Condition and Encounter now have provisional shared, source-neutral persistence records, pure fixture-driven mappers, repositories, a shared bounded Cerner Bundle client, one-time refresh after a 401, original-resource retention, idempotent normalized upserts, stale-update protection, and focused HTTP/service/JPA tests. Their controllers, approved expected outputs, contract tests, frontend workflows, and live smoke evidence remain open. The public response shape remains provisional until the canonical model and unified OpenAPI contract are approved. See [the current validation report](team-c-task-validation-2026-10-17.md) for earlier executed results and [the Test Lead packet](team-c-m1-test-lead-review-2026-10-17.md) for review decisions.
 
 This plan is intended for active use during implementation. QA artifacts, fixtures, tests, and traceability will evolve alongside WBS 4.7 and WBS 4.8 rather than being completed after development. An unresolved dependency does not prevent semantic or lower-level testing when the temporary assumption is recorded in Section 12; affected assertions must be updated after the authoritative decision is approved.
 
 ## 2. Repository baseline and artifact status
 
-Snapshot inspected on 2026-09-26:
+Snapshot inspected on branch `feature/team-c-cerner-qa-implementation` after fast-forwarding `team-c-develop` to `29ca58e4` on 2026-10-21:
 
 | Artifact | Observed status | QA consequence |
 |---|---|---|
-| `docs/team-c-m3-qa` | QA documentation branch created from `team-c-develop` (`87f42ff1`) | These documents change no application behavior. |
-| `integration/unified-health-data` | Not present in available local or remote refs | Contract and cross-team tests cannot be finalized. |
-| `contracts/unified-health-data.openapi.yaml` | Not present in available refs | Paths, parameters, response shapes, error codes, and `sourceStatus` assertions are TBD. |
-| Team C Cerner mapping | Implemented on `origin/feature/team-c-cerner-resource-mapping` (`29b94dd2`), not on this baseline | Pure Patient/Appointment projection exists with 57 reported focused tests; AllergyIntolerance and HTTP integration remain unimplemented. |
-| Shared adapter | `EhrApiClient` exists on Team D and Team B branches in different packages/forms | The shared adapter interface is proposed, not approved for Team C use. |
-| Shared persistence/reconciliation | Models and SQL exist on feature branches, not this baseline | ERD/canonical persistence and reconciliation rules require approval before persistence assertions. |
-| Frontend health-data model | Exists on `origin/feature/e-health-data-frontend` | Mock and E2E assertions must be reconciled with OpenAPI 1.0 before sign-off. |
+| Five-resource Cerner scope | Confirmed: Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment | QA requirements and resource coverage now include all five; Appointment remains explicitly provisional. |
+| `contracts/unified-health-data.openapi.yaml` | Not found in the synchronized repository | Paths, parameters, response shapes, error codes, contract tests, and `sourceStatus` assertions remain TBD. |
+| AllergyIntolerance implementation | Mapper, provisional controller, live service wiring, OAuth/refresh, patient crosswalk, bounded pagination, raw-payload retention, fixtures, and focused offline tests exist | Useful vertical-slice pattern; approved contract validation, Spring/WireMock integration, E2E, live smoke, and final partial-result/rate-limit policies remain open. |
+| Patient and Appointment implementation | `CernerResourceMapper` and `CernerStorageAdapter` provide limited mapping/storage behavior | Expand to approved field rules and endpoint/client evidence; do not count storage tests as end-to-end retrieval evidence. |
+| Condition and Encounter implementation | Shared source-neutral records, repositories, pure mappers, a bounded same-source HTTP client, OAuth refresh orchestration, raw-payload retention, normalized upserts, stale-update protection, and focused HTTP/service/JPA tests exist; the shapes remain provisional | Review and approve the field rules, then add controllers, approved paired expected outputs, Spring/WireMock integration, contract tests, E2E, and smoke evidence. |
+| Shared adapter and persistence | Shared EHR interfaces, canonical persistence, retention, and reconciliation code are present, but the final Cerner integration boundary still requires team confirmation | Reuse approved shared contracts; do not introduce a Cerner-only canonical model. |
+| Frontend health-data integration | Shared health-data UI exists, but full Cerner retrieval and connection behavior are not demonstrated | Final frontend mocks and E2E assertions must be reconciled with the approved OpenAPI contract. |
 
 The repository's `TESTING_NORMS.md` requires shared fixtures, no live network or database dependencies in unit tests, and test-only helpers under established test locations. This plan follows those rules.
 
@@ -34,6 +34,7 @@ The repository's `TESTING_NORMS.md` requires shared fixtures, no live network or
 ### In scope
 
 - Mapping and normalization of approved M3 Cerner FHIR R4 resources into the approved CareConnect schema.
+- Read-only retrieval for Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment.
 - Source identity and provenance retention, including source system and source record identity.
 - Successful authorized retrieval and FHIR Bundle processing.
 - Missing optional data, malformed required/core data, empty results, and mixed valid/invalid Bundle entries.
@@ -72,6 +73,11 @@ The repository's `TESTING_NORMS.md` requires shared fixtures, no live network or
 | M3-REQ-13 | Preserve existing health-data behavior through focused regression tests. | High |
 | M3-REQ-14 | Demonstrate current interoperability with a documented synthetic live-sandbox smoke test weekly and before sign-off. | Critical |
 | M3-REQ-15 | Meet coverage, CI stability, contract coverage, defect, and evidence requirements for sign-off. | Critical |
+| M3-REQ-16 | Retrieve and map the authorized Cerner Patient resource without using demographics to infer identity. | Critical |
+| M3-REQ-17 | Retrieve and map Cerner Condition search results, preserving approved category, status, code, onset/abatement, encounter reference, and provenance behavior. | Critical |
+| M3-REQ-18 | Retrieve and map Cerner Encounter search results, preserving approved status, class/type, period, participants, service provider, and provenance behavior. | Critical |
+| M3-REQ-19 | Retrieve and map provisional Cerner Appointment results using an approved bounded date or `-date-or-req-period` search; no appointment write-back is permitted. | High |
+| M3-REQ-20 | Keep SMART authorization, token, audience, and FHIR requests on one approved persona/host pair and request only the approved read scopes. | Critical |
 
 Requirements must be referenced in JUnit tags or display names, for example `@Tag("M3-REQ-04")` and `@DisplayName("M3-REQ-04: complete AllergyIntolerance maps every field")`. Scenario IDs from the catalog may also be included.
 
@@ -113,6 +119,28 @@ WBS 4.7 and 4.8 intentionally overlap. Carry AllergyIntolerance through all phas
 - The live smoke test uses Oracle Health code Console Test Sandbox only, an approved synthetic patient, S256 PKCE, provider authentication, and short-lived bearer tokens.
 - Secrets, authorization codes, code verifiers, access/refresh tokens, cookies, and identifying headers must never enter fixtures, logs, screenshots, or commits.
 - Sanitized captures must follow [fixtures-README.md](fixtures-README.md).
+- QA records capture status in [cerner-fixture-capture-register.md](cerner-fixture-capture-register.md) and executes live checks with [cerner-secure-sandbox-smoke-checklist.md](cerner-secure-sandbox-smoke-checklist.md).
+
+### Verified secure-sandbox reference
+
+The following values were verified against Oracle Health discovery/capability metadata on 2026-10-21. They are test-environment references, not application secrets:
+
+| Persona | FHIR base | Authorization/token behavior |
+|---|---|---|
+| Provider/non-patient access | `https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d` | Use the provider authorization endpoint and the token endpoint whose host segment is `fhir-ehr-code.cerner.com`. |
+| Patient access | `https://fhir-myrecord.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d` | Use the patient authorization endpoint and the token endpoint whose host segment is `fhir-myrecord.cerner.com`. |
+
+The provider discovery document is `{providerBase}/.well-known/smart-configuration`. Tests must verify S256 PKCE, exact redirect URI matching, FHIR audience consistency, approved read-only scopes, and rejection of a token used against the wrong FHIR host. No client secret, launch value, authorization code, verifier, access token, refresh token, cookie, or bearer header may be committed.
+
+Resource request patterns for the secure sandbox are:
+
+- `GET {base}/Patient/{id}` or approved `_id` search.
+- `GET {base}/AllergyIntolerance?patient={cernerPatientId}`.
+- `GET {base}/Condition?patient={cernerPatientId}`.
+- `GET {base}/Encounter?patient={cernerPatientId}`.
+- `GET {base}/Appointment?patient={cernerPatientId}&date=gt{start}&date=le{end}` or the approved bounded `-date-or-req-period` equivalent.
+
+These are Oracle Health boundary calls, not final CareConnect frontend/backend endpoint paths. For pagination, the client must follow the complete same-source `Bundle.link` URL whose relation is `next`, subject to loop and page-count limits.
 
 ## 8. Entry criteria
 
@@ -173,10 +201,11 @@ QA may issue **Pass**, **Pass with accepted conditions** (no Critical/High defec
 | Unified OpenAPI 1.0 | Not observed | Use semantic outcomes only; illustrated paths, fields, errors, and `sourceStatus` are provisional. | CTL-001–008, CON-001–004, INT-001–010, E2E-002–003 | Frontend/backend/integration contributors | Pin path, version, and checksum; replace provisional assertions and validate fixtures/responses. |
 | Approved canonical model/ERD | Draft implementations exist on feature branches | Preserve source facts and provenance without finalizing normalized JSON. | MAP-001–015 and expected outputs | Cross-team architecture/model owners | Create or revise paired expected outputs and field-level assertions. |
 | Approved shared adapter interface | Competing/proposed feature-branch forms exist | Test behavior at service boundaries without assuming a package or concrete interface. | Service/client and integration tests | Cross-team technical leads | Align test wiring and shared client/service cases to the approved interface. |
+| Oracle Health source identifier | Team C adopted the seeded persistence code `ORACLE_HEALTH`; the earlier provisional mapper value `CERNER` was retired | Use `ORACLE_HEALTH` in mapper records, persistence, connection status, and source error envelopes. | Mapper, controller, OAuth, persistence, contract | Team C plus OpenAPI approvers | Confirm that OpenAPI 1.0 exposes `ORACLE_HEALTH`; otherwise document and test an explicit API-to-persistence translation. |
 | Approved reconciliation rules | Proposed | Keep uncertain matches separate and do not infer identity. | MAP-007–008, SVC-009–011, partial-result tests | Architecture/reconciliation owners | Finalize duplicate, crosswalk, uncertain-match, and partial-result assertions. |
-| Final M3 resource scope | Pending | AllergyIntolerance is the first reference workflow; other resources remain conditional. | Resource matrix, SMK-003 | Team C lead/product owner | Add final resource requirements, scenarios, fixtures, and evidence rows. |
-| Refresh-token policy for Cerner | Pending | Test bounded behavior semantically; do not fix call counts except where implementation policy approves them. | SVC-003–004, INT-003–004 | Cerner/backend auth owners | Set exact refresh, retry, and reauthorization assertions. |
-| Pagination and partial-result contract | Pending OpenAPI | Preserve successful records internally and describe client behavior semantically. | SVC-008–011, CTL-007, INT-008–009, E2E-003 | Contract and backend owners | Finalize pagination limits, client response, and `sourceStatus` assertions. |
+| Final M3 resource scope | Confirmed for Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment | AllergyIntolerance remains the first reference workflow; apply the reusable pattern to the other four resources. | M3-REQ-04 and M3-REQ-16–20; resource matrix; smoke tests | Team C lead/product owner | Record any Appointment scope change and update affected tests without renumbering existing requirements. |
+| Refresh-token policy for Cerner | Implementation baseline: refresh near local expiry, or once after an upstream 401; a failed refresh marks the credential `NEEDS_REAUTH` | Treat one forced refresh as the current bounded safety rule, pending backend approval. | SVC-003–004, INT-003–004 | Cerner/backend auth owners | Approve or revise the exact refresh rule and lock it with WireMock call-count assertions. |
+| Pagination and partial-result contract | Client follows at most 20 unique, same-scheme/host/port/base-path pages; any later page failure currently fails the source request | Use the bounded same-source rule for internal client tests; do not finalize API partial-result assertions. | SVC-008–011, CTL-007, INT-008–009, E2E-003 | Contract and backend owners | Approve page limit, duplicate policy, later-page failure behavior, and `sourceStatus` assertions. |
 | Approved frontend presentation rules | Pending | Test distinct loading, empty, denial, reconnect, error, retry, and partial states using provisional labels. | Frontend unit/widget and E2E | Frontend/product contributors | Replace provisional copy and presentation assertions with approved behavior. |
 
 Update this register whenever an assumption is adopted or an authoritative decision is approved. Link the approving artifact, decision, or pull request; do not silently replace one competing approach with another.
@@ -188,9 +217,9 @@ Complete this record with Team C as implementation begins:
 | Coordination item | Assigned person/reference | Date/status |
 |---|---|---|
 | AllergyIntolerance mapper developer | TBD | TBD |
-| Cerner allergy endpoint developer | TBD | TBD |
+| Cerner allergy endpoint developer | Team C branch implementation | OAuth, crosswalk, live allergy service, pagination, and raw-payload baseline added 2026-10-21 |
 | QA/developer first-mapper pairing session | Tiffany Obi + TBD | TBD |
-| Implementation branch/pull request | TBD | TBD |
+| Implementation branch/pull request | `feature/team-c-cerner-qa-implementation` | Local implementation in progress; pull request TBD |
 | Source fixture and sanitization reviewer | TBD | TBD |
 | Expected-output/mapping reviewer | TBD | TBD |
 | OpenAPI 1.0 approval reference and checksum | TBD | Pending approval |

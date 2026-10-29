@@ -1,0 +1,44 @@
+{
+  "resourceType": "Bundle",
+  "id": "synthetic-condition-bundle-minimal",
+  "type": "searchset",
+  "entry": [
+    {
+      "fullUrl": "https://example.test/fhir/Condition/synthetic-condition-minimal",
+      "resource": {
+        "resourceType": "Condition",
+        "id": "synthetic-condition-minimal",
+        "verificationStatus": {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+              "code": "confirmed",
+              "display": "Confirmed"
+            }
+          ]
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                "code": "problem-list-item",
+                "display": "Problem List Item"
+              }
+            ]
+          }
+        ],
+        "code": {
+          "text": "Synthetic condition without coding"
+        },
+        "subject": {
+          "reference": "Patient/synthetic-patient-1"
+        },
+        "recordedDate": "2026-09-16T10:00:00Z"
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}

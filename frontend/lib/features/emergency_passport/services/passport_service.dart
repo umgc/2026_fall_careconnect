@@ -83,7 +83,8 @@ class PassportService {
 
   /// Sends a request; on 401 refreshes the sign-in once and retries.
   Future<http.Response> _send(
-      Future<http.Response> Function(Map<String, String> headers) request) async {
+      Future<http.Response> Function(Map<String, String> headers)
+          request) async {
     try {
       final first = await request(await _headers()).timeout(_timeout);
       if (first.statusCode != 401) return first;

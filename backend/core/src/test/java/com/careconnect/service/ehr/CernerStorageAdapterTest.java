@@ -14,8 +14,11 @@ import java.net.URI;
 import java.time.*;
 import java.util.*;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("M3-REQ-16")
+@Tag("M3-REQ-19")
 class CernerStorageAdapterTest {
     private final ObjectMapper json = new ObjectMapper();
     private final EhrSourceRepository sources = mock(EhrSourceRepository.class);
@@ -212,10 +215,10 @@ class CernerStorageAdapterTest {
         assertEquals(1, rawRows.size());
     }
 
-    @Test void sharedMapperAloneExhibitsOffsetLoss() throws Exception {
+    @Test void sharedMapperNormalizesOffsetDateTimesToUtc() throws Exception {
         var row = EhrAppointmentMapper.map(fixture("appointment.json"), patient, source, null);
-        assertEquals(LocalDateTime.parse("2026-11-01T01:30:00"), row.getStartTime());
-        assertEquals(row.getStartTime(), row.getEndTime());
+        assertEquals(LocalDateTime.parse("2026-11-01T05:30:00"), row.getStartTime());
+        assertEquals(LocalDateTime.parse("2026-11-01T06:30:00"), row.getEndTime());
     }
 
     @Test void sharedMapperAloneAcceptsWrongPatient() throws Exception {

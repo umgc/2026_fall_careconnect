@@ -35,6 +35,12 @@
 //
 // Tests that can run purely in the Flutter layer are annotated:
 //   // OFFLINE: no backend needed
+//
+// OPT-IN: every test calls app.main(), which loads the .env asset and starts
+// backend services, so the suite is skipped unless enabled. Add
+//   --dart-define=VIDEO_CALL_E2E=true
+// to any of the commands above. Without it (e.g. in CI with no backend) the
+// app hangs on startup until the job times out.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,6 +60,8 @@ const kCaregiverPassword = 'Test1234!';
 // Seeded call ID that exists in the test database.
 // REQUIRES: backend running at localhost:8081
 const kTestCallId = 'e2e-test-call-001';
+
+const _enabled = bool.fromEnvironment('VIDEO_CALL_E2E');
 
 // ---------------------------------------------------------------------------
 // Shared helper: log in with [email]/[password] from the current screen.
@@ -86,6 +94,16 @@ Future<void> loginAs(
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  if (!_enabled) {
+    test(
+      'Video call E2E suite',
+      () {},
+      skip: 'opt-in: pass --dart-define=VIDEO_CALL_E2E=true with a running '
+          'backend and a frontend .env',
+    );
+    return;
+  }
 
   // =========================================================================
   // GROUP: App launch

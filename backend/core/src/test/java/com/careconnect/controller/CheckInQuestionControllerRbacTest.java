@@ -92,7 +92,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(jsonPath("$[0].prompt").value("How are you?"));
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(adminUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(adminUser, 3L);
         verify(checkInSnapshotService).getSnapshotQuestions(1L);
     }
 
@@ -109,7 +109,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(jsonPath("$.length()").value(0));
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(caregiverUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(caregiverUser, 3L);
         verify(checkInSnapshotService).getSnapshotQuestions(1L);
     }
 
@@ -125,7 +125,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(status().isOk());
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(patientUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(patientUser, 3L);
     }
 
     @Test
@@ -140,7 +140,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(status().isOk());
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(familyMemberUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(familyMemberUser, 3L);
     }
 
     @Test
@@ -156,7 +156,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(jsonPath("$[0].checkInId").value(10));
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(patientUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(patientUser, 3L);
         verify(checkInSnapshotService).listCheckInsForPatient(3L);
     }
 
@@ -166,13 +166,13 @@ class CheckInQuestionControllerRbacTest {
     void patient_cannotListOtherPatientCheckIns() throws Exception {
         when(securityUtil.resolveCurrentUser()).thenReturn(patientUser);
         doThrow(new UnauthorizedException("Patients can only access their own data"))
-                .when(authorizationService).requirePatientAccess(patientUser, 9L);
+                .when(authorizationService).requirePatientRecordAccess(patientUser, 9L);
 
         mockMvc.perform(get("/api/checkins/patients/9"))
                 .andExpect(status().isForbidden());
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(patientUser, 9L);
+        verify(authorizationService).requirePatientRecordAccess(patientUser, 9L);
         verifyNoInteractions(checkInSnapshotService);
     }
 
@@ -189,7 +189,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].prompt").value("Legacy"));
 
-        verify(authorizationService).requirePatientAccess(adminUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(adminUser, 3L);
         verify(questionService).findActiveOrdered();
     }
 
@@ -210,7 +210,7 @@ class CheckInQuestionControllerRbacTest {
                 .andExpect(jsonPath("$.checkInId").value(10));
 
         verify(securityUtil).resolveCurrentUser();
-        verify(authorizationService).requirePatientAccess(adminUser, 3L);
+        verify(authorizationService).requirePatientRecordAccess(adminUser, 3L);
         verify(checkInSnapshotService).createCheckInWithSnapshot(any());
     }
 

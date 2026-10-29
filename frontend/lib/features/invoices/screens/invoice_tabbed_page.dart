@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:care_connect_app/features/invoices/screens/dashboard/invoice_dashboard_page.dart';
 import 'package:care_connect_app/features/invoices/screens/upload_invoice.dart';
@@ -29,7 +30,10 @@ class _InvoiceTabbedPageState extends State<InvoiceTabbedPage>
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
+    _tabController.addListener(_onTabChanged);
   }
+
+  void _onTabChanged() => setState(() {});
 
   @override
   void dispose() {
@@ -42,7 +46,7 @@ class _InvoiceTabbedPageState extends State<InvoiceTabbedPage>
     final showBack = widget.quickFilter != null; // filtered route
     final appBarTheme = Theme.of(context).appBarTheme;
 
-    return Scaffold(
+    final page = Scaffold(
       appBar: AppBar(
         title: const Text('Invoice Assistant'),
         leading: showBack
@@ -64,14 +68,31 @@ class _InvoiceTabbedPageState extends State<InvoiceTabbedPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          const _DashboardTab(key: ValueKey('dashboard')),
-          const _UploadInvoiceTab(key: ValueKey('upload')),
-          _InvoiceListTab(
-            key: const ValueKey('list'),
-            quickFilter: widget.quickFilter, // <— pass it in
+          PageTitleScope(
+            active: _tabController.index == 0,
+            child: const _DashboardTab(key: ValueKey('dashboard')),
+          ),
+          PageTitleScope(
+            active: _tabController.index == 1,
+            child: const _UploadInvoiceTab(key: ValueKey('upload')),
+          ),
+          PageTitleScope(
+            active: _tabController.index == 2,
+            child: _InvoiceListTab(
+              key: const ValueKey('list'),
+              quickFilter: widget.quickFilter,
+            ),
           ),
         ],
       ),
+    );
+    return PageTitle(
+      title: const [
+        'Invoice Dashboard',
+        'Upload Invoice',
+        'Invoice List'
+      ][_tabController.index],
+      child: page,
     );
   }
 }
@@ -83,7 +104,8 @@ class _DashboardTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (settings) {
-        return MaterialPageRoute(
+        return TitledMaterialPageRoute(
+            title: 'Invoice Dashboard',
             builder: (context) => const InvoiceDashboardPage());
       },
     );
@@ -97,7 +119,8 @@ class _UploadInvoiceTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (settings) {
-        return MaterialPageRoute(
+        return TitledMaterialPageRoute(
+            title: 'Upload Invoice',
             builder: (context) => const UploadInvoicePage());
       },
     );
@@ -113,7 +136,8 @@ class _InvoiceListTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Navigator(
       onGenerateRoute: (settings) {
-        return MaterialPageRoute(
+        return TitledMaterialPageRoute(
+          title: 'Invoice List',
           builder: (context) => InvoiceListPage(quickFilter: quickFilter),
         );
       },

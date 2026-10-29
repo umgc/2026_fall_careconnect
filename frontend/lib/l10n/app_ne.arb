@@ -153,6 +153,7 @@
   "ptdashboard_onceAtBed": "सुत्ने समयमा दैनिक एक पटक",
   
   "login_loginFailedError": "लगइन असफल भयो",
+  "login_invalidCredentials": "प्रयोगकर्ता नाम वा पासवर्ड गलत छ। तिनीहरू जाँच गर्नुहोस् र फेरि प्रयास गर्नुहोस्।",
 
   "settings_telemetryDefaultDialogTitle": "टेलीमेट्री सक्षम पारिएको छ",
   "settings_telemetryDefaultDialogDescription": "विश्वसनीयता सुधार गर्न मद्दत गर्न पूर्वनिर्धारित रूपमा CareConnect ले बेनामी निदान र कार्यसम्पादन मेट्रिक्स सङ्कलन गर्दछ।\nतपाईं जुनसुकै बेला अप्ट आउट गर्न सक्नुहुन्छ।",

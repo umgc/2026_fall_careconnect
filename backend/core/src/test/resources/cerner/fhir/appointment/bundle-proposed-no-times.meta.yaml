@@ -1,0 +1,19 @@
+requirements: [M3-REQ-06, M3-REQ-19]
+scenarios: [M3-SC-APPOINTMENT-002]
+origin: synthetic
+capturedAtUtc: null
+sandboxPersona: null
+requestPattern: GET {openBase}/Appointment?patient={syntheticPatientId}&-date-or-req-period={approvedBoundedRange}
+httpStatus: 200
+bundleEntryCount: 1
+nextLinkPresent: false
+derivedFrom: bundle-one-appointment.json and Oracle Health documented proposed-appointment search behavior
+changes:
+  - changed status to proposed
+  - removed confirmed start and end values
+  - retained only a requested period and needs-action participant
+reviewedBy: Team C QA working baseline
+reviewedAtUtc: 2026-10-22T00:00:00Z
+consumers: [CernerFiveResourceFixtureStructureTest.proposedAppointmentHasRequestedPeriodWithoutConfirmedTimes, CernerFiveResourceFixtureStructureTest.populatedBundlesContainTheExpectedResource, EhrAppointmentMapperTest.retainsProposedAppointmentWithMissingOptionalTimes, CernerPatientAppointmentExpectedOutputTest.proposedAppointmentMatchesPairedExpectedOutput]
+expectedBehavior: proposed Appointment remains proposed, confirmed start/end remain null, and the requested window remains available in the retained raw payload
+contractDependency: external response envelope and final field names remain pending unified OpenAPI approval

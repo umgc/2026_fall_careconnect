@@ -16,30 +16,121 @@ import java.util.Map;
 @Service
 public class VoiceIntentService {
 
-    private static final Map<String, String> ROUTE_MAP = Map.of(
-            "home", "/dashboard",
-            "dashboard", "/dashboard",
-            "calendar", "/calendar",
-            "symptoms", "/symptoms",
-            "symptom tracker", "/symptoms",
-            "medication", "/medication",
-            "medications", "/medication"
-    );
-    private static final String PROMPT_TEMPLATE = """
-            You are a voice command intent classifier for the CareConnect healthcare app.
+    private static final Map<String, String> ROUTE_MAP = Map.ofEntries(
+            // Core
+            Map.entry("home", "/dashboard"),
+            Map.entry("dashboard", "/dashboard"),
+            Map.entry("calendar", "/calendar"),
+            Map.entry("messages", "/dashboard?tab=messages"),
+            Map.entry("profile", "/profile"),
+            Map.entry("settings", "/settings"),
+            Map.entry("menu", "/dashboard?tab=menu"),
+
+            // Health & Wellness
+            Map.entry("symptoms", "/symptoms"),
+            Map.entry("symptom tracker", "/symptoms"),
+            Map.entry("medication", "/medication"),
+            Map.entry("medications", "/medication"),
+            Map.entry("medication tracker", "/medication"),
+            Map.entry("virtual check-in", "/virtual-checkin"),
+            Map.entry("virtual checkin", "/virtual-checkin"),
+            Map.entry("check-in", "/virtual-checkin"),
+
+            // Integrations & Devices
+            Map.entry("wearables", "/wearables"),
+            Map.entry("smart devices", "/smart-devices"),
+            Map.entry("home monitoring", "/home-monitoring"),
+
+            // Social
+            Map.entry("social feed", "/social-feed"),
+            Map.entry("social", "/social-feed"),
+
+            // Caregiver
+            Map.entry("patient list", "/tasks"),
+            Map.entry("patients", "/tasks"),
+            Map.entry("evv", "/evv"),
+            Map.entry("evv dashboard", "/evv"),
+            Map.entry("notetaker", "/notetaker-search"),
+            Map.entry("medical notetaker", "/notetaker-search"),
+            Map.entry("invoice", "/invoice-assistant"),
+            Map.entry("invoice assistant", "/invoice-assistant"),
+
+            // Files & Documents
+            Map.entry("files", "/file-management"),
+            Map.entry("file management", "/file-management"),
+            Map.entry("informed delivery", "/informed-delivery"),
+            Map.entry("mail", "/informed-delivery"),
+
+            // Gamification
+            Map.entry("gamification", "/gamification"),
+            Map.entry("achievements", "/gamification"),
+
+            // Configuration
+            Map.entry("ai configuration", "/ai-configuration"),
+            Map.entry("ai config", "/ai-configuration"),
+            Map.entry("notetaker configuration", "/notetaker-configuration"),
+
+            // Payments & Search
+            Map.entry("subscription", "/subscription"),
+            Map.entry("search", "/search"),
+
+            // Voice
+            Map.entry("voice", "/voice"),
+            Map.entry("voice commands", "/voice")
+
+    ); //end of ROUTE_MAP
+
+
+private static final String PROMPT_TEMPLATE = """
+            You are a strict voice command intent classifier for the CareConnect healthcare app.
             Given the user utterance below, extract the intent and entities.
-            Respond ONLY with valid JSON, no other text.
-            
+            Respond ONLY with valid JSON, with no other text, markdown formatting, or prose.
+
             Supported intents:
-            - "navigate": user wants to go to a screen. Entities: {"destination": "home|calendar|symptoms|medication|medications|dashboard"}
-            - "call": user wants to call someone. Entities: {"target": "<person name or role>"}
-            - "schedule": user wants to schedule an appointment. Entities: {"target": "<person>", "date": "<date if mentioned>"}
-            - "unknown": cannot determine intent
-            
+            - "navigate": The user wants to view a screen or open a feature.
+              ALLOWED DESTINATION KEYS:
+              "home", "dashboard", "calendar", "messages", "profile", "settings", "menu",
+              "symptoms", "symptom tracker", "medication", "medications", "medication tracker",
+              "virtual check-in", "virtual checkin", "check-in", "wearables", "smart devices",
+              "home monitoring", "social feed", "social", "patient list", "patients", "evv",
+              "evv dashboard", "notetaker", "medical notetaker", "invoice", "invoice assistant",
+              "files", "file management", "informed delivery", "mail", "gamification",
+              "achievements", "ai configuration", "ai config", "notetaker configuration",
+              "subscription", "search", "voice", "voice commands".
+              (You must output one of these exact keys under entities.destination).
+            - "call": The user wants to call someone. Entities: {"target": "<person name or role>"}
+            - "schedule": The user wants to schedule an appointment. Entities: {"target": "<person>", "date": "<date if mentioned>"}
+            - "unknown": Spoken phrase has nothing to do with CareConnect screens, or is casual non-healthcare chatter.
+
+            CONCRETE EXAMPLES:
+            Utterance: "where are my pills"
+            {"intent": "navigate", "entities": {"destination": "medication"}, "confidence": 0.95}
+
+            Utterance: "what medicine do I take"
+            {"intent": "navigate", "entities": {"destination": "medications"}, "confidence": 0.95}
+
+            Utterance: "how do I record my headache"
+            {"intent": "navigate", "entities": {"destination": "symptoms"}, "confidence": 0.92}
+
+            Utterance: "did I get any letters today"
+            {"intent": "navigate", "entities": {"destination": "mail"}, "confidence": 0.90}
+
+            Utterance: "show my badges and points"
+            {"intent": "navigate", "entities": {"destination": "achievements"}, "confidence": 0.93}
+
+            Utterance: "tell me a funny joke"
+            {"intent": "unknown", "entities": {}, "confidence": 0.99}
+
+            Utterance: "what is the weather like right now"
+            {"intent": "unknown", "entities": {}, "confidence": 0.99}
+
             JSON schema: {"intent":"...","entities":{...},"confidence":0.0-1.0}
-            
+
             User utterance: "%s"
             """;
+
+            //end of PROMPT_TEMPLATE
+
     private final AIServiceFactory aiServiceFactory;
     private final ObjectMapper objectMapper;
 

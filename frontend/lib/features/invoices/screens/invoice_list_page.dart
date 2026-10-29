@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 // invoice_list_page.dart
 import 'package:care_connect_app/features/invoices/models/filter_result.dart';
 import 'package:care_connect_app/features/invoices/services/invoice_service.dart';
@@ -244,7 +245,9 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
     // Push onto the app-level (root) navigator
     final updated =
         await Navigator.of(context, rootNavigator: true).push<Invoice>(
-      MaterialPageRoute(builder: (_) => InvoiceDetailPage(invoice: invoice)),
+      TitledMaterialPageRoute(
+        title: 'Invoice Details',
+        builder: (_) => InvoiceDetailPage(invoice: invoice)),
     );
     if (updated != null) {
       await InvoiceService.instance.upsert(updated);
@@ -255,7 +258,8 @@ class _InvoiceListPageState extends State<InvoiceListPage> {
   void _openDetailPaymentTab(Invoice invoice) {
     // Same idea, but start on the Payment tab
     Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Invoice Details',
         builder: (_) => InvoiceDetailPage(
           invoice: invoice,
           initialTabIndex: 2,

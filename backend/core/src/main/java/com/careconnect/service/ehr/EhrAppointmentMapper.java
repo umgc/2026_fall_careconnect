@@ -7,6 +7,7 @@ import com.careconnect.model.ehr.EhrSource;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 /**
  * Maps one raw FHIR {@code Appointment} resource into an {@link EhrAppointmentRecord}.
@@ -14,12 +15,12 @@ import java.time.OffsetDateTime;
  * <p>Isolated from {@link EhrAppointmentSyncService} so the FHIR-shape knowledge is independently
  * unit-testable against sample resource JSON, without a database or HTTP call in the loop.
  */
-final class EhrAppointmentMapper {
+public final class EhrAppointmentMapper {
 
     private EhrAppointmentMapper() {
     }
 
-    static EhrAppointmentRecord map(
+    public static EhrAppointmentRecord map(
             final JsonNode resource,
             final Patient patient,
             final EhrSource source,
@@ -60,7 +61,9 @@ final class EhrAppointmentMapper {
 
     private static LocalDateTime dateTime(final JsonNode node, final String field) {
         final String raw = text(node, field);
-        return raw == null ? null : OffsetDateTime.parse(raw).toLocalDateTime();
+        return raw == null
+                ? null
+                : OffsetDateTime.parse(raw).withOffsetSameInstant(ZoneOffset.UTC).toLocalDateTime();
     }
 
     private static LocalDateTime metaLastUpdated(final JsonNode resource) {

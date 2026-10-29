@@ -139,6 +139,69 @@
   "settingsNotetakerConfiguration": "Notetaker Configuration",
   "settingsNotetakerConfigurationDesc": "Customize your Notetaker assistant settings",
   "settingsGeneral": "General",
+  "settingsHelp": "Help",
+  "settingsHelpDesc": "FAQs, how-to guides, and troubleshooting",
+  "helpCenterTitle": "Help Center",
+  "helpCenterHome": "Help Center Home",
+  "helpBackToTop": "Back to top",
+  "helpOnThisPage": "On this page",
+  "@helpOnThisPage": {
+    "description": "Expandable article contents menu whose links scroll to section headings."
+  },
+  "@helpBackToTop": {
+    "description": "Floating button to scroll a long Help article back to its beginning."
+  },
+  "@helpCenterHome": {
+    "description": "Persistent Help navigation button returning directly to the Help Center home."
+  },
+  "helpBackToSettings": "Back to Settings",
+  "@helpBackToSettings": {
+    "description": "Persistent Help navigation button returning directly to Settings."
+  },
+  "helpSearchArticles": "Search Help",
+  "helpGlossary": "Glossary",
+  "helpGlossaryDescription": "Simple meanings for words used in the app",
+  "helpFindWord": "Find a word",
+  "helpArticles": "Articles",
+  "helpWordsAndMeanings": "Words and meanings",
+  "helpTermsInArticle": "Words in this article",
+  "helpNoGlossaryResults": "Try a shorter word or a different name for it.",
+  "helpShowAllWords": "Show all words",
+  "helpWordNotFound": "That word could not be found. You can search or browse all words below.",
+  "helpSeeInGlossary": "See {term} in glossary",
+  "@helpSeeInGlossary": {"placeholders": {"term": {"type": "String"}}},
+  "helpGlossaryResultsCount": "{count, plural, =0{No glossary words found} =1{1 glossary word found} other{{count} glossary words found}}",
+  "@helpGlossaryResultsCount": {"placeholders": {"count": {"type": "int"}}},
+  "helpCombinedResultsCount": "{articles}. {words}.",
+  "@helpCombinedResultsCount": {"placeholders": {"articles": {"type": "String"}, "words": {"type": "String"}}},
+  "helpClearSearch": "Clear search",
+  "helpPopularHelp": "Popular Help",
+  "helpBrowseTopics": "Browse Topics",
+  "helpSearchResults": "Search results",
+  "helpSearchResultsCount": "{count, plural, =0{No Help articles found} =1{1 Help article found} other{{count} Help articles found}}",
+  "@helpSearchResultsCount": {
+    "description": "Screen reader announcement when local Help search results change.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "helpNoSearchResults": "No matching articles or words. Try another search.",
+  "helpNoArticles": "No articles are available yet.",
+  "helpTopicNotFound": "Topic not found",
+  "helpTopicNotFoundDescription": "This help topic is unavailable. Return to the Help Center to browse other topics.",
+  "helpTroubleshooting": "Troubleshooting",
+  "helpRelatedArticles": "Related articles",
+  "helpOpenArticleHint": "Opens a Help article",
+  "helpOpenTopicHint": "Opens articles in this topic",
+  "helpOpenWordHint": "Opens this word in the glossary",
+  "helpOpenGlossaryHint": "Opens the glossary of app words and meanings",
+  "helpArticlesAboutWord": "Articles about {term}",
+  "@helpArticlesAboutWord": {
+    "description": "Heading for articles related to a glossary word.",
+    "placeholders": {"term": {"type": "String"}}
+  },
+  "helpGlossaryArticlesDescription": "Read these articles to learn how this word is used in the app.",
+  "helpArticleNotFoundTitle": "Article not found",
+  "helpArticleNotFoundDescription": "This help article is unavailable. Return to the Help Center to browse other guides.",
+  "helpBackToCenter": "Back to Help Center",
   "settingsClearCache": "Clear Cache",
   "settingsClearCacheShortDesc": "Remove temporary files and cache data",
   "settingsClearCacheDesc": "This will clear all temporary files and cache data. The app may take longer to load content initially after clearing cache.",
@@ -197,6 +260,7 @@
   "login_e2eEncrypted": "End-to-end encrypted",
   "login_wcagAACompliant": "WCAG AA compliant",
   "login_loginFailedError": "Login failed",
+  "login_invalidCredentials": "The username or password is incorrect. Check them and try again.",
 
   "voicecommand_wakeWordError": "Wake word init error",
   "voicecommand_voiceCommandsUnavailable": "Speech recognition not available",
@@ -1356,6 +1420,185 @@
   "medicarehelp_errMcr04": "You need an internet connection to connect your Medicare account.",
   "@medicarehelp_errMcr04": {"description": "ERR-MCR-04. Exact SRS text (section 8.6); do not reword."},
   "medicarehelp_errMcr05": "Your Medicare connection has expired. Connect again to see current records.",
-  "@medicarehelp_errMcr05": {"description": "ERR-MCR-05. Exact SRS text (section 8.6); do not reword."}
-
+  "@medicarehelp_errMcr05": {"description": "ERR-MCR-05. Exact SRS text (section 8.6); do not reword."},
+  "connectionRequests_title": "Caregiver requests",
+  "@connectionRequests_title": {"description": "Heading of the patient dashboard card listing caregivers who asked to connect."},
+  "connectionRequests_wantsToConnect": "{caregiverName} would like to be your caregiver. They will see your health records only if you accept.",
+  "@connectionRequests_wantsToConnect": {
+    "description": "Body of one pending caregiver connection request.",
+    "placeholders": {"caregiverName": {"type": "String"}}
+  },
+  "connectionRequests_accept": "Accept",
+  "@connectionRequests_accept": {"description": "Button that accepts a caregiver connection request."},
+  "connectionRequests_decline": "Decline",
+  "@connectionRequests_decline": {"description": "Button that declines a caregiver connection request."},
+  "connectionRequests_accepted": "You are now connected with {caregiverName}.",
+  "@connectionRequests_accepted": {
+    "description": "Snackbar after the patient accepts a caregiver connection request.",
+    "placeholders": {"caregiverName": {"type": "String"}}
+  },
+  "connectionRequests_declined": "Request declined.",
+  "@connectionRequests_declined": {"description": "Snackbar after the patient declines a caregiver connection request."},
+  "connectionRequests_error": "Could not update the request. Please try again.",
+  "@connectionRequests_error": {"description": "Snackbar when accepting or declining a caregiver connection request fails."},
+  "conditionFlags_title": "Condition screening",
+  "@conditionFlags_title": {
+    "description": "Title of the post-call card showing AI condition screening flags (caregivers, family, admins only)."
+  },
+  "conditionFlags_disclaimer": "This is a screening flag generated by an AI model. It is not a clinical diagnosis. Consult a healthcare professional for clinical evaluation.",
+  "@conditionFlags_disclaimer": {
+    "description": "Mandatory disclaimer shown on every surface that displays condition screening flags. Requires review."
+  },
+  "conditionFlags_loadError": "Couldn't load condition screening. Pull down to refresh.",
+  "@conditionFlags_loadError": {
+    "description": "Shown when the condition screening request fails."
+  },
+  "conditionFlags_modelVoice": "Voice analysis",
+  "@conditionFlags_modelVoice": {
+    "description": "Heading for the screening model that analyzes the patient's voice (depression and anxiety)."
+  },
+  "conditionFlags_modelTranscript": "Transcript analysis",
+  "@conditionFlags_modelTranscript": {
+    "description": "Heading for the screening model that analyzes the call transcript (PTSD and bipolar indicators)."
+  },
+  "conditionFlags_statusProcessing": "Analyzing the call. This can take several minutes — pull down to refresh.",
+  "@conditionFlags_statusProcessing": {
+    "description": "Shown while a screening model has not finished."
+  },
+  "conditionFlags_statusFailed": "Analysis failed after several attempts.",
+  "@conditionFlags_statusFailed": {
+    "description": "Shown when a screening model failed permanently."
+  },
+  "conditionFlags_skipCallTooShort": "Not analyzed because the call was shorter than 30 seconds.",
+  "@conditionFlags_skipCallTooShort": {
+    "description": "Skip reason: call too short."
+  },
+  "conditionFlags_skipNoRecording": "Not analyzed because the call wasn't recorded.",
+  "@conditionFlags_skipNoRecording": {
+    "description": "Skip reason: no recording."
+  },
+  "conditionFlags_skipNoPatientAudio": "Not analyzed because no audio from the patient was captured.",
+  "@conditionFlags_skipNoPatientAudio": {
+    "description": "Skip reason: no patient audio."
+  },
+  "conditionFlags_skipInsufficientSpeech": "Not analyzed because the patient spoke for less than 30 seconds.",
+  "@conditionFlags_skipInsufficientSpeech": {
+    "description": "Skip reason: not enough patient speech."
+  },
+  "conditionFlags_skipAudioExpired": "Not analyzed because the call audio expired before it could be processed.",
+  "@conditionFlags_skipAudioExpired": {
+    "description": "Skip reason: audio retention expired."
+  },
+  "conditionFlags_skipTranscriptUnavailable": "Not analyzed because no transcript is available for this call.",
+  "@conditionFlags_skipTranscriptUnavailable": {
+    "description": "Skip reason: transcript unavailable."
+  },
+  "conditionFlags_skipTranscriptTimeout": "Not analyzed because the transcript took too long to become available.",
+  "@conditionFlags_skipTranscriptTimeout": {
+    "description": "Skip reason: transcript wait timed out."
+  },
+  "conditionFlags_skipPatientSpeakerUnidentified": "Not analyzed because the transcript couldn't tell which lines the patient said.",
+  "@conditionFlags_skipPatientSpeakerUnidentified": {
+    "description": "Skip reason: patient speaker not identified in transcript."
+  },
+  "conditionFlags_skipModelUnavailable": "Not analyzed because the screening model isn't available.",
+  "@conditionFlags_skipModelUnavailable": {
+    "description": "Skip reason: model unavailable."
+  },
+  "conditionFlags_skipUnknown": "Not analyzed.",
+  "@conditionFlags_skipUnknown": {
+    "description": "Skip reason fallback."
+  },
+  "conditionFlags_conditionDepression": "Depression",
+  "@conditionFlags_conditionDepression": {
+    "description": "Condition name."
+  },
+  "conditionFlags_conditionAnxiety": "Anxiety",
+  "@conditionFlags_conditionAnxiety": {
+    "description": "Condition name."
+  },
+  "conditionFlags_conditionPtsd": "PTSD",
+  "@conditionFlags_conditionPtsd": {
+    "description": "Condition name (post-traumatic stress disorder)."
+  },
+  "conditionFlags_conditionBipolar": "Bipolar disorder",
+  "@conditionFlags_conditionBipolar": {
+    "description": "Condition name."
+  },
+  "conditionFlags_severityNone": "No indicator",
+  "@conditionFlags_severityNone": {
+    "description": "Severity level: nothing detected."
+  },
+  "conditionFlags_severityLow": "Low",
+  "@conditionFlags_severityLow": {
+    "description": "Severity level."
+  },
+  "conditionFlags_severityMild": "Mild",
+  "@conditionFlags_severityMild": {
+    "description": "Severity level."
+  },
+  "conditionFlags_severityMildToModerate": "Mild to moderate",
+  "@conditionFlags_severityMildToModerate": {
+    "description": "Severity level."
+  },
+  "conditionFlags_severityModerate": "Moderate",
+  "@conditionFlags_severityModerate": {
+    "description": "Severity level."
+  },
+  "conditionFlags_severitySevere": "Severe",
+  "@conditionFlags_severitySevere": {
+    "description": "Severity level."
+  },
+  "conditionFlags_severityHigh": "High",
+  "@conditionFlags_severityHigh": {
+    "description": "Severity level."
+  },
+  "healthEventDetailsTitle": "Health Event Details",
+  "@healthEventDetailsTitle": {
+    "description": "Title of the Unified Health event details screen."
+  },
+  "healthDataDate": "Date",
+  "@healthDataDate": {
+    "description": "Label shown above a health record date."
+  },
+  "healthEventDetailsSource": "Where this came from",
+  "@healthEventDetailsSource": {
+    "description": "Heading identifying the healthcare source of a record."
+  },
+  "healthDataRecordTypeMedication": "Medication",
+  "healthDataRecordTypeCondition": "Condition",
+  "healthDataRecordTypeAllergy": "Allergy",
+  "healthDataRecordTypeVisit": "Visit",
+  "healthDataRecordTypeClinicalRecord": "Clinical Record",
+  "healthDataRecordTypeClaimService": "Claim / Service",
+  "healthDataRecordTypeRecord": "Record",
+  "analyticsPatientAnalytics": "Patient Analytics",
+  "analyticsRetry": "Retry",
+  "analyticsAskAiTooltip": "Ask AI about analytics",
+  "analyticsDownloadCsv": "Download CSV",
+  "analyticsDownloadPdf": "Download PDF",
+  "analyticsOverview": "Analytics Overview",
+  "analyticsMetricsAndTrends": "Patient health metrics and trends",
+  "analyticsTimeRange": "Time Range:",
+  "analyticsHealthSummary": "Health Summary",
+  "analyticsLastDaysShort": "Last {days}d",
+  "@analyticsLastDaysShort": {
+    "description": "Compact Analytics summary period shown on narrow screens.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "analyticsLastDaysOverview": "Last {days} days overview",
+  "@analyticsLastDaysOverview": {
+    "description": "Analytics summary period shown on regular-width screens.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "analyticsDetailedCharts": "Detailed Charts",
+  "analyticsLoadingData": "Loading analytics data..."
 }

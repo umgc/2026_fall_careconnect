@@ -111,7 +111,7 @@ class SymptomEntryControllerTest {
 
         final ResponseEntity<?> response = controller.getSymptoms(10L);
 
-        verify(authorizationService).requirePatientAccess(adminUser, 10L);
+        verify(authorizationService).requirePatientRecordAccess(adminUser, 10L);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         final Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertThat(body.get("message")).isEqualTo("Symptoms retrieved successfully");
@@ -123,7 +123,7 @@ class SymptomEntryControllerTest {
     void getSymptoms_unauthorized_throwsException() throws Exception {
         when(securityUtil.resolveCurrentUser()).thenReturn(adminUser);
         doThrow(new UnauthorizedException("Access denied"))
-                .when(authorizationService).requirePatientAccess(adminUser, 10L);
+                .when(authorizationService).requirePatientRecordAccess(adminUser, 10L);
 
         assertThatThrownBy(() -> controller.getSymptoms(10L))
                 .isInstanceOf(UnauthorizedException.class)

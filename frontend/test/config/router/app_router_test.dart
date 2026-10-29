@@ -9,6 +9,8 @@
 import 'dart:convert';
 
 import 'package:care_connect_app/l10n/app_localizations.dart';
+import 'package:care_connect_app/services/user_role_storage_service.dart';
+import 'package:care_connect_app/screens/main_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,11 +18,15 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/config/router/app_router.dart';
+import 'package:care_connect_app/pages/epic_resource_detail_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
+import 'package:care_connect_app/features/health/health_data/pages/athena_connect_page.dart';
+import 'package:care_connect_app/features/health/health_data/pages/athena_resource_detail_page.dart';
+import 'package:care_connect_app/features/health/health_data/services/athena_connect_service.dart';
 import 'package:care_connect_app/widgets/hybrid_video_call_widget.dart';
 import 'package:care_connect_app/features/invite_accept/services/pending_invite.dart';
 import 'package:care_connect_app/services/api_service.dart';
-import 'package:care_connect_app/services/user_role_storage_service.dart';
+import 'package:care_connect_app/services/pending_oracle_health_launch.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -187,6 +193,91 @@ void main() {
   setUpAll(() {
     allPaths = _extractPaths(appRouter.configuration.routes);
     namedRoutes = _extractNamedRoutes(appRouter.configuration.routes);
+  });
+
+  group('Oracle Health SMART launch routing', () {
+    const issuer = 'https://fhir-ehr-code.cerner.com/r4/test';
+
+    setUp(PendingOracleHealthLaunch.clear);
+    tearDown(PendingOracleHealthLaunch.clear);
+
+    test('detects query and hash launch parameters', () {
+      expect(
+        hasOracleHealthLaunchParameters(
+          Uri.parse('https://app.example/?launch=temporary'),
+        ),
+        isTrue,
+      );
+      expect(
+        hasOracleHealthLaunchParameters(
+          Uri.parse('https://app.example/#/oracle-health-launch?iss=$issuer'),
+        ),
+        isTrue,
+      );
+      expect(
+        hasOracleHealthLaunchParameters(Uri.parse('https://app.example/')),
+        isFalse,
+      );
+    });
+
+    test('rejects missing or incomplete launch parameters', () {
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse('https://app.example/'),
+        routeUri: Uri.parse('/oracle-health-launch?iss=$issuer'),
+        expectedIssuer: issuer,
+      );
+
+      expect(
+        page.errorMessage,
+        'Missing or invalid Oracle Health launch parameters.',
+      );
+    });
+
+    test('resumes a previously validated launch after login', () {
+      PendingOracleHealthLaunch.set(
+        issuer: issuer,
+        launch: 'temporary-launch',
+      );
+
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse('https://app.example/'),
+        routeUri: Uri.parse('/oracle-health-launch'),
+        expectedIssuer: issuer,
+      );
+
+      expect(page.errorMessage, isNull);
+      expect(PendingOracleHealthLaunch.hasPending, isTrue);
+    });
+
+    test('accepts and stores a trusted launch', () {
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse('https://app.example/'),
+        routeUri: Uri.parse(
+          '/oracle-health-launch?iss=${Uri.encodeComponent(issuer)}'
+          '&launch=temporary-launch',
+        ),
+        expectedIssuer: issuer,
+      );
+
+      expect(page.errorMessage, isNull);
+      final pending = PendingOracleHealthLaunch.take();
+      expect(pending?.issuer, issuer);
+      expect(pending?.launch, 'temporary-launch');
+    });
+
+    test('rejects an untrusted issuer', () {
+      final page = buildOracleHealthLaunchPage(
+        browserUri: Uri.parse(
+          'https://app.example/?iss=${Uri.encodeComponent(issuer)}'
+          '&launch=temporary-launch',
+        ),
+        routeUri: Uri.parse('/oracle-health-launch'),
+        expectedIssuer: 'https://different.example.com/r4/test',
+      );
+
+      expect(page.errorMessage, 'The Oracle Health issuer is not trusted.');
+      expect(PendingOracleHealthLaunch.hasPending, isFalse);
+    });
   });
 
   group('appRouter configuration', () {
@@ -794,14 +885,19 @@ void main() {
       _tearDownPlatformChannels();
     });
 
-    testWidgets('TC-ROUTE-114: shows Invalid user ID when no userId query param',
+    testWidgets('TC-ROUTE-114: direct patient URL uses dashboard sign-in handling',
         (tester) async {
-      final router = _createFullTestRouter('/dashboard/patient');
+      final router = GoRouter(initialLocation: '/dashboard/patient', routes: [
+        _findRoute(appRouter.configuration.routes, '/dashboard/patient')!,
+        _findRoute(appRouter.configuration.routes, '/dashboard')!,
+        GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
+      ]);
+      addTearDown(router.dispose);
       await _pumpRouterApp(tester, router);
       await tester.pumpAndSettle();
 
-      expect(find.text('Invalid user ID'), findsOneWidget);
-      expect(find.text('Go to Login'), findsOneWidget);
+      expect(find.text('Invalid user ID'), findsNothing);
+      expect(router.state.uri.path, '/login');
     });
 
     testWidgets('TC-ROUTE-115: shows Invalid user ID when userId is 0', (tester) async {
@@ -1165,6 +1261,40 @@ void main() {
       _tearDownPlatformChannels();
     });
 
+    testWidgets('tab URL refresh retains the dashboard with cached user data',
+        (tester) async {
+      final dashboard =
+          _findRoute(appRouter.configuration.routes, '/dashboard')!;
+      Widget? result;
+      final router =
+          GoRouter(initialLocation: '/dashboard?tab=messages', routes: [
+        GoRoute(
+            path: '/dashboard',
+            builder: (context, state) {
+              final page = dashboard.builder!(context, state)
+                  as FutureBuilder<UserData?>;
+              // FutureBuilder retains its last data while the replacement storage
+              // future is waiting. That frame must not unmount MainScreen.
+              result = page.builder(
+                  context,
+                  const AsyncSnapshot<UserData?>.withData(
+                    ConnectionState.waiting,
+                    UserData(
+                        role: 'CAREGIVER',
+                        userId: 2,
+                        caregiverId: 2,
+                        isLoggedIn: true),
+                  ));
+              return const SizedBox();
+            }),
+      ]);
+      addTearDown(router.dispose);
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      expect(result, isA<MainScreen>());
+      expect((result as MainScreen).initialTabIndex, 4);
+    });
+
     testWidgets('TC-ROUTE-140: shows loading indicator initially', (tester) async {
       final router = _createFullTestRouter('/dashboard');
       await _pumpRouterApp(tester, router);
@@ -1359,6 +1489,81 @@ void main() {
       await tester.pump();
 
       expect(find.text('Redirecting...'), findsOneWidget);
+    });
+  });
+
+  group('/epic/:type/:id builder - widget tests (I3c)', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+
+    // UserProvider subscribes to the connectivity event stream; draining real
+    // async below makes that subscription fire, so the EventChannel is mocked
+    // too (the shared helper mocks only the connectivity MethodChannel).
+    const connectivityStatus =
+        EventChannel('dev.fluttercommunity.plus/connectivity_status');
+
+    setUp(() {
+      _setupPlatformChannels();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus,
+              MockStreamHandler.inline(onListen: (_, __) {}));
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus, null);
+      _tearDownPlatformChannels();
+    });
+
+    // Drives the real async (secure-storage read + mocked HTTP) to completion so
+    // the citation page's initState fetch settles and leaves no pending timers.
+    Future<void> drain(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+    }
+
+    testWidgets('TC-ROUTE-160: reads the patientUserId query param (I3c)',
+        (tester) async {
+      Uri? seen;
+      final client = MockClient((request) async {
+        seen = request.url;
+        return http.Response('x', 404);
+      });
+
+      await http.runWithClient(() async {
+        final router = _createFullTestRouter(
+            '/epic/Observation/obs-1?patientUserId=user-7');
+        await _pumpRouterApp(tester, router);
+        await drain(tester);
+      }, () => client);
+
+      expect(find.byType(EpicResourceDetailPage), findsOneWidget);
+      expect(seen, isNotNull);
+      expect(seen!.pathSegments, containsAll(<String>['Observation', 'obs-1']));
+      expect(seen!.queryParameters['patientUserId'], 'user-7');
+    });
+
+    testWidgets('TC-ROUTE-161: falls back to the legacy patientId param (I3c)',
+        (tester) async {
+      Uri? seen;
+      final client = MockClient((request) async {
+        seen = request.url;
+        return http.Response('x', 404);
+      });
+
+      await http.runWithClient(() async {
+        final router =
+            _createFullTestRouter('/epic/Observation/obs-1?patientId=legacy-5');
+        await _pumpRouterApp(tester, router);
+        await drain(tester);
+      }, () => client);
+
+      expect(find.byType(EpicResourceDetailPage), findsOneWidget);
+      expect(seen, isNotNull);
+      // The legacy ?patientId= is read and forwarded as patientUserId downstream.
+      expect(seen!.queryParameters['patientUserId'], 'legacy-5');
     });
   });
 
@@ -1755,6 +1960,10 @@ void main() {
       ('/admin/users', '/admin/users', {}, null, 'AdminUsersPage', {}),
       ('/oauth/callback', '/oauth/callback?token=t&user=u&error=e', {}, null,
           'OAuthCallbackPage', {'token': 't', 'user': 'u', 'error': 'e'}),
+      ('/oracle-health-launch', '/oracle-health-launch', {}, null,
+          'OracleHealthLaunchPage', {}),
+      ('/oracle-health-linked', '/oracle-health-linked?status=ok', {}, null,
+          'OracleHealthLinkedReturnPage', {'status': 'ok'}),
       ('/wearables', '/wearables', {}, null, 'WearablesScreen', {}),
       ('/home-monitoring', '/home-monitoring', {}, null,
           'HomeMonitoringScreen', {}),
@@ -1896,6 +2105,7 @@ void main() {
             'fromPortal' => d.fromPortal,
             'user' => d.user,
             'error' => d.error,
+            'status' => d.status,
             'serviceType' => d.serviceType,
             'locationType' => d.locationType,
             'latitude' => d.latitude,
@@ -1968,6 +2178,11 @@ void main() {
       ('/admin/users', '/admin/users', 'CAREGIVER', '/dashboard'),
       ('/admin/users', '/admin/users', 'ADMIN', null),
       ('/taskscheduling', '/taskscheduling', null, '/login'),
+      ('/dashboard/patient', '/dashboard/patient', null, '/dashboard'),
+      ('/dashboard/patient', '/dashboard/patient', 'PATIENT', '/dashboard'),
+      ('/dashboard/patient', '/dashboard/patient?tab=messages', 'PATIENT',
+          '/dashboard?tab=messages'),
+      ('/dashboard/patient', '/dashboard/patient?userId=5', 'PATIENT', null),
       ('/taskscheduling', '/taskscheduling', 'CAREGIVER', '/dashboard?tab=tasks'),
       ('/taskscheduling', '/taskscheduling', 'PATIENT', '/dashboard?tab=home'),
       ('/chatandcalls', '/chatandcalls', null, '/login'),
@@ -2171,4 +2386,94 @@ void main() {
     expect(
         await route.redirect!(ctx, routeState('/medicare-sharing')), isNull);
   });
+  group('athenahealth routes (PR #381)', () {
+    late AthenaConnectService originalAthena;
+
+    const connectivityStatus =
+        EventChannel('dev.fluttercommunity.plus/connectivity_status');
+
+    setUp(() {
+      _setupPlatformChannels();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus,
+              MockStreamHandler.inline(onListen: (_, __) {}));
+      originalAthena = AthenaConnectService.instance;
+      AthenaConnectService.instance = _AthenaNotConnected();
+    });
+
+    tearDown(() {
+      AthenaConnectService.instance = originalAthena;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(connectivityStatus, null);
+      _tearDownPlatformChannels();
+    });
+
+    Future<GoRouter> open(WidgetTester tester, String location,
+        {required bool signedIn}) async {
+      if (signedIn) {
+        await UserRoleStorageService.instance
+            .setUserData(role: 'PATIENT', userId: 1, patientId: 1);
+      } else {
+        await UserRoleStorageService.instance.clearUserData();
+      }
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final router = _createFullTestRouter(location);
+      await _pumpRouterApp(tester, router);
+      for (var i = 0; i < 20; i++) {
+        await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      return router;
+    }
+
+    String path(GoRouter r) => r.routerDelegate.currentConfiguration.uri.path;
+
+    test('both routes are registered', () {
+      expect(allPaths, containsAll(['/athena-connect', '/athena/:type/:id']));
+    });
+
+    testWidgets('/athena-connect opens the connect page when signed in',
+        (tester) async {
+      final r = await open(tester, '/athena-connect', signedIn: true);
+      expect(path(r), '/athena-connect');
+      expect(find.byType(AthenaConnectPage), findsOneWidget);
+    });
+
+    testWidgets('/athena/{type}/{id} opens that record', (tester) async {
+      final r = await open(tester, '/athena/Condition/ath-1', signedIn: true);
+      expect(path(r), '/athena/Condition/ath-1');
+      final page = tester.widget<AthenaResourceDetailPage>(
+          find.byType(AthenaResourceDetailPage));
+      expect(page.resourceType, 'Condition');
+      expect(page.resourceId, 'ath-1');
+    });
+
+    for (final location in ['/athena-connect', '/athena/Condition/ath-1']) {
+      testWidgets('negative: $location without signing in goes to the login '
+          'page', (tester) async {
+        // Only where the router lands is under test; the inherited login page
+        // overflows its Rows with the test font.
+        final previous = FlutterError.onError;
+        FlutterError.onError = (d) {
+          if (!d.exceptionAsString().contains('RenderFlex overflowed')) {
+            previous?.call(d);
+          }
+        };
+        addTearDown(() => FlutterError.onError = previous);
+        final r = await open(tester, location, signedIn: false);
+        FlutterError.onError = previous;
+        expect(path(r), '/login');
+        expect(find.byType(AthenaConnectPage), findsNothing);
+        expect(find.byType(AthenaResourceDetailPage), findsNothing);
+      });
+    }
+  });
+}
+
+class _AthenaNotConnected extends AthenaConnectService {
+  @override
+  Future<AthenaStatus?> status() async => const AthenaStatus(
+      connected: false, reason: AthenaNotConnectedReason.notConsented);
 }
