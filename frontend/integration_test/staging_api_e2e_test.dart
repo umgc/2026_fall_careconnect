@@ -2,9 +2,11 @@
 //
 // Run with:
 //   flutter test integration_test/staging_api_e2e_test.dart \
-//     --dart-define=STAGING_BACKEND_URL=https://252kex9t5g.execute-api.us-east-1.amazonaws.com/v1
+//     --dart-define=STAGING_BACKEND_URL=https://<api-id>.execute-api.us-east-1.amazonaws.com/v1
 //
-// In CI the URL is injected via the STAGING_BACKEND_URL secret.
+// The suite is skipped when STAGING_BACKEND_URL is not provided. The old
+// default (252kex9t5g.execute-api...) no longer resolves (NXDOMAIN), so a
+// hard-coded fallback only made CI fail.
 // Historical note: 5 tests here were formerly skipped over staging 500s (issue #232);
 // the root cause was wrong test paths, fixed in PR #295.
 
@@ -14,10 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:integration_test/integration_test.dart';
 
-const _baseUrl = String.fromEnvironment(
-  'STAGING_BACKEND_URL',
-  defaultValue: 'https://252kex9t5g.execute-api.us-east-1.amazonaws.com/v1',
-);
+const _baseUrl = String.fromEnvironment('STAGING_BACKEND_URL');
 
 // Demo accounts provided by Team A (password for all: password)
 const _patientEmail = 'patient@careconnect.com';
@@ -45,6 +44,15 @@ Future<Map<String, dynamic>> _login(String email, String password) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  if (_baseUrl.isEmpty) {
+    test(
+      'Staging API E2E suite',
+      () {},
+      skip: 'opt-in: pass --dart-define=STAGING_BACKEND_URL=<staging API URL>',
+    );
+    return;
+  }
 
   // ─── Health ───────────────────────────────────────────────────────────────
 
