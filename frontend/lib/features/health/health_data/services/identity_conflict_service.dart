@@ -44,7 +44,8 @@ class IdentityConflictService {
   Future<List<IdentityConflict>> fetchAccepted() async {
     if (useMock) {
       await Future.delayed(const Duration(milliseconds: 400));
-      return _mockPending;
+      // Nothing in the demo data was answered on another device.
+      return const [];
     }
     final owner = await _owner();
     final server = await _fetchServer("ACCEPTED");
@@ -61,7 +62,8 @@ class IdentityConflictService {
   Future<List<IdentityConflict>> fetchRejected() async {
     if (useMock) {
       await Future.delayed(const Duration(milliseconds: 400));
-      return _mockPending;
+      // Nothing in the demo data was answered on another device.
+      return const [];
     }
     final owner = await _owner();
     final server = await _fetchServer("REJECTED");
@@ -76,7 +78,8 @@ class IdentityConflictService {
   }
 
 
-  /// The patient's pending date-of-birth conflicts from the backend. A 400,
+  /// The patient's date-of-birth conflicts in [status] (PENDING, ACCEPTED or
+  /// REJECTED) from the backend. A 400,
   /// 403, 404 or 409 means the backend has none this caller can confirm (not
   /// a patient, or no patient record); anything else is rethrown.
   Future<List<IdentityConflict>> _fetchServer(final String status) async {
@@ -99,9 +102,12 @@ class IdentityConflictService {
     for (final j in (env['resources'] as List?) ?? const []) {
       if (j is! Map) continue;
       final c = IdentityConflict.fromJson(Map<String, dynamic>.from(j));
-      // Only a pending date of birth is the patient's to confirm here, and
-      // only a positive id can be sent back to the backend.
-      if (!c.isDob || !c.isPending || c.id <= 0) continue;
+      // Only a date of birth in the status asked for (a pending one is the
+      // patient's to confirm here; an answered one is looked up after a 409,
+      // #459), and only a positive id can be sent back to the backend.
+      if (!c.isDob || c.status.name.toUpperCase() != status || c.id <= 0) {
+        continue;
+      }
       out.add(_withShownDates(c));
     }
     return out;

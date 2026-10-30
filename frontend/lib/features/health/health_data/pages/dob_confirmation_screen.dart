@@ -84,16 +84,22 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
       }
     }
     if(gone){
-      final accepted = await _service.fetchAccepted();
-      if(accepted.any((x) => x.id == c.id)){
-        await IdentityConflictService.rememberServerChoice(c.id, true);
-      }else{
-        final rejected = await _service.fetchRejected();
-        if(rejected.any((x) => x.id == c.id)){
-          await IdentityConflictService.rememberServerChoice(c.id, false);
+      // Answered on another device: the same choice is kept on this one, so
+      // its copy of the same dates isn't asked again (#459). If it can't be
+      // looked up, the card still goes, as before (DEF-EHR-REC-13).
+      try {
+        final accepted = await _service.fetchAccepted();
+        if(accepted.any((x) => x.id == c.id)){
+          await IdentityConflictService.rememberServerChoice(c.id, true);
+        }else{
+          final rejected = await _service.fetchRejected();
+          if(rejected.any((x) => x.id == c.id)){
+            await IdentityConflictService.rememberServerChoice(c.id, false);
+          }
         }
+      } catch (_) {
+        // Couldn't look it up: nothing is kept on this device.
       }
-
     }
 
     if (!mounted) return;
