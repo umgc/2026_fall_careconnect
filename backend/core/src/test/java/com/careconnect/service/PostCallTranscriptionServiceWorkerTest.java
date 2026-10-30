@@ -165,6 +165,10 @@ class PostCallTranscriptionServiceWorkerTest {
                 AbortableInputStream.create(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8))));
     }
 
+    private static KvsAudioClip clip(final Path file) {
+        return new KvsAudioClip(file, 0L, 300_000L);
+    }
+
     private void execute(final CallRecording rec) {
         ReflectionTestUtils.invokeMethod(service, "executeTranscription", CALL_ID, rec, PLAYABLE_KEY);
     }
@@ -388,8 +392,8 @@ class PostCallTranscriptionServiceWorkerTest {
             when(callAttendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(caregiver, noRole, unmapped));
             // Each attendee gets its own temp files; the service deletes them after every attendee.
             when(kvsArchivedMediaExportService.exportAttendeeRange(anyString(), any(Instant.class), any(Instant.class)))
-                    .thenAnswer(inv -> Files.createTempFile("kvs-worker", ".mkv"));
-            when(kvsAudioTranscodeService.toWav(any(Path.class)))
+                    .thenAnswer(inv -> clip(Files.createTempFile("kvs-worker", ".mkv")));
+            when(kvsAudioTranscodeService.toWav(any(KvsAudioClip.class)))
                     .thenAnswer(inv -> Files.createTempFile("kvs-worker", ".wav"));
             when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
                     .thenReturn(job(TranscriptionJobStatus.COMPLETED));
@@ -444,9 +448,9 @@ class PostCallTranscriptionServiceWorkerTest {
             final Path child = Files.createTempFile(rawDir, "child", ".bin");
             final Path wav = Files.createTempFile("kvs-worker", ".wav");
             when(kvsArchivedMediaExportService.exportAttendeeRange(anyString(), any(Instant.class), any(Instant.class)))
-                    .thenReturn(rawDir)
+                    .thenReturn(clip(rawDir))
                     .thenThrow(new IllegalStateException("No KVS fragments found"));
-            when(kvsAudioTranscodeService.toWav(rawDir)).thenReturn(wav);
+            when(kvsAudioTranscodeService.toWav(any(KvsAudioClip.class))).thenReturn(wav);
             when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
                     .thenReturn(job(TranscriptionJobStatus.FAILED));
             final CallRecording rec = recording();
@@ -472,8 +476,8 @@ class PostCallTranscriptionServiceWorkerTest {
             final Path raw = Files.createTempFile("kvs-worker", ".mkv");
             final Path wav = Files.createTempFile("kvs-worker", ".wav");
             when(kvsArchivedMediaExportService.exportAttendeeRange(anyString(), any(Instant.class), any(Instant.class)))
-                    .thenReturn(raw);
-            when(kvsAudioTranscodeService.toWav(raw)).thenReturn(wav);
+                    .thenReturn(clip(raw));
+            when(kvsAudioTranscodeService.toWav(any(KvsAudioClip.class))).thenReturn(wav);
             when(transcribeClient.getTranscriptionJob(any(GetTranscriptionJobRequest.class)))
                     .thenReturn(job(TranscriptionJobStatus.COMPLETED));
             final String items =
