@@ -29,6 +29,7 @@ public final class CernerFhirBundleHttpClient {
     private final ObjectMapper mapper = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+
     public enum ResourceType {
         CONDITION("Condition"),
         ENCOUNTER("Encounter"),
@@ -45,9 +46,31 @@ public final class CernerFhirBundleHttpClient {
         }
     }
 
+
+    public JsonNode getAllergies(final String patientId) {
+        validatePatientAndToken(patientId, "internal-token-placeholder");
+        final var allergies = mapper.createArrayNode();
+        for (final JsonNode resource : getResources(
+                ResourceType.CONDITION, patientId, "internal-token-placeholder").resources()) {
+            if (resource.path("category").isArray()
+                    && java.util.stream.StreamSupport.stream(
+                            resource.path("category").spliterator(), false)
+                            .anyMatch(category -> "allergy".equalsIgnoreCase(
+                                    category.path("text").asText()))) {
+                allergies.add(resource);
+            }
+        }
+        return allergies;
+    }
+
+
     public record Result(List<JsonNode> resources) {
+
         public Result {
             resources = resources.stream().map(node -> (JsonNode) node.deepCopy()).toList();
+        }
+        public List<JsonNode> resources() {
+            return List.copyOf(resources);
         }
     }
 

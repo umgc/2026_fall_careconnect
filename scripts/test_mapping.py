@@ -10,6 +10,7 @@ one (a file whose diff only deletes lines needs no test):
         -> frontend/test/foo/bar_test.dart
     backend/core/src/main/java/com/careconnect/Foo.java
         -> backend/core/src/test/java/com/careconnect/FooTest.java
+    backend implementation FooImpl.java may instead use FooTest.java
 
 Test files changed directly on the PR are run as well. Exemptions live in
 scripts/test-exemptions.txt and are shared with coverage_gate.py.
@@ -179,6 +180,18 @@ def expected_test(path: str) -> str | None:
     return None
 
 
+def expected_tests(path: str) -> list[str]:
+    """Return test paths for a source, including the base-name form of Java implementations."""
+    candidate = expected_test(path)
+    if candidate is None:
+        return []
+
+    candidates = [candidate]
+    if is_backend_source(path) and path.removesuffix(".java").endswith("Impl"):
+        candidates.append(candidate.removesuffix("ImplTest.java") + "Test.java")
+    return candidates
+
+
 # ---------------------------------------------------------------------------
 # Test selection
 # ---------------------------------------------------------------------------
@@ -212,11 +225,12 @@ def select_tests(
         if not needs_test(f, patterns, repo_root):
             continue
 
-        candidate = expected_test(f)
-        if (root / candidate).is_file():
+        candidates = expected_tests(f)
+        candidate = next((test for test in candidates if (root / test).is_file()), None)
+        if candidate:
             tests.add(candidate)
         elif added_lines is None or added_lines.get(f):
-            missing.append((f, candidate))
+            missing.append((f, candidates[0]))
 
     frontend = sorted(
         t.removeprefix("frontend/") for t in tests if t.startswith(FRONTEND_TEST)

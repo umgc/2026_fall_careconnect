@@ -196,6 +196,20 @@ class DefaultCernerPatientAppointmentServiceTest {
                         .isEqualTo("CERNER_INVALID_RESPONSE"));
     }
 
+    @Test
+    void unsupportedAppointmentModesReturnEmptyResults() {
+        assertThat(service.synchronizeAppointmentsWithTokenRefresh(42L, WINDOW_START, WINDOW_END))
+                .isEmpty();
+        assertThat(service.synchronizeAppointmentsAllowingEmptyResults(42L, WINDOW_START, WINDOW_END))
+                .isEmpty();
+        assertThat(service.synchronizeAppointmentsWithPaginationAndRateLimiting(
+                42L, WINDOW_START, WINDOW_END)).isEmpty();
+        assertThat(service.synchronizeAppointmentsWithReferenceMismatchHandling(
+                42L, WINDOW_START, WINDOW_END)).isEmpty();
+        assertThat(service.validatePatientAndAppointmentExpectedOutputFixtures(
+                42L, WINDOW_START, WINDOW_END)).isFalse();
+    }
+
     private void arrangeContext() {
         final Patient patient = Patient.builder()
                 .id(42L)
