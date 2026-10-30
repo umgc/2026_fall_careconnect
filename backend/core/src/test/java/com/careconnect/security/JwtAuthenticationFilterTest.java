@@ -240,4 +240,99 @@ class JwtAuthenticationFilterTest {
             org.junit.jupiter.api.Assertions.assertFalse(jwtAuthenticationFilter.shouldNotFilter(request), path);
         }
     }
+
+    // ---- NFR-SEC-12, issue #460 (DEF-EMG-30): the raw scan code never reaches this filter's log ----
+
+    /** A synthetic code in the shape EmergencyPassportService issues. Not a real one. */
+    private static final String SCAN_CODE = "Qx7pK2mZ9vR4tL8wN3sB6yH1cF5dJ0aE";
+
+    @Test
+    @DisplayName("TC-SEC-018: issue #460: with DEBUG on, a scan's raw code is not in any line this filter logs; "
+            + "the masked path is")
+    void doFilter_DoesNotLogTheRawScanCode() throws Exception {
+        final java.util.List<ch.qos.logback.classic.spi.ILoggingEvent> events = captureFilterLog(() ->
+                jwtAuthenticationFilter.doFilter(new org.springframework.mock.web.MockHttpServletRequest(
+                        "GET", "/v1/api/passport/scan/" + SCAN_CODE),
+                        new org.springframework.mock.web.MockHttpServletResponse(), filterChain));
+
+        assertCodeNotLogged(events);
+        // Not vacuous: the line is still written, with the prefix in place of the path.
+        org.junit.jupiter.api.Assertions.assertTrue(events.stream().anyMatch(e -> e.getFormattedMessage()
+                .equals("Processing JWT authentication for masked path /v1/api/passport/scan")), events::toString);
+        verify(filterChain).doFilter(any(), any());
+    }
+
+    @Test
+    @DisplayName("TC-SEC-019: issue #460: a signed-in caller who scans (valid token, renewed) still leaves no raw code "
+            + "in this filter's log")
+    void doFilter_SignedInScanDoesNotLogTheRawScanCode() throws Exception {
+        final org.springframework.mock.web.MockHttpServletRequest req =
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/v1/api/passport/scan/" + SCAN_CODE);
+        req.addHeader("Authorization", "Bearer valid-token");
+        final io.jsonwebtoken.Claims claims = mock(io.jsonwebtoken.Claims.class);
+        when(claims.getSubject()).thenReturn("caregiver-one@test.invalid");
+        when(jwtTokenProvider.validateToken("valid-token")).thenReturn(true);
+        when(jwtTokenProvider.getClaims("valid-token")).thenReturn(claims);
+        when(jwtTokenProvider.needsRenewal(claims)).thenReturn(true);
+        when(jwtTokenProvider.refresh(claims)).thenReturn("renewed-token");
+        when(userDetailsService.loadUserByUsername("caregiver-one@test.invalid")).thenReturn(
+                org.springframework.security.core.userdetails.User.withUsername("caregiver-one@test.invalid")
+                        .password("n/a").roles("CAREGIVER").build());
+        final org.springframework.mock.web.MockHttpServletResponse res =
+                new org.springframework.mock.web.MockHttpServletResponse();
+
+        final java.util.List<ch.qos.logback.classic.spi.ILoggingEvent> events =
+                captureFilterLog(() -> jwtAuthenticationFilter.doFilter(req, res, filterChain));
+
+        assertCodeNotLogged(events);
+        // Every branch ran: signed in, renewed, and the request went on.
+        org.junit.jupiter.api.Assertions.assertEquals("caregiver-one@test.invalid",
+                SecurityContextHolder.getContext().getAuthentication().getName());
+        org.junit.jupiter.api.Assertions.assertNotNull(res.getHeader("Set-Cookie"));
+        verify(filterChain).doFilter(eq(req), any());
+    }
+
+    @Test
+    @DisplayName("TC-SEC-020: issue #460: a path that is not masked is still logged in full")
+    void doFilter_StillLogsAPathThatIsNotMasked() throws Exception {
+        final java.util.List<ch.qos.logback.classic.spi.ILoggingEvent> events = captureFilterLog(() ->
+                jwtAuthenticationFilter.doFilter(new org.springframework.mock.web.MockHttpServletRequest(
+                        "GET", "/v1/api/passport/profile"),
+                        new org.springframework.mock.web.MockHttpServletResponse(), filterChain));
+
+        org.junit.jupiter.api.Assertions.assertTrue(events.stream().anyMatch(e -> e.getFormattedMessage()
+                .equals("Processing JWT authentication for: /v1/api/passport/profile")), events::toString);
+    }
+
+    private interface FilterCall {
+        void run() throws Exception;
+    }
+
+    /** Runs the call with this filter's logger at DEBUG (the dev profile's level) and returns what it logged. */
+    private static java.util.List<ch.qos.logback.classic.spi.ILoggingEvent> captureFilterLog(final FilterCall call)
+            throws Exception {
+        final ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger)
+                org.slf4j.LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+        final ch.qos.logback.classic.Level before = logger.getLevel();
+        final ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+        try {
+            call.run();
+        } finally {
+            logger.detachAppender(appender);
+            logger.setLevel(before);
+        }
+        return appender.list;
+    }
+
+    private static void assertCodeNotLogged(final java.util.List<ch.qos.logback.classic.spi.ILoggingEvent> events) {
+        org.junit.jupiter.api.Assertions.assertFalse(events.isEmpty(), "nothing was captured");
+        for (final ch.qos.logback.classic.spi.ILoggingEvent e : events) {
+            org.junit.jupiter.api.Assertions.assertFalse(e.getFormattedMessage().contains(SCAN_CODE),
+                    "raw scan code logged: " + e.getFormattedMessage().replace(SCAN_CODE, "<code>"));
+        }
+    }
 }
