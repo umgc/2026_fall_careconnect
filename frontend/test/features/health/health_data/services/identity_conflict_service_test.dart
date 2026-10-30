@@ -1,8 +1,8 @@
 // IdentityConflictService: it never reports a save that didn't happen, and
 // the sample conflict is opt-in only. Since the backend endpoint (#432) it
 // loads and saves through GET/POST /v1/api/ehr/identity-conflicts.
-// Test IDs TC-EHR-REC-065, 067..069, 094..116 and 132 are permanent (066
-// is withdrawn). Never renumber, never reuse.
+// Test IDs TC-EHR-REC-065, 067..069, 094..116, 132 and 133..137 are
+// permanent (066 is withdrawn). Never renumber, never reuse.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -324,6 +324,94 @@ void main() {
       expect((await service.fetchPending()).single.id, isNegative);
       expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)), isNull);
     });
+
+    // ---- Testing Lead (PR #465 review, issue #459) ----
+
+    test('TC-EHR-REC-133: a conflict answered elsewhere as Use new date is '
+        'looked up on the backend as ACCEPTED, dates shown MM/DD/YYYY',
+        () async {
+      backend.conflicts = [dob(7, status: 'ACCEPTED')];
+      final c = (await service.fetchAccepted()).single;
+      expect(backend.gets.single.path,
+          endsWith('/v1/api/ehr/identity-conflicts'));
+      expect(backend.gets.single.queryParameters['status'], 'ACCEPTED');
+      expect(c.id, 7);
+      expect(c.status, ConflictStatus.accepted);
+      expect([c.canonicalValueBefore, c.incomingValue],
+          ['05/14/1980', '05/14/1985']);
+    });
+
+    test('TC-EHR-REC-134: a conflict answered elsewhere as Keep current is '
+        'looked up as REJECTED, and only a date of birth with that answer '
+        'and a backend id is returned', () async {
+      backend.conflicts = [
+        dob(1, status: 'REJECTED'),
+        dob(2, status: 'REJECTED', field: 'phone'),
+        dob(3, status: 'ACCEPTED'),
+        dob(4),
+        dob(0, status: 'REJECTED'),
+      ];
+      expect((await service.fetchRejected()).map((c) => c.id), [1]);
+      expect(backend.gets.single.queryParameters['status'], 'REJECTED');
+    });
+
+    for (final accepted in [true, false]) {
+      test('TC-EHR-REC-135: a backend conflict answered on another device as '
+          '${accepted ? 'Use new date' : 'Keep current'}, with the same dates '
+          'found on this device: after the 409 it is not asked again, and '
+          'Health Data shows the date chosen elsewhere', () async {
+        backend.conflicts = [
+          dob(5, before: '1980-05-14', incoming: '1980-05-15')
+        ];
+        expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)),
+            isNull);
+        expect((await service.fetchPending()).single.id, 5);
+
+        // Answered on another device: the backend's copy is closed.
+        backend
+          ..conflicts = [
+            dob(5,
+                before: '1980-05-14',
+                incoming: '1980-05-15',
+                status: accepted ? 'ACCEPTED' : 'REJECTED')
+          ]
+          ..postStatus = 409;
+        expect(await service.resolve(5, accepted: !accepted), isFalse);
+        // The backend's copy is gone, so this device's copy is back.
+        expect((await service.fetchPending()).single.id, isNegative);
+
+        // What the DOB screen does next (#459).
+        final answered = accepted
+            ? await service.fetchAccepted()
+            : await service.fetchRejected();
+        expect(answered.map((c) => c.id), contains(5));
+        await IdentityConflictService.rememberServerChoice(5, accepted);
+
+        expect(await service.fetchPending(), isEmpty);
+        expect(await found(DateTime(1980, 5, 14), DateTime(1980, 5, 15)),
+            accepted ? DateTime(1980, 5, 15) : DateTime(1980, 5, 14));
+      });
+    }
+
+    for (final failure in ['400', '403', '404', '409', '500', 'no connection']) {
+      final nothing = failure != '500' && failure != 'no connection';
+      test('TC-EHR-REC-136: a $failure on the answered-elsewhere lookup '
+          '${nothing ? 'means nothing was found' : 'fails, so the screen can '
+              'tell'}', () async {
+        if (failure == 'no connection') {
+          backend.offline = true;
+        } else {
+          backend.getStatus = int.parse(failure);
+        }
+        for (final lookup in [service.fetchAccepted, service.fetchRejected]) {
+          if (nothing) {
+            expect(await lookup(), isEmpty);
+          } else {
+            await expectLater(lookup(), throwsA(anything));
+          }
+        }
+      });
+    }
   });
 
   test('TC-EHR-REC-067: the default build has the demo data off', () {
@@ -350,6 +438,12 @@ void main() {
     test('TC-EHR-REC-069: resolving succeeds either way', () async {
       expect(await service.resolve(1, accepted: true), isTrue);
       expect(await service.resolve(1, accepted: false), isTrue);
+    });
+
+    test('TC-EHR-REC-137: nothing in the demo data was answered on another '
+        'device', () async {
+      expect(await service.fetchAccepted(), isEmpty);
+      expect(await service.fetchRejected(), isEmpty);
     });
   });
 

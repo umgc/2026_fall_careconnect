@@ -1,6 +1,8 @@
 // DOB confirmation (identity reconciliation UI). Backend vocabulary:
 // EhrConflictStatus PENDING / ACCEPTED / REJECTED, PENDING only for
 // date_of_birth (ck_ehr_identity_conflict_pending_dob).
+// Test IDs TC-EHR-REC-138..140 (PR #465) are permanent, as are the others
+// in this file. Never renumber, never reuse.
 
 import 'dart:async';
 import 'dart:convert';
@@ -721,7 +723,94 @@ void main() {
       expect(find.textContaining('Please try again'), findsNothing);
       expect(find.text('This was already answered, so nothing was saved.'),
           findsOneWidget);
+      // Neither answer found on the backend (#459): nothing is kept.
+      expect(backend.gets.map((g) => g.queryParameters['status']),
+          ['PENDING', 'PENDING', 'ACCEPTED', 'REJECTED']);
+      final prefs = (await t.runAsync(SharedPreferences.getInstance))!;
+      expect(prefs.getString('health_data.dob_choices'), isNull);
     });
+
+    // ---- Testing Lead (PR #465 review, issue #459) ----
+
+    /// The same two dates as [_Backend.dob], found on this device between
+    /// two connected sources.
+    Future<DateTime?> foundOnDevice(WidgetTester t) async =>
+        (await t.runAsync<DateTime?>(() => IdentityConflictService.reportDobDisagreement(
+            current: DateTime(1980, 5, 14),
+            currentSource: 'Epic',
+            incoming: DateTime(1985, 5, 14),
+            incomingSource: 'athenahealth')));
+
+    Future<void> reopen(WidgetTester t) async {
+      await t.pumpWidget(const SizedBox());
+      await open(t);
+    }
+
+    for (final accepted in [true, false]) {
+      final id = accepted ? 'TC-EHR-REC-138' : 'TC-EHR-REC-139';
+      testWidgets(
+          '$id: a conflict answered on another '
+          'device as ${accepted ? 'Use new date' : 'Keep current'} (409) is '
+          'looked up, and neither this screen nor Health Data asks about '
+          'this device\'s copy of the same dates again', (t) async {
+        backend
+          ..conflicts = [_Backend.dob(7)]
+          ..postStatus = 409;
+        expect(await foundOnDevice(t), isNull);
+        await open(t);
+        expect(find.text('Which date of birth is correct?'), findsOneWidget);
+        await press(t, 'Yes, it’s mine');
+
+        backend
+          ..conflicts = []
+          ..byStatus = {
+            accepted ? 'ACCEPTED' : 'REJECTED': [
+              {..._Backend.dob(7), 'status': accepted ? 'ACCEPTED' : 'REJECTED'}
+            ]
+          }
+          ..gets.clear();
+        await press(t, accepted ? 'Keep current' : 'Use new date');
+        await settle(t);
+        expect(backend.gets.map((g) => g.queryParameters['status']), [
+          'PENDING',
+          'ACCEPTED',
+          if (!accepted) 'REJECTED',
+        ]);
+        expect(find.text('Which date of birth is correct?'), findsNothing);
+        expect(find.text('This was already answered, so nothing was saved.'),
+            findsOneWidget);
+
+        await reopen(t);
+        expect(find.text('Which date of birth is correct?'), findsNothing);
+        expect(find.text('You’re all caught up'), findsOneWidget);
+        expect(await foundOnDevice(t),
+            accepted ? DateTime(1985, 5, 14) : DateTime(1980, 5, 14));
+      });
+    }
+
+    for (final failure in ['500', 'no connection']) {
+      testWidgets('TC-EHR-REC-140: when the answered-elsewhere lookup fails '
+          '($failure), the card still leaves with "already answered" and '
+          'nothing is left loading', (t) async {
+        backend
+          ..conflicts = [_Backend.dob(7)]
+          ..postStatus = 409;
+        await open(t);
+        await press(t, 'Yes, it’s mine');
+        backend.conflicts = [];
+        if (failure == '500') {
+          backend.getStatusFor = {'ACCEPTED': 500, 'REJECTED': 500};
+        } else {
+          backend.offlineFor = {'ACCEPTED', 'REJECTED'};
+        }
+        await press(t, 'Use new date');
+        await settle(t);
+        expect(find.text('Which date of birth is correct?'), findsNothing);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.text('This was already answered, so nothing was saved.'),
+            findsOneWidget);
+      });
+    }
   });
 }
 
@@ -734,6 +823,17 @@ class _Backend implements HttpClientAdapter {
   int postStatus = 200;
   final gets = <RequestOptions>[];
   final posts = <RequestOptions>[];
+
+  /// A GET for one of these statuses lists these rows instead of
+  /// [conflicts] (PR #465: the answered-elsewhere lookup).
+  Map<String, List<Map<String, dynamic>>> byStatus = {};
+
+  /// A GET for one of these statuses answers this code instead of
+  /// [getStatus].
+  Map<String, int> getStatusFor = {};
+
+  /// A GET for one of these statuses has no connection.
+  Set<String> offlineFor = {};
 
   static Map<String, dynamic> dob(int id) => {
         'id': id,
@@ -755,14 +855,23 @@ class _Backend implements HttpClientAdapter {
     };
     if (options.method == 'GET') {
       gets.add(options);
-      return getStatus == 200
+      final asked = '${options.queryParameters['status']}';
+      if (offlineFor.contains(asked)) {
+        throw DioException(
+            requestOptions: options,
+            type: DioExceptionType.connectionError,
+            message: 'offline');
+      }
+      return (getStatusFor[asked] ?? getStatus) == 200
           ? ResponseBody.fromString(
               jsonEncode({
-                'resources': raw == null ? conflicts : [raw]
+                'resources': raw == null ? (byStatus[asked] ?? conflicts) : [raw]
               }),
               200,
               headers: json)
-          : ResponseBody.fromString('{"error":"x"}', getStatus, headers: json);
+          : ResponseBody.fromString(
+              '{"error":"x"}', getStatusFor[asked] ?? getStatus,
+              headers: json);
     }
     posts.add(options);
     return ResponseBody.fromString(

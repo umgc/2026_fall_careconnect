@@ -30,7 +30,7 @@ class IdentityConflictService {
     // Throws when the backend can't be checked, so the screen says so
     // instead of "all caught up".
     final owner = await _owner();
-    final server = await _fetchServer();
+    final server = await _fetchServer("PENDING");
     _shown
       ..clear()
       ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
@@ -41,15 +41,53 @@ class IdentityConflictService {
     return List.unmodifiable([...server, ...local]);
   }
 
-  /// The patient's pending date-of-birth conflicts from the backend. A 400,
+  Future<List<IdentityConflict>> fetchAccepted() async {
+    if (useMock) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      // Nothing in the demo data was answered on another device.
+      return const [];
+    }
+    final owner = await _owner();
+    final server = await _fetchServer("ACCEPTED");
+    _shown
+      ..clear()
+      ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
+    final local = _found.values
+        .where((f) => f.owner == owner)
+        .map((f) => f.conflict)
+        .where((l) => !server.any((s) => _sameDates(s, l) != 0));
+    return List.unmodifiable([...server, ...local]);
+  }
+
+  Future<List<IdentityConflict>> fetchRejected() async {
+    if (useMock) {
+      await Future.delayed(const Duration(milliseconds: 400));
+      // Nothing in the demo data was answered on another device.
+      return const [];
+    }
+    final owner = await _owner();
+    final server = await _fetchServer("REJECTED");
+    _shown
+      ..clear()
+      ..addAll({for (final s in server) s.id: (owner: owner, conflict: s)});
+    final local = _found.values
+        .where((f) => f.owner == owner)
+        .map((f) => f.conflict)
+        .where((l) => !server.any((s) => _sameDates(s, l) != 0));
+    return List.unmodifiable([...server, ...local]);
+  }
+
+
+  /// The patient's date-of-birth conflicts in [status] (PENDING, ACCEPTED or
+  /// REJECTED) from the backend. A 400,
   /// 403, 404 or 409 means the backend has none this caller can confirm (not
   /// a patient, or no patient record); anything else is rethrown.
-  Future<List<IdentityConflict>> _fetchServer() async {
+  Future<List<IdentityConflict>> _fetchServer(final String status) async {
     final Map<String, dynamic> env;
     try {
       env = await ApiClient.instance.getJson<Map<String, dynamic>>(
         _path,
-        query: const {'status': 'PENDING'},
+        query: {'status': status},
         parser: (json) =>
             json is Map<String, dynamic> ? json : <String, dynamic>{},
       );
@@ -64,9 +102,12 @@ class IdentityConflictService {
     for (final j in (env['resources'] as List?) ?? const []) {
       if (j is! Map) continue;
       final c = IdentityConflict.fromJson(Map<String, dynamic>.from(j));
-      // Only a pending date of birth is the patient's to confirm here, and
-      // only a positive id can be sent back to the backend.
-      if (!c.isDob || !c.isPending || c.id <= 0) continue;
+      // Only a date of birth in the status asked for (a pending one is the
+      // patient's to confirm here; an answered one is looked up after a 409,
+      // #459), and only a positive id can be sent back to the backend.
+      if (!c.isDob || c.status.name.toUpperCase() != status || c.id <= 0) {
+        continue;
+      }
       out.add(_withShownDates(c));
     }
     return out;
@@ -107,14 +148,14 @@ class IdentityConflictService {
     } catch (_) {
       return false;
     }
-    await _rememberServerChoice(conflictId, accepted);
+    await rememberServerChoice(conflictId, accepted);
     return true;
   }
 
   /// Once the backend has saved [conflictId], the same choice is kept on the
   /// device for that pair of dates, and a matching disagreement this device
   /// found is dropped, so neither this screen nor Health Data asks again.
-  static Future<void> _rememberServerChoice(int id, bool accepted) async {
+  static Future<void> rememberServerChoice(int id, bool accepted) async {
     final shown = _shown.remove(id);
     if (shown == null || shown.owner != await _owner()) return;
     final c = shown.conflict;
