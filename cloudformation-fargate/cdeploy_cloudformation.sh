@@ -713,6 +713,22 @@ deploy_stack() {
   local parameter_overrides=()
   mapfile -t parameter_overrides < <(build_parameter_overrides "$parameter_file" "$@")
 
+  # The helpers above emit only keys the parameter file lists. Append overrides for any
+  # other template parameter (e.g. Athena*) so they are not silently dropped.
+  local extra existing found
+  for extra in "$@"; do
+    found="false"
+    for existing in "${parameter_overrides[@]}"; do
+      if [[ "${existing%%=*}" == "${extra%%=*}" ]]; then
+        found="true"
+        break
+      fi
+    done
+    if [[ "$found" != "true" ]]; then
+      parameter_overrides+=("$extra")
+    fi
+  done
+
   local stack_status=""
   if stack_exists "$stack_name"; then
     stack_status="$(get_stack_status "$stack_name" | tr -d '\r')"
@@ -920,6 +936,22 @@ if [[ -n "${CARECONNECT_FRONTEND_BASE_URL-}" ]]; then
 fi
 if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
   SERVICE_OVERRIDES+=("FromEmail=${CARECONNECT_FROM_EMAIL}")
+fi
+# athenahealth. Unset leaves the stack's current value in place.
+if [[ -n "${CARECONNECT_ATHENA_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaEnabled=${CARECONNECT_ATHENA_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_CLIENT_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaClientId=${CARECONNECT_ATHENA_CLIENT_ID}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_PRACTICE_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaPracticeId=${CARECONNECT_ATHENA_PRACTICE_ID}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_SCOPES-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaScopes=${CARECONNECT_ATHENA_SCOPES}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_CLIENT_SECRET-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaClientSecret=${CARECONNECT_ATHENA_CLIENT_SECRET}")
 fi
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
