@@ -37,8 +37,6 @@ String _nextCallId() => 'hv-session-call-${++_callCounter}';
 class _Backend {
   _Backend({
     this.joinStatus = 200,
-    this.sessionStatus = 201,
-    this.recordingStartStatus = 'STARTED',
     this.recordingStartCode = 200,
     this.recordingStopCode = 200,
     this.invitees = const <Map<String, dynamic>>[],
@@ -51,8 +49,6 @@ class _Backend {
   });
 
   final int joinStatus;
-  final int sessionStatus;
-  final String recordingStartStatus;
   final int recordingStartCode;
   final int recordingStopCode;
   final List<Map<String, dynamic>> invitees;
@@ -69,7 +65,7 @@ class _Backend {
         final path = request.url.path;
         requests.add('${request.method} $path');
         if (path.endsWith('/calls/sessions')) {
-          return http.Response('{}', sessionStatus);
+          return http.Response('{}', 201);
         }
         if (path.endsWith('/join')) {
           if (joinStatus != 200) {
@@ -92,7 +88,7 @@ class _Backend {
         }
         if (path.endsWith('/recording/start')) {
           return http.Response(
-            jsonEncode({'status': recordingStartStatus}),
+            jsonEncode({'status': 'STARTED'}),
             recordingStartCode,
           );
         }

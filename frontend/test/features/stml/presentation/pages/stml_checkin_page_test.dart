@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_page.dart';
 import 'package:care_connect_app/features/stml/presentation/pages/stml_checkin_patient_selection_page.dart';
 import 'package:care_connect_app/services/api_service.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
