@@ -515,6 +515,20 @@ try {
         $ServiceOverrides["FrontendBaseUrl"] = $FrontendUrl
         $ServiceOverrides["CorsAllowedList"] = "http://localhost:*,http://127.0.0.1:*,$FrontendUrl"
     }
+    # athenahealth, from the same CARECONNECT_ATHENA_* variables the bash scripts and CI use.
+    # Unset leaves the stack's current value in place.
+    $athenaOverrides = [ordered]@{
+        AthenaEnabled      = $env:CARECONNECT_ATHENA_ENABLED
+        AthenaClientId     = $env:CARECONNECT_ATHENA_CLIENT_ID
+        AthenaPracticeId   = $env:CARECONNECT_ATHENA_PRACTICE_ID
+        AthenaScopes       = $env:CARECONNECT_ATHENA_SCOPES
+        AthenaClientSecret = $env:CARECONNECT_ATHENA_CLIENT_SECRET
+    }
+    foreach ($key in $athenaOverrides.Keys) {
+        if (-not [string]::IsNullOrWhiteSpace($athenaOverrides[$key])) {
+            $ServiceOverrides[$key] = [string]$athenaOverrides[$key]
+        }
+    }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 
     Write-Step "Reading final API endpoint"

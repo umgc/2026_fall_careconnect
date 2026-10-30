@@ -85,6 +85,36 @@ Parameters:
     Type: String
     Default: http://localhost:*,http://127.0.0.1:*
 
+  # athenahealth (2-legged client_credentials, read-only). Off unless AthenaEnabled is 'true';
+  # the backend then refuses to start without a practice ID, so the AthenaNeedsPractice rule
+  # rejects that combination at deploy time instead of letting the service crash-loop.
+  AthenaEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  AthenaClientId:
+    Type: String
+    Default: ''
+
+  # athena's ah-practice form, e.g. a-1.Practice-195900 (the preview sandbox); comma-separated
+  # for several. A bare numeric ID is rejected by the backend.
+  AthenaPracticeId:
+    Type: String
+    Default: ''
+
+  AthenaScopes:
+    Type: String
+    Default: system/Patient.read
+
+  # Stored in Secrets Manager by this stack, so app-only deploys can set or change it.
+  AthenaClientSecret:
+    Type: String
+    NoEcho: true
+    Default: not-configured
+
   # The backend currently binds to 8081 in ECS.
   ContainerPort:
     Type: Number
@@ -149,8 +179,25 @@ Conditions:
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
   # Run the DAM inference sidecar only when an image has been pushed for it.
   HasConditionSidecar: !Not [!Equals [!Ref SidecarImageUri, '']]
+  HasAthenaClientId: !Not [!Equals [!Ref AthenaClientId, '']]
+  HasAthenaPracticeId: !Not [!Equals [!Ref AthenaPracticeId, '']]
+
+Rules:
+  AthenaNeedsPractice:
+    RuleCondition: !Equals [!Ref AthenaEnabled, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AthenaPracticeId, '']]
+        AssertDescription: AthenaPracticeId is required when AthenaEnabled is true (e.g. a-1.Practice-195900).
 
 Resources:
+  # Consumed by ECS as ATHENA_CLIENT_SECRET. Kept in this stack rather than the data stack
+  # so app-only deploys, which skip the data stack, can create and update it.
+  AthenaClientSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/athena-client-secret
+      SecretString: !Ref AthenaClientSecret
+
   # ---------------------------------------------------------------------------
   # Cloud Map namespace and service for ECS service discovery.
   # API Gateway VPC Link routes traffic through Cloud Map to ECS tasks.
@@ -592,6 +639,21 @@ Resources:
               Value: !Ref FrontendBaseUrl
             - Name: CORS_ALLOWED_LIST
               Value: !Ref CorsAllowedList
+            - Name: ATHENA_ENABLED
+              Value: !Ref AthenaEnabled
+            # Omitted when unset rather than passed as an empty value.
+            - !If
+              - HasAthenaClientId
+              - Name: ATHENA_CLIENT_ID
+                Value: !Ref AthenaClientId
+              - !Ref AWS::NoValue
+            - !If
+              - HasAthenaPracticeId
+              - Name: ATHENA_PRACTICE_ID
+                Value: !Ref AthenaPracticeId
+              - !Ref AWS::NoValue
+            - Name: ATHENA_SCOPES
+              Value: !Ref AthenaScopes
             # Ask AI / Bedrock (Task 0.1 P0 deploy unblock)
             - Name: CARECONNECT_AI_ENABLED
               Value: !Ref CareConnectAiEnabled
@@ -645,6 +707,8 @@ Resources:
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
+            - Name: ATHENA_CLIENT_SECRET
+              ValueFrom: !Ref AthenaClientSecretValue
         # DAM depression/anxiety inference (CPU). Not essential: if it stops, the API keeps
         # serving and voice screening runs retry. Reachable only from cc-backend on localhost.
         - !If

@@ -194,6 +194,13 @@ jobs:
           STAGING_CORS_ALLOWED_LIST: ${{ vars.STAGING_CORS_ALLOWED_LIST }}
           STAGING_FRONTEND_BASE_URL: ${{ vars.STAGING_FRONTEND_BASE_URL }}
           STAGING_FROM_EMAIL: ${{ vars.STAGING_FROM_EMAIL }}
+          STAGING_ATHENA_ENABLED: ${{ vars.STAGING_ATHENA_ENABLED }}
+          STAGING_ATHENA_CLIENT_ID: ${{ vars.STAGING_ATHENA_CLIENT_ID }}
+          STAGING_ATHENA_PRACTICE_ID: ${{ vars.STAGING_ATHENA_PRACTICE_ID }}
+          STAGING_ATHENA_SCOPES: ${{ vars.STAGING_ATHENA_SCOPES }}
+          # Loaded here rather than in "Load environment secrets" because the athena
+          # secret lives in the service stack, which app-only deploys also update.
+          STAGING_ATHENA_CLIENT_SECRET: ${{ secrets.STAGING_ATHENA_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           # Unset values simply mean "no override" — the committed
@@ -203,6 +210,11 @@ jobs:
               [[ -n "${STAGING_CORS_ALLOWED_LIST:-}" ]] && echo "CARECONNECT_CORS_ALLOWED_LIST=$STAGING_CORS_ALLOWED_LIST" >> "$GITHUB_ENV"
               [[ -n "${STAGING_FRONTEND_BASE_URL:-}" ]] && echo "CARECONNECT_FRONTEND_BASE_URL=$STAGING_FRONTEND_BASE_URL" >> "$GITHUB_ENV"
               [[ -n "${STAGING_FROM_EMAIL:-}" ]] && echo "CARECONNECT_FROM_EMAIL=$STAGING_FROM_EMAIL" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_ATHENA_ENABLED:-}" ]] && echo "CARECONNECT_ATHENA_ENABLED=$STAGING_ATHENA_ENABLED" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_ATHENA_CLIENT_ID:-}" ]] && echo "CARECONNECT_ATHENA_CLIENT_ID=$STAGING_ATHENA_CLIENT_ID" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_ATHENA_PRACTICE_ID:-}" ]] && echo "CARECONNECT_ATHENA_PRACTICE_ID=$STAGING_ATHENA_PRACTICE_ID" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_ATHENA_SCOPES:-}" ]] && echo "CARECONNECT_ATHENA_SCOPES=$STAGING_ATHENA_SCOPES" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_ATHENA_CLIENT_SECRET:-}" ]] && echo "CARECONNECT_ATHENA_CLIENT_SECRET=$STAGING_ATHENA_CLIENT_SECRET" >> "$GITHUB_ENV"
               ;;
           esac
           exit 0
