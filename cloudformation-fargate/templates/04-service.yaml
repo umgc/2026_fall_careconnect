@@ -70,6 +70,31 @@ Parameters:
     Type: String
     Default: amazon.nova-lite-v1:0
 
+  # Epic SMART configuration is off unless explicitly enabled for this environment.
+  EpicEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  EpicClientId:
+    Type: String
+    Default: ''
+  EpicRedirectUri:
+    Type: String
+    Default: ''
+  EpicWebReturnUrl:
+    Type: String
+    Default: ''
+  EpicClientSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+  EmailCryptoSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+
   # SendGrid from-address for prod profile email (API key loaded from SSM when SpringProfile=prod).
   FromEmail:
     Type: String
@@ -143,14 +168,47 @@ Parameters:
     Default: ''
     Description: Route 53 Hosted Zone ID (required if DomainName is set)
 
+Rules:
+  EpicRequiredSettings:
+    RuleCondition: !Equals [!Ref EpicEnabled, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref EpicClientId, '']]
+        AssertDescription: EpicClientId is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EpicRedirectUri, '']]
+        AssertDescription: EpicRedirectUri is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EpicWebReturnUrl, '']]
+        AssertDescription: EpicWebReturnUrl is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EmailCryptoSecret, '']]
+        AssertDescription: EmailCryptoSecret is required to encrypt Epic tokens.
+
 Conditions:
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
   # Run the DAM inference sidecar only when an image has been pushed for it.
   HasConditionSidecar: !Not [!Equals [!Ref SidecarImageUri, '']]
+  UseEpic: !Equals [!Ref EpicEnabled, 'true']
+  UseEpicClientSecret: !And
+    - !Condition UseEpic
+    - !Not [!Equals [!Ref EpicClientSecret, '']]
 
 Resources:
+  # ECS injects these values from Secrets Manager; they never appear in the task
+  # definition's plaintext Environment list. Both values come from NoEcho inputs.
+  EpicClientSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseEpicClientSecret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/epic-client-secret
+      SecretString: !Ref EpicClientSecret
+
+  EmailCryptoSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseEpic
+    Properties:
+      Name: !Sub /careconnect/${Environment}/email-crypto-secret
+      SecretString: !Ref EmailCryptoSecret
+
   # ---------------------------------------------------------------------------
   # Cloud Map namespace and service for ECS service discovery.
   # API Gateway VPC Link routes traffic through Cloud Map to ECS tasks.
@@ -601,6 +659,19 @@ Resources:
               Value: !Ref AiModel
             - Name: CARECONNECT_LLM_ENABLED
               Value: !Ref CareConnectLlmEnabled
+            # Epic SMART is explicitly enabled and configured per environment.
+            - Name: EPIC_ENABLED
+              Value: !Ref EpicEnabled
+            - Name: EPIC_CLIENT_ID
+              Value: !Ref EpicClientId
+            - Name: EPIC_REDIRECT_URI
+              Value: !Ref EpicRedirectUri
+            - Name: EPIC_WEB_RETURN_URL
+              Value: !Ref EpicWebReturnUrl
+            # Staging uses the dev Spring profile, whose default enables verbose
+            # Epic error responses. Keep diagnostics server-side on deployed ECS.
+            - Name: EPIC_DIAGNOSTICS_VERBOSE
+              Value: 'false'
             # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
             - Name: EMAIL_PROVIDER
               Value: !If [IsProdProfile, 'sendgrid', 'console']
@@ -645,6 +716,16 @@ Resources:
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
+            - !If
+              - UseEpic
+              - Name: EMAIL_CRYPTO_SECRET
+                ValueFrom: !Ref EmailCryptoSecretStore
+              - !Ref AWS::NoValue
+            - !If
+              - UseEpicClientSecret
+              - Name: EPIC_CLIENT_SECRET
+                ValueFrom: !Ref EpicClientSecretStore
+              - !Ref AWS::NoValue
         # DAM depression/anxiety inference (CPU). Not essential: if it stops, the API keeps
         # serving and voice screening runs retry. Reachable only from cc-backend on localhost.
         - !If

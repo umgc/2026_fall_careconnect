@@ -186,6 +186,34 @@ The full deploy scripts read those values from environment variables:
 
 That keeps real data-stack secrets out of committed parameter files.
 
+#### Epic SMART in staging
+
+The staging backend runs with the Spring `dev` profile, where Epic is disabled
+by default. To enable it, configure these GitHub Actions repository variables:
+
+- `STAGING_EPIC_ENABLED=true`
+- `STAGING_EPIC_CLIENT_ID` (the Epic app's client ID)
+- `STAGING_EPIC_REDIRECT_URI` (the exact registered HTTPS callback URL, ending in `/api/epic/callback`)
+- `STAGING_EPIC_WEB_RETURN_URL` (the deployed frontend's HTTPS return URL)
+
+Configure `STAGING_EMAIL_CRYPTO_SECRET` as a GitHub Actions repository secret.
+Generate a unique value with `openssl rand -hex 32`; do not commit or share it.
+Keep the same value across redeploys because it encrypts stored OAuth tokens.
+The existing `STAGING_EPIC_CLIENT_SECRET` repository secret is injected only
+when supplied; public PKCE clients can leave it empty. The service stack creates
+Secrets Manager entries for these secret values and ECS injects them at startup.
+Neither secret is added to the task definition's plaintext environment list.
+
+Before changing the encryption key on an existing staging database, account for
+any OAuth tokens already encrypted with the old key; those tokens cannot be read
+with a new key. The service stack sets `EPIC_DIAGNOSTICS_VERBOSE=false` even
+though the Spring `dev` profile defaults to verbose diagnostics.
+
+After the staging workflow deploys, verify the backend health endpoint. Sign
+in as a test patient and check that `/api/epic/status` returns HTTP `200` with
+`connected: false` before linking. Then exercise Epic connect and check status
+again. An unauthenticated `401` does not establish that the Epic route exists.
+
 ### GitHub Actions Full Deploy
 
 This repo also includes a manual full-deploy workflow:

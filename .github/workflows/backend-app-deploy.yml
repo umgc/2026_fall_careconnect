@@ -194,6 +194,12 @@ jobs:
           STAGING_CORS_ALLOWED_LIST: ${{ vars.STAGING_CORS_ALLOWED_LIST }}
           STAGING_FRONTEND_BASE_URL: ${{ vars.STAGING_FRONTEND_BASE_URL }}
           STAGING_FROM_EMAIL: ${{ vars.STAGING_FROM_EMAIL }}
+          STAGING_EPIC_ENABLED: ${{ vars.STAGING_EPIC_ENABLED }}
+          STAGING_EPIC_CLIENT_ID: ${{ vars.STAGING_EPIC_CLIENT_ID }}
+          STAGING_EPIC_REDIRECT_URI: ${{ vars.STAGING_EPIC_REDIRECT_URI }}
+          STAGING_EPIC_WEB_RETURN_URL: ${{ vars.STAGING_EPIC_WEB_RETURN_URL }}
+          STAGING_EPIC_CLIENT_SECRET: ${{ secrets.STAGING_EPIC_CLIENT_SECRET }}
+          STAGING_EMAIL_CRYPTO_SECRET: ${{ secrets.STAGING_EMAIL_CRYPTO_SECRET }}
         run: |
           set -euo pipefail
           # Unset values simply mean "no override" — the committed
@@ -203,6 +209,46 @@ jobs:
               [[ -n "${STAGING_CORS_ALLOWED_LIST:-}" ]] && echo "CARECONNECT_CORS_ALLOWED_LIST=$STAGING_CORS_ALLOWED_LIST" >> "$GITHUB_ENV"
               [[ -n "${STAGING_FRONTEND_BASE_URL:-}" ]] && echo "CARECONNECT_FRONTEND_BASE_URL=$STAGING_FRONTEND_BASE_URL" >> "$GITHUB_ENV"
               [[ -n "${STAGING_FROM_EMAIL:-}" ]] && echo "CARECONNECT_FROM_EMAIL=$STAGING_FROM_EMAIL" >> "$GITHUB_ENV"
+              case "${STAGING_EPIC_ENABLED:-false}" in
+                true|false) ;;
+                *) echo "::error::STAGING_EPIC_ENABLED must be true or false." >&2; exit 1 ;;
+              esac
+              echo "CARECONNECT_EPIC_ENABLED=${STAGING_EPIC_ENABLED:-false}" >> "$GITHUB_ENV"
+              if [[ "${STAGING_EPIC_ENABLED:-false}" == "true" ]]; then
+                if [[ -z "${STAGING_EPIC_CLIENT_ID:-}" ||
+                      -z "${STAGING_EPIC_REDIRECT_URI:-}" ||
+                      -z "${STAGING_EPIC_WEB_RETURN_URL:-}" ||
+                      -z "${STAGING_EMAIL_CRYPTO_SECRET:-}" ]]; then
+                  echo "::error::Epic staging requires its client ID, redirect URI, web return URL, and a separate token-encryption secret." >&2
+                  exit 1
+                fi
+                if [[ "$STAGING_EPIC_REDIRECT_URI" != https://*/api/epic/callback ||
+                      "$STAGING_EPIC_WEB_RETURN_URL" != https://* ]]; then
+                  echo "::error::Epic staging URLs must use HTTPS and the redirect URI must end in /api/epic/callback." >&2
+                  exit 1
+                fi
+                if (( ${#STAGING_EMAIL_CRYPTO_SECRET} < 32 )); then
+                  echo "::error::STAGING_EMAIL_CRYPTO_SECRET must contain at least 32 characters." >&2
+                  exit 1
+                fi
+                for value in "$STAGING_EPIC_CLIENT_SECRET" "$STAGING_EMAIL_CRYPTO_SECRET"; do
+                  if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+                    echo "::error::Epic staging secrets must be single-line values." >&2
+                    exit 1
+                  fi
+                done
+                for value in "$STAGING_EPIC_CLIENT_ID" "$STAGING_EPIC_REDIRECT_URI" "$STAGING_EPIC_WEB_RETURN_URL"; do
+                  if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+                    echo "::error::Epic staging variables must be single-line values." >&2
+                    exit 1
+                  fi
+                done
+                {
+                  printf 'CARECONNECT_EPIC_CLIENT_ID=%s\n' "$STAGING_EPIC_CLIENT_ID"
+                  printf 'CARECONNECT_EPIC_REDIRECT_URI=%s\n' "$STAGING_EPIC_REDIRECT_URI"
+                  printf 'CARECONNECT_EPIC_WEB_RETURN_URL=%s\n' "$STAGING_EPIC_WEB_RETURN_URL"
+                } >> "$GITHUB_ENV"
+              fi
               ;;
           esac
           exit 0
@@ -224,6 +270,9 @@ jobs:
       - name: Create full environment
         if: steps.mode.outputs.mode == 'full'
         shell: bash
+        env:
+          CARECONNECT_EPIC_CLIENT_SECRET: ${{ secrets.STAGING_EPIC_CLIENT_SECRET }}
+          CARECONNECT_EMAIL_CRYPTO_SECRET: ${{ secrets.STAGING_EMAIL_CRYPTO_SECRET }}
         run: |
           set -euo pipefail
           ./cloudformation-fargate/cdeploy_cloudformation.sh \
@@ -234,6 +283,9 @@ jobs:
       - name: Update ECS service only
         if: steps.mode.outputs.mode == 'app'
         shell: bash
+        env:
+          CARECONNECT_EPIC_CLIENT_SECRET: ${{ secrets.STAGING_EPIC_CLIENT_SECRET }}
+          CARECONNECT_EMAIL_CRYPTO_SECRET: ${{ secrets.STAGING_EMAIL_CRYPTO_SECRET }}
         run: |
           set -euo pipefail
           ./cloudformation-fargate/cdeploy_app_only.sh \
