@@ -1299,6 +1299,11 @@ final Map<String, _Message> _messages = <String, _Message>{
   'medicarehelp_errMcr03': (l) => l.medicarehelp_errMcr03,
   'medicarehelp_errMcr04': (l) => l.medicarehelp_errMcr04,
   'medicarehelp_errMcr05': (l) => l.medicarehelp_errMcr05,
+  'connectionRequests_title': (l) => l.connectionRequests_title,
+  'connectionRequests_accept': (l) => l.connectionRequests_accept,
+  'connectionRequests_decline': (l) => l.connectionRequests_decline,
+  'connectionRequests_declined': (l) => l.connectionRequests_declined,
+  'connectionRequests_error': (l) => l.connectionRequests_error,
   'conditionFlags_title': (l) => l.conditionFlags_title,
   'conditionFlags_disclaimer': (l) => l.conditionFlags_disclaimer,
   'conditionFlags_loadError': (l) => l.conditionFlags_loadError,
@@ -1388,6 +1393,9 @@ final Map<String, _Message> _messages = <String, _Message>{
   'hhaCheckOut': (l) => l.hhaCheckOut('x'),
   'hhaState': (l) => l.hhaState('x'),
   'shiftVisitSaved': (l) => l.shiftVisitSaved('x'),
+  'connectionRequests_wantsToConnect': (l) =>
+      l.connectionRequests_wantsToConnect('x'),
+  'connectionRequests_accepted': (l) => l.connectionRequests_accepted('x'),
   'analyticsLastDaysShort': (l) => l.analyticsLastDaysShort(2),
   'analyticsLastDaysOverview': (l) => l.analyticsLastDaysOverview(2),
 };
