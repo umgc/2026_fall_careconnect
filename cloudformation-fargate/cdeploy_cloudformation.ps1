@@ -703,6 +703,20 @@ Write-Step "Checking prerequisites"
     if ($AiModel) {
         $ServiceOverrides["AiModel"] = $AiModel
     }
+    # Medicare (Blue Button), from the same CARECONNECT_MEDICARE_* variables the bash scripts and CI use.
+    # Unset leaves the parameter file's value in place.
+    $medicareOverrides = [ordered]@{
+        MedicareEnabled      = $env:CARECONNECT_MEDICARE_ENABLED
+        MedicareMode         = $env:CARECONNECT_MEDICARE_MODE
+        MedicareClientId     = $env:CARECONNECT_MEDICARE_CLIENT_ID
+        MedicareRedirectUri  = $env:CARECONNECT_MEDICARE_REDIRECT_URI
+        MedicareClientSecret = $env:CARECONNECT_MEDICARE_CLIENT_SECRET
+    }
+    foreach ($key in $medicareOverrides.Keys) {
+        if (-not [string]::IsNullOrWhiteSpace($medicareOverrides[$key])) {
+            $ServiceOverrides[$key] = [string]$medicareOverrides[$key]
+        }
+    }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 
     # Print the final API Gateway endpoints so the frontend or health checks can use them.

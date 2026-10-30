@@ -615,6 +615,23 @@ fi
 # parameters/<env>-service.json. Listed after the flags so that when both are
 # supplied the environment wins — aws cloudformation deploy takes the last
 # value given for a repeated parameter key.
+# Medicare (Blue Button). These template parameters are listed in parameters/staging-service.json;
+# a key the parameter file does not list is dropped by build_parameter_overrides.
+if [[ -n "${CARECONNECT_MEDICARE_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareEnabled=${CARECONNECT_MEDICARE_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_MODE-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareMode=${CARECONNECT_MEDICARE_MODE}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_CLIENT_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareClientId=${CARECONNECT_MEDICARE_CLIENT_ID}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_REDIRECT_URI-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareRedirectUri=${CARECONNECT_MEDICARE_REDIRECT_URI}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_CLIENT_SECRET-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareClientSecret=${CARECONNECT_MEDICARE_CLIENT_SECRET}")
+fi
 if [[ -n "${CARECONNECT_CORS_ALLOWED_LIST-}" ]]; then
   SERVICE_OVERRIDES+=("CorsAllowedList=${CARECONNECT_CORS_ALLOWED_LIST}")
 fi

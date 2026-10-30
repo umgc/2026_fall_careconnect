@@ -75,6 +75,37 @@ Parameters:
     Type: String
     Default: noreply@careconnect.com
 
+  # Medicare (Blue Button 2.0). Defaults match application.properties, so an environment that
+  # leaves these unset behaves as it did before they existed. MedicareRedirectUri must match the
+  # CMS sandbox app registration exactly and end in /login/oauth2/code/medicare.
+  MedicareEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  MedicareMode:
+    Type: String
+    Default: live
+    AllowedValues:
+      - live
+      - mock
+
+  MedicareClientId:
+    Type: String
+    Default: not-configured
+
+  MedicareRedirectUri:
+    Type: String
+    Default: http://localhost:8080/login/oauth2/code/medicare
+
+  # Stored in Secrets Manager by this stack, so app-only deploys can set or change it.
+  MedicareClientSecret:
+    Type: String
+    NoEcho: true
+    Default: not-configured
+
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
     Type: String
@@ -513,6 +544,14 @@ Resources:
   # ECS Task Definition and Service.
   # ---------------------------------------------------------------------------
 
+  # Consumed by ECS as CARECONNECT_MEDICARE_CLIENT_SECRET. Kept in this stack rather than the
+  # data stack so app-only deploys, which skip the data stack, can create and update it.
+  MedicareClientSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/medicare-client-secret
+      SecretString: !Ref MedicareClientSecret
+
   # ECS task definition tied to the runtime contract used by the backend code.
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -637,11 +676,22 @@ Resources:
               Value: !If [HasConditionSidecar, 'true', 'false']
             - Name: CARECONNECT_DAM_URL
               Value: http://localhost:8000
+            # Medicare (Blue Button 2.0) sign-in and retrieval.
+            - Name: CARECONNECT_MEDICARE_ENABLED
+              Value: !Ref MedicareEnabled
+            - Name: CARECONNECT_MEDICARE_MODE
+              Value: !Ref MedicareMode
+            - Name: CARECONNECT_MEDICARE_CLIENT_ID
+              Value: !Ref MedicareClientId
+            - Name: CARECONNECT_MEDICARE_REDIRECT_URI
+              Value: !Ref MedicareRedirectUri
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-DatabasePasswordSecretArn
+            - Name: CARECONNECT_MEDICARE_CLIENT_SECRET
+              ValueFrom: !Ref MedicareClientSecretValue
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
