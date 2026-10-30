@@ -1254,7 +1254,6 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
               _voiceStatus = _VoiceStatus.confirming;
               _statusDetail = _pendingDetail!;
             });
-            _startConfirmationListening();
             return;
           }
         }
