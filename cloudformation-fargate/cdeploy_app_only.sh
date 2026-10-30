@@ -563,6 +563,34 @@ fi
 if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
   SERVICE_OVERRIDES+=("FromEmail=${CARECONNECT_FROM_EMAIL}")
 fi
+# Cerner settings: absent values preserve CloudFormation defaults.
+if [[ -n "${CARECONNECT_CERNER_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerEnabled=${CARECONNECT_CERNER_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_CERNER_ALLERGIES_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerAllergiesEnabled=${CARECONNECT_CERNER_ALLERGIES_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_CERNER_CLINICAL_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerClinicalEnabled=${CARECONNECT_CERNER_CLINICAL_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_CERNER_PATIENT_APPOINTMENT_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerPatientAppointmentEnabled=${CARECONNECT_CERNER_PATIENT_APPOINTMENT_ENABLED}")
+fi
+if [[ -n "${CERNER_FHIR_BASE_URL-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerFhirBaseUrl=${CERNER_FHIR_BASE_URL}")
+fi
+if [[ -n "${CERNER_CLIENT_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerClientId=${CERNER_CLIENT_ID}")
+fi
+if [[ -n "${CERNER_REDIRECT_URI-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerRedirectUri=${CERNER_REDIRECT_URI}")
+fi
+if [[ -n "${CERNER_WEB_RETURN_URL-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerWebReturnUrl=${CERNER_WEB_RETURN_URL}")
+fi
+if [[ -n "${CERNER_CLIENT_SECRET_ARN-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerClientSecretArn=${CERNER_CLIENT_SECRET_ARN}")
+fi
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
 step "Reading final API endpoint"
