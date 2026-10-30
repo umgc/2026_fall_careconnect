@@ -61,4 +61,36 @@ class KvsAttendeeStreamRegistryTest {
         assertThat(registry.getStreamArn(CALL_ID, "other")).isNull();
         assertThat(registry.getStreamArn("other-call", ROSTER_ID)).isEqualTo(STREAM_ARN + "/3");
     }
+
+    @Test
+    @DisplayName("register ignores blank call, attendee or stream values")
+    void register_blankValues_ignored() {
+        registry.register(null, ROSTER_ID, STREAM_ARN);
+        registry.register(CALL_ID, " ", STREAM_ARN);
+        registry.register(CALL_ID, ROSTER_ID, null);
+
+        assertThat(registry.getMappings(CALL_ID)).isEmpty();
+        assertThat(registry.getMappings("unknown")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("clearCall ignores a null or blank call id")
+    void clearCall_blankCallId_noOp() {
+        registry.register(CALL_ID, ROSTER_ID, STREAM_ARN);
+
+        registry.clearCall(null);
+        registry.clearCall(" ");
+
+        assertThat(registry.getStreamArn(CALL_ID, ROSTER_ID)).isEqualTo(STREAM_ARN);
+    }
+
+    @Test
+    @DisplayName("tryAliasOrphansToRoster is a no-op for blank input or a call with no mappings")
+    void tryAliasOrphansToRoster_invalidInput_noOp() {
+        assertThat(registry.tryAliasOrphansToRoster(null, List.of(ROSTER_ID))).isFalse();
+        assertThat(registry.tryAliasOrphansToRoster(" ", List.of(ROSTER_ID))).isFalse();
+        assertThat(registry.tryAliasOrphansToRoster(CALL_ID, null)).isFalse();
+        assertThat(registry.tryAliasOrphansToRoster(CALL_ID, List.of())).isFalse();
+        assertThat(registry.tryAliasOrphansToRoster(CALL_ID, List.of(ROSTER_ID))).isFalse();
+    }
 }

@@ -53,4 +53,27 @@ class KvsFragmentMetadataReaderTest {
                         payload, MEETING_ID, Set.of(ATTENDEE_ID)))
                 .contains(ATTENDEE_ID);
     }
+
+    @Test
+    @DisplayName("invalid fragment, meeting or attendee input never matches")
+    void invalidInput_neverMatches() {
+        final byte[] payload = (MEETING_ID + ATTENDEE_ID).getBytes(StandardCharsets.UTF_8);
+
+        assertThat(KvsFragmentMetadataReader.matchAttendeeId(null, MEETING_ID, Set.of(ATTENDEE_ID)))
+                .isEmpty();
+        assertThat(KvsFragmentMetadataReader.matchAttendeeId(new byte[0], MEETING_ID, Set.of(ATTENDEE_ID)))
+                .isEmpty();
+        assertThat(KvsFragmentMetadataReader.matchAttendeeId(payload, " ", Set.of(ATTENDEE_ID)))
+                .isEmpty();
+        assertThat(KvsFragmentMetadataReader.matchAttendeeId(payload, MEETING_ID, null)).isEmpty();
+        assertThat(KvsFragmentMetadataReader.matchAttendeeId(payload, MEETING_ID, List.of()))
+                .isEmpty();
+        assertThat(KvsFragmentMetadataReader.matchAttendeeId(payload, MEETING_ID, List.of(" ", "zzz")))
+                .isEmpty();
+        assertThat(KvsFragmentMetadataReader.containsMeetingId(null, MEETING_ID)).isFalse();
+        assertThat(KvsFragmentMetadataReader.containsMeetingId(new byte[0], MEETING_ID)).isFalse();
+        assertThat(KvsFragmentMetadataReader.containsMeetingId(payload, null)).isFalse();
+        assertThat(KvsFragmentMetadataReader.containsMeetingId(payload, " ")).isFalse();
+        assertThat(KvsFragmentMetadataReader.containsMeetingId(new byte[] {1}, "nohyphen")).isFalse();
+    }
 }
