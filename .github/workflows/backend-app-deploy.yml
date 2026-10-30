@@ -191,6 +191,13 @@ jobs:
         if: steps.mode.outputs.mode != 'skip'
         shell: bash
         env:
+          STAGING_MEDICARE_ENABLED: ${{ vars.STAGING_MEDICARE_ENABLED }}
+          STAGING_MEDICARE_MODE: ${{ vars.STAGING_MEDICARE_MODE }}
+          STAGING_MEDICARE_CLIENT_ID: ${{ vars.STAGING_MEDICARE_CLIENT_ID }}
+          STAGING_MEDICARE_REDIRECT_URI: ${{ vars.STAGING_MEDICARE_REDIRECT_URI }}
+          # Loaded here rather than in "Load environment secrets" because the Medicare
+          # secret lives in the service stack, which app-only deploys also update.
+          STAGING_MEDICARE_CLIENT_SECRET: ${{ secrets.STAGING_MEDICARE_CLIENT_SECRET }}
           STAGING_CORS_ALLOWED_LIST: ${{ vars.STAGING_CORS_ALLOWED_LIST }}
           STAGING_FRONTEND_BASE_URL: ${{ vars.STAGING_FRONTEND_BASE_URL }}
           STAGING_FROM_EMAIL: ${{ vars.STAGING_FROM_EMAIL }}
@@ -200,6 +207,11 @@ jobs:
           # parameters/<env>-service.json value is used instead.
           case "${{ steps.settings.outputs.deploy_environment }}" in
             staging)
+              [[ -n "${STAGING_MEDICARE_ENABLED:-}" ]] && echo "CARECONNECT_MEDICARE_ENABLED=$STAGING_MEDICARE_ENABLED" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_MEDICARE_MODE:-}" ]] && echo "CARECONNECT_MEDICARE_MODE=$STAGING_MEDICARE_MODE" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_MEDICARE_CLIENT_ID:-}" ]] && echo "CARECONNECT_MEDICARE_CLIENT_ID=$STAGING_MEDICARE_CLIENT_ID" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_MEDICARE_REDIRECT_URI:-}" ]] && echo "CARECONNECT_MEDICARE_REDIRECT_URI=$STAGING_MEDICARE_REDIRECT_URI" >> "$GITHUB_ENV"
+              [[ -n "${STAGING_MEDICARE_CLIENT_SECRET:-}" ]] && echo "CARECONNECT_MEDICARE_CLIENT_SECRET=$STAGING_MEDICARE_CLIENT_SECRET" >> "$GITHUB_ENV"
               [[ -n "${STAGING_CORS_ALLOWED_LIST:-}" ]] && echo "CARECONNECT_CORS_ALLOWED_LIST=$STAGING_CORS_ALLOWED_LIST" >> "$GITHUB_ENV"
               [[ -n "${STAGING_FRONTEND_BASE_URL:-}" ]] && echo "CARECONNECT_FRONTEND_BASE_URL=$STAGING_FRONTEND_BASE_URL" >> "$GITHUB_ENV"
               [[ -n "${STAGING_FROM_EMAIL:-}" ]] && echo "CARECONNECT_FROM_EMAIL=$STAGING_FROM_EMAIL" >> "$GITHUB_ENV"
