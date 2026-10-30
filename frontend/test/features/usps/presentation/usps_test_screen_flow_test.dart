@@ -90,7 +90,6 @@ class _Backend {
     this.search,
     this.connectUrl = '/oauth/google/start',
     this.failDelete = false,
-    this.failClearCache = false,
   });
 
   Map<String, dynamic> status;
@@ -99,7 +98,7 @@ class _Backend {
   List<Map<String, dynamic>>? search;
   String? connectUrl;
   bool failDelete;
-  bool failClearCache;
+  bool failClearCache = false;
 
   JsonReply call(String method, Uri uri, String body) {
     final p = uri.path;
