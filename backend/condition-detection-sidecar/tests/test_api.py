@@ -1,7 +1,10 @@
 import numpy as np
 import pytest
 
-from conftest import FakeModel, wav_bytes
+from fastapi.testclient import TestClient
+
+from app import create_app
+from conftest import FakeModel, PassThroughVad, wav_bytes
 
 
 def post(client, data, name="x.wav"):
@@ -17,6 +20,55 @@ def test_health_loading_then_ready(make_client):
     r = client.get("/health")
     assert r.status_code == 200
     assert r.json() == {"status": "ok", "model_revision": "testrev"}
+
+
+class FlakyLoader:
+    """Fails the first `failures` loads, then returns a model."""
+
+    def __init__(self, failures):
+        self.failures = failures
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise RuntimeError("weights not readable")
+        return FakeModel()
+
+
+def _retrying_app(loader, attempts=3):
+    sleeps, exits = [], []
+    app = create_app(
+        model_loader=loader, vad=PassThroughVad(), start_loading=False,
+        load_attempts=attempts, load_retry_seconds=60, sleep=sleeps.append, exit_fn=exits.append,
+    )
+    return app, sleeps, exits
+
+
+def test_model_load_retries_then_becomes_healthy():
+    # Two failures, third attempt loads: no exit, and the backoff doubled between attempts.
+    loader = FlakyLoader(failures=2)
+    app, sleeps, exits = _retrying_app(loader)
+
+    app.state.load()
+
+    assert loader.calls == 3
+    assert sleeps == [60, 120]
+    assert exits == []
+    assert TestClient(app).get("/health").status_code == 200
+
+
+def test_model_load_exhausted_exits_nonzero():
+    # Every attempt fails: the process must exit so ECS restarts the container.
+    loader = FlakyLoader(failures=99)
+    app, sleeps, exits = _retrying_app(loader)
+
+    app.state.load()
+
+    assert loader.calls == 3
+    assert sleeps == [60, 120]  # no sleep after the last attempt
+    assert exits == [1]
+    assert TestClient(app).get("/health").status_code == 503
 
 
 def test_analyze_ok(make_client):

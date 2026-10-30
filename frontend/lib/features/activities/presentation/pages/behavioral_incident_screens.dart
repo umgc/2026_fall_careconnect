@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -73,7 +74,8 @@ class _BehavioralIncidentFormScreenState
           const SnackBar(content: Text('Behavioral incident logged')),
         );
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute<void>(
+          TitledMaterialPageRoute<void>(
+            title: 'Behavioral Incident History',
             builder: (context) => BehavioralIncidentHistoryScreen(
               clientId: widget.clientId,
               clientName: widget.clientName,

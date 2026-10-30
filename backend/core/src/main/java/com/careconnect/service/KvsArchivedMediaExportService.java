@@ -4,6 +4,7 @@ import java.io.OutputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -48,12 +49,17 @@ public class KvsArchivedMediaExportService {
     }
 
     /**
-     * Lists fragments in the call window ({@code SERVER_TIMESTAMP}), concatenates them via {@code
+     * Lists fragments in the window ({@code SERVER_TIMESTAMP}), concatenates them via {@code
      * GetMediaForFragmentList}, and writes one temporary WebM/MKV file for ffmpeg → WAV.
      *
-     * @return temporary raw media path
+     * <p>The fragment query is padded so a fragment that began just before {@code start} (or clock
+     * skew between our timestamps and KVS's) does not cut off the first words. The padding is for
+     * selection only: the returned clip's trim window, measured from the first fragment's server
+     * timestamp, is exactly {@code [start, end)}, and the transcoder decodes nothing outside it.
+     *
+     * @return temporary raw media file and the slice of it covering {@code [start, end)}
      */
-    public Path exportAttendeeRange(
+    public KvsAudioClip exportAttendeeRange(
             final String streamArn,
             final Instant start,
             final Instant end) throws Exception {
@@ -70,8 +76,8 @@ public class KvsArchivedMediaExportService {
         final Region region = Region.of(regionFromArn(streamArn));
         final Instant paddedStart = start.minusSeconds(EXPORT_WINDOW_PADDING_SECONDS);
         final Instant paddedEnd = end.plusSeconds(EXPORT_WINDOW_PADDING_SECONDS);
-        final List<String> fragmentNumbers = listFragmentNumbers(region, streamArn, paddedStart, paddedEnd);
-        if (fragmentNumbers.isEmpty()) {
+        final List<Fragment> fragments = listFragments(region, streamArn, paddedStart, paddedEnd);
+        if (fragments.isEmpty()) {
             if (log.isWarnEnabled()) {
                 log.warn(
                         "No KVS fragments found streamArn={} start={} end={} paddedStart={} paddedEnd={}",
@@ -83,6 +89,14 @@ public class KvsArchivedMediaExportService {
             }
             throw new IllegalStateException("No KVS fragments found for attendee stream " + streamArn);
         }
+        final Instant mediaStart = fragments.get(0).serverTimestamp();
+        final long[] trim = trimWindowMs(mediaStart, start, end);
+        if (trim.length == 0) {
+            throw new IllegalStateException("No KVS fragments inside window for attendee stream " + streamArn);
+        }
+        final long trimStartMs = trim[0];
+        final long trimEndMs = trim[1];
+        final List<String> fragmentNumbers = fragments.stream().map(Fragment::fragmentNumber).toList();
 
         final String mediaEndpoint =
                 kinesisVideoClient
@@ -107,15 +121,30 @@ public class KvsArchivedMediaExportService {
 
         if (log.isInfoEnabled()) {
             log.info(
-                    "Exported {} KVS fragments streamArn={} output={}",
+                    "Exported {} KVS fragments streamArn={} output={} mediaStart={} trimMs=[{}, {})",
                     fragmentNumbers.size(),
                     streamArn,
-                    output);
+                    output,
+                    mediaStart,
+                    trimStartMs,
+                    trimEndMs);
         }
-        return output;
+        return new KvsAudioClip(output, trimStartMs, trimEndMs);
     }
 
-    private List<String> listFragmentNumbers(
+    /**
+     * Where {@code [start, end)} lies in media whose first fragment began at {@code mediaStart}:
+     * {@code {startMs, endMs}} from the start of the file, or an empty array when every fetched
+     * fragment is after the window (only padding was found). A window that starts before the
+     * first fragment begins at 0: there is no earlier audio to cut.
+     */
+    static long[] trimWindowMs(final Instant mediaStart, final Instant start, final Instant end) {
+        final long startMs = Math.max(0L, Duration.between(mediaStart, start).toMillis());
+        final long endMs = Duration.between(mediaStart, end).toMillis();
+        return endMs > startMs ? new long[] {startMs, endMs} : new long[0];
+    }
+
+    private List<Fragment> listFragments(
             final Region region,
             final String streamArn,
             final Instant start,
@@ -146,14 +175,15 @@ public class KvsArchivedMediaExportService {
                                     .build())
                     .fragments()
                     .stream()
+                    .filter(fragment -> fragment.serverTimestamp() != null)
+                    .filter(fragment -> fragment.fragmentNumber() != null && !fragment.fragmentNumber().isBlank())
                     .sorted(Comparator.comparing(Fragment::serverTimestamp))
-                    .map(Fragment::fragmentNumber)
-                    .filter(fragmentNumber -> fragmentNumber != null && !fragmentNumber.isBlank())
                     .toList();
         }
     }
 
-    private KinesisVideoArchivedMediaClient archivedClient(final Region region, final String endpoint) {
+    /** Package-private so tests can supply a mocked client; production builds a real one. */
+    KinesisVideoArchivedMediaClient archivedClient(final Region region, final String endpoint) {
         return KinesisVideoArchivedMediaClient.builder()
                 .region(region)
                 .endpointOverride(URI.create(endpoint))

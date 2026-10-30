@@ -9,16 +9,16 @@ import com.careconnect.model.conditiondetection.ConditionName;
 import com.careconnect.model.conditiondetection.ConditionSkipReason;
 import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
+import com.careconnect.service.AttendeeAudioWindows;
 import com.careconnect.service.KvsArchivedMediaExportService;
+import com.careconnect.service.KvsAudioClip;
 import com.careconnect.service.KvsAudioTranscodeService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -131,50 +131,48 @@ public class KintsugiDamAdapter implements ConditionModelAdapter {
             return new AdapterOutcome.Deferred(SIDECAR_WAIT_SECONDS);
         }
 
-        final List<Path> rawFiles = new ArrayList<>();
+        final List<KvsAudioClip> clips = new ArrayList<>();
         Path wav = null;
         try {
-            for (final CallAttendee row : patientRows(context)) {
-                final Path raw = exportRow(row, recording);
-                if (raw != null) {
-                    rawFiles.add(raw);
+            for (final AttendeeAudioWindows.Window window : patientWindows(context, recording)) {
+                final KvsAudioClip clip = exportWindow(window);
+                if (clip != null) {
+                    clips.add(clip);
                 }
             }
-            if (rawFiles.isEmpty()) {
+            if (clips.isEmpty()) {
                 return new AdapterOutcome.Skipped(ConditionSkipReason.NO_PATIENT_AUDIO);
             }
-            wav = transcoder.toMonoWav(rawFiles, DAM_SAMPLE_RATE);
+            wav = transcoder.toMonoWav(clips, DAM_SAMPLE_RATE);
             return toOutcome(sidecar.analyze(wav));
         } finally {
-            for (final Path raw : rawFiles) {
-                deleteQuietly(raw);
+            for (final KvsAudioClip clip : clips) {
+                deleteQuietly(clip.file());
             }
             deleteQuietly(wav);
         }
     }
 
-    /** The patient's own attendee rows (one per Chime join), oldest first. */
-    private List<CallAttendee> patientRows(final ConditionDetectionContext context) {
-        return attendeeRepository.findByCallId(context.callId()).stream()
+    /**
+     * The patient's own attendee rows (one per Chime join) as consecutive windows inside the
+     * recording. KVS pool streams are reused across calls, so each row's join/leave bounds what is
+     * read, and rejoins never overlap, so no speech is scored twice.
+     */
+    private List<AttendeeAudioWindows.Window> patientWindows(
+            final ConditionDetectionContext context, final CallRecording recording) {
+        final List<CallAttendee> rows = attendeeRepository.findByCallId(context.callId()).stream()
                 .filter(a -> context.patientUserId().equals(a.getUserId()))
                 .filter(a -> a.getKvsStreamArn() != null && !a.getKvsStreamArn().isBlank())
-                .sorted(Comparator.comparing(
-                        CallAttendee::getJoinedAt, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .toList();
+        return AttendeeAudioWindows.forUser(rows, recording.getStartedAt(), recording.getEndedAt());
     }
 
-    /**
-     * Exports one attendee row's window, clamped to the recording. KVS pool streams are reused
-     * across calls, so the row's own join/leave times bound what is exported.
-     */
-    private Path exportRow(final CallAttendee row, final CallRecording recording) throws Exception {
-        final LocalDateTime from = later(row.getJoinedAt(), recording.getStartedAt());
-        final LocalDateTime to = earlier(row.getLeftAt(), recording.getEndedAt());
-        if (!to.isAfter(from)) {
-            return null;
-        }
+    /** Exports one window; null when its stream has no audio there. */
+    private KvsAudioClip exportWindow(final AttendeeAudioWindows.Window window) throws Exception {
+        final CallAttendee row = window.attendee();
         try {
-            return kvsExport.exportAttendeeRange(row.getKvsStreamArn(), utc(from), utc(to));
+            return kvsExport.exportAttendeeRange(
+                    row.getKvsStreamArn(), window.fromInstant(), window.toInstant());
         } catch (IllegalStateException noAudio) {
             // No fragments for this join (or KVS unavailable); other joins may still have audio.
             if (log.isInfoEnabled()) {
@@ -211,18 +209,6 @@ public class KintsugiDamAdapter implements ConditionModelAdapter {
         }
         return new ConditionFinding(
                 condition, score.level(), labels.get(score.level()), score.raw(), null);
-    }
-
-    private static LocalDateTime later(final LocalDateTime a, final LocalDateTime b) {
-        return a == null || a.isBefore(b) ? b : a;
-    }
-
-    private static LocalDateTime earlier(final LocalDateTime a, final LocalDateTime b) {
-        return a == null || a.isAfter(b) ? b : a;
-    }
-
-    private static Instant utc(final LocalDateTime value) {
-        return value.toInstant(ZoneOffset.UTC);
     }
 
     private static void deleteQuietly(final Path path) {

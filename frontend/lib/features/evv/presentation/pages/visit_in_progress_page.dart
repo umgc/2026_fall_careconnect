@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -492,7 +493,8 @@ class _VisitInProgressPageState extends State<VisitInProgressPage> {
               onPressed: () {
                 final name = fullName.trim().isEmpty ? 'Client' : fullName;
                 Navigator.of(context).push(
-                  MaterialPageRoute<void>(
+                  TitledMaterialPageRoute<void>(
+                    title: 'Report Incident',
                     builder: (context) => IncidentReportWizardScreen(
                       clientId: patient.id,
                       clientName: name,

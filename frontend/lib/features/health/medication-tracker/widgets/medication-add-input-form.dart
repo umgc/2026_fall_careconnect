@@ -20,6 +20,9 @@ import 'package:provider/provider.dart';
 class AddMedicationModal extends StatefulWidget {
   final Function(Medication) onMedicationAdded;
 
+  /// Patient selected by a caregiver. Patient users fall back to their own ID.
+  final int? targetPatientId;
+
   /// Picks a medication label photo. Defaults to the device camera.
   final Future<XFile?> Function()? pickLabelPhoto;
 
@@ -36,6 +39,7 @@ class AddMedicationModal extends StatefulWidget {
   const AddMedicationModal({
     super.key,
     required this.onMedicationAdded,
+    this.targetPatientId,
     this.pickLabelPhoto,
     this.extractLabelPhoto,
     this.readAloud,
@@ -790,7 +794,7 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
       'The photo could not be read. Please enter the medication manually.';
 
   Future<void> _captureLabelPhoto() async {
-    final patientId =
+    final patientId = widget.targetPatientId ??
         Provider.of<UserProvider>(context, listen: false).user?.patientId;
     if (patientId == null) {
       _applyPhotoResult(MedicationPhotoExtractionResult.manualFallback(
@@ -956,8 +960,8 @@ class _AddMedicationModalState extends State<AddMedicationModal> {
       });
 
       try {
-        final userProvider = Provider.of<UserProvider>(context, listen: false);
-        final patientId = userProvider.user?.patientId;
+        final patientId = widget.targetPatientId ??
+            Provider.of<UserProvider>(context, listen: false).user?.patientId;
 
         if (patientId == null) {
           throw Exception('Patient ID not found');

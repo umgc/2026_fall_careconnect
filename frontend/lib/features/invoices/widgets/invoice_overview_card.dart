@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:flutter/material.dart';
 
@@ -22,7 +23,9 @@ class InvoiceOverviewCard extends StatelessWidget {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const InvoiceTabbedPage()),
+            TitledMaterialPageRoute(
+              title: 'Invoice Assistant',
+              builder: (context) => const InvoiceTabbedPage()),
           );
         },
         child: Padding(

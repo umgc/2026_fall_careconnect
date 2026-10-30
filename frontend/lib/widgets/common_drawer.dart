@@ -225,6 +225,18 @@ class _CommonDrawerState extends State<CommonDrawer> {
             isActive: widget.currentRoute == '/medication',
           ),
 
+          // Unified Health Data: the patient's own records from every
+          // connected source. Before this, a patient could only reach it
+          // from the check-in page or by typing /#/health-data.
+          if (user.role.toUpperCase() == 'PATIENT')
+            _buildDrawerItem(
+              context,
+              icon: Icons.health_and_safety,
+              title: 'Health Data',
+              route: '/health-data',
+              isActive: widget.currentRoute.startsWith('/health-data'),
+            ),
+
           _buildDrawerItem(
             context,
             icon: Icons.people_alt,

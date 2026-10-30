@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/l10n/app_localizations.dart';
 
 import '../../dashboard/presentation/sosscreen.dart';
@@ -73,7 +74,9 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const CancelScreen()),
+                TitledMaterialPageRoute(
+                  title: 'Cancel Alert',
+                  builder: (context) => const CancelScreen()),
               );
             },
             style: AppTheme.textButtonStyle,
@@ -84,7 +87,9 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const SosScreen()),
+                TitledMaterialPageRoute(
+                  title: 'Emergency Assistance',
+                  builder: (context) => const SosScreen()),
               );
             },
             style: AppTheme.textButtonStyle.copyWith(

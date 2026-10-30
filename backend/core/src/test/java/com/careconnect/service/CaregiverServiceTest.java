@@ -867,10 +867,32 @@ class CaregiverServiceTest {
             fmUser.setId(3L);
             fmUser.setRole(Role.FAMILY_MEMBER);
 
+            final User patientUser = new User();
+            patientUser.setId(77L);
+            final Patient patient = new Patient();
+            patient.setId(20L);
+            patient.setUser(patientUser);
+
             when(users.findById(3L)).thenReturn(Optional.of(fmUser));
-            when(familyMemberLinkRepository.existsByFamilyMemberUserIdAndPatientId(eq(3L), eq(20L), any(LocalDateTime.class))).thenReturn(true);
+            when(patientRepository.findById(20L)).thenReturn(Optional.of(patient));
+            when(familyMemberLinkRepository.existsActiveNonExpiredLinkByUserIds(
+                    eq(3L), eq(77L), any(LocalDateTime.class))).thenReturn(true);
 
             assertTrue(caregiverService.hasAccessToPatient(3L, 20L));
+        }
+
+        @Test
+        @DisplayName("hasAccessToPatient_familyMemberRole_unknownPatient_shouldDeny")
+        void hasAccessToPatient_familyMemberRole_unknownPatient_shouldDeny() throws Exception {
+            final User fmUser = new User();
+            fmUser.setId(3L);
+            fmUser.setRole(Role.FAMILY_MEMBER);
+
+            when(users.findById(3L)).thenReturn(Optional.of(fmUser));
+            when(patientRepository.findById(404L)).thenReturn(Optional.empty());
+
+            assertFalse(caregiverService.hasAccessToPatient(3L, 404L));
+            verifyNoInteractions(familyMemberLinkRepository);
         }
 
         @Test

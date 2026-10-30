@@ -10,12 +10,16 @@ import com.careconnect.model.conditiondetection.ConditionSkipReason;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.service.BedrockSentimentService;
 import com.careconnect.service.CallTranscriptService;
+import com.careconnect.service.PostCallTranscriptionService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -28,9 +32,10 @@ import org.springframework.stereotype.Component;
  * Phase 2: PTSD and bipolar indicator screening from the post-call transcript with Amazon
  * Bedrock (the app-wide model unless overridden).
  *
- * <p>Only statements attributed to the patient are assessed, so the run needs a transcript
- * with per-attendee speaker attribution. A mixed-recording fallback transcript ("SPEAKER 1")
- * cannot attribute statements and is skipped rather than risk flagging the wrong person.</p>
+ * <p>The model reads the whole conversation but assesses only the patient's statements, so the
+ * run needs per-attendee speaker attribution (the KVS transcript). Live captions and the
+ * mixed-recording fallback ("SPEAKER 1") cannot attribute statements reliably and are not used;
+ * without a patient line the run is skipped rather than risk flagging the wrong person.</p>
  */
 @Component
 @Order(2)
@@ -42,15 +47,19 @@ public class BedrockTranscriptScreeningAdapter implements ConditionModelAdapter 
 
     static final String MODEL_ID = "bedrock-transcript-screen-v1";
 
-    static final String PROMPT_VERSION = "condition-screen-v1";
+    /** v2: KVS-attributed segments only, chunked instead of truncated. */
+    static final String PROMPT_VERSION = "condition-screen-v2";
 
     /** How long to wait for transcription before giving up. */
     static final Duration TRANSCRIPT_WAIT = Duration.ofHours(6);
 
     static final long TRANSCRIPT_POLL_SECONDS = 120L;
 
-    /** Same transcript budget as call summaries ({@code captureSummarySnapshot}). */
-    static final int MAX_TRANSCRIPT_CHARS = 16_000;
+    /**
+     * Characters per Bedrock request (~30k tokens, well inside the Nova context window). A normal
+     * call fits in one chunk; longer calls are screened in several rather than truncated.
+     */
+    static final int MAX_TRANSCRIPT_CHARS = 120_000;
 
     static final int MAX_EVIDENCE_CHARS = 240;
 
@@ -118,14 +127,38 @@ public class BedrockTranscriptScreeningAdapter implements ConditionModelAdapter 
         if (waiting != null) {
             return waiting;
         }
-        final String transcript = buildTranscript(
+        final List<String> chunks = buildChunks(
                 transcriptService.getSegmentsForCall(context.callId()), context.patientUserId());
-        if (transcript == null) {
+        if (chunks.isEmpty()) {
             return new AdapterOutcome.Skipped(ConditionSkipReason.PATIENT_SPEAKER_UNIDENTIFIED);
         }
-        final String json = bedrock.completeJson(
-                buildPrompt(bedrock.anonymizeForPrompt(transcript)), modelIdOverride, MAX_OUTPUT_TOKENS);
-        return new AdapterOutcome.Completed(parseFindings(json), null);
+        List<ConditionFinding> merged = null;
+        for (final String chunk : chunks) {
+            final String json = bedrock.completeJson(
+                    buildPrompt(bedrock.anonymizeForPrompt(chunk)), modelIdOverride, MAX_OUTPUT_TOKENS);
+            merged = mergeHighest(merged, parseFindings(json));
+        }
+        return new AdapterOutcome.Completed(merged, null);
+    }
+
+    /** Per condition, keeps the more severe finding; on a tie, the earlier chunk's. */
+    static List<ConditionFinding> mergeHighest(
+            final List<ConditionFinding> current, final List<ConditionFinding> next) {
+        if (current == null) {
+            return next;
+        }
+        final List<ConditionFinding> merged = new ArrayList<>(current.size());
+        for (final ConditionFinding kept : current) {
+            ConditionFinding best = kept;
+            for (final ConditionFinding candidate : next) {
+                if (candidate.condition() == kept.condition()
+                        && candidate.severityLevel() > best.severityLevel()) {
+                    best = candidate;
+                }
+            }
+            merged.add(best);
+        }
+        return merged;
     }
 
     /** Returns null when the transcript is ready, else the outcome to report meanwhile. */
@@ -152,26 +185,57 @@ public class BedrockTranscriptScreeningAdapter implements ConditionModelAdapter 
     }
 
     /**
-     * Renders the transcript with role tags instead of speaker names, or null when no line is
-     * attributed to the patient. Capped at {@link #MAX_TRANSCRIPT_CHARS}.
+     * Renders the whole conversation, both sides, with role tags instead of speaker names, cut into
+     * consecutive chunks of at most {@link #MAX_TRANSCRIPT_CHARS}. Only chunks containing a patient
+     * line are returned; an empty list means the patient never spoke (or could not be identified).
+     *
+     * <p>Only per-attendee KVS segments are used: their actor user id is the speaker, because each
+     * attendee's audio came from their own stream. Live captions are excluded because their actor
+     * user id is whoever uploaded them (both clients upload everyone's speech), and the mixed-MP4
+     * fallback carries no speaker at all.</p>
      */
-    static String buildTranscript(final List<CallTranscriptSegment> segments, final Long patientUserId) {
-        final StringBuilder text = new StringBuilder();
-        boolean patientSpoke = false;
-        for (final CallTranscriptSegment segment : segments) {
-            final String line = segment.getText() == null ? "" : segment.getText().strip();
-            if (line.isEmpty()) {
-                continue;
-            }
-            final boolean fromPatient = patientUserId != null && patientUserId.equals(segment.getActorUserId());
-            patientSpoke |= fromPatient;
-            final String rendered = "[" + (fromPatient ? PATIENT_TAG : CARE_TEAM_TAG) + "] " + line + "\n";
-            if (text.length() + rendered.length() > MAX_TRANSCRIPT_CHARS) {
-                break;
-            }
-            text.append(rendered);
+    static List<String> buildChunks(final List<CallTranscriptSegment> segments, final Long patientUserId) {
+        final List<String> chunks = new ArrayList<>();
+        if (patientUserId == null) {
+            return chunks;
         }
-        return patientSpoke ? text.toString() : null;
+        final StringBuilder chunk = new StringBuilder();
+        boolean chunkHasPatient = false;
+        for (final CallTranscriptSegment segment : speakerAttributed(segments)) {
+            final boolean fromPatient = patientUserId.equals(segment.getActorUserId());
+            String rendered = "[" + (fromPatient ? PATIENT_TAG : CARE_TEAM_TAG) + "] "
+                    + segment.getText().strip() + "\n";
+            if (rendered.length() > MAX_TRANSCRIPT_CHARS) {
+                rendered = rendered.substring(0, MAX_TRANSCRIPT_CHARS - 1) + "\n";
+            }
+            if (chunk.length() + rendered.length() > MAX_TRANSCRIPT_CHARS) {
+                if (chunkHasPatient) {
+                    chunks.add(chunk.toString());
+                }
+                chunk.setLength(0);
+                chunkHasPatient = false;
+            }
+            chunk.append(rendered);
+            chunkHasPatient |= fromPatient;
+        }
+        if (chunkHasPatient) {
+            chunks.add(chunk.toString());
+        }
+        return chunks;
+    }
+
+    /** KVS segments with a speaker and text, exact duplicates removed, in conversation order. */
+    private static List<CallTranscriptSegment> speakerAttributed(final List<CallTranscriptSegment> segments) {
+        final Set<List<Object>> seen = new HashSet<>();
+        return segments.stream()
+                .filter(s -> PostCallTranscriptionService.KVS_TRANSCRIPT_SOURCE.equals(s.getSource()))
+                .filter(s -> s.getActorUserId() != null)
+                .filter(s -> s.getText() != null && !s.getText().isBlank())
+                .filter(s -> seen.add(Arrays.asList(
+                        s.getActorUserId(), s.getStartMs(), s.getEndMs(), s.getText().strip())))
+                .sorted(Comparator.comparing(
+                        CallTranscriptSegment::getStartMs, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList();
     }
 
     static String buildPrompt(final String transcript) {

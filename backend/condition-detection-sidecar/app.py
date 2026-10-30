@@ -68,9 +68,15 @@ def create_app(
     min_speech_seconds: Optional[float] = None,
     max_speech_seconds: Optional[float] = None,
     start_loading: bool = True,
+    load_attempts: Optional[int] = None,
+    load_retry_seconds: Optional[float] = None,
+    sleep: Callable[[float], None] = time.sleep,
+    exit_fn: Callable[[int], None] = os._exit,
 ) -> FastAPI:
     min_s = float(os.environ.get("MIN_SPEECH_SECONDS", "30")) if min_speech_seconds is None else min_speech_seconds
     max_s = float(os.environ.get("MAX_SPEECH_SECONDS", "600")) if max_speech_seconds is None else max_speech_seconds
+    attempts = int(os.environ.get("MODEL_LOAD_ATTEMPTS", "5")) if load_attempts is None else load_attempts
+    retry_s = float(os.environ.get("MODEL_LOAD_RETRY_SECONDS", "60")) if load_retry_seconds is None else load_retry_seconds
     loader = model_loader or _default_model_loader
 
     app = FastAPI(title="condition-detection-sidecar")
@@ -78,13 +84,24 @@ def create_app(
     infer_lock = threading.Lock()
 
     def _load() -> None:
-        try:
-            if state["vad"] is None:
-                state["vad"] = _default_vad()
-            state["model"] = loader()
-            log.info("model loaded")
-        except Exception:
-            log.exception("model load failed")
+        # Retry with doubling backoff, then exit: a process that stays up without a model looks
+        # alive but can never serve, and ECS only restarts the (non-essential) sidecar on exit.
+        delay = retry_s
+        for attempt in range(1, attempts + 1):
+            try:
+                if state["vad"] is None:
+                    state["vad"] = _default_vad()
+                state["model"] = loader()
+                log.info("model loaded")
+                return
+            except Exception:
+                log.exception("model load failed (attempt %d/%d)", attempt, attempts)
+            if attempt < attempts:
+                sleep(delay)
+                delay = min(delay * 2, 600.0)
+        log.error("model load failed permanently; exiting")
+        # os._exit, not sys.exit: this runs on the loader thread, where sys.exit ends only the thread.
+        exit_fn(1)
 
     app.state.load = _load  # tests may call this synchronously (start_loading=False)
     if start_loading:

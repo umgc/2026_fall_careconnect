@@ -15,6 +15,8 @@ import 'package:care_connect_app/features/dashboards/dashboards_screen.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/incident_report_screens.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/incident_report_history_screen.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
+import 'package:care_connect_app/features/health/medication-tracker/models/medication-model.dart';
+import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/widgets/communication_history_card.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/widgets/emergency_contact_card.dart';
 import 'package:care_connect_app/features/health/caregiver-patient-list/widgets/mood_history_card.dart';
@@ -110,7 +112,8 @@ void _setSarahHttpMocks() {
     if (path.contains('/telemetry') || path.contains('/call')) {
       return http.Response(jsonEncode([]), 200);
     }
-    if (path.contains('/search') || path.contains('/check-in') ||
+    if (path.contains('/search') ||
+        path.contains('/check-in') ||
         path.contains('/checkin')) {
       return http.Response(
         jsonEncode({
@@ -402,6 +405,34 @@ void main() {
     testWidgets('TC-PDP-025: builds with isCaregiver true', (WidgetTester tester) async {
       await pumpReady(tester, buildTestWidget(isCaregiver: true));
       expect(find.text('Sarah Johnson'), findsWidgets);
+    });
+
+    testWidgets('caregiver opens medication form for the selected patient',
+        (WidgetTester tester) async {
+      await pumpReady(tester, buildTestWidget(isCaregiver: true));
+
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+
+      final addButton = find.byKey(const Key('add-medication-button'));
+      await tester.ensureVisible(addButton);
+      await tester.tap(addButton);
+      await tester.pumpAndSettle();
+
+      final modal = tester.widget<AddMedicationModal>(
+        find.byType(AddMedicationModal),
+      );
+      expect(modal.targetPatientId, 42);
+
+      modal.onMedicationAdded(const Medication(
+        patientId: 42,
+        medicationName: 'Metformin',
+        dosage: '500 mg',
+        frequency: 'Twice daily',
+        route: 'oral',
+        isActive: true,
+      ));
+      await tester.pump();
     });
 
     testWidgets('TC-PDP-026: builds with patient role UserProvider',

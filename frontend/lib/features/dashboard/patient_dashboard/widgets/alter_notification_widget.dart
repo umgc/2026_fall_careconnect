@@ -123,6 +123,7 @@ class AlertNotification extends StatelessWidget {
           ),
           if (onDismiss != null)
             IconButton(
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
               icon: Icon(
                 Icons.close,
                 color: _getTextColor(context),

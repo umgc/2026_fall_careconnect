@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/social/in-app-chat/pages/chat-page.dart';
 import 'package:care_connect_app/widgets/default_app_header.dart';
 import 'package:flutter/material.dart';
@@ -228,7 +229,8 @@ class _MessagesListPageState extends State<MessagesListPage> {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(
+          TitledMaterialPageRoute(
+            title: 'Conversation',
             builder: (context) => ChatPage(
               contactName: name,
               contactRole: role,

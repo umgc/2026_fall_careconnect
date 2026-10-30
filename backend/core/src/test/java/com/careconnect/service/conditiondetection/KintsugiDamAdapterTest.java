@@ -22,6 +22,7 @@ import com.careconnect.model.conditiondetection.ConditionSkipReason;
 import com.careconnect.repository.CallAttendeeRepository;
 import com.careconnect.repository.CallRecordingRepository;
 import com.careconnect.service.KvsArchivedMediaExportService;
+import com.careconnect.service.KvsAudioClip;
 import com.careconnect.service.KvsAudioTranscodeService;
 import com.careconnect.testsupport.fixtures.ConditionDetectionFixtures;
 import java.nio.file.Files;
@@ -93,6 +94,11 @@ class KintsugiDamAdapterTest {
             final long id, final Long userId, final String arn,
             final LocalDateTime joinedAt, final LocalDateTime leftAt) {
         return ConditionDetectionFixtures.attendee(id, userId, arn, joinedAt, leftAt);
+    }
+
+    /** Export result for a raw file; the trim window is the transcoder's concern, mocked here. */
+    private static KvsAudioClip clip(final Path raw) {
+        return new KvsAudioClip(raw, 0L, 60_000L);
     }
 
     private static DamSidecarClient.DamResult okResult(
@@ -184,7 +190,7 @@ class KintsugiDamAdapterTest {
         final Path raw = Files.createTempFile("dam-raw", ".webm");
         final Path wav = Files.createTempFile("dam-wav", ".wav");
         try {
-            when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(raw);
+            when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(clip(raw));
             when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
             when(sidecar.analyze(wav)).thenReturn(okResult(0, 0));
 
@@ -202,7 +208,11 @@ class KintsugiDamAdapterTest {
         }
     }
 
-    /** Scenario: a null leftAt and a leftAt after the recording end both clamp the export end to the recording end. */
+    /**
+     * Scenario: a null leftAt and a leftAt after the recording end. The open row is ended by the
+     * patient's next join (a stale row must not keep reading a possibly reassigned stream); the
+     * late leave is clamped to the recording end.
+     */
     @Test
     void analyze_openEndedRowAndLateLeave_areClampedToRecordingEnd() throws Exception {
         final LocalDateTime started = base;
@@ -215,8 +225,8 @@ class KintsugiDamAdapterTest {
         final Path rawB = Files.createTempFile("dam-raw", ".webm");
         final Path wav = Files.createTempFile("dam-wav", ".wav");
         try {
-            when(kvsExport.exportAttendeeRange(eq("arn:open"), any(), any())).thenReturn(rawA);
-            when(kvsExport.exportAttendeeRange(eq("arn:late"), any(), any())).thenReturn(rawB);
+            when(kvsExport.exportAttendeeRange(eq("arn:open"), any(), any())).thenReturn(clip(rawA));
+            when(kvsExport.exportAttendeeRange(eq("arn:late"), any(), any())).thenReturn(clip(rawB));
             when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
             when(sidecar.analyze(wav)).thenReturn(okResult(0, 0));
 
@@ -224,7 +234,9 @@ class KintsugiDamAdapterTest {
 
             final Instant endInstant = ended.toInstant(ZoneOffset.UTC);
             verify(kvsExport).exportAttendeeRange(
-                    "arn:open", started.plusMinutes(1).toInstant(ZoneOffset.UTC), endInstant);
+                    "arn:open",
+                    started.plusMinutes(1).toInstant(ZoneOffset.UTC),
+                    started.plusMinutes(2).toInstant(ZoneOffset.UTC));
             verify(kvsExport).exportAttendeeRange(
                     "arn:late", started.plusMinutes(2).toInstant(ZoneOffset.UTC), endInstant);
         } finally {
@@ -284,17 +296,57 @@ class KintsugiDamAdapterTest {
         final Path rawSecond = Files.createTempFile("dam-raw-2", ".webm");
         final Path wav = Files.createTempFile("dam-wav", ".wav");
         try {
-            when(kvsExport.exportAttendeeRange(eq("arn:first"), any(), any())).thenReturn(rawFirst);
-            when(kvsExport.exportAttendeeRange(eq("arn:second"), any(), any())).thenReturn(rawSecond);
+            when(kvsExport.exportAttendeeRange(eq("arn:first"), any(), any())).thenReturn(clip(rawFirst));
+            when(kvsExport.exportAttendeeRange(eq("arn:second"), any(), any())).thenReturn(clip(rawSecond));
             when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
             when(sidecar.analyze(wav)).thenReturn(okResult(0, 0));
 
             adapter.analyze(context(RECORDING_ID));
 
             @SuppressWarnings("unchecked")
-            final ArgumentCaptor<List<Path>> paths = ArgumentCaptor.forClass(List.class);
-            verify(transcoder).toMonoWav(paths.capture(), eq(16000));
-            assertThat(paths.getValue()).containsExactly(rawFirst, rawSecond);
+            final ArgumentCaptor<List<KvsAudioClip>> clips = ArgumentCaptor.forClass(List.class);
+            verify(transcoder).toMonoWav(clips.capture(), eq(16000));
+            assertThat(clips.getValue()).extracting(KvsAudioClip::file).containsExactly(rawFirst, rawSecond);
+        } finally {
+            Files.deleteIfExists(rawFirst);
+            Files.deleteIfExists(rawSecond);
+            Files.deleteIfExists(wav);
+        }
+    }
+
+    /**
+     * Scenario: a rapid rejoin. The first join's leave (3:30) was recorded after the second join
+     * (3:00). Overlapping windows would score the same speech twice, so the second join ends the
+     * first window and the second export starts there.
+     */
+    @Test
+    void analyze_overlappingRejoins_exportNonOverlappingWindows() throws Exception {
+        // Arrange
+        final LocalDateTime started = base;
+        final LocalDateTime ended = base.plusMinutes(10);
+        stubRecording(recording(started, ended));
+        when(attendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(
+                row(1, PATIENT_USER_ID, "arn:first", started.plusMinutes(1), started.plusSeconds(210)),
+                row(2, PATIENT_USER_ID, "arn:second", started.plusMinutes(3), null)));
+        final Path rawFirst = Files.createTempFile("dam-raw-1", ".webm");
+        final Path rawSecond = Files.createTempFile("dam-raw-2", ".webm");
+        final Path wav = Files.createTempFile("dam-wav", ".wav");
+        try {
+            when(kvsExport.exportAttendeeRange(eq("arn:first"), any(), any())).thenReturn(clip(rawFirst));
+            when(kvsExport.exportAttendeeRange(eq("arn:second"), any(), any())).thenReturn(clip(rawSecond));
+            when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
+            when(sidecar.analyze(wav)).thenReturn(okResult(0, 0));
+
+            // Act
+            adapter.analyze(context(RECORDING_ID));
+
+            // Assert
+            verify(kvsExport).exportAttendeeRange("arn:first",
+                    started.plusMinutes(1).toInstant(ZoneOffset.UTC),
+                    started.plusMinutes(3).toInstant(ZoneOffset.UTC));
+            verify(kvsExport).exportAttendeeRange("arn:second",
+                    started.plusMinutes(3).toInstant(ZoneOffset.UTC),
+                    ended.toInstant(ZoneOffset.UTC));
         } finally {
             Files.deleteIfExists(rawFirst);
             Files.deleteIfExists(rawSecond);
@@ -331,12 +383,12 @@ class KintsugiDamAdapterTest {
         try {
             when(kvsExport.exportAttendeeRange(eq("arn:a"), any(), any()))
                     .thenThrow(new IllegalStateException("no fragments"));
-            when(kvsExport.exportAttendeeRange(eq("arn:b"), any(), any())).thenReturn(raw);
+            when(kvsExport.exportAttendeeRange(eq("arn:b"), any(), any())).thenReturn(clip(raw));
             when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
             when(sidecar.analyze(wav)).thenReturn(okResult(0, 0));
 
             assertThat(adapter.analyze(context(RECORDING_ID))).isInstanceOf(AdapterOutcome.Completed.class);
-            verify(transcoder).toMonoWav(List.of(raw), 16000);
+            verify(transcoder).toMonoWav(List.of(clip(raw)), 16000);
         } finally {
             Files.deleteIfExists(raw);
             Files.deleteIfExists(wav);
@@ -366,7 +418,7 @@ class KintsugiDamAdapterTest {
                 row(1, PATIENT_USER_ID, PATIENT_ARN, base, null)));
         final Path raw = Files.createTempFile("dam-raw", ".webm");
         final Path wav = Files.createTempFile("dam-wav", ".wav");
-        when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(raw);
+        when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(clip(raw));
         when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
         when(sidecar.analyze(wav)).thenReturn(okResult(1, 3));
 
@@ -390,7 +442,7 @@ class KintsugiDamAdapterTest {
                 row(1, PATIENT_USER_ID, PATIENT_ARN, base, null)));
         final Path raw = Files.createTempFile("dam-raw", ".webm");
         final Path wav = Files.createTempFile("dam-wav", ".wav");
-        when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(raw);
+        when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(clip(raw));
         when(transcoder.toMonoWav(anyList(), anyInt())).thenReturn(wav);
         when(sidecar.analyze(wav)).thenThrow(new IllegalStateException("sidecar 503"));
 
@@ -409,7 +461,7 @@ class KintsugiDamAdapterTest {
         when(attendeeRepository.findByCallId(CALL_ID)).thenReturn(List.of(
                 row(1, PATIENT_USER_ID, PATIENT_ARN, base, null)));
         final Path raw = Files.createTempFile("dam-raw", ".webm");
-        when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(raw);
+        when(kvsExport.exportAttendeeRange(any(), any(), any())).thenReturn(clip(raw));
         when(transcoder.toMonoWav(anyList(), anyInt())).thenThrow(new IllegalStateException("ffmpeg"));
 
         assertThatThrownBy(() -> adapter.analyze(context(RECORDING_ID)))

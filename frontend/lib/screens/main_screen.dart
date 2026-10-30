@@ -1,3 +1,5 @@
+import 'package:care_connect_app/widgets/page_title.dart';
+import 'package:care_connect_app/widgets/wrapping_bottom_navigation_bar.dart';
 import 'dart:async';
 import 'dart:convert';
 import '../services/auth_token_manager.dart';
@@ -772,7 +774,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final callId = 'chime_call_${DateTime.now().millisecondsSinceEpoch}';
     if (!mounted) return;
     Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Video Call',
         builder: (_) => HybridVideoCallWidget(
           userId: currentUser.id.toString(),
           userRole: role,
@@ -1023,7 +1026,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    return Consumer<UserProvider>(
+    final page = Consumer<UserProvider>(
       builder: (context, userProvider, child) {
         // Check if user data is missing or invalid
         final currentUser = userProvider.user;
@@ -1079,8 +1082,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               Expanded(
                 child: NotificationListener<ScrollStartNotification>(
                   onNotification: (notification) {
-                    if (notification.dragDetails != null)
+                    if (notification.dragDetails != null) {
                       _pageChangeTarget = null;
+                    }
                     return false;
                   },
                   child: PageView.builder(
@@ -1088,7 +1092,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                     onPageChanged: _onPageChanged,
                     itemCount: _navItems.length,
                     itemBuilder: (context, index) {
-                      return _navItems[index].screen;
+                      return PageTitleScope(
+                        active: index == _selectedIndex,
+                        child: _navItems[index].screen ?? const SizedBox.shrink(),
+                      );
                     },
                   ),
                 ),
@@ -1100,6 +1107,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           bottomNavigationBar: _buildBottomNavigationBar(),
         );
       },
+    );
+    return PageTitle(
+      title: _navItems.isEmpty ? 'Home' : _navItems[_selectedIndex].label,
+      child: page,
     );
   }
 
@@ -1331,6 +1342,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   /// Build the bottom navigation bar
   Widget _buildBottomNavigationBar() {
     final t = AppLocalizations.of(context)!;
+    if (MediaQuery.sizeOf(context).width < 600 ||
+        MediaQuery.textScalerOf(context).scale(12) > 18) {
+      return WrappingBottomNavigationBar(
+        labels: _navItems.map((item) => item.localizedLabel(t)).toList(),
+        icons: [for (var i = 0; i < _navItems.length; i++)
+          _buildNavIcon(_navItems[i], active: i == _selectedIndex)],
+        selectedIndex: _selectedIndex,
+        onSelected: _onItemTapped,
+        selectedColor: _config.primaryColor ?? Theme.of(context).primaryColor,
+        unselectedColor: Colors.grey[600]!,
+      );
+    }
     return Container(
       decoration: BoxDecoration(
         boxShadow: [
@@ -1413,7 +1436,8 @@ class _SpinningSyncIconState extends State<_SpinningSyncIcon>
 extension MainScreenNavigation on BuildContext {
   void navigateToMainScreen({int? tabIndex, MainScreenConfig? config}) {
     Navigator.of(this).pushReplacement(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Home',
         builder: (context) =>
             MainScreen(initialTabIndex: tabIndex, config: config),
       ),
@@ -1425,7 +1449,8 @@ extension MainScreenNavigation on BuildContext {
     int? tabIndex,
   }) {
     Navigator.of(this).pushReplacement(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Home',
         builder: (context) =>
             MainScreen(initialTabIndex: tabIndex, config: config),
       ),

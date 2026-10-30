@@ -11,6 +11,7 @@ class CurrentMedicationsSection extends StatefulWidget {
   final String title; // defaults to 'Current Medications'
   final Function()? onMedicationUpdated; // Callback to refresh medications
   final int? caregiverId; // Caregiver ID for hard delete
+  final VoidCallback? onAddMedication;
 
   const CurrentMedicationsSection({
     super.key,
@@ -18,6 +19,7 @@ class CurrentMedicationsSection extends StatefulWidget {
     this.title = 'Current Medications',
     this.onMedicationUpdated,
     this.caregiverId,
+    this.onAddMedication,
   });
 
   @override
@@ -85,14 +87,23 @@ class _CurrentMedicationsSectionState extends State<CurrentMedicationsSection> {
               Icon(Icons.vaccines_outlined,
                   size: 20, color: theme.colorScheme.primary),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurface,
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
+              if (widget.onAddMedication != null)
+                TextButton.icon(
+                  key: const Key('add-medication-button'),
+                  onPressed: widget.onAddMedication,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Medication'),
+                ),
             ],
           ),
           const SizedBox(height: 8),

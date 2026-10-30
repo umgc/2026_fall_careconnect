@@ -1,3 +1,5 @@
+import 'package:care_connect_app/widgets/page_title.dart';
+import 'package:care_connect_app/config/theme/app_theme.dart';
 import 'package:care_connect_app/features/evv/schedule/pages/schedule_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -71,6 +73,8 @@ class _EvvDashboardState extends State<EvvDashboard>
     final isSupervisor = user?.role == 'SUPERVISOR';
     final isCaregiver = user?.role == 'CAREGIVER';
     final isPatient = user?.role == 'PATIENT';
+    final compact = MediaQuery.sizeOf(context).width < 600 ||
+        MediaQuery.textScalerOf(context).scale(16) > 24;
 
     if (_isLoading) {
       return Scaffold(
@@ -95,7 +99,8 @@ class _EvvDashboardState extends State<EvvDashboard>
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
+                  TitledMaterialPageRoute(
+                    title: 'Offline Visit Sync',
                       builder: (context) => const EvvOfflineSyncPage()),
                 );
               },
@@ -133,7 +138,8 @@ class _EvvDashboardState extends State<EvvDashboard>
                   onOpenCorrections: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      TitledMaterialPageRoute(
+                        title: 'Visit Corrections',
                           builder: (context) => const EvvCorrectionsPage()),
                     );
                   },
@@ -146,7 +152,8 @@ class _EvvDashboardState extends State<EvvDashboard>
                   onSync: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      TitledMaterialPageRoute(
+                        title: 'Offline Visit Sync',
                           builder: (context) => const EvvOfflineSyncPage()),
                     );
                   },
@@ -158,12 +165,13 @@ class _EvvDashboardState extends State<EvvDashboard>
           ),
         ),
       ),
-      floatingActionButton: isCaregiver
+      floatingActionButton: isCaregiver && !compact
           ? FloatingActionButton.extended(
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
+                  TitledMaterialPageRoute(
+                    title: 'Select Patient for Visit',
                       builder: (context) => const PatientSelectionPage()),
                 );
               },
@@ -286,7 +294,7 @@ class _StatCard extends StatelessWidget {
       case _Tone.info:
         return scheme.onPrimaryContainer;
       case _Tone.warning:
-        return scheme.onTertiaryContainer;
+        return AppTheme.textPrimary;
       case _Tone.error:
         return scheme.onErrorContainer;
       case _Tone.neutral:
@@ -372,7 +380,9 @@ class _MainActions extends StatelessWidget {
           icon: Icons.play_circle,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const PatientSelectionPage()),
+            TitledMaterialPageRoute(
+              title: 'Select Patient for Visit',
+              builder: (_) => const PatientSelectionPage()),
           ),
         ),
       if (isCaregiver)
@@ -381,7 +391,9 @@ class _MainActions extends StatelessWidget {
           icon: Icons.rate_review,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const EvvRecordReviewPage()),
+            TitledMaterialPageRoute(
+              title: 'Review Visit Records',
+              builder: (_) => const EvvRecordReviewPage()),
           ),
         ),
       if (isCaregiver || isSupervisor || isAdmin)
@@ -390,7 +402,9 @@ class _MainActions extends StatelessWidget {
           icon: Icons.upload_rounded,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const EvvHhaExchangeSubmitPage()),
+            TitledMaterialPageRoute(
+              title: 'Submit Visits to HHAExchange',
+              builder: (_) => const EvvHhaExchangeSubmitPage()),
           ),
         ),
       if (isAdmin || isSupervisor || isPatient)
@@ -399,7 +413,9 @@ class _MainActions extends StatelessWidget {
           icon: Icons.history,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const EvvVisitHistoryPage()),
+            TitledMaterialPageRoute(
+              title: 'Visit History',
+              builder: (_) => const EvvVisitHistoryPage()),
           ),
         ),
       if (isAdmin || isSupervisor)
@@ -408,7 +424,9 @@ class _MainActions extends StatelessWidget {
           icon: Icons.edit_note,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const EvvCorrectionsPage()),
+            TitledMaterialPageRoute(
+              title: 'Visit Corrections',
+              builder: (_) => const EvvCorrectionsPage()),
           ),
         ),
       if (isAdmin || isSupervisor || isCaregiver || isPatient)
@@ -417,7 +435,9 @@ class _MainActions extends StatelessWidget {
           icon: Icons.schedule,
           onTap: () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const SchedulePage()),
+            TitledMaterialPageRoute(
+              title: 'Schedule',
+              builder: (_) => const SchedulePage()),
           ),
         ),
       _ActionSpec(
@@ -425,7 +445,9 @@ class _MainActions extends StatelessWidget {
         icon: Icons.sync,
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const EvvOfflineSyncPage()),
+          TitledMaterialPageRoute(
+            title: 'Offline Visit Sync',
+            builder: (_) => const EvvOfflineSyncPage()),
         ),
       ),
     ];
@@ -456,7 +478,9 @@ class _MainActions extends StatelessWidget {
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: 12,
                     mainAxisSpacing: 12,
-                    mainAxisExtent: 72,
+                    mainAxisExtent: 72 *
+                        (MediaQuery.textScalerOf(context).scale(16) / 16)
+                            .clamp(1.0, double.infinity),
                   ),
                   itemCount: actions.length,
                   itemBuilder: (context, i) {
@@ -508,11 +532,15 @@ class _ActionCard extends StatelessWidget {
             children: [
               Icon(spec.icon, color: scheme.primary),
               const SizedBox(width: 8),
-              Text(
-                spec.title,
-                style: TextStyle(
-                  color: scheme.onSurface,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  spec.title,
+                  textAlign: TextAlign.center,
+                  softWrap: true,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -681,7 +709,7 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Icon(icon, color: scheme.primary),
         const SizedBox(width: 8),
-        Text(title, style: textStyle),
+        Expanded(child: Text(title, style: textStyle, softWrap: true)),
       ],
     );
   }

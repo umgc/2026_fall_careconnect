@@ -13,8 +13,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Unit tests for {@link KvsAudioTranscodeService}: ffmpeg command construction (asserted
- * directly on {@code buildCommand}, no process started), argument validation, and the
+ * Unit tests for {@link KvsAudioTranscodeService}: ffmpeg command construction, including the
+ * per-clip trim to the attendee window (asserted directly on {@code buildCommand}, no process
+ * started), argument validation, and the
  * transcode process paths, where a stand-in executable plays ffmpeg so no real ffmpeg is needed.
  */
 class KvsAudioTranscodeServiceTest {
@@ -29,16 +30,14 @@ class KvsAudioTranscodeServiceTest {
         return service;
     }
 
-    @Test
-    void toWav_nullPath_throwsIllegalArgument() {
-        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("does not exist");
+    /** A whole-file-ish window; the window itself doesn't matter where only the file is under test. */
+    private static KvsAudioClip clip(final Path file) {
+        return new KvsAudioClip(file, 0L, 60_000L);
     }
 
     @Test
     void toWav_missingFile_throwsIllegalArgument(@TempDir final Path dir) {
-        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(dir.resolve("missing.webm")))
+        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(clip(dir.resolve("missing.webm"))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("does not exist");
     }
@@ -48,7 +47,7 @@ class KvsAudioTranscodeServiceTest {
         final Path raw = Files.writeString(dir.resolve("in.webm"), "not audio");
 
         // `java -y ...` rejects the unknown option and exits 1, standing in for a failed ffmpeg.
-        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(raw))
+        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(clip(raw)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("exitCode=1")
                 .hasMessageContaining("-y");
@@ -59,7 +58,7 @@ class KvsAudioTranscodeServiceTest {
         assumeTrue(canRun("true"), "no `true` executable on this machine");
         final Path raw = Files.writeString(dir.resolve("in.webm"), "audio");
 
-        final Path wav = serviceWith("true").toWav(raw);
+        final Path wav = serviceWith("true").toWav(clip(raw));
         try {
             assertThat(wav).exists();
             assertThat(wav.getFileName().toString()).startsWith("careconnect-kvs-").endsWith(".wav");
@@ -68,68 +67,90 @@ class KvsAudioTranscodeServiceTest {
         }
     }
 
-    /** Scenario: the Transcribe path (single input, 48 kHz) must be byte-for-byte the legacy command. */
+    /**
+     * Scenario: the Transcribe path (one clip, 48 kHz). The clip's window (10 s padding before, a
+     * 60 s join) must be cut out of the file, so the padding never reaches the WAV.
+     */
     @Test
-    void buildCommand_singleInput_isExactLegacyCommand() {
-        // Arrange
+    void buildCommand_singleClip_trimsToWindow() {
+        // Arrange: 10 000 ms of padding precedes the window; the window is 60 s long.
         final Path in = Path.of("in.webm");
         final Path out = Path.of("out.wav");
 
         // Act
-        final List<String> command = serviceWith("ffmpeg").buildCommand(List.of(in), 48000, out);
+        final List<String> command = serviceWith("ffmpeg").buildCommand(
+                List.of(new KvsAudioClip(in, 10_000L, 70_000L)), 48000, out);
 
         // Assert
         assertThat(command).containsExactly(
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
                 "-i", in.toString(),
-                "-vn", "-acodec", "pcm_s16le", "-ar", "48000", "-ac", "1",
+                "-filter_complex",
+                "[0:a]asetpts=PTS-STARTPTS,atrim=start=10.000:end=70.000,asetpts=PTS-STARTPTS,"
+                        + "aresample=48000,aformat=channel_layouts=mono[a0];"
+                        + "[a0]concat=n=1:v=0:a=1[out]",
+                "-map", "[out]",
+                "-acodec", "pcm_s16le", "-ar", "48000", "-ac", "1",
                 out.toString());
     }
 
-    /** Scenario: a rejoined attendee has two segments; they are normalized then concatenated. */
+    /**
+     * Scenario: a rejoined attendee has two clips; each is trimmed to its own window before they
+     * are concatenated, so neither clip's padding ends up between them.
+     */
     @Test
-    void buildCommand_twoInputs_usesConcatFilterGraphAndMapsOutput() {
-        // Arrange
+    void buildCommand_twoClips_trimsEachBeforeConcat() {
+        // Arrange: sub-second offsets check the millisecond formatting.
         final Path a = Path.of("a.webm");
         final Path b = Path.of("b.webm");
         final Path out = Path.of("out.wav");
 
         // Act
-        final List<String> command = serviceWith("ffmpeg").buildCommand(List.of(a, b), 16000, out);
+        final List<String> command = serviceWith("ffmpeg").buildCommand(
+                List.of(new KvsAudioClip(a, 0L, 30_500L), new KvsAudioClip(b, 9_250L, 40_000L)),
+                16000, out);
 
         // Assert
         assertThat(command).containsExactly(
                 "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
                 "-i", a.toString(), "-i", b.toString(),
                 "-filter_complex",
-                "[0:a]aresample=16000,aformat=channel_layouts=mono[a0];"
-                        + "[1:a]aresample=16000,aformat=channel_layouts=mono[a1];"
+                "[0:a]asetpts=PTS-STARTPTS,atrim=start=0.000:end=30.500,asetpts=PTS-STARTPTS,"
+                        + "aresample=16000,aformat=channel_layouts=mono[a0];"
+                        + "[1:a]asetpts=PTS-STARTPTS,atrim=start=9.250:end=40.000,asetpts=PTS-STARTPTS,"
+                        + "aresample=16000,aformat=channel_layouts=mono[a1];"
                         + "[a0][a1]concat=n=2:v=0:a=1[out]",
                 "-map", "[out]",
                 "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1",
                 out.toString());
-        assertThat(command).doesNotContain("-vn");
     }
 
-    /** Scenario: three segments extend the graph by one chain and the concat count. */
+    /** Scenario: three clips extend the graph by one chain and the concat count. */
     @Test
-    void buildCommand_threeInputs_concatCountMatchesInputs() {
+    void buildCommand_threeClips_concatCountMatchesInputs() {
         final List<String> command = serviceWith("ffmpeg").buildCommand(
-                List.of(Path.of("a"), Path.of("b"), Path.of("c")), 16000, Path.of("o.wav"));
+                List.of(clip(Path.of("a")), clip(Path.of("b")), clip(Path.of("c"))),
+                16000, Path.of("o.wav"));
 
-        assertThat(command).contains(
-                "[0:a]aresample=16000,aformat=channel_layouts=mono[a0];"
-                        + "[1:a]aresample=16000,aformat=channel_layouts=mono[a1];"
-                        + "[2:a]aresample=16000,aformat=channel_layouts=mono[a2];"
-                        + "[a0][a1][a2]concat=n=3:v=0:a=1[out]");
+        assertThat(String.join(" ", command))
+                .contains("[0:a]asetpts").contains("[1:a]asetpts").contains("[2:a]asetpts")
+                .contains("[a0][a1][a2]concat=n=3:v=0:a=1[out]");
     }
 
     /** Scenario: the configured ffmpeg path is the command's first element. */
     @Test
     void buildCommand_usesConfiguredFfmpegPath() {
         assertThat(serviceWith("/opt/ffmpeg/bin/ffmpeg")
-                .buildCommand(List.of(Path.of("a")), 48000, Path.of("o")).get(0))
+                .buildCommand(List.of(clip(Path.of("a"))), 48000, Path.of("o")).get(0))
                 .isEqualTo("/opt/ffmpeg/bin/ffmpeg");
+    }
+
+    /** Scenario: a null clip is rejected like a missing file, before any temp file is made. */
+    @Test
+    void toWav_nullClip_throwsIllegalArgument() {
+        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("does not exist");
     }
 
     /** Scenario: an empty list is a caller bug and must fail before creating any temp file. */
@@ -154,7 +175,7 @@ class KvsAudioTranscodeServiceTest {
 
         // Act + Assert
         assertThatThrownBy(() -> serviceWith("ffmpeg").toMonoWav(
-                List.of(existing, dir.resolve("missing.webm")), 16000))
+                List.of(clip(existing), clip(dir.resolve("missing.webm"))), 16000))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

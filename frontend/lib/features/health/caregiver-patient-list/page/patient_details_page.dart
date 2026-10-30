@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:care_connect_app/features/telemetry/telemetry.dart';
+import 'package:care_connect_app/features/health/medication-tracker/widgets/medication-add-input-form.dart';
 import 'dart:async';
 
 // Pain level card
@@ -331,7 +333,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     if (trimmedCallId.isEmpty || !mounted) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Call Summary',
         builder: (_) => PostCallTelemetrySummaryScreen(
           callId: trimmedCallId,
           recipientName: _patientName,
@@ -1946,7 +1949,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Dashboards',
               builder: (context) => DashboardsScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2002,7 +2006,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Audit Log',
               builder: (context) => AuditLogScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2058,7 +2063,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Daily Living Activities',
               builder: (context) => AdlIadlManagementScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2113,7 +2119,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Report Behavioral Incident',
               builder: (context) => BehavioralIncidentFormScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2168,7 +2175,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Behavioral Incident History',
               builder: (context) => BehavioralIncidentHistoryScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2222,7 +2230,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Report Incident',
               builder: (context) => IncidentReportWizardScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2276,7 +2285,8 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       child: InkWell(
         onTap: () {
           Navigator.of(context).push(
-            MaterialPageRoute<void>(
+            TitledMaterialPageRoute<void>(
+              title: 'Incident Report History',
               builder: (context) => IncidentReportHistoryScreen(
                 clientId: clientId,
                 clientName: patientName,
@@ -2537,6 +2547,27 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
   }
 
   /// Build the medications section with loading/error handling
+  Future<void> _showAddMedicationModal() async {
+    final patientId = int.tryParse(widget.patientId);
+    if (patientId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Unable to add medication: Invalid patient ID')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddMedicationModal(
+        targetPatientId: patientId,
+        onMedicationAdded: (_) => unawaited(_fetchMedications()),
+      ),
+    );
+  }
+
   Widget _buildMedicationsSection() {
     if (_isLoadingMedications) {
       return Center(
@@ -2592,6 +2623,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
       onMedicationUpdated: _fetchMedications,
       // Refresh medications after delete/approve
       caregiverId: caregiverId,
+      onAddMedication: widget.isCaregiver ? _showAddMedicationModal : null,
     );
   }
 

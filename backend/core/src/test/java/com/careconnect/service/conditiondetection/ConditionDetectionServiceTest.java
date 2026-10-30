@@ -47,8 +47,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * Unit tests for {@link ConditionDetectionService}: enqueue rules, the claim / work / finish
- * lease cycle and error text handling.
+ * Unit tests for {@link ConditionDetectionService}: enqueue rules, reconciliation of calls whose
+ * runs were never created, the claim / work / finish lease cycle and error text handling.
  *
  * <p>Repositories, the session service and adapters are Mockito mocks because they are
  * database and network boundaries; the service's own branching is the thing under test. Entities
@@ -518,6 +518,55 @@ class ConditionDetectionServiceTest {
         org.assertj.core.api.Assertions
                 .assertThatThrownBy(() -> service.finishRun(1L, UUID.randomUUID(), new AdapterOutcome.Deferred(5)))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ---------------------------------------------------- reconcileMissingRuns
+
+    /**
+     * Scenario: termination swallowed two enqueue failures. The first call is still broken (its
+     * session lookup throws); the second must get its runs anyway, and the query must ask about
+     * exactly the enabled models within the configured lookback.
+     */
+    @Test
+    void reconcile_enqueuesEachMissingCall_andOneFailureDoesNotStopTheBatch() {
+        // Arrange
+        ReflectionTestUtils.setField(service, "reconcileLookbackHours", 24L);
+        registerAdapters(adapter(MODEL_A), adapter(MODEL_B));
+        when(runRepository.findEndedCallsMissingRuns(24L, List.of(MODEL_A, MODEL_B), 2L))
+                .thenReturn(List.of("broken-call", CALL_ID));
+        when(callSessionService.requireSession("broken-call")).thenThrow(new IllegalStateException("db"));
+        stubSession();
+        when(recordingRepository.findTopByCallIdOrderByStartedAtDesc(CALL_ID))
+                .thenReturn(Optional.of(recording(600L)));
+        when(runRepository.findByCallIdAndModelId(eq(CALL_ID), any())).thenReturn(Optional.empty());
+
+        // Act
+        service.reconcileMissingRuns();
+
+        // Assert: both of the healthy call's runs were created despite the earlier failure.
+        final ArgumentCaptor<ConditionDetectionRun> captor = ArgumentCaptor.forClass(ConditionDetectionRun.class);
+        verify(runRepository, Mockito.times(2)).saveAndFlush(captor.capture());
+        assertThat(captor.getAllValues()).extracting(ConditionDetectionRun::getCallId).containsOnly(CALL_ID);
+    }
+
+    /** Scenario: the feature is off, so the reconciliation query is never run. */
+    @Test
+    void reconcile_disabled_neverQueries() {
+        ReflectionTestUtils.setField(service, "enabled", false);
+
+        service.reconcileMissingRuns();
+
+        verifyNoInteractions(runRepository, adapterProvider);
+    }
+
+    /** Scenario: no adapter is enabled, so no call can be missing a run. */
+    @Test
+    void reconcile_noAdapters_neverQueries() {
+        registerAdapters();
+
+        service.reconcileMissingRuns();
+
+        verifyNoInteractions(runRepository);
     }
 
     // -------------------------------------------------------------- runDueRuns

@@ -5,8 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:care_connect_app/widgets/epic_connect_tile.dart';
+
+import '../helpers/titled_route_probe.dart';
 
 const MethodChannel _secureStorageChannel =
     MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
@@ -341,6 +344,33 @@ void main() {
         find.widgetWithText(TextButton, 'Disconnect'),
         findsOneWidget,
       );
+    }, () => client);
+  });
+
+  // VPAT 2.4.2 (Team E): the sign-in page Connect opens has its own title.
+  testWidgets('Connect opens the in-app sign-in page titled "Connect Epic"',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/status')) {
+        return http.Response(jsonEncode({'connected': false}), 200);
+      }
+      if (request.url.path.endsWith('/authorize')) {
+        return http.Response(
+            jsonEncode({'authUrl': 'https://epic.example/authorize'}), 200);
+      }
+      return http.Response('{}', 404);
+    });
+
+    await http.runWithClient(() async {
+      final probe = TitledRouteProbe();
+      await tester.pumpWidget(MaterialApp(
+        navigatorObservers: [probe],
+        home: const Scaffold(body: EpicConnectTile()),
+      ));
+      await tester.pumpAndSettle();
+      expect(await probe.tapAndReadTitle(tester, find.text('Connect')),
+          'Connect Epic');
     }, () => client);
   });
 }

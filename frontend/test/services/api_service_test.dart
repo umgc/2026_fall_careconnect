@@ -669,10 +669,10 @@ void main() {
     });
 
     test('getPendingRequestsByCaregiver returns 200', () async {
-      // Pending connection requests are listed for a specific caregiver.
+      // Pending connection requests are listed for the signed-in caregiver.
       final resp = await _withSpec(
         const _FakeSpec(200, '[]'),
-        () => ApiService.getPendingRequestsByCaregiver(1),
+        () => ApiService.getPendingRequestsByCaregiver(),
       );
       expect(resp.statusCode, 200);
     });

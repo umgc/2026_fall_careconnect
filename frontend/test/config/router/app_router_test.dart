@@ -885,14 +885,19 @@ void main() {
       _tearDownPlatformChannels();
     });
 
-    testWidgets('TC-ROUTE-114: shows Invalid user ID when no userId query param',
+    testWidgets('TC-ROUTE-114: direct patient URL uses dashboard sign-in handling',
         (tester) async {
-      final router = _createFullTestRouter('/dashboard/patient');
+      final router = GoRouter(initialLocation: '/dashboard/patient', routes: [
+        _findRoute(appRouter.configuration.routes, '/dashboard/patient')!,
+        _findRoute(appRouter.configuration.routes, '/dashboard')!,
+        GoRoute(path: '/login', builder: (_, __) => const Scaffold()),
+      ]);
+      addTearDown(router.dispose);
       await _pumpRouterApp(tester, router);
       await tester.pumpAndSettle();
 
-      expect(find.text('Invalid user ID'), findsOneWidget);
-      expect(find.text('Go to Login'), findsOneWidget);
+      expect(find.text('Invalid user ID'), findsNothing);
+      expect(router.state.uri.path, '/login');
     });
 
     testWidgets('TC-ROUTE-115: shows Invalid user ID when userId is 0', (tester) async {
@@ -2173,6 +2178,11 @@ void main() {
       ('/admin/users', '/admin/users', 'CAREGIVER', '/dashboard'),
       ('/admin/users', '/admin/users', 'ADMIN', null),
       ('/taskscheduling', '/taskscheduling', null, '/login'),
+      ('/dashboard/patient', '/dashboard/patient', null, '/dashboard'),
+      ('/dashboard/patient', '/dashboard/patient', 'PATIENT', '/dashboard'),
+      ('/dashboard/patient', '/dashboard/patient?tab=messages', 'PATIENT',
+          '/dashboard?tab=messages'),
+      ('/dashboard/patient', '/dashboard/patient?userId=5', 'PATIENT', null),
       ('/taskscheduling', '/taskscheduling', 'CAREGIVER', '/dashboard?tab=tasks'),
       ('/taskscheduling', '/taskscheduling', 'PATIENT', '/dashboard?tab=home'),
       ('/chatandcalls', '/chatandcalls', null, '/login'),

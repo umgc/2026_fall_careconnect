@@ -79,7 +79,9 @@ public class TaskControllerV2 {
      * @return list of all {@link TaskDtoV2} objects
      */
     @GetMapping
-    public ResponseEntity<List<TaskDtoV2>> getAllTasks() {
+    public ResponseEntity<List<TaskDtoV2>> getAllTasks() throws UnauthorizedException {
+        // Every patient's tasks: admin only.
+        authorizationService.requireAdmin(securityUtil.resolveCurrentUser());
         return ResponseEntity.ok(taskService.getAllTasks());
     }
 
@@ -95,7 +97,8 @@ public class TaskControllerV2 {
      * exists
      */
     @GetMapping("/{id}")
-    public ResponseEntity<TaskDtoV2> getTaskById(@PathVariable Long id) {
+    public ResponseEntity<TaskDtoV2> getTaskById(@PathVariable Long id) throws UnauthorizedException {
+        authorizationService.requireTaskAccess(securityUtil.resolveCurrentUser(), taskService.getTaskById(id));
         return ResponseEntity.ok(taskService.getTaskDtoById(id));
     }
 
@@ -112,7 +115,7 @@ public class TaskControllerV2 {
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<List<TaskDtoV2>> getTasksByPatient(@PathVariable Long patientId) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
         return ResponseEntity.ok(taskService.getTasksByPatient(patientId));
     }
 
@@ -132,7 +135,8 @@ public class TaskControllerV2 {
             @PathVariable Long patientId,
             @RequestBody TaskDtoV2 task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requirePatientAccess(currentUser, patientId);
+        authorizationService.requirePatientRecordAccess(currentUser, patientId);
+        authorizationService.requireWriteAccess(currentUser);
         return ResponseEntity.ok(taskService.createTask(patientId, task));
     }
 
@@ -152,7 +156,8 @@ public class TaskControllerV2 {
             @PathVariable Long id,
             @RequestBody TaskDtoV2 task) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
+        authorizationService.requireWriteAccess(currentUser);
         return ResponseEntity.ok(taskService.updateTask(id, task));
     }
 
@@ -195,7 +200,8 @@ public class TaskControllerV2 {
             @PathVariable Long id,
             @RequestBody Map<String, Boolean> body) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
+        authorizationService.requireWriteAccess(currentUser);
 
         boolean isComplete = body.getOrDefault("isComplete", false);
         TaskDtoV2 updated = taskService.updateCompletionStatus(id, isComplete);
@@ -223,7 +229,8 @@ public class TaskControllerV2 {
             @PathVariable Long id,
             @RequestParam(name = "deleteSeries", defaultValue = "false") boolean deleteSeries) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireAdminOrCaregiver(currentUser);
+        authorizationService.requireTaskAccess(currentUser, taskService.getTaskById(id));
+        authorizationService.requireWriteAccess(currentUser);
         taskService.deleteTask(id, deleteSeries);
         return ResponseEntity.noContent().build();
     }

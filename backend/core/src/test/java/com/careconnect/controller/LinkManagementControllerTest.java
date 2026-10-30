@@ -27,6 +27,7 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -91,11 +92,9 @@ class LinkManagementControllerTest {
         @Test
         @WithMockUser(username = "10")
         @DisplayName("Caregiver can create temporary caregiver-patient link")
-        void caregiverCreatesTemporaryLink() throws Exception {
+        void caregiverCannotCreateTemporaryLinkDirectly() throws Exception {
             // Arrange
             when(userRepository.findById(10L)).thenReturn(Optional.of(user(10L, Role.CAREGIVER)));
-            when(caregiverPatientLinkService.createLink(eq(10L), any(), eq(10L)))
-                    .thenReturn(caregiverLink(100L, "ACTIVE", LocalDateTime.now().plusDays(3)));
 
             final LinkManagementController.CreateTemporaryLinkRequest body =
                     new LinkManagementController.CreateTemporaryLinkRequest(1L, LocalDateTime.now().plusDays(3), "Temp access");
@@ -105,11 +104,10 @@ class LinkManagementControllerTest {
                             .with(csrf())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(body)))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.id").value(100));
+                    .andExpect(status().isForbidden());
 
-            // Assert
-            verify(caregiverPatientLinkService).createLink(eq(10L), any(), eq(10L));
+            // Assert: caregivers must send a connection request the patient accepts
+            verify(caregiverPatientLinkService, never()).createLink(any(), any(), any());
         }
 
         @Test

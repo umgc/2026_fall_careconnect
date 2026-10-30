@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/widgets/ai_chat_improved.dart';
 import 'package:care_connect_app/widgets/ai_chat_modal.dart';
@@ -76,7 +77,8 @@ class _SymptomInputFormState extends State<SymptomInputForm> {
                       final navigator = Navigator.of(context);
 
                       final transcript = await navigator.push<String>(
-                        MaterialPageRoute(
+                        TitledMaterialPageRoute(
+                          title: 'Voice Assistant',
                           builder: (_) =>
                               const VoiceCommandAI(singleShot: true),
                           fullscreenDialog: true,

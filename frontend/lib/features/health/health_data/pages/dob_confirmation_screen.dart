@@ -29,6 +29,9 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
   List<IdentityConflict> _conflicts = [];
   final Set<int> _resolving = {};
 
+  /// Conflicts whose phone, email or ZIP code the patient said is theirs.
+  final Set<int> _checkConfirmed = {};
+
   @override
   void initState() {
     super.initState();
@@ -58,7 +61,11 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
     }
   }
 
-  Future<void> _resolve(IdentityConflict c, bool accepted) async {
+  /// [notMine]: the patient said the record's phone, email or ZIP code isn't
+  /// theirs, so
+  /// the record may belong to someone else with the same name and birthday.
+  Future<void> _resolve(IdentityConflict c, bool accepted,
+      {bool notMine = false}) async {
     setState(() => _resolving.add(c.id));
     var ok = false;
     try {
@@ -66,20 +73,35 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
     } catch (_) {
       ok = false;
     }
+    // A backend conflict answered meanwhile (on another device) is no longer
+    // pending there, so trying again could never work (DEF-EHR-REC-11).
+    var gone = false;
+    if (!ok && c.id > 0) {
+      try {
+        gone = !(await _service.fetchPending()).any((x) => x.id == c.id);
+      } catch (_) {
+        // Couldn't check: keep the card.
+      }
+    }
     if (!mounted) return;
     setState(() {
       _resolving.remove(c.id);
-      if (ok) _conflicts.removeWhere((x) => x.id == c.id);
+      if (ok || gone) _conflicts.removeWhere((x) => x.id == c.id);
     });
     // A failed save keeps the card and says so; nothing changed.
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        backgroundColor: ok ? _success : const Color(0xFFB91C1C),
-        content: Text(!ok
-            ? 'We couldn\u2019t save your choice. Nothing was changed. Please try again.'
-            : accepted
-                ? 'Date of birth updated.'
-                : 'Kept your current date of birth.'),
+        backgroundColor:
+            ok ? _success : (gone ? _muted : const Color(0xFFB91C1C)),
+        content: Text(gone
+            ? 'This was already answered, so nothing was saved.'
+            : !ok
+                ? 'We couldn\u2019t save your choice. Nothing was changed. Please try again.'
+                : notMine
+                    ? 'Nothing was changed. This record may not be yours.'
+                    : accepted
+                        ? 'Date of birth updated.'
+                        : 'Kept your current date of birth.'),
       ),
     );
   }
@@ -194,7 +216,13 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
           const SizedBox(height: 14),
           if (busy)
             const Center(child: CircularProgressIndicator(color: _teal))
-          else
+          else if (c.identityCheck != null && !_checkConfirmed.contains(c.id))
+            _identityCheck(c, c.identityCheck!)
+          else ...[
+            if (c.identityCheck == null) ...[
+              _noCheckWarning(),
+              const SizedBox(height: 14),
+            ],
             Row(
               children: [
                 Expanded(
@@ -226,8 +254,123 @@ class _DobConfirmationScreenState extends State<DobConfirmationScreen> {
                 ),
               ],
             ),
+          ],
         ],
       ),
+    );
+  }
+
+  /// No phone, email or ZIP code on the new record: nothing to double-check
+  /// with, so the patient is told before they choose.
+  Widget _noCheckWarning() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _warning.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _warning.withValues(alpha: 0.4)),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.warning_amber_rounded, color: _warning, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'We couldn\u2019t double-check that this record is yours. '
+              'Only choose Use new date if you\u2019re sure.',
+              style: TextStyle(color: _text, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Name and date of birth can match two people, so before the patient picks
+  /// a date they confirm one more detail from the new record: its phone (last
+  /// 4 digits), else its email (name part hidden), else its ZIP code. Old
+  /// numbers and addresses count, so a patient who moved still says Yes.
+  Widget _identityCheck(IdentityConflict c, IdentityCheck check) {
+    final from = c.incomingSourceLabel == null
+        ? 'The new record'
+        : 'The new record from ${c.incomingSourceLabel}';
+    final (question, detail, hint) = switch (check.type) {
+      IdentityCheckType.phone => (
+          'Is this a phone number you use now or used before?',
+          '$from has a phone number ending in ${check.value}.',
+          'Choose Yes if it\u2019s an old number of yours.',
+        ),
+      IdentityCheckType.email => (
+          'Is this an email you use now or used before?',
+          '$from has the email ${check.value}.',
+          'Choose Yes if it\u2019s an old email of yours.',
+        ),
+      IdentityCheckType.zip => (
+          'Do you live, or did you live, in this ZIP code?',
+          '$from has the ZIP code ${check.value}.',
+          'Choose Yes if you lived there before.',
+        ),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F4F6),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(question,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.bold, color: _text)),
+              const SizedBox(height: 4),
+              Text(detail, style: const TextStyle(color: _text, fontSize: 14)),
+              const SizedBox(height: 4),
+              Text(
+                '$hint This helps us make sure the record is yours, since two '
+                'people can have the same name and date of birth.',
+                style: const TextStyle(color: _muted, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  side: const BorderSide(color: _border),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => _resolve(c, false, notMine: true),
+                child: const Text('Not mine', style: TextStyle(color: _text)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _teal,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => setState(() => _checkConfirmed.add(c.id)),
+                child: const Text('Yes, it\u2019s mine'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 

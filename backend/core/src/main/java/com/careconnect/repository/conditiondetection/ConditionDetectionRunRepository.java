@@ -2,6 +2,7 @@ package com.careconnect.repository.conditiondetection;
 
 import com.careconnect.model.conditiondetection.ConditionDetectionRun;
 import com.careconnect.repository.projection.ConditionDueRunProjection;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,6 +51,29 @@ public interface ConditionDetectionRunRepository
              LIMIT 10
             """, nativeQuery = true)
     List<ConditionDueRunProjection> findDueRuns(@Param("modelId") String modelId);
+
+    /**
+     * Call ids of calls that ended (termination complete) within the last {@code lookbackHours}
+     * by the database clock ({@code ended_at} is written by it; see {@link #markDueNow}) and are
+     * missing a run for at least one of {@code modelIds}, oldest first.
+     *
+     * @param lookbackHours how far back to look
+     * @param modelIds enabled model ids
+     * @param modelCount number of {@code modelIds}
+     */
+    @Query(value = """
+            SELECT s.call_id FROM call_sessions s
+             WHERE s.status = 'ENDED'
+               AND s.ended_at >= CURRENT_TIMESTAMP - (CAST(:lookbackHours AS INTEGER) * INTERVAL '1' HOUR)
+               AND (SELECT COUNT(*) FROM condition_detection_runs r
+                     WHERE r.call_id = s.call_id AND r.model_id IN (:modelIds)) < :modelCount
+             ORDER BY s.ended_at, s.id
+             LIMIT 50
+            """, nativeQuery = true)
+    List<String> findEndedCallsMissingRuns(
+            @Param("lookbackHours") long lookbackHours,
+            @Param("modelIds") Collection<String> modelIds,
+            @Param("modelCount") long modelCount);
 
     @Modifying
     @Transactional

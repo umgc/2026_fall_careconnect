@@ -145,6 +145,19 @@ void main() {
     expect(find.textContaining('athenahealth is disconnected'), findsOneWidget);
   });
 
+  testWidgets('a refresh that could not reach athenahealth says to try '
+      'again later, not that nothing was found', (t) async {
+    final s = _FakeService(const AthenaStatus(connected: true),
+        syncResult: const AthenaSyncResult(completed: false));
+    await _pump(t, s);
+    await t.tap(find.text('Refresh records'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('We couldn\'t get your records just now'),
+        findsOneWidget);
+    expect(find.textContaining('No new records were found'), findsNothing);
+    expect(find.text('Refresh records'), findsOneWidget);
+  });
+
   testWidgets('Keep connected cancels the disconnect: nothing is deleted',
       (t) async {
     final s = _FakeService(const AthenaStatus(connected: true));
