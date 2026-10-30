@@ -5,6 +5,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/evv_hhaexchange_submit_page.dart';
 import 'package:care_connect_app/services/api_service_offline.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,9 @@ Future<void> _pump(WidgetTester tester) async {
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
     MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(splashFactory: InkRipple.splashFactory),
       home: const EvvHhaExchangeSubmitPage(),
     ),

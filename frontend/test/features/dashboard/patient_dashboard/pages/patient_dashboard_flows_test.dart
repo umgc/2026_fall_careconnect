@@ -15,6 +15,7 @@ import 'package:care_connect_app/services/api_service_offline.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
@@ -227,15 +228,33 @@ void main() {
     _channels();
   });
 
-  group('PatientDashboard error state', () {
-    testWidgets('shows not-logged-in error and retry button', (tester) async {
-      await _pump(tester, provider: _NoIdUserProvider());
-      expect(find.text('User not logged in.'), findsOneWidget);
-      expect(find.byIcon(Icons.error_outline), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.refresh));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(find.text('User not logged in.'), findsOneWidget);
+  group('PatientDashboard without a session', () {
+    testWidgets('redirects to the login route', (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, __) => ChangeNotifierProvider<UserProvider>.value(
+              value: _NoIdUserProvider(),
+              child: const PatientDashboard(),
+            ),
+          ),
+          GoRoute(
+            path: '/login',
+            builder: (_, __) => const Text('Login Route'),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp.router(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          routerConfig: router,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Login Route'), findsOneWidget);
     });
   });
 

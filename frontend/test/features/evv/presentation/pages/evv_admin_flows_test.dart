@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/evv_corrections.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/evv_dashboard.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/evv_offline_sync.dart';
@@ -119,6 +120,9 @@ Future<void> _pump(WidgetTester tester, Widget page,
         mockUser: MockUser(id: 1, role: role, caregiverId: 2),
       ),
       child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: ThemeData(splashFactory: InkRipple.splashFactory),
         // The test font is wider than real fonts; shrink text to avoid
         // overflow reports in the dashboard tiles.
