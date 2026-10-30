@@ -85,6 +85,49 @@ Parameters:
     Type: String
     Default: http://localhost:*,http://127.0.0.1:*
 
+  # Cerner/Oracle Health staging integration; disabled unless explicitly enabled.
+  CareConnectCernerEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CareConnectCernerAllergiesEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CareConnectCernerClinicalEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CareConnectCernerPatientAppointmentEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CernerFhirBaseUrl:
+    Type: String
+    Default: ''
+
+  CernerClientId:
+    Type: String
+    Default: ''
+
+  CernerRedirectUri:
+    Type: String
+    Default: ''
+
+  CernerWebReturnUrl:
+    Type: String
+    Default: ''
+
+  # Existing Secrets Manager ARN, configured only when Cerner is enabled.
+  CernerClientSecretArn:
+    Type: String
+    Default: ''
+    Description: Optional ARN of an existing Cerner OAuth client secret
+
   # The backend currently binds to 8081 in ECS.
   ContainerPort:
     Type: Number
@@ -144,6 +187,9 @@ Parameters:
     Description: Route 53 Hosted Zone ID (required if DomainName is set)
 
 Conditions:
+  HasCernerClientSecret: !And
+    - !Equals [!Ref CareConnectCernerEnabled, 'true']
+    - !Not [!Equals [!Ref CernerClientSecretArn, '']]
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
@@ -592,6 +638,23 @@ Resources:
               Value: !Ref FrontendBaseUrl
             - Name: CORS_ALLOWED_LIST
               Value: !Ref CorsAllowedList
+            # Cerner/Oracle Health configuration.
+            - Name: CARECONNECT_CERNER_ENABLED
+              Value: !Ref CareConnectCernerEnabled
+            - Name: CARECONNECT_CERNER_ALLERGIES_ENABLED
+              Value: !Ref CareConnectCernerAllergiesEnabled
+            - Name: CARECONNECT_CERNER_CLINICAL_ENABLED
+              Value: !Ref CareConnectCernerClinicalEnabled
+            - Name: CARECONNECT_CERNER_PATIENT_APPOINTMENT_ENABLED
+              Value: !Ref CareConnectCernerPatientAppointmentEnabled
+            - Name: CERNER_FHIR_BASE_URL
+              Value: !Ref CernerFhirBaseUrl
+            - Name: CERNER_CLIENT_ID
+              Value: !Ref CernerClientId
+            - Name: CERNER_REDIRECT_URI
+              Value: !Ref CernerRedirectUri
+            - Name: CERNER_WEB_RETURN_URL
+              Value: !Ref CernerWebReturnUrl
             # Ask AI / Bedrock (Task 0.1 P0 deploy unblock)
             - Name: CARECONNECT_AI_ENABLED
               Value: !Ref CareConnectAiEnabled
@@ -645,6 +708,11 @@ Resources:
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
+            - !If
+              - HasCernerClientSecret
+              - Name: CERNER_CLIENT_SECRET
+                ValueFrom: !Ref CernerClientSecretArn
+              - !Ref AWS::NoValue
         # DAM depression/anxiety inference (CPU). Not essential: if it stops, the API keeps
         # serving and voice screening runs retry. Reachable only from cc-backend on localhost.
         - !If
