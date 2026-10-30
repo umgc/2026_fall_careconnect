@@ -271,9 +271,11 @@ function Get-ParameterOverrides {
     # Key=Value format expected by `aws cloudformation deploy`.
     $entries = Get-Content -LiteralPath $ParameterFile -Raw | ConvertFrom-Json
     $result = New-Object System.Collections.Generic.List[string]
+    $seen = New-Object System.Collections.Generic.HashSet[string]
 
     foreach ($entry in $entries) {
         $key = [string]$entry.ParameterKey
+        [void]$seen.Add($key)
         $value = [string]$entry.ParameterValue
 
         if ($Overrides.ContainsKey($key)) {
@@ -281,6 +283,14 @@ function Get-ParameterOverrides {
         }
 
         $result.Add("$key=$value")
+    }
+
+    # Overrides for template parameters the file does not list (e.g. Athena*) would
+    # otherwise be dropped; append them.
+    foreach ($key in $Overrides.Keys) {
+        if (-not $seen.Contains([string]$key)) {
+            $result.Add("$key=$([string]$Overrides[$key])")
+        }
     }
 
     return $result.ToArray()

@@ -713,6 +713,22 @@ deploy_stack() {
   local parameter_overrides=()
   mapfile -t parameter_overrides < <(build_parameter_overrides "$parameter_file" "$@")
 
+  # The helpers above emit only keys the parameter file lists. Append overrides for any
+  # other template parameter (e.g. Athena*) so they are not silently dropped.
+  local extra existing found
+  for extra in "$@"; do
+    found="false"
+    for existing in "${parameter_overrides[@]}"; do
+      if [[ "${existing%%=*}" == "${extra%%=*}" ]]; then
+        found="true"
+        break
+      fi
+    done
+    if [[ "$found" != "true" ]]; then
+      parameter_overrides+=("$extra")
+    fi
+  done
+
   local stack_status=""
   if stack_exists "$stack_name"; then
     stack_status="$(get_stack_status "$stack_name" | tr -d '\r')"
