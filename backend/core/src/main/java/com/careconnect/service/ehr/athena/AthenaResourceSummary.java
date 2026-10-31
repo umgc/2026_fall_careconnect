@@ -28,6 +28,8 @@ final class AthenaResourceSummary {
     static String title(final String resourceType, final JsonNode resource) {
         final String label = firstNonNull(
                 conceptText(resource.get("medicationCodeableConcept")),
+                // athena names the drug only in the Reference's display.
+                conceptText(resource.get("medicationReference")),
                 conceptText(resource.get("vaccineCode")),
                 conceptText(resource.get("code")),
                 plainText(resource.get("title")),

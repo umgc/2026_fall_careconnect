@@ -141,6 +141,36 @@ Parameters:
     Type: String
     Default: http://localhost:*,http://127.0.0.1:*
 
+  # athenahealth (2-legged client_credentials, read-only). Off unless AthenaEnabled is 'true';
+  # the backend then refuses to start without a practice ID, so the AthenaNeedsPractice rule
+  # rejects that combination at deploy time instead of letting the service crash-loop.
+  AthenaEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  AthenaClientId:
+    Type: String
+    Default: ''
+
+  # athena's ah-practice form, e.g. a-1.Practice-195900 (the preview sandbox); comma-separated
+  # for several. A bare numeric ID is rejected by the backend.
+  AthenaPracticeId:
+    Type: String
+    Default: ''
+
+  AthenaScopes:
+    Type: String
+    Default: system/Patient.read
+
+  # Stored in Secrets Manager by this stack, so app-only deploys can set or change it.
+  AthenaClientSecret:
+    Type: String
+    NoEcho: true
+    Default: not-configured
+
   # Cerner/Oracle Health staging integration; disabled unless explicitly enabled.
   CareConnectCernerEnabled:
     Type: String
@@ -254,6 +284,11 @@ Rules:
         AssertDescription: EpicWebReturnUrl is required when Epic is enabled.
       - Assert: !Not [!Equals [!Ref EmailCryptoSecret, '']]
         AssertDescription: EmailCryptoSecret is required to encrypt Epic tokens.
+  AthenaNeedsPractice:
+    RuleCondition: !Equals [!Ref AthenaEnabled, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AthenaPracticeId, '']]
+        AssertDescription: AthenaPracticeId is required when AthenaEnabled is true (e.g. a-1.Practice-195900).
 
 Conditions:
   HasCernerClientSecret: !And
@@ -264,12 +299,22 @@ Conditions:
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
   # Run the DAM inference sidecar only when an image has been pushed for it.
   HasConditionSidecar: !Not [!Equals [!Ref SidecarImageUri, '']]
+  HasAthenaClientId: !Not [!Equals [!Ref AthenaClientId, '']]
+  HasAthenaPracticeId: !Not [!Equals [!Ref AthenaPracticeId, '']]
   UseEpic: !Equals [!Ref EpicEnabled, 'true']
   UseEpicClientSecret: !And
     - !Condition UseEpic
     - !Not [!Equals [!Ref EpicClientSecret, '']]
 
 Resources:
+  # Consumed by ECS as ATHENA_CLIENT_SECRET. Kept in this stack rather than the data stack
+  # so app-only deploys, which skip the data stack, can create and update it.
+  AthenaClientSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/athena-client-secret
+      SecretString: !Ref AthenaClientSecret
+
   # ECS injects these values from Secrets Manager; they never appear in the task
   # definition's plaintext Environment list. Both values come from NoEcho inputs.
   EpicClientSecretStore:
@@ -735,6 +780,21 @@ Resources:
               Value: !Ref FrontendBaseUrl
             - Name: CORS_ALLOWED_LIST
               Value: !Ref CorsAllowedList
+            - Name: ATHENA_ENABLED
+              Value: !Ref AthenaEnabled
+            # Omitted when unset rather than passed as an empty value.
+            - !If
+              - HasAthenaClientId
+              - Name: ATHENA_CLIENT_ID
+                Value: !Ref AthenaClientId
+              - !Ref AWS::NoValue
+            - !If
+              - HasAthenaPracticeId
+              - Name: ATHENA_PRACTICE_ID
+                Value: !Ref AthenaPracticeId
+              - !Ref AWS::NoValue
+            - Name: ATHENA_SCOPES
+              Value: !Ref AthenaScopes
             # Cerner/Oracle Health configuration.
             - Name: CARECONNECT_CERNER_ENABLED
               Value: !Ref CareConnectCernerEnabled
@@ -829,6 +889,8 @@ Resources:
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
+            - Name: ATHENA_CLIENT_SECRET
+              ValueFrom: !Ref AthenaClientSecretValue
             - !If
               - HasCernerClientSecret
               - Name: CERNER_CLIENT_SECRET

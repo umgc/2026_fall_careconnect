@@ -441,7 +441,8 @@ purge_scheduled_secrets() {
   for secret in \
     "/careconnect/${ENVIRONMENT}/db-password" \
     "/careconnect/${ENVIRONMENT}/jwt-secret" \
-    "/careconnect/${ENVIRONMENT}/medicare-client-secret"; do
+    "/careconnect/${ENVIRONMENT}/medicare-client-secret" \
+    "/careconnect/${ENVIRONMENT}/athena-client-secret"; do
     CURRENT_OPERATION="Purging secret '$secret'"
     if aws_cli secretsmanager describe-secret \
          --region "$REGION" \
