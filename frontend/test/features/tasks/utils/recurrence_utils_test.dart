@@ -1,6 +1,7 @@
 // Tests for RecurrenceUtils
 // (lib/features/tasks/utils/recurrence_utils.dart)
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/tasks/utils/recurrence_utils.dart';
 import 'package:care_connect_app/features/tasks/models/task_model.dart';
@@ -279,6 +280,86 @@ void main() {
         count: 5,
       );
       expect(result.interval, 1);
+    });
+
+    test('weekly with an end date counts selected weekdays', () {
+      final days = [true, false, true, false, false, false, false]; // Sun, Tue
+      final result = RecurrenceUtils.buildTask(
+        baseTask: _baseTask(date: DateTime(2024, 3, 1)), // Friday
+        isRecurring: true,
+        recurrenceType: 'Weekly',
+        daysOfWeek: days,
+        endDate: DateTime(2024, 3, 31),
+      );
+      expect(result.frequency, 'weekly');
+      expect(result.count, 9);
+      expect(result.date, DateTime(2024, 3, 3));
+    });
+
+    test('weekly timed task keeps the anchor when countStartDate is given',
+        () {
+      final result = RecurrenceUtils.buildTask(
+        baseTask: Task(
+          name: 'Timed',
+          description: '',
+          date: DateTime(2024, 3, 1),
+          timeOfDay: const TimeOfDay(hour: 9, minute: 0),
+        ),
+        isRecurring: true,
+        recurrenceType: 'Weekly',
+        daysOfWeek: List<bool>.filled(7, true),
+        interval: 2,
+        countStartDate: DateTime(2024, 3, 1),
+        endDate: DateTime(2024, 3, 20),
+      );
+      expect(result.date, DateTime(2024, 3, 1));
+      expect(result.interval, 2);
+    });
+
+    test('monthly with an end date pushes a past day to next month', () {
+      final result = RecurrenceUtils.buildTask(
+        baseTask: _baseTask(date: DateTime(2024, 1, 20)),
+        isRecurring: true,
+        recurrenceType: 'Monthly',
+        dayOfMonth: 31,
+        endDate: DateTime(2024, 6, 30),
+      );
+      expect(result.frequency, 'monthly');
+      expect(result.date, DateTime(2024, 1, 31));
+      expect(result.count, 6);
+
+      final pushed = RecurrenceUtils.buildTask(
+        baseTask: _baseTask(date: DateTime(2024, 12, 20)),
+        isRecurring: true,
+        recurrenceType: 'Monthly',
+        dayOfMonth: 5,
+      );
+      expect(pushed.date, DateTime(2025, 1, 5));
+      expect(pushed.count, 12);
+    });
+
+    test('yearly with an end date counts the years', () {
+      final result = RecurrenceUtils.buildTask(
+        baseTask: _baseTask(date: DateTime(2024, 3, 1)),
+        isRecurring: true,
+        recurrenceType: 'Yearly',
+        endDate: DateTime(2027, 3, 1),
+      );
+      expect(result.count, 4);
+    });
+  });
+
+  group('RecurrenceUtils.calculateEndDate weekly with selected days', () {
+    test('returns the date of the last selected occurrence', () {
+      final days = [false, true, false, true, false, false, false]; // Mon, Wed
+      final end = RecurrenceUtils.calculateEndDate(
+        startDate: DateTime(2024, 3, 4), // Monday
+        frequency: 'weekly',
+        interval: 2,
+        count: 3,
+        daysOfWeek: days,
+      );
+      expect(end, DateTime(2024, 3, 18));
     });
   });
 }

@@ -53,5 +53,50 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    // The steps that run before the unsupported package selector (CID inlining
+    // and digest-date resolution) still execute for each input below.
+    test('inlines CID images and reads an ISO <time datetime> first', () {
+      expect(
+        () => parser.toDomain(GmailRaw(
+          '<html><body><time datetime="2026-10-05T00:00:00Z">x</time>'
+          '<img src="cid:&lt;Img1@Mail&gt;"><img src="cid:other"></body></html>',
+          {'<img1@mail>': 'data:image/png;base64,AAAA'},
+          DateTime.utc(2026, 1, 1),
+        )),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('parses friendly dates from <time> text', () {
+      for (final text in [
+        'Monday, October 5, 2026',
+        'October 5, 2026',
+        '10/5/2026',
+        'Mon, 05 Oct 2026 10:00:00 +0000',
+        'not a date at all',
+      ]) {
+        expect(
+          () => parser.toDomain(GmailRaw(
+            '<html><body><time datetime="">$text</time></body></html>',
+            {},
+            null,
+          )),
+          throwsA(isA<FormatException>()),
+        );
+      }
+    });
+
+    test('falls back to the meta date', () {
+      expect(
+        () => parser.toDomain(GmailRaw(
+          '<html><head><meta name="date" content="2026-10-05"></head>'
+          '<body></body></html>',
+          {},
+          null,
+        )),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
 }

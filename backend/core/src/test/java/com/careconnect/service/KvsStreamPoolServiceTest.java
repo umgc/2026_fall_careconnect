@@ -81,4 +81,38 @@ class KvsStreamPoolServiceTest {
         final KvsStreamPoolService service = KvsStreamPoolService.forTest(true, PLACEHOLDER_ARN);
         assertThat(service.getStreamPoolRegion()).isBlank();
     }
+
+    @Test
+    @DisplayName("pool accessors expose ARN, name and ListStreams prefix for a valid ARN")
+    void poolAccessors_validArn() {
+        final KvsStreamPoolService service = KvsStreamPoolService.forTest(true, "  " + VALID_ARN + " ");
+
+        assertThat(service.getStreamPoolArn()).isEqualTo(VALID_ARN);
+        assertThat(service.getStreamPoolName()).isEqualTo("careconnect-dev-speaker");
+        assertThat(service.getStreamPoolListStreamsPrefix())
+                .isEqualTo("ChimeMediaPipelines-careconnect-dev-speaker");
+        assertThat(service.isEnabled()).isTrue();
+    }
+
+    @Test
+    @DisplayName("pool accessors are blank when no ARN is configured")
+    void poolAccessors_nullArn() {
+        final KvsStreamPoolService service = KvsStreamPoolService.forTest(false, null);
+
+        assertThat(service.getStreamPoolArn()).isEmpty();
+        assertThat(service.getStreamPoolName()).isEmpty();
+        assertThat(service.getStreamPoolListStreamsPrefix()).isEmpty();
+        assertThat(service.getStreamPoolRegion()).isEmpty();
+        assertThat(service.isEnabled()).isFalse();
+    }
+
+    @Test
+    @DisplayName("ARN helpers tolerate null, trailing slash and too few segments")
+    void arnHelpers_edgeCases() {
+        assertThat(KvsStreamPoolService.extractResourceName(null)).isEmpty();
+        assertThat(KvsStreamPoolService.extractResourceName("arn:aws:chime:us-east-1:1:pool/")).isEmpty();
+        assertThat(KvsStreamPoolService.extractArnRegion(null)).isEmpty();
+        assertThat(KvsStreamPoolService.extractArnRegion("arn:aws")).isEmpty();
+        assertThat(KvsStreamPoolService.isWellFormedStreamPoolArn(null)).isFalse();
+    }
 }
