@@ -93,11 +93,13 @@ class PatientDetailsPage extends StatefulWidget {
 
   /// NEW: when true, caregiver UI (can configure); when false, patient UI (no configure).
   final bool isCaregiver;
+  final String? initialTab;
 
   const PatientDetailsPage({
     super.key,
     required this.patientId,
     this.isCaregiver = false, // default to patient behavior
+    this.initialTab,
   });
 
   @override
@@ -2635,9 +2637,15 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
     // caregiver gets the Medicare tab (WBS 6.2.58).
     final medicarePatientId =
         widget.isCaregiver ? int.tryParse(widget.patientId) : null;
+    final initialTabIndex = switch (widget.initialTab) {
+      'health' => 2,
+      'medicare' when medicarePatientId != null => 5,
+      _ => 0,
+    };
 
     return DefaultTabController(
       length: medicarePatientId != null ? 6 : 5,
+      initialIndex: initialTabIndex,
       child: Scaffold(
         appBar: _DetailsAppBar(title: _patientName, subtitle: subtitlePrefix),
         body: _isLoadingPatient
@@ -3015,6 +3023,7 @@ class _PatientDetailsPageState extends State<PatientDetailsPage> {
                             if (medicarePatientId != null)
                               CaregiverMedicareTab(
                                 patientId: medicarePatientId,
+                                patientName: _patientName,
                               ),
                           ],
                         ),

@@ -525,6 +525,20 @@ try {
         $ServiceOverrides["FrontendBaseUrl"] = $FrontendUrl
         $ServiceOverrides["CorsAllowedList"] = "http://localhost:*,http://127.0.0.1:*,$FrontendUrl"
     }
+    # Medicare (Blue Button), from the same CARECONNECT_MEDICARE_* variables the bash scripts and CI use.
+    # Unset leaves the parameter file's value in place.
+    $medicareOverrides = [ordered]@{
+        MedicareEnabled      = $env:CARECONNECT_MEDICARE_ENABLED
+        MedicareMode         = $env:CARECONNECT_MEDICARE_MODE
+        MedicareClientId     = $env:CARECONNECT_MEDICARE_CLIENT_ID
+        MedicareRedirectUri  = $env:CARECONNECT_MEDICARE_REDIRECT_URI
+        MedicareClientSecret = $env:CARECONNECT_MEDICARE_CLIENT_SECRET
+    }
+    foreach ($key in $medicareOverrides.Keys) {
+        if (-not [string]::IsNullOrWhiteSpace($medicareOverrides[$key])) {
+            $ServiceOverrides[$key] = [string]$medicareOverrides[$key]
+        }
+    }
     # athenahealth, from the same CARECONNECT_ATHENA_* variables the bash scripts and CI use.
     # Unset leaves the stack's current value in place.
     $athenaOverrides = [ordered]@{

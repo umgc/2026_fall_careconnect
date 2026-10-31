@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 class LocaleProvider extends ChangeNotifier {
   static const String _key = 'selected_locale';
-  static const Locale _fallbackLocale = Locale('en');
-
-  static const Set<String> _supportedLanguageCodes = <String>{'en', 'es'};
 
   Locale? _locale;
 
@@ -20,12 +18,16 @@ class LocaleProvider extends ChangeNotifier {
       _locale = null;
       await prefs.remove(_key);
       return;
-    } else if (_supportedLanguageCodes.contains(normalizedCode)) {
-      _locale = Locale(normalizedCode);
-      await prefs.setString(_key, normalizedCode);
     } else {
-      _locale = _fallbackLocale;
-      await prefs.setString(_key, _fallbackLocale.languageCode);
+      final locale = Locale(normalizedCode);
+
+      if (AppLocalizations.delegate.isSupported(locale)) {
+        _locale = locale;
+        await prefs.setString(_key, normalizedCode);
+      } else {
+        _locale = null;
+        await prefs.remove(_key);
+      }
     }
 
     notifyListeners();
@@ -41,16 +43,18 @@ class LocaleProvider extends ChangeNotifier {
       return;
     }
 
-    final normalizedCode = locale.languageCode.trim().toLowerCase();
+    final normalizedLocale = Locale(
+      locale.languageCode.trim().toLowerCase(),
+    );
 
-    if (_supportedLanguageCodes.contains(normalizedCode)) {
-      _locale = Locale(normalizedCode);
-    } else {
-      _locale = _fallbackLocale;
+    if (!AppLocalizations.delegate.isSupported(normalizedLocale)) {
+      return;
     }
 
+    _locale = normalizedLocale;
+
     notifyListeners();
-    await prefs.setString(_key, _locale!.languageCode);
+    await prefs.setString(_key, normalizedLocale.languageCode);
   }
 
   Future<void> clearLocale() async {

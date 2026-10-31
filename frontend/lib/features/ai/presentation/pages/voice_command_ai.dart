@@ -1189,6 +1189,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
               _voiceStatus = _VoiceStatus.confirming;
               _statusDetail = _pendingDetail!;
             });
+            _startConfirmationListening();
             return;
           }
         }
@@ -1253,7 +1254,9 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
               _voiceStatus = _VoiceStatus.confirming;
               _statusDetail = _pendingDetail!;
             });
+            _startConfirmationListening();
             return;
+            
           }
         }
 
@@ -1405,6 +1408,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
           _voiceStatus = _VoiceStatus.confirming;
           _statusDetail = _pendingDetail!;
         });
+        _startConfirmationListening();
       } else if (result.destination != null) {
         setState(() {
           _pendingDestination = result.destination;
@@ -1414,6 +1418,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
           _voiceStatus = _VoiceStatus.confirming;
           _statusDetail = _pendingDetail!;
         });
+        _startConfirmationListening();
       } else {
         _setStatus(
           status: _VoiceStatus.fallback,
@@ -1436,6 +1441,7 @@ class _VoiceCommandAIState extends State<VoiceCommandAI>
         _voiceStatus = _VoiceStatus.confirming;
         _statusDetail = _pendingDetail!;
       });
+      _startConfirmationListening();
     } else {
       _setStatus(
         status: _VoiceStatus.fallback,

@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 // Tests for MockFallDetectionService and the FallAlert model.
 //
 // NOTE: This is a Dart/Flutter project. The equivalent of JUnit here is the
@@ -42,6 +43,10 @@ void _clearNotificationChannel() {
 // ─── test entry point ────────────────────────────────────────────────────────
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
   // Needed so MethodChannel / TestDefaultBinaryMessengerBinding are available.
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -65,7 +70,8 @@ void main() {
         detectedAtUtc: DateTime.utc(2025, 10, 21, 2, 16, 4),
         source: 'camera',
         hasLiveVideo: hasVideo,
-        liveVideoUrl: hasVideo ? Uri.parse('https://example.com/live/p1') : null,
+        liveVideoUrl:
+            hasVideo ? Uri.parse('https://example.com/live/p1') : null,
         patientPhone: _mockPhone,
         emergencyContactName: 'Sarah Carter',
         emergencyContactPhone: _mockPhone,
@@ -155,10 +161,12 @@ void main() {
       expect(reconstructed.patientName, original.patientName);
       expect(reconstructed.source, original.source);
       expect(reconstructed.hasLiveVideo, original.hasLiveVideo);
-      expect(reconstructed.liveVideoUrl.toString(), original.liveVideoUrl.toString());
+      expect(reconstructed.liveVideoUrl.toString(),
+          original.liveVideoUrl.toString());
       expect(reconstructed.patientPhone, original.patientPhone);
       expect(reconstructed.emergencyContactName, original.emergencyContactName);
-      expect(reconstructed.emergencyContactPhone, original.emergencyContactPhone);
+      expect(
+          reconstructed.emergencyContactPhone, original.emergencyContactPhone);
       expect(
         reconstructed.detectedAtUtc.toIso8601String(),
         original.detectedAtUtc.toIso8601String(),
@@ -192,7 +200,8 @@ void main() {
   // ─── MockFallDetectionService ──────────────────────────────────────────────
 
   group('MockFallDetectionService', () {
-    test('is a singleton — two factory calls return the identical instance', () {
+    test('is a singleton — two factory calls return the identical instance',
+        () {
       // The service manages shared timer/stream state; there must be only one.
       final a = MockFallDetectionService();
       final b = MockFallDetectionService();
@@ -224,7 +233,8 @@ void main() {
       expect((await future).id, isNotEmpty);
     });
 
-    test('emitted alert patientId is one of the three known mock patients', () async {
+    test('emitted alert patientId is one of the three known mock patients',
+        () async {
       // Ensures the random selection stays within the hard-coded patient list.
       final service = MockFallDetectionService();
       final future = service.alerts$.first;
@@ -250,7 +260,8 @@ void main() {
       expect(['camera', 'watch'], contains((await future).source));
     });
 
-    test('detectedAtUtc is a UTC timestamp within the current second', () async {
+    test('detectedAtUtc is a UTC timestamp within the current second',
+        () async {
       // The timestamp must be UTC and must fall between before/after the call.
       final service = MockFallDetectionService();
       final before = DateTime.now().toUtc();
@@ -300,7 +311,8 @@ void main() {
       // Statistically this branch will be reached; if not, the invariant still holds.
     });
 
-    test('liveVideoUrl contains the patient id when hasLiveVideo is true', () async {
+    test('liveVideoUrl contains the patient id when hasLiveVideo is true',
+        () async {
       // The URL template is https://example.com/live/<patientId>.
       final service = MockFallDetectionService();
 
@@ -326,7 +338,8 @@ void main() {
       expect((await future).patientPhone, _mockPhone);
     });
 
-    test('emitted alert has non-empty emergency contact name and phone', () async {
+    test('emitted alert has non-empty emergency contact name and phone',
+        () async {
       // Emergency contact fields must always be populated for mock patients.
       final service = MockFallDetectionService();
       final future = service.alerts$.first;
@@ -339,7 +352,8 @@ void main() {
       expect(alert.emergencyContactPhone, isNotEmpty);
     });
 
-    test('emitted alert playbackData contains status_code 200 and success true', () async {
+    test('emitted alert playbackData contains status_code 200 and success true',
+        () async {
       // The service always embeds the same fixed SAMPLE_RESPONSE map.
       final service = MockFallDetectionService();
       final future = service.alerts$.first;

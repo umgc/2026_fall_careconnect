@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for MockAlertLabPage
 // (lib/features/fall_alert/pages/mock_alert_lab_page.dart).
 //
@@ -65,12 +67,20 @@ void _clearNotifChannel() {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+  TestWidgetsFlutterBinding.ensureInitialized();
 
   group('MockAlertLabPage – initial state', () {
     testWidgets('renders Scaffold without crashing', (tester) async {
       // Verifies the widget builds successfully.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -82,7 +92,11 @@ void main() {
     ) async {
       // Verifies the initial button states: Start enabled, Stop disabled.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -102,7 +116,11 @@ void main() {
     testWidgets('Trigger button is always enabled', (tester) async {
       // Verifies the tonal Trigger button is always available.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -115,7 +133,11 @@ void main() {
     testWidgets('status text shows "stopped" initially', (tester) async {
       // Verifies the status line reflects _running == false.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -125,7 +147,11 @@ void main() {
     testWidgets('empty hint is shown when no alerts exist', (tester) async {
       // Verifies the _EmptyHint widget renders before any alert fires.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -139,7 +165,11 @@ void main() {
     ) async {
       // Verifies _startPeriodic sets _running = true and updates button states.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -162,7 +192,11 @@ void main() {
     ) async {
       // Verifies the status line updates when _running flips to true.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -177,7 +211,11 @@ void main() {
     ) async {
       // Verifies _stopPeriodic sets _running = false and restores button states.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -203,7 +241,11 @@ void main() {
     ) async {
       // Verifies the status line returns to "stopped" after Stop is tapped.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -231,7 +273,11 @@ void main() {
     ) async {
       // Verifies _triggerOnce fires emitNow and shows the SnackBar on success.
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 
@@ -248,7 +294,11 @@ void main() {
       // Verifies the stream listener inserts the emitted alert into _recent
       // and _AlertTile renders (replacing the _EmptyHint).
       await tester.pumpWidget(
-        const MaterialApp(home: MockAlertLabPage()),
+        MaterialApp(
+            locale: const Locale('en'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: MockAlertLabPage()),
       );
       await tester.pump();
 

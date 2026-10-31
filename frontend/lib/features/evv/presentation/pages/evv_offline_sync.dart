@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import '../../../../services/evv_service.dart';
 
@@ -45,8 +46,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
       await _loadOfflineData();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Offline data sync completed'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.evvOfflineSyncDone),
             backgroundColor: Colors.green,
           ),
         );
@@ -71,7 +72,7 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Offline Sync'),
+        title: Text(AppLocalizations.of(context)!.evvOfflineTitle),
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         actions: [
@@ -101,7 +102,7 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                             Icon(Icons.cloud_sync, color: cs.primary),
                             const SizedBox(width: 8),
                             Text(
-                              'Sync Status',
+                              AppLocalizations.of(context)!.evvOfflineSyncStatus,
                               style: Theme.of(context)
                                   .textTheme
                                   .titleMedium
@@ -125,8 +126,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                   )
                                 : const Icon(Icons.sync),
                             label: Text(_isSyncing
-                                ? 'Syncing...'
-                                : 'Sync All Offline Data'),
+                                ? AppLocalizations.of(context)!.evvOfflineSyncingDots
+                                : AppLocalizations.of(context)!.evvOfflineSyncAll),
                           ),
                         ),
                       ],
@@ -137,18 +138,18 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                 // Offline Queue List
                 Expanded(
                   child: _offlineQueue.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.cloud_done,
+                              const Icon(Icons.cloud_done,
                                   size: 56, color: Colors.green),
-                              SizedBox(height: 10),
-                              Text('All data is synced',
+                              const SizedBox(height: 10),
+                              Text(AppLocalizations.of(context)!.evvOfflineAllSynced,
                                   style: TextStyle(
                                       fontSize: 16, color: Colors.grey)),
-                              SizedBox(height: 6),
-                              Text('No offline records to sync',
+                              const SizedBox(height: 6),
+                              Text(AppLocalizations.of(context)!.evvOfflineNoRecords,
                                   style: TextStyle(
                                       fontSize: 14, color: Colors.grey)),
                             ],
@@ -172,23 +173,23 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                       color: Colors.white),
                                 ),
                                 title: Text(
-                                  '${item.operationType} Record #${item.recordId}',
+                                  '${item.operationType} ${AppLocalizations.of(context)!.evvOfflineRecord} #${item.recordId}',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text('Caregiver ID: ${item.caregiverId}'),
+                                    Text('${AppLocalizations.of(context)!.evvOfflineCaregiverId}: ${item.caregiverId}'),
                                     Text(
-                                        'Queued: ${_formatDateTime(item.queuedAt)}'),
+                                        '${AppLocalizations.of(context)!.evvOfflineQueued}: ${_formatDateTime(item.queuedAt)}'),
                                     if (item.lastSyncAttempt != null)
                                       Text(
-                                          'Last Attempt: ${_formatDateTime(item.lastSyncAttempt!)}'),
+                                          '${AppLocalizations.of(context)!.evvOfflineLastAttempt}: ${_formatDateTime(item.lastSyncAttempt!)}'),
                                     if (item.syncAttempts > 0)
-                                      Text('Attempts: ${item.syncAttempts}'),
+                                      Text('${AppLocalizations.of(context)!.evvOfflineAttempts}: ${item.syncAttempts}'),
                                     if (item.lastError != null)
-                                      Text('Error: ${item.lastError}',
+                                      Text('${AppLocalizations.of(context)!.evvOfflineError}: ${item.lastError}',
                                           style: const TextStyle(
                                               color: Colors.red)),
                                     const SizedBox(height: 4),
@@ -213,25 +214,25 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
                                     }
                                   },
                                   itemBuilder: (context) => [
-                                    const PopupMenuItem(
+                                    PopupMenuItem(
                                       value: 'details',
                                       child: Row(
                                         children: [
                                           Icon(Icons.info, size: 20),
                                           SizedBox(width: 8),
-                                          Text('Details'),
+                                          Text(AppLocalizations.of(context)!.evvOfflineDetails),
                                         ],
                                       ),
                                     ),
                                     if (item.syncStatus == 'FAILED')
-                                      const PopupMenuItem(
+                                      PopupMenuItem(
                                         value: 'retry',
                                         child: Row(
                                           children: [
                                             Icon(Icons.refresh,
                                                 size: 20, color: Colors.blue),
                                             SizedBox(width: 8),
-                                            Text('Retry',
+                                            Text(AppLocalizations.of(context)!.evvOfflineRetry,
                                                 style: TextStyle(
                                                     color: Colors.blue)),
                                           ],
@@ -264,25 +265,25 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
 
     final tiles = [
       _StatusTileData(
-        title: 'Pending',
+        title: AppLocalizations.of(context)!.evvOfflinePending,
         count: pendingCount,
         icon: Icons.pending,
         color: Colors.orange,
       ),
       _StatusTileData(
-        title: 'Syncing',
+        title: AppLocalizations.of(context)!.evvOfflineSyncing,
         count: syncingCount,
         icon: Icons.sync,
         color: cs.primary,
       ),
       _StatusTileData(
-        title: 'Synced',
+        title: AppLocalizations.of(context)!.evvOfflineSynced,
         count: syncedCount,
         icon: Icons.check_circle,
         color: Colors.green,
       ),
       _StatusTileData(
-        title: 'Failed',
+        title: AppLocalizations.of(context)!.evvOfflineFailed,
         count: failedCount,
         icon: Icons.error,
         color: cs.error,
@@ -374,8 +375,8 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
 
   void _retrySync(EvvOfflineQueue item) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Retry functionality would be implemented here'),
+      SnackBar(
+        content: Text(AppLocalizations.of(context)!.evvOfflineRetryPlaceholder),
         backgroundColor: Colors.blue,
       ),
     );
@@ -385,28 +386,28 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Offline Queue Item Details'),
+        title: Text(AppLocalizations.of(context)!.evvOfflineDetailTitle),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildDetailRow('Record ID', item.recordId.toString()),
-              _buildDetailRow('Operation', item.operationType),
-              _buildDetailRow('Caregiver ID', item.caregiverId.toString()),
-              _buildDetailRow('Device ID', item.deviceId ?? 'N/A'),
-              _buildDetailRow('Queued At', _formatDateTime(item.queuedAt)),
-              _buildDetailRow('Sync Status', item.syncStatus),
-              _buildDetailRow('Sync Attempts', item.syncAttempts.toString()),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineRecordId, item.recordId.toString()),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineOperation, item.operationType),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineCaregiverId, item.caregiverId.toString()),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineDeviceId, item.deviceId ?? 'N/A'),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineQueuedAt, _formatDateTime(item.queuedAt)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineSyncStatus, _localizedStatus(item.syncStatus)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflineSyncAttempts, item.syncAttempts.toString()),
               if (item.lastSyncAttempt != null)
-                _buildDetailRow('Last Sync Attempt',
+                _buildDetailRow(AppLocalizations.of(context)!.evvOfflineLastSyncAttempt,
                     _formatDateTime(item.lastSyncAttempt!)),
               if (item.lastError != null)
-                _buildDetailRow('Last Error', item.lastError!),
-              _buildDetailRow('Priority', _getPriorityText(item.priority)),
+                _buildDetailRow(AppLocalizations.of(context)!.evvOfflineLastError, item.lastError!),
+              _buildDetailRow(AppLocalizations.of(context)!.evvOfflinePriority, _getPriorityText(item.priority)),
               const SizedBox(height: 12),
-              const Text('Record Data:',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(AppLocalizations.of(context)!.evvOfflineRecordData,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               Container(
                 padding: const EdgeInsets.all(8),
@@ -423,7 +424,7 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close')),
+              child: Text(AppLocalizations.of(context)!.evvOfflineClose)),
         ],
       ),
     );
@@ -488,14 +489,25 @@ class _EvvOfflineSyncPageState extends State<EvvOfflineSyncPage> {
     }
   }
 
+  String _localizedStatus(String status) {
+    final t = AppLocalizations.of(context)!;
+    switch (status) {
+      case 'PENDING': return t.evvOfflinePending;
+      case 'SYNCING': return t.evvOfflineSyncing;
+      case 'SYNCED': return t.evvOfflineSynced;
+      case 'FAILED': return t.evvOfflineFailed;
+      default: return status;
+    }
+  }
+
   String _getPriorityText(int priority) {
     switch (priority) {
       case 1:
         return 'Normal';
       case 2:
-        return 'High';
+        return AppLocalizations.of(context)!.evvOfflineHigh;
       case 3:
-        return 'Urgent';
+        return AppLocalizations.of(context)!.evvOfflineUrgent;
       default:
         return 'Normal';
     }

@@ -4,10 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class LanguagePicker {
-  static const List<Locale> _availableLocales = <Locale>[
-    Locale('en'),
-    Locale('es'),
-  ];
+  static const List<Locale> _availableLocales =
+      AppLocalizations.supportedLocales;
 
   static Future<void> show(BuildContext context) async {
     final current = context.read<LocaleProvider>().locale;
@@ -125,10 +123,23 @@ class LanguagePicker {
   }
 
   static String labelFor(Locale locale, AppLocalizations t) {
-    if (locale.languageCode == 'es') {
-      return t.languagepicker_Spanish;
+    if (locale.languageCode == 'en') return t.languagepicker_English;
+    if (locale.languageCode == 'es') return t.languagepicker_Spanish;
+    if (locale.languageCode == 'ur') return t.languagepicker_Urdu;
+    if (locale.languageCode == 'ar') return t.languagepicker_Arabic;
+    if (locale.languageCode == 'fr') return t.languagepicker_French;
+    if (locale.languageCode == 'am') return t.languagepicker_Amharic;
+    if (locale.languageCode == 'ne') return t.languagepicker_Nepali;
+    if (locale.languageCode == 'hi') return t.languagepicker_Hindi;
+    if (locale.languageCode == 'fa') return t.languagepicker_Farsi;
+    if (locale.languageCode == 'zh') {
+      return t.languagepicker_MandarinChinese;
     }
+    if (locale.languageCode == 'pt') return t.languagepicker_Portuguese;
+    if (locale.languageCode == 'bn') return t.languagepicker_Bengali;
+    if (locale.languageCode == 'ru') return t.languagepicker_Russian;
+    if (locale.languageCode == 'ja') return t.languagepicker_Japanese;
 
-    return t.languagepicker_English;
+    return locale.toLanguageTag();
   }
 }

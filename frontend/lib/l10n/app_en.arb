@@ -66,9 +66,9 @@
   "fileManagement": "File Management",
   "addPatient": "Add Patient",
   "settings": "Settings",
-  "fallDetection":"Fall Detection", 
-  "informedDelivery":"Informed Delivery",
-  "smartDevices":"Smart Devices",
+  "fallDetection": "Fall Detection",
+  "informedDelivery": "Informed Delivery",
+  "smartDevices": "Smart Devices",
   "pleaseLogIn": "Please log in",
   "loginRequiredMessage": "You need to be logged in to access the menu",
   "login": "Login",
@@ -77,14 +77,10 @@
   "save": "Save",
   "systemDefault": "System default",
   "fallbackUser": "User",
-
   "roles_Patient": "Patient",
   "roles_Caregiver": "Caregiver",
   "roles_Admin": "Admin",
-
-
   "dashboard": "Dashboard",
-
   "shortcut_dashboard": "Dashboard",
   "shortcut_invoices": "Invoices",
   "shortcut_calendar": "Calendar",
@@ -94,7 +90,6 @@
   "shortcut_wearables": "Wearables",
   "shortcut_files": "Files",
   "shortcut_gamification": "Gamification",
-
   "navHome": "Home",
   "navSymptoms": "Symptoms",
   "navHealth": "Health",
@@ -103,9 +98,7 @@
   "navPatientList": "Patient List",
   "navAnalytics": "Analytics",
   "navMore": "More",
-
   "notetakerAssistant": "Notetaker Assistant",
-
   "settingsTitle": "Settings",
   "settingsAppearance": "Appearance",
   "settingsNotifications": "Notifications",
@@ -213,7 +206,6 @@
   "settingsDeleteAccountDesc": "This action cannot be undone. All your data will be permanently deleted.",
   "settingsDeleteAccountRequested": "Account deletion requested. Please contact support.",
   "settingsDeleteAccountAction": "Delete Account",
-
   "settings_telemetryDefaultDialogTitle": "Telemetry is enabled",
   "settings_telemetryDefaultDialogDescription": "CareConnect collects anonymous diagnostics and performance metrics by default to help improve reliability.\nYou can opt out at any time.",
   "settings_telemetryDefaultDialogKeepEnabled": "Keep enabled",
@@ -230,8 +222,6 @@
   "settings_generalSectionOfflinePersistenceSetting": "Offline Persistence",
   "settings_generalSectionOfflinePersistenceSettingEnabled": "Save data locally and sync when reconnected",
   "settings_generalSectionOfflinePersistenceSettingDisabled": "New data will not be stored locally for offline use.",
-
-
   "welcomeInitializingHealthcare": "Initializing your healthcare experience...",
   "welcomeReadyToConnect": "Ready to connect your care!",
   "welcomeBackendNotHealthyWarning": "Backend service is not healthy. The application has limited capabilities.",
@@ -242,7 +232,6 @@
   "welcome_subtitle": "Connecting Care, Empowering Health",
   "welcome_description": "Your healthcare companion for",
   "welcome_tagline": "Better Care • Better Outcomes • Better Life",
-
   "login_tagline": "Connect with care, track with confidence",
   "login_signInTitle": "Sign in to your account",
   "login_signInSubtitle": "Enter your credentials to access CareConnect",
@@ -305,7 +294,6 @@
   "voicecommand_timeoutGuidance": "Tap the microphone to try again.",
   "voicecommand_noSpeechGuidance": "No speech heard. Tap the microphone to try again.",
   "voicecommand_intentNotYetSupported": "This action is not yet available. Use manual navigation.",
-
   "mainscreen_voiceCommandsTooltip": "Voice commands",
   "mainscreen_loginFailed": "Please log in again",
   "mainscreen_cgCallEnabled": "Caregiver - Patient calls enabled",
@@ -327,7 +315,6 @@
   "mainscreen_failRetry": "Failed (will retry)",
   "mainscreen_queued": "Queued",
   "mainscreen_retries": "retries",
-
   "resetpassword_failedSendReset": "Failed to send reset link. Please try again.",
   "resetpassword_resetPasswordTitle": "Reset Password",
   "resetpassword_resetInstructions": "Enter your email to receive a password reset link",
@@ -335,7 +322,6 @@
   "resetpassword_missingEmail": "Please enter your email",
   "resetpassword_invalidEmail": "Please enter a valid email address",
   "resetpassword_sendLinkButton": "Send Reset Link",
-
   "authservice_oauthError": "OAuth error",
   "authservice_jwtTokenMissing": "No JWT token received from backend",
   "authservice_userDataMissing": "No user data received from backend",
@@ -363,7 +349,6 @@
   "authservice_alexaUnlinkedSuccess": "Alexa account unlinked successfully",
   "authservice_alexaUnlinkedFailed": "Failed to unlink Alexa account",
   "authservice_unexpectedError": "An unexpected error occurred",
-
   "alexalogin_checkForAlexaOAuthParams": "Checking for Alexa OAuth parameters",
   "alexalogin_currentURI": "Current URI",
   "alexalogin_queryParams": "Query Parameters",
@@ -396,7 +381,6 @@
   "alexalogin_emailAddress": "Email Address",
   "alexalogin_enterEmailAddress": "Enter your email",
   "alexalogin_debugLog": "Debug Log",
-
   "signup_patient": "Patient",
   "signup_caregiver": "Caregiver",
   "signup_patientDescription": "As a patient, you'll have access to track your health, communicate with caregivers, manage medications, and monitor symptoms.",
@@ -478,7 +462,6 @@
   "signup_nextButton": "Next",
   "signup_step": "Step",
   "signup_of": "of",
-
   "oauthcallback_initilizeAuth": "Processing authentication",
   "oauthcallback_missingAuthData": "Missing authentication data. Please try signing in again.",
   "oauthcallback_savingAuthData": "Saving authentication data",
@@ -490,14 +473,12 @@
   "oauthcallback_invalidRequest": "Invalid request. Please try signing in again.",
   "oauthcallback_serverError": "Server error occurred. Please try again later.",
   "oauthcallback_authError": "Authentication error",
-
   "passwordresetconfirm_missingPsw": "Please enter a new password",
   "passwordresetconfirm_pswLengthShort": "Password must be at least 6 characters",
   "passwordresetconfirm_failedToResetPsw": "Failed to reset password",
   "passwordresetconfirm_setNewPassword": "Set New Password",
   "passwordresetconfirm_newPasswordDeco": "New Password",
   "passwordresetconfirm_confirmNewPasswordDeco": "Confirm New Password",
-
   "passwordresetpage_failedToSetPassword": "Failed to set password",
   "passwordresetpage_setPasswordFirst": "Set Your Password",
   "passwordresetpage_resetPasswordExisting": "Reset Your Password",
@@ -505,19 +486,15 @@
   "passwordresetpage_resetPasswordDescription": "Enter your new password below.",
   "passwordresetpage_setPassword": "Set Password",
   "passwordresetpage_missingPassword": "Please enter a password",
-
   "careteamperfmcard_careTeamPerfm": "Care Team Performance",
   "careteamperfmcard_overallPatSat": "Overall Patient Satisfaction",
   "careteamperfmcard_basedOnLast30": "Based on last 30 days",
   "careteamperfmcard_checkInCompRate": "Check-in Completion Rate",
-
   "ptstatcard_missedCheckInHeader": "# of Missed Check-Ins",
   "ptstatcard_activePtsHeader": "Active Patients",
   "ptstatcard_missedCheckIn": "# of Missed\nCheck-Ins",
   "ptstatcard_activePts": "Active\nPatients",
-
   "recentptactivity_recentPtActivityTitle": "Recent Patient Activity",
-
   "upcomingcheckinwidget_missingCaregiverSession": "No caregiver session found.",
   "upcomingcheckinwidget_failedToLoadVisits": "Failed to load visits",
   "upcomingcheckinwidget_failedToLoadCheckIns": "Could not load upcoming check-ins.",
@@ -529,7 +506,6 @@
   "upcomingcheckinwidget_viewAllPatients": "View All Patients",
   "upcomingcheckinwidget_startEVSession": "Start EV Session",
   "upcomingcheckinwidget_view": "View",
-
   "recentcheckinwidget_widgetTitle": "Recent Check-Ins",
   "recentcheckinwidget_openCheckInButton": "Open Check-In",
   "recentcheckinwidget_janShort": "Jan",
@@ -550,7 +526,6 @@
   "recentcheckinwidget_moodHappy": "Happy",
   "recentcheckinwidget_moodGreat": "Great",
   "recentcheckinwidget_moodExcellent": "Excellent",
-
   "pcpwidget_pcpTitle": "Your Primary Care Provider",
   "pcpwidget_nextAppointment": "Next Appointment",
   "pcpwidget_contactProvider": "Contact Provider",
@@ -566,7 +541,6 @@
   "pcpwidget_octLong": "October",
   "pcpwidget_novLong": "November",
   "pcpwidget_decLong": "December",
-
   "offlinenotiwidget_neverSynced": "Never synced",
   "offlinenotiwidget_minutesAgo": "minutes ago",
   "offlinenotiwidget_hoursAgo": "hours ago",
@@ -574,12 +548,10 @@
   "offlinenotiwidget_offlineMode": "Offline Mode",
   "offlinenotiwidget_lastSynced": "Last synced",
   "offlinenotiwidget_syncOnReconnect": "Your data will sync when reconnected. The application will have limited functionality.",
-
   "notificationspanelwidget_notifications": "Notifications",
   "notificationspanelwidget_noNotifToShow": "No notifications to show.",
   "notificationspanelwidget_hideButton": "Hide",
   "notificationspanelwidget_showButton": "Show",
-
   "medicationreminderwidget_noMedReminders": "No active medication reminders",
   "medicationreminderwidget_medRemindersTitle": "Medication Reminders",
   "medicationreminderwidget_taken": "Taken",
@@ -590,7 +562,6 @@
   "medicationreminderwidget_moreMedications": "more medications",
   "medicationreminderwidget_today": "Today",
   "medicationreminderwidget_tomorrow": "Tomorrow",
-
   "currentmoodwidget_title": "Current Mood",
   "currentmoodwidget_rateCurrentMood": "Rate how you feel right now:",
   "currentmoodwidget_saveMood": "Save Mood",
@@ -616,12 +587,10 @@
   "currentmoodwidget_moodTagMonitoring": "monitoring",
   "currentmoodwidget_noMoodTags": "no recent mood data",
   "currentmoodwidget_yesterday": "Yesterday",
-
   "alternotifwidget_alertImportant": "Important",
   "alternotifwidget_alertReminder": "Reminder",
   "alternotifwidget_alertSuccess": "Success",
   "alternotifwidget_alertInfo": "Info",
-
   "ptmedreminderservice_doseNotSet": "Dose not set",
   "ptmedreminderservice_frequencyNotSet": "Once daily",
   "ptmedreminderservice_twice": "twice",
@@ -633,7 +602,6 @@
   "ptmedreminderservice_month": "month",
   "ptmedreminderservice_day": "day",
   "ptmedreminderservice_daily": "daily",
-
   "ptdashboard_userNotLoggedIn": "User not logged in.",
   "ptdashboard_errorLoadDash": "Error loading dashboard",
   "ptdashboard_videoCallDisabledWithoutCaregiver": "Video calling is unavailable until a caregiver is linked.",
@@ -680,20 +648,16 @@
   "ptdashboard_weekly": "Weekly",
   "ptdashboard_monthly": "Monthly",
   "ptdashboard_onceAtBed": "Once daily at bedtime",
-
   "sosscreen_sosSent": "SOS Sent",
   "sosscreen_caregiverNotified": "Your caregiver has been notified.",
   "sosscreen_backButton": "Back",
-
   "mainscreen_emergencySOS": "Emergency SOS",
   "mainscreen_areYouSure": "Are you sure you want to send an alert to your caregiver?\nThey will be notified of your location.",
   "mainscreen_sendSOS": "Yes, Send SOS",
   "mainscreen_sosLoaded": "Emergency screen loaded",
   "mainscreen_sosAuto": "This screen will automatically show the Emergency SOS dialog.",
-
   "cancelscreen_sosRequestCancel": "SOS Request Cancelled",
   "cancelscreen_sosCancelConfirm": "Your caregiver has not been alerted.",
-
   "ptstatusscreen_noPtID": "No patient ID available",
   "ptstatusscreen_failedToLoadProfile": "Failed to load patient profile. Status",
   "ptstatusscreen_failedToLoadVitals": "Failed to load vitals summary. Status",
@@ -730,21 +694,16 @@
   "ptstatusscreen_vitalSummary": "Vitals Summary (Past 7 Days)",
   "ptstatusscreen_noVitalsData": "No vitals data available for summary.",
   "ptstatusscreen_bpm": "bpm",
-
   "ptmednotes_medNotes": "Medical Notes",
   "ptmednotes_ptID": "Patient ID",
   "ptmednotes_caregiverView": "Caregiver View",
   "ptmednotes_ptView": "Patient View",
-
   "appheaderwidget_invalidDOB": "Invalid date of birth. Cannot generate emergency QR.",
   "appheaderwidget_missingPtData": "Patient data not available for emergency QR",
   "appheaderwidget_medicalPassport": "Medical passport",
   "appheaderwidget_welcomeBack": "Welcome back",
   "appheaderwidget_greetingPt": "How are you feeling today?",
   "appheaderwidget_greetingNonPt": "Your patients' health summary",
-
-  "mainscreen_voiceCommandsTooltip": "Voice commands",
-
   "languagepicker_English": "English",
   "languagepicker_Spanish": "Español (Spanish)",
   "languagepicker_Urdu": "اردو (Urdu)",
@@ -759,13 +718,11 @@
   "languagepicker_Bengali": "বাংলা (Bengali)",
   "languagepicker_Russian": "Русский (Russian)",
   "languagepicker_Japanese": "日本語 (Japanese)",
-
   "menupage_patientReportItem": "Patient Report",
   "menupage_medicationTrackerItem": "Medication Tracker",
   "menupage_addPatientItem": "Add Patient",
   "menupage_settingsItem": "Settings",
   "menupage_mailDigestItem": "Mail Digest",
-
   "ptfiles_allFilesItem": "All Files",
   "ptfiles_quickUploadItem": "Quick Upload",
   "ptfiles_filtersCate": "Filter by Category",
@@ -804,13 +761,11 @@
   "ptfiles_yesterday": "Yesterday",
   "ptfiles_daysAgo": "days ago",
   "ptfiles_structEntry": "Structured entry",
-
   "subscriptionplans_basicDescription": "Subscription plan for CareConnect services.",
   "subscriptionplans_standardDescription": "Basic features for patients and caregivers.",
   "subscriptionplans_premiumDescription": "All features including video calls, AI assistant, and device integration.",
   "subscriptionplans_yearly": "yearly",
   "subscriptionplans_monthly": "monthly",
-
   "subscriptionmodels_yearly": "Yearly",
   "subscriptionmodels_monthly": "Monthly",
   "subscriptionmodels_cancelOnPeriod": "Canceling at period end",
@@ -820,7 +775,6 @@
   "subscriptionmodels_unpaid": "Unpaid",
   "subscriptionmodels_monthInterval": "/month",
   "subscriptionmodels_yearInterval": "/year",
-
   "nativebilling_purchaseFailed": "Purchase failed",
   "nativebilling_purchaseError": "Purchase error",
   "nativebilling_completeYourPurchase": "Complete Your Purchase",
@@ -834,7 +788,6 @@
   "nativebilling_orderSummary": "Order Summary",
   "nativebilling_taxes": "Taxes",
   "nativebilling_total": "Total",
-
   "submangement_coreMonitorFeature": "Core monitoring features",
   "submangement_emailSupportFeature": "Email support",
   "submangement_unlimitedPtFeature": "Unlimited patients",
@@ -899,7 +852,6 @@
   "submangement_inactivePlan": "Inactive Plan",
   "submangement_standardPlan": "Standard Plan",
   "submangement_premiumPlan": "Premium Plan",
-
   "cancelpay_paymentCancel": "Payment Cancelled",
   "cancelpay_regNotComplete": "Your registration is not complete without payment. You can try again or contact support if you need assistance.",
   "cancelpay_paymentCanceled": "Your payment was cancelled. No charges were made to your account.",
@@ -907,11 +859,10 @@
   "cancelpay_returnDash": "Return to Dashboard",
   "cancelpay_skipGoLogin": "Skip for Now (Go to Login)",
   "cancelpay_goHome": "Go to Home",
-
   "paysuccess_redirectIn": "Redirecting in",
   "paysuccess_seconds": "seconds",
   "paysuccess_regComplete": "Registration Complete!",
-  "paysuccess_paymentSuccess": "Payment Successful!", 
+  "paysuccess_paymentSuccess": "Payment Successful!",
   "paysuccess_thankForPayment": "Thank you for your payment! Your subscription has been updated successfully.",
   "paysuccess_sessionId": "Session ID",
   "paysuccess_continueLogin": "Continue to Login",
@@ -920,7 +871,6 @@
   "paysuccess_redirectingAuto": "Redirecting automatically in 4 seconds...",
   "paysuccess_welcomeTo": "Welcome to CareConnect",
   "paysuccess_accountCreated": "Your account has been created and your subscription is active. You can now log in to access all features.",
-
   "subselection_choosePlan": "Choose Your Plan",
   "subselection_selectPlan": "Select a Subscription Plan",
   "subselection_choosePlanDescr": "Choose the plan that works best for you",
@@ -943,7 +893,6 @@
   "subselection_confirmFree": "Confirm Free Plan",
   "subselection_selectedFree": "You have selected the Free Plan. You can upgrade at any time.",
   "subselection_mostPopular": "Most Popular",
-
   "webpay_paymentFailed": "Payment failed",
   "webpay_transaction": "Transaction",
   "webpay_errorLoadingQuote": "Error loading quote",
@@ -953,13 +902,11 @@
   "webpay_payGoogle": "Pay with Google Pay",
   "webpay_taxState": "Tax State",
   "webpay_currency": "Currency",
-
   "billservice_inAppUnavailable": "In-app purchases not available",
   "billservice_productNotFound": "Product not found",
   "billservice_noOfferToken": "No offer token found for",
   "billservice_verifyFailed": "Verify failed",
   "billservice_paymentProcessFailed": "Payment processing failed",
-
   "filemanage_errorLoadingFiles": "Error loading files",
   "filemanage_myFiles": "My Files",
   "filemanage_upload": "Upload",
@@ -1011,7 +958,6 @@
   "filemanage_empContract": "Employment Contract",
   "filemanage_taxForm": "Tax Form (W-4)",
   "filemanage_workAuth": "Work Authorization (I-9)",
-
   "manualentrywidget_manualTextEntry": "Manual Text Entry",
   "manualentrywidget_noCateAvail": "No categories available.",
   "manualentrywidget_noCateSelected": "Please select a file category",
@@ -1029,14 +975,12 @@
   "manualentrywidget_fileContentDescr": "Enter file content",
   "manualentrywidget_fileContentEmpty": "File content cannot be empty",
   "manualentrywidget_saveToFile": "Save to File",
-
   "speechtextwidget_speechToTextSaved": "Speech-to-text file saved",
   "speechtextwidget_speechToText": "Speech to Text",
   "speechtextwidget_recoginizedText": "Recognized Text",
   "speechtextwidget_tapButtonToStart": "Tap the button below to start Speech-to-Text",
   "speechtextwidget_stopListening": "Stop Listening",
   "speechtextwidget_startListening": "Start Listening",
-
   "fileuploadwidget_uploadFile": "Upload File",
   "fileuploadwidget_selectFile": "Select File",
   "fileuploadwidget_fileSelected": "File Selected",
@@ -1054,7 +998,6 @@
   "fileuploadwidget_quickFileUpload": "Quick File Upload",
   "fileuploadwidget_profilePhoto": "Profile Photo",
   "fileuploadwidget_upload": "Upload",
-
   "homecarewidget_extractionFailed": "Automatic extraction failed. Please enter the fields manually.",
   "homecarewidget_extractionUnavailable": "Automatic extraction was unavailable — continuing with manual entry.",
   "homecarewidget_homeCareDigitization": "Home Care Document Digitization",
@@ -1066,7 +1009,6 @@
   "homecarewidget_clearSelectFile": "Clear selected files",
   "homecarewidget_digitizeReview": "Digitize & Review",
   "homecarewidget_enterManual": "Enter manually",
-
   "hiringformfill_submitted": "Submitted",
   "hiringformfill_copySaved": "a copy was saved to My Files",
   "hiringformfill_confirmSub": "Confirm submission",
@@ -1087,7 +1029,6 @@
   "hiringformfill_required": "Required",
   "hiringformfill_selectDate": "Select date",
   "hiringformfill_attachDocument": "Attach this document from the Upload tab after submitting.",
-
   "hiringformtab_noHiringForm": "No hiring forms available.",
   "hiringformtab_requiredDocuments": "Required hiring & onboarding documents",
   "hiringformtab_notReadableFile": "Could not read selected file",
@@ -1106,7 +1047,6 @@
   "hiringformtab_by": "by",
   "hiringformtab_rules": "Rules",
   "hiringformtab_source": "Source",
-
   "homecarereview_review": "Review",
   "homecarereview_saving": "Saving",
   "homecarereview_confirmSave": "Confirm & Save",
@@ -1120,18 +1060,21 @@
   "homecarereview_reviewed": "(reviewed)",
   "homecarereview_savedForm": "Saved digitized form",
   "homecarereview_failedToSave": "Failed to save digitized form",
-
   "socialFeedInvalidUser": "Invalid user ID. Please re-login.",
   "socialFeedLoadError": "Error: {message}",
   "@socialFeedLoadError": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "socialFeedComments": "{count, plural, =1{1 comment} other{{count} comments}}",
   "@socialFeedComments": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "socialFeedTitle": "My Feed",
@@ -1140,13 +1083,14 @@
   "socialFeedFriendRequests": "Friend Requests",
   "socialFeedMessages": "Messages",
   "socialFeedCreatePost": "Create Post",
-
   "gamificationTitle": "Achievements",
   "gamificationHeading": "Gamification",
   "gamificationLevel": "Level {level}",
   "@gamificationLevel": {
     "placeholders": {
-      "level": {"type": "int"}
+      "level": {
+        "type": "int"
+      }
     }
   },
   "gamificationAchievements": "Achievements",
@@ -1157,7 +1101,6 @@
   "gamificationDailyMessage3": "Believe in yourself and all that you are.",
   "gamificationDailyMessage4": "Progress, not perfection.",
   "gamificationDailyMessage5": "One day at a time — you got this!",
-
   "uspsTitle": "USPS Mail Digest",
   "uspsGmailIntegration": "Gmail Integration",
   "uspsIntegrationDescription": "CareConnect reads USPS Informed Delivery emails from Gmail using read-only access. We never send, delete, or modify your email.",
@@ -1181,33 +1124,45 @@
   "uspsFoundItems": "Found {count} mail items matching \"{keyword}\"",
   "@uspsFoundItems": {
     "placeholders": {
-      "count": {"type": "int"},
-      "keyword": {"type": "String"}
+      "count": {
+        "type": "int"
+      },
+      "keyword": {
+        "type": "String"
+      }
     }
   },
   "uspsSearchFailed": "Search failed: {message}",
   "@uspsSearchFailed": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "uspsNoMatches": "No mail items matched \"{keyword}\".",
   "@uspsNoMatches": {
     "placeholders": {
-      "keyword": {"type": "String"}
+      "keyword": {
+        "type": "String"
+      }
     }
   },
   "uspsShowTodayMail": "Show Today's Mail",
   "uspsShowingDate": "Showing digest for {date}",
   "@uspsShowingDate": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsItemCount": "{count, plural, =1{1 item} other{{count} items}}",
   "@uspsItemCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "uspsNoItems": "No items",
@@ -1220,25 +1175,33 @@
   "uspsFrom": "From: {sender}",
   "@uspsFrom": {
     "placeholders": {
-      "sender": {"type": "String"}
+      "sender": {
+        "type": "String"
+      }
     }
   },
   "uspsTracking": "Tracking: {trackingNumber}",
   "@uspsTracking": {
     "placeholders": {
-      "trackingNumber": {"type": "String"}
+      "trackingNumber": {
+        "type": "String"
+      }
     }
   },
   "uspsExpected": "Expected: {date}",
   "@uspsExpected": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsDelivered": "Delivered: {date}",
   "@uspsDelivered": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsDetails": "Details",
@@ -1270,11 +1233,12 @@
   "uspsDigestNotFound": "No USPS digest found for {date}.",
   "@uspsDigestNotFound": {
     "placeholders": {
-      "date": {"type": "String"}
+      "date": {
+        "type": "String"
+      }
     }
   },
   "uspsUSPSPackage": "USPS Package",
-
   "hhaTitle": "Submit to HHAExchange",
   "hhaRefresh": "Refresh",
   "hhaInfo": "Select APPROVED visits to send to the Virginia HHAExchange aggregator (https://implementation.hhaexchange.com/api/v2/visits). Only VA-state records are forwarded.",
@@ -1282,39 +1246,51 @@
   "hhaSelectAll": "Select all ({count})",
   "@hhaSelectAll": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaSelectedCount": "{count} selected",
   "@hhaSelectedCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaSubmitting": "Submitting…",
   "hhaSubmitVisits": "Submit {count} Visit(s)",
   "@hhaSubmitVisits": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaErrorLoading": "Error loading records: {message}",
   "@hhaErrorLoading": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaDownloading": "Downloading HHAExchange payload...",
   "hhaDownloadedAs": "Payload downloaded as {filename}",
   "@hhaDownloadedAs": {
     "placeholders": {
-      "filename": {"type": "String"}
+      "filename": {
+        "type": "String"
+      }
     }
   },
   "hhaDownloadFailed": "Failed to download payload: {message}",
   "@hhaDownloadFailed": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaFetchingPayload": "Fetching payload for download...",
@@ -1322,19 +1298,25 @@
   "hhaPayloadDownloadWarning": "Warning: Could not download payload ({message}). Continuing with submission...",
   "@hhaPayloadDownloadWarning": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaSubmittedCount": "{count} visit(s) successfully submitted to HHAExchange.",
   "@hhaSubmittedCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "hhaSubmissionFailed": "Submission failed: {message}",
   "@hhaSubmissionFailed": {
     "placeholders": {
-      "message": {"type": "String"}
+      "message": {
+        "type": "String"
+      }
     }
   },
   "hhaNoEligibleVisits": "No eligible visits",
@@ -1343,23 +1325,28 @@
   "hhaCheckIn": "Check-in: {time}",
   "@hhaCheckIn": {
     "placeholders": {
-      "time": {"type": "String"}
+      "time": {
+        "type": "String"
+      }
     }
   },
   "hhaCheckOut": "Check-out: {time}",
   "@hhaCheckOut": {
     "placeholders": {
-      "time": {"type": "String"}
+      "time": {
+        "type": "String"
+      }
     }
   },
   "hhaState": "State: {state}",
   "@hhaState": {
     "placeholders": {
-      "state": {"type": "String"}
+      "state": {
+        "type": "String"
+      }
     }
   },
   "hhaStatusApproved": "APPROVED",
-
   "shiftTitle": "Caregiver Shift Scheduling",
   "shiftRecurring": "Recurring Shift",
   "shiftStartTime": "Start Time",
@@ -1377,48 +1364,87 @@
   "shiftVisitSaved": "Visit saved: {patient}",
   "@shiftVisitSaved": {
     "placeholders": {
-      "patient": {"type": "String"}
+      "patient": {
+        "type": "String"
+      }
     }
   },
-
   "medicarehelp_title": "Help with Medicare",
-  "@medicarehelp_title": {"description": "Heading for the Medicare help section (WBS 6.4.33)."},
+  "@medicarehelp_title": {
+    "description": "Heading for the Medicare help section (WBS 6.4.33)."
+  },
   "medicarehelp_connectTitle": "Connecting your Medicare account",
-  "@medicarehelp_connectTitle": {"description": "Help topic heading: how linking works (FR-MCR-01)."},
+  "@medicarehelp_connectTitle": {
+    "description": "Help topic heading: how linking works (FR-MCR-01)."
+  },
   "medicarehelp_connectBody": "Tap Connect Medicare Account. CareConnect opens Medicare's website, where you sign in with your Medicare username and password. CareConnect never sees or stores your Medicare password.",
-  "@medicarehelp_connectBody": {"description": "Help topic body for connecting (FR-MCR-01, AC-MCR-01-2). Names the button by its exact label, medicarehelp_connectButton."},
+  "@medicarehelp_connectBody": {
+    "description": "Help topic body for connecting (FR-MCR-01, AC-MCR-01-2). Names the button by its exact label, medicarehelp_connectButton."
+  },
   "medicarehelp_connectButton": "Connect Medicare Account",
-  "@medicarehelp_connectButton": {"description": "Label of the button on the Medicare connect tile. The help text tells people to tap it by this exact name, so the tile should use this string (agreed with the connect-tile owner on PR #258)."},
+  "@medicarehelp_connectButton": {
+    "description": "Label of the button on the Medicare connect tile. The help text tells people to tap it by this exact name, so the tile should use this string (agreed with the connect-tile owner on PR #258)."
+  },
   "medicarehelp_consentTitle": "What you're agreeing to",
-  "@medicarehelp_consentTitle": {"description": "Help topic heading: the Medicare consent page."},
+  "@medicarehelp_consentTitle": {
+    "description": "Help topic heading: the Medicare consent page."
+  },
   "medicarehelp_consentBody": "On Medicare's page, you choose whether CareConnect can read your Medicare claims and coverage. CareConnect can only read this information. It can't change anything in your Medicare account. If you tap Cancel or Deny, nothing is connected and nothing is saved.",
-  "@medicarehelp_consentBody": {"description": "Help topic body for consent (FR-MCR-05, FR-MCR-06)."},
+  "@medicarehelp_consentBody": {
+    "description": "Help topic body for consent (FR-MCR-05, FR-MCR-06)."
+  },
   "medicarehelp_connected": "Medicare account connected",
-  "@medicarehelp_connected": {"description": "Confirmation text shown when the link state becomes Linked. Exact SRS text (FR-MCR-04, AC-MCR-04-1); do not reword."},
+  "@medicarehelp_connected": {
+    "description": "Confirmation text shown when the link state becomes Linked. Exact SRS text (FR-MCR-04, AC-MCR-04-1); do not reword."
+  },
   "medicarehelp_reconcileTitle": "When your details don't match",
-  "@medicarehelp_reconcileTitle": {"description": "Help topic heading: reviewing details that differ between sources (6.2.41)."},
+  "@medicarehelp_reconcileTitle": {
+    "description": "Help topic heading: reviewing details that differ between sources (6.2.41)."
+  },
   "medicarehelp_reconcileBody": "Sometimes Medicare has different details than CareConnect. If Medicare has a different date of birth, CareConnect asks you before changing it. You can accept the new date or keep the one you have. If you keep yours, CareConnect won't ask about that same date from Medicare again. Other details, like your address, update automatically, and we let you know.",
-  "@medicarehelp_reconcileBody": {"description": "Help topic body for reconciliation (FR-XSRC-13, BR-15, same-source rule). Matches RecencyWinsIdentityReconciler: only date of birth waits for the patient to confirm; other identity fields apply automatically with a notice."},
+  "@medicarehelp_reconcileBody": {
+    "description": "Help topic body for reconciliation (FR-XSRC-13, BR-15, same-source rule). Matches RecencyWinsIdentityReconciler: only date of birth waits for the patient to confirm; other identity fields apply automatically with a notice."
+  },
   "medicarehelp_disconnectTitle": "Disconnecting Medicare",
-  "@medicarehelp_disconnectTitle": {"description": "Help topic heading: unlinking (FR-MCR-10)."},
+  "@medicarehelp_disconnectTitle": {
+    "description": "Help topic heading: unlinking (FR-MCR-10)."
+  },
   "medicarehelp_disconnectBody": "You can disconnect at any time. When you do, CareConnect deletes your Medicare connection and the Medicare records it brought in, and stops getting new ones. Your CareConnect account, information from other sources, and details already updated in your profile, like your address, stay. You can connect again later.",
-  "@medicarehelp_disconnectBody": {"description": "Help topic body for unlinking (FR-MCR-10/11). Follows the unlink rule Rich confirmed on #239 (Addendum A1-Q1, SRS v1.5 draft): the Medicare connection and coverage and visit records are deleted; demographic values reconciliation already applied are kept. The deletion part also holds under SRS 1.4."},
+  "@medicarehelp_disconnectBody": {
+    "description": "Help topic body for unlinking (FR-MCR-10/11). Follows the unlink rule Rich confirmed on #239 (Addendum A1-Q1, SRS v1.5 draft): the Medicare connection and coverage and visit records are deleted; demographic values reconciliation already applied are kept. The deletion part also holds under SRS 1.4."
+  },
   "medicarehelp_emptyTitle": "No Medicare records yet",
-  "@medicarehelp_emptyTitle": {"description": "Empty-state heading on the Medicare records screen."},
+  "@medicarehelp_emptyTitle": {
+    "description": "Empty-state heading on the Medicare records screen."
+  },
   "medicarehelp_emptyBody": "Connect your Medicare account to see your Medicare claims and coverage here. If you just connected, it can take a moment for your records to appear.",
-  "@medicarehelp_emptyBody": {"description": "Empty-state body on the Medicare records screen."},
+  "@medicarehelp_emptyBody": {
+    "description": "Empty-state body on the Medicare records screen."
+  },
   "medicarehelp_errorsTitle": "If something goes wrong",
-  "@medicarehelp_errorsTitle": {"description": "Help topic heading: what the Medicare error messages mean."},
+  "@medicarehelp_errorsTitle": {
+    "description": "Help topic heading: what the Medicare error messages mean."
+  },
   "medicarehelp_errorsBody": "Most problems with Medicare are temporary. Check your internet connection and try again in a few minutes. Nothing is connected or saved until the connection finishes, so it's safe to try again.",
-  "@medicarehelp_errorsBody": {"description": "Help topic body for errors (FR-MCR-07/08, FR-MCR-26)."},
+  "@medicarehelp_errorsBody": {
+    "description": "Help topic body for errors (FR-MCR-07/08, FR-MCR-26)."
+  },
   "medicarehelp_errMcr01": "We couldn't reach Medicare. Try connecting again in a few minutes.",
-  "@medicarehelp_errMcr01": {"description": "ERR-MCR-01. Exact SRS text (section 8.6); do not reword."},
+  "@medicarehelp_errMcr01": {
+    "description": "ERR-MCR-01. Exact SRS text (section 8.6); do not reword."
+  },
   "medicarehelp_errMcr02": "Medicare couldn't complete the connection. Try connecting again.",
-  "@medicarehelp_errMcr02": {"description": "ERR-MCR-02. Exact SRS text (section 8.6); do not reword."},
+  "@medicarehelp_errMcr02": {
+    "description": "ERR-MCR-02. Exact SRS text (section 8.6); do not reword."
+  },
   "medicarehelp_errMcr03": "Showing your saved records. We couldn't check Medicare for updates.",
-  "@medicarehelp_errMcr03": {"description": "ERR-MCR-03. Exact SRS text (section 8.6); do not reword."},
+  "@medicarehelp_errMcr03": {
+    "description": "ERR-MCR-03. Exact SRS text (section 8.6); do not reword."
+  },
   "medicarehelp_errMcr04": "You need an internet connection to connect your Medicare account.",
-  "@medicarehelp_errMcr04": {"description": "ERR-MCR-04. Exact SRS text (section 8.6); do not reword."},
+  "@medicarehelp_errMcr04": {
+    "description": "ERR-MCR-04. Exact SRS text (section 8.6); do not reword."
+  },
   "medicarehelp_errMcr05": "Your Medicare connection has expired. Connect again to see current records.",
   "@medicarehelp_errMcr05": {"description": "ERR-MCR-05. Exact SRS text (section 8.6); do not reword."},
   "connectionRequests_title": "Caregiver requests",
@@ -1572,6 +1598,47 @@
   "healthDataRecordTypeClinicalRecord": "Clinical Record",
   "healthDataRecordTypeClaimService": "Claim / Service",
   "healthDataRecordTypeRecord": "Record",
+  "healthDataTitle": "Health Data",
+  "healthDataLoading": "Loading your health data…",
+  "healthDataOracleUnavailable": "We couldn't load records from Oracle Health. Showing what we could.",
+  "healthDataOracleConnected": "Connected to Oracle Health. Your Oracle Health records are included in your health history.",
+  "healthDataHistoryDescription": "One searchable health history from all of your connected healthcare providers.",
+  "healthDataSearchHistory": "Search your health history",
+  "healthDataClearFilters": "Clear filters",
+  "healthDataYourHistory": "Your health history",
+  "healthDataEventCount": "{count, plural, =0 {0 events} =1 {1 event} other {{count} events}}",
+  "@healthDataEventCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "healthDataInformation": "Health Information",
+  "healthDataFilterAll": "All",
+  "healthDataFilterMedications": "Medications",
+  "healthDataFilterConditions": "Conditions",
+  "healthDataFilterAllergies": "Allergies",
+  "healthDataFilterVisits": "Visits",
+  "healthDataFilterClinicalRecords": "Clinical Records",
+  "healthDataFilterClaims": "Claims",
+  "healthDataNoRecords": "No health records found",
+  "healthDataChangeSearchFilters": "Try changing your search or filters.",
+  "healthDataNoDate": "Health information without a date",
+  "healthDataViewDetails": "View details",
+  "healthDataStatusActive": "Active",
+  "healthDataPatientInformation": "Patient Information",
+  "healthDataName": "Name",
+  "healthDataDateOfBirth": "Date of Birth",
+  "healthDataGender": "Gender",
+  "healthDataGenderFemale": "Female",
+  "healthDataGenderMale": "Male",
+  "healthDataNotAvailable": "Not available",
+  "healthDataMedicareNotConnected": "Medicare isn't connected yet.",
+  "healthDataMedicareExpired": "Your Medicare connection has expired. Connect again to see current records.",
+  "healthDataMedicareUpdateUnavailable": "Showing your saved records. We couldn't check Medicare for updates.",
+  "healthDataMedicareNoRecords": "No Medicare records found.",
+  "healthDataMedicareConnect": "Connect Medicare Account",
   "analyticsPatientAnalytics": "Patient Analytics",
   "analyticsRetry": "Retry",
   "analyticsAskAiTooltip": "Ask AI about analytics",
@@ -1600,5 +1667,646 @@
     }
   },
   "analyticsDetailedCharts": "Detailed Charts",
-  "analyticsLoadingData": "Loading analytics data..."
+  "analyticsLoadingData": "Loading analytics data...",
+  "fallAlertTitle": "Fall Alert",
+  "fallAlertPatientMayNeedHelp": "Patient may need help.",
+  "fallAlertViewDetails": "View Details",
+  "fallAlertNoResponseFromPatient": "No response from patient",
+  "fallAlertFallPlayback": "Fall Playback",
+  "fallAlertPlaybackUnavailable": "Playback Unavailable",
+  "fallAlertCallPatient": "Call Patient",
+  "fallAlertSendMessage": "Send Message",
+  "fallAlertContactEmergencyServices": "Contact Emergency Services",
+  "fallAlertDetails": "Details",
+  "fallAlertDetectedAt": "Detected at",
+  "fallAlertSource": "Source",
+  "fallAlertPatientPhone": "Patient phone",
+  "fallAlertPlayback": "Playback",
+  "fallAlertAvailable": "Available",
+  "fallAlertNotAvailable": "Not available",
+  "fallAlertNoPhoneNumberAvailable": "No phone number available",
+  "fallAlertCallFailedToStart": "Call failed to start",
+  "fallAlertSmsMessage": "I got an alert that you may have fallen. Are you okay? Please reply or call me if you need help.",
+  "fallAlertMessageFailedToStart": "Message failed to start",
+  "fallAlertPatientIdNotAvailable": "Patient ID not available",
+  "fallAlertEmergencyContact": "Emergency Contact",
+  "fallAlertEmergencyActions": "Emergency actions",
+  "fallAlertChooseHowToEscalate": "Choose how you want to escalate",
+  "fallAlertCall911": "Call 911",
+  "fallAlertConnectLocalEmergencyServices": "Connect to local emergency services",
+  "fallAlertCouldNotStartCall911": "Could not start call to 911",
+  "fallAlertCallContact": "Call {contactName}",
+  "@fallAlertCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertNoPhoneOnFile": "No phone on file",
+  "fallAlertCouldNotStartCallContact": "Could not start call to {contactName}",
+  "@fallAlertCouldNotStartCallContact": {
+    "placeholders": {
+      "contactName": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertEmergencyInstruction": "If you cannot reach the patient, contact emergency services immediately.",
+  "fallAlertDetected": "Fall Detected",
+  "fallAlertAreYouOkay": "Are You Okay?",
+  "fallAlertMayHaveFallen": "It looks like you may have fallen. Do you need help?",
+  "fallAlertImOkay": "I'm Okay",
+  "fallAlertCallForHelp": "Call for Help",
+  "fallAlertNoResponseAutoCall": "If you do not respond within {seconds} seconds, emergency services will be contacted automatically.",
+  "@fallAlertNoResponseAutoCall": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertAutoCallingIn": "Auto-calling in {seconds} seconds...",
+  "@fallAlertAutoCallingIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertGladYouAreOkay": "Glad you are okay. We will dismiss this alert.",
+  "fallAlertCouldNotStartCall": "Could not start the call.",
+  "fallAlertAutoCallFailed": "Auto call failed to start.",
+  "fallAlertCallEmergencyNumber": "Call {number}",
+  "@fallAlertCallEmergencyNumber": {
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "fallAlertMockAlerts": "Mock Fall Alerts",
+  "fallAlertStart": "Start",
+  "fallAlertStop": "Stop",
+  "fallAlertTrigger": "Trigger",
+  "fallAlertStatusRunning": "Status: running (emits every ~3s)",
+  "fallAlertStatusStopped": "Status: stopped",
+  "fallAlertMockAlertEmitted": "Mock fall alert emitted",
+  "fallAlertNoAlertsYet": "No alerts yet. Tap \"Trigger\" to emit one or start periodic.",
+  "fallAlertSourceWithTime": "Source: {source} • {time}",
+  "fallAlertCamera": "Camera",
+  "fallAlertSecondsAgo": "{count}s ago",
+  "@fallAlertSecondsAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertMinutesAgo": "{count}m ago",
+  "@fallAlertMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertHoursAgo": "{count}h ago",
+  "@fallAlertHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fallAlertDaysAgo": "{count}d ago",
+  "@fallAlertDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@fallAlertSourceWithTime": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "wearablesTitle": "Wearables",
+  "wearablesNoConnected": "No Wearables Connected",
+  "wearablesConnectDescription": "Connect wearable devices to track your patient's health data in real-time.",
+  "wearablesAddFirstDevice": "Add Your First Device",
+  "wearablesSupportedDevices": "Supported Devices",
+  "wearablesLatestHealthData": "Latest Health Data",
+  "wearablesSynchronizationFailed": "Synchronization failed",
+  "wearablesSynchronizationFailedDescription": "We could not synchronize wearable readings.",
+  "wearablesNoSyncedDataYet": "No synced data yet",
+  "wearablesNoSyncedDataDescription": "Connect a wearable and run sync to view persisted vitals.",
+  "wearablesYourDevices": "Your Devices",
+  "wearablesConnectedDevices": "Connected Devices",
+  "wearablesAddDevice": "Add Device",
+  "wearablesDevicesConnected": "{count, plural, =0{No devices connected} =1{1 device connected} other{{count} devices connected}}",
+  "@wearablesDevicesConnected": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wearablesSemesterMetricScope": "Semester Metric Scope",
+  "wearablesPersisted": "Persisted",
+  "wearablesPlaceholder": "Placeholder",
+  "wearablesMetricScopeDescription": "Persisted = mapped to backend entities. Placeholder = UI-only demo or not wired this semester.",
+  "wearablesHealthMetrics": "Health Metrics",
+  "wearablesUpdated": "Updated: {date}",
+  "@wearablesUpdated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "wearablesConnectedOn": "Connected {date}",
+  "@wearablesConnectedOn": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "wearablesPermissionsGranted": "{count, plural, =0{No permissions granted} =1{1 permission granted} other{{count} permissions granted}}",
+  "@wearablesPermissionsGranted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wearablesActive": "Active",
+  "wearablesDaysAgo": "{count, plural, =1{1 day ago} other{{count} days ago}}",
+  "@wearablesDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wearablesHoursAgo": "{count, plural, =1{1 hour ago} other{{count} hours ago}}",
+  "@wearablesHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wearablesMinutesAgo": "{count, plural, =1{1 minute ago} other{{count} minutes ago}}",
+  "@wearablesMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wearablesJustNow": "Just now",
+  "wearablesRemoveDevice": "Remove Device",
+  "wearablesConfirmRemoveDevice": "Are you sure you want to remove {deviceName}?",
+  "@wearablesConfirmRemoveDevice": {
+    "placeholders": {
+      "deviceName": {
+        "type": "String"
+      }
+    }
+  },
+  "wearablesRemove": "Remove",
+  "wearablesDeviceRemoved": "{deviceName} has been removed",
+  "@wearablesDeviceRemoved": {
+    "placeholders": {
+      "deviceName": {
+        "type": "String"
+      }
+    }
+  },
+  "wearablesFailedToRemoveDevice": "Failed to remove device",
+  "wearablesSelectPatientFirst": "Select a patient first (Analytics patient dropdown), then tap refresh.",
+  "wearablesNoAppleHealthSamples": "No Apple Health samples were collected in the last 7 days. Debug: collected={collected} accepted={accepted} rejected={rejected}",
+  "@wearablesNoAppleHealthSamples": {
+    "placeholders": {
+      "collected": {
+        "type": "int"
+      },
+      "accepted": {
+        "type": "int"
+      },
+      "rejected": {
+        "type": "int"
+      }
+    }
+  },
+  "wearablesSyncFailedWithError": "Failed to synchronize wearable data: {error}",
+  "@wearablesSyncFailedWithError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "wearablesNoPersistedVitals": "No persisted wearable vitals available in this range. Debug: collected={collected} accepted={accepted} rejected={rejected}",
+  "@wearablesNoPersistedVitals": {
+    "placeholders": {
+      "collected": {
+        "type": "int"
+      },
+      "accepted": {
+        "type": "int"
+      },
+      "rejected": {
+        "type": "int"
+      }
+    }
+  },
+  "addDevicesHealthConnectDescription": "Connect to Health Connect for health tracking",
+  "addDevicesConnected": "Connected",
+  "addDevicesConnectToPlatform": "Connect to Platform",
+  "addDevicesAuthorizationPrompt": "Please complete authorization in the permission dialog",
+  "addDevicesAddedToConnectedDevices": "Device has been added to your connected devices",
+  "addDevicesConnectionFailed": "Connection Failed",
+  "addDevicesTryAgain": "Try Again",
+  "addDevicesSuccessfullyConnected": "Successfully Connected!",
+  "addDevicesHealthMonitoringActive": "Health Monitoring Active",
+  "addDevicesBackToDashboard": "Back to Dashboard",
+  "addDevicesAddAnotherPlatform": "Add Another Platform",
+  "addDevicesContinue": "Continue",
+  "addDevicesConnectingTo": "Connecting to {platform}...",
+  "@addDevicesConnectingTo": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectedTo": "Connected to {platform}!",
+  "@addDevicesConnectedTo": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesPlatformAdded": "{platform} has been connected and added to your devices.",
+  "@addDevicesPlatformAdded": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesNowTracking": "Now tracking: {metrics}",
+  "@addDevicesNowTracking": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "metrics": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectionFailedRetry": "Failed to connect to {platform}. Please try again.",
+  "@addDevicesConnectionFailedRetry": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesAlreadyConnected": "{platform} is already connected to this account.",
+  "@addDevicesAlreadyConnected": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesFailedToConnectWithError": "Failed to connect to {platform}: {error}",
+  "@addDevicesFailedToConnectWithError": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectionFailedWithError": "Connection failed: {error}",
+  "@addDevicesConnectionFailedWithError": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesFailedToConnectError": "Failed to connect: {error}",
+  "@addDevicesFailedToConnectError": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addDevicesConnectedWithPermissions": "{platform} successfully connected with {count} permissions!",
+  "@addDevicesConnectedWithPermissions": {
+    "description": "Add Devices screen message",
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+"smartDevicesProfileUnavailable": "Unable to load user profile.",
+  "smartDevicesErrorOccurred": "An error occurred: {error}",
+  "@smartDevicesErrorOccurred": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesUnlinkError": "Error unlinking Alexa: {error}",
+  "@smartDevicesUnlinkError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesIntegrationTitle": "Smart Device Integration",
+  "smartDevicesIntro": "Connect Alexa or Google Nest compatible smart devices to help monitor and assist with daily activities.",
+  "smartDevicesPrivacyPolicy": "Privacy Policy",
+  "smartDevicesPrivacyOpenFailed": "Could not open Privacy Policy",
+  "smartDevicesEchoDevices": "Echo Devices",
+  "smartDevicesSmartLights": "Smart Lights",
+  "smartDevicesThermostats": "Thermostats",
+  "smartDevicesSmartLocks": "Smart Locks",
+  "smartDevicesSmartPlugs": "Smart Plugs",
+  "smartDevicesSensors": "Sensors",
+  "smartDevicesAlexaLinked": "Your Alexa account is linked!",
+  "smartDevicesAlexaNotLinked": "Alexa is not linked yet.",
+  "smartDevicesAlexaPatientOnly": "Alexa integration is currently available for patients only. Development is underway to support caregivers soon!",
+  "smartDevicesDisableAlexa": "Disable Alexa Skill",
+  "smartDevicesEnableAlexa": "Enable Alexa Skill",
+  "smartDevicesCaregiversComingSoon": "Coming Soon for Caregivers",
+  "smartDevicesNestHubs": "Nest Hubs",
+  "smartDevicesGoogleHome": "Google Home",
+  "smartDevicesNestThermostat": "Nest Thermostat",
+  "smartDevicesNestDoorbell": "Nest Doorbell",
+  "smartDevicesNestCameras": "Nest Cameras",
+  "smartDevicesGoogleUnderDevelopment": "Google Home integration is under development. Stay tuned for updates!",
+  "smartDevicesGooglePatientOnly": "Google Home integration is currently available for patients only. Development is underway to support caregivers soon!",
+  "smartDevicesEnableGoogleComingSoon": "Enable Google Action (Coming Soon)",
+  "smartDevicesComingSoon": "Coming Soon",
+  "smartDevicesEnablePlatform": "Enable {platform} {skillType}",
+  "@smartDevicesEnablePlatform": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "skillType": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesOpenStoreInstruction": "Click the button below to open the {platform} {skillType} store and enable CareConnect.",
+  "@smartDevicesOpenStoreInstruction": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "skillType": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesSampleUrlNote": "Note: Currently using a sample URL for demonstration.",
+  "smartDevicesOpeningStore": "Opening {platform} {skillType} store...",
+  "@smartDevicesOpeningStore": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "skillType": {
+        "type": "String"
+      }
+    }
+  },
+  "smartDevicesStoreOpenFailed": "Could not open the store URL",
+  "smartDevicesOpenPlatformStore": "Open {platform} Store",
+  "@smartDevicesOpenPlatformStore": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      }
+    }
+  },
+  "evvDashTitle": "EVV Dashboard",
+  "evvDashOfflineSync": "Offline Sync",
+  "evvDashStartVisit": "Start Visit",
+  "evvDashOfflineRecords": "Offline Records",
+  "evvDashPendingApprovals": "Pending Approvals",
+  "evvDashPendingCorrections": "Pending Corrections",
+  "evvDashQuickStats": "Quick Stats",
+  "evvDashReviewRecords": "Review Records",
+  "evvDashSubmitHha": "Submit to HHAExchange",
+  "evvDashVisitHistory": "Visit History",
+  "evvDashManageCorrections": "Manage Corrections",
+  "evvDashVisitSchedules": "Visit Schedules",
+  "evvDashMainActions": "Main Actions",
+  "evvDashPendingItems": "Pending Items",
+  "evvDashEorApprovals": "EOR Approvals",
+  "evvDashCorrections": "Corrections",
+  "evvDashNoPendingItems": "No pending items",
+  "evvDashOfflineQueue": "Offline Queue",
+  "evvDashSyncNow": "Sync Now",
+  "evvDashRecentActivities": "Recent Activities",
+  "evvDashNoRecentActivity": "No recent activity",
+  "evvDashLoadError": "Error loading dashboard: {error}",
+  "@evvDashLoadError": {"placeholders": {"error": {"type": "String"}}},
+  "evvDashPendingCount": "{count} pending",
+  "@evvDashPendingCount": {"placeholders": {"count": {"type": "int"}}},
+  "evvDashWaitingCount": "{count} records waiting to sync",
+  "@evvDashWaitingCount": {"placeholders": {"count": {"type": "int"}}},
+  "evvSelectPatientTitle": "Select Patient",
+  "evvSelectPatientCancel": "Cancel",
+  "evvSelectPatientErrorTitle": "Error Loading Patients",
+  "evvSelectPatientRetry": "Try Again",
+  "evvSelectPatientEmptyTitle": "No Patients Found",
+  "evvSelectPatientEmptyBody": "You don't have any patients assigned to you yet.",
+  "evvSelectPatientAdd": "Add Patient",
+  "evvSelectPatientNoAddress": "Address not available",
+  "evvSelectPatientUnauthenticated": "User not authenticated",
+  "evvSelectPatientHttpError": "Failed to load patients: {statusCode}",
+  "@evvSelectPatientHttpError": {"placeholders": {"statusCode": {"type": "int"}}},
+  "evvHistoryTitle": "EVV Visit History",
+  "evvHistoryClear": "Clear Filters",
+  "evvHistoryFilters": "Search Filters",
+  "evvHistorySearch": "Search",
+  "evvHistoryPatientName": "Patient Name",
+  "evvHistoryServiceType": "Service Type",
+  "evvHistoryCaregiverId": "Caregiver ID",
+  "evvHistoryDateRange": "Select Date Range",
+  "evvHistoryState": "State",
+  "evvHistoryAllStates": "All States",
+  "evvHistoryStatus": "Status",
+  "evvHistoryAllStatuses": "All Statuses",
+  "evvHistoryUnderReview": "Under Review",
+  "evvHistoryApproved": "Approved",
+  "evvHistoryRejected": "Rejected",
+  "evvHistoryNone": "No records found",
+  "evvHistoryAdjustFilters": "Try adjusting your search filters",
+  "evvHistoryLoadMore": "Load More",
+  "evvHistoryDetails": "Record Details",
+  "evvHistoryIndividual": "Individual",
+  "evvHistoryDate": "Date",
+  "evvHistoryTimeIn": "Time In",
+  "evvHistoryTimeOut": "Time Out",
+  "evvHistoryCheckInLocation": "Check-In Location",
+  "evvHistoryCheckOutLocation": "Check-Out Location",
+  "evvHistoryMaNumber": "MA Number",
+  "evvHistoryCreated": "Created",
+  "evvHistoryUpdated": "Updated",
+  "evvHistoryCreatedOffline": "This record was created offline",
+  "evvHistoryClose": "Close",
+  "evvHistoryNotRecorded": "Not recorded",
+  "evvHistoryGpsUnavailable": "GPS (coordinates not available)",
+  "evvHistoryAddressUnavailable": "Address not available",
+  "evvHistoryPatientAddressUnavailable": "Patient Address (not available)",
+  "evvHistoryUnknown": "Unknown",
+  "evvHistoryOffline": "OFFLINE",
+  "evvHistorySearchError": "Error searching records: {error}",
+  "@evvHistorySearchError": {"placeholders": {"error": {"type": "String"}}},
+  "evvHistoryFound": "{count, plural, =1{Found 1 record} other{Found {count} records}}",
+  "@evvHistoryFound": {"placeholders": {"count": {"type": "int"}}},
+  "evvHistoryPage": "Page {page} of {total}",
+  "@evvHistoryPage": {"placeholders": {"page": {"type": "int"}, "total": {"type": "int"}}},
+  "evvCalendarVisitCount": "{count, plural, =1{1 visit} other{{count} visits}}",
+  "@evvCalendarVisitCount": {"placeholders": {"count": {"type": "int"}}},
+  "evvCalendarNoVisits": "No visits",
+  "evvCalendarNoScheduledVisits": "No visits scheduled",
+  "evvCalendarScheduleHint": "Tap the + button to schedule a new visit",
+  "evvScheduleTitle": "EVV Visit Schedules",
+  "evvScheduleRefresh": "Refresh",
+  "evvScheduleList": "List",
+  "evvScheduleMonth": "Month",
+  "evvScheduleWeek": "Week",
+  "evvScheduleDay": "Day",
+  "evvScheduleCaregiverView": "Caregiver View",
+  "evvSchedulePatientView": "Patient View",
+  "evvScheduleHideFilters": "Hide Filters",
+  "evvScheduleShowFilters": "Show Filters",
+  "evvScheduleFrom": "From Date",
+  "evvScheduleTo": "To Date",
+  "evvSchedulePatient": "Patient",
+  "evvScheduleServiceType": "Service Type",
+  "evvScheduleStatus": "Status",
+  "evvScheduleClearFilters": "Clear Filters",
+  "evvScheduleAny": "Any",
+  "evvScheduleManage": "Manage your visit schedule",
+  "evvScheduleNewVisit": "Schedule New Visit",
+  "evvScheduleStartVisit": "Start Visit",
+  "evvScheduleViewDetails": "View Details",
+  "evvScheduleTime": "Time",
+  "evvScheduleDuration": "Duration",
+  "evvScheduleClose": "Close",
+  "evvScheduleDetailsTitle": "Visit Details - {patientName}",
+  "@evvScheduleDetailsTitle": {"placeholders": {"patientName": {"type": "String"}}},
+  "evvScheduleFormPatientRequired": "Patient *",
+  "evvScheduleFormServiceRequired": "Service Type *",
+  "evvScheduleFormDateRequired": "Date *",
+  "evvScheduleFormTimeRequired": "Time *",
+  "evvScheduleFormDurationMinutes": "Duration (minutes)",
+  "evvScheduleFormPriority": "Priority",
+  "evvScheduleFormNotes": "Notes",
+  "evvScheduleFormSelectPatient": "Select a patient",
+  "evvScheduleFormSelectService": "Select service type",
+  "evvScheduleFormNotesHint": "Add any special instructions or notes...",
+  "evvScheduleFormCancel": "Cancel",
+  "evvScheduleFormSubmit": "Schedule Visit",
+  "evvScheduleFormSelectPatientError": "Please select a patient",
+  "evvScheduleFormSelectServiceError": "Please select a service type",
+  "evvScheduleFormSelectTimeError": "Please select a time",
+  "evvScheduleFormSuccess": "Visit scheduled successfully!",
+  "evvScheduleBatchNoMatchingVisits": "No visits match the current filters",
+  "evvScheduleBatchAdjustFilters": "Adjust filters or schedule new visits",
+  "evvScheduleBatchNoToday": "No visits scheduled for today",
+  "evvScheduleBatchUpcomingVisits": "Upcoming Visits",
+  "evvScheduleBatchScheduledTime": "Scheduled Time: ",
+  "evvScheduleBatchEstimatedDuration": "Estimated Duration: ",
+  "evvScheduleBatchTodayVisits": "Today's Scheduled Visits",
+  "evvScheduleBatchOverdue": "Overdue",
+  "evvScheduleBatchReady": "Ready",
+  "evvScheduleBatchUpcoming": "Upcoming",
+  "evvScheduleBatchTotalToday": "Total Today",
+  "evvScheduleBatchStartOverdue": "Start Overdue Visit",
+  "evvScheduleStatusScheduled": "Scheduled",
+  "evvScheduleStatusInProgress": "In Progress",
+  "evvScheduleStatusCompleted": "Completed",
+  "evvScheduleStatusCancelled": "Cancelled",
+  "evvScheduleInfoDateTime": "Date & Time",
+  "evvScheduleConflictTitle": "Scheduling Conflict",
+  "evvScheduleConflictAdvice": "What to do:",
+  "evvScheduleConflictSteps": "• Choose a different time\n• Select a different date\n• Assign to a different caregiver",
+  "evvScheduleConflictTryAgain": "Try Different Time",
+  "evvScheduleConflictModify": "Modify Details",
+  "evvSchedulePatientCount": "{count, plural, =1{1 Patient} other{{count} Patients}}",
+  "evvScheduleVisitCount": "{count, plural, =1{1 Visit} other{{count} Visits}}",
+  "@evvSchedulePatientCount": {"placeholders": {"count": {"type": "int"}}},
+  "@evvScheduleVisitCount": {"placeholders": {"count": {"type": "int"}}},
+  "evvOfflineTitle": "Offline Sync",
+  "evvOfflineSyncStatus": "Sync Status",
+  "evvOfflineSyncingDots": "Syncing...",
+  "evvOfflineSyncAll": "Sync All Offline Data",
+  "evvOfflineAllSynced": "All data is synced",
+  "evvOfflineNoRecords": "No offline records to sync",
+  "evvOfflineDetails": "Details",
+  "evvOfflineRetry": "Retry",
+  "evvOfflinePending": "Pending",
+  "evvOfflineSyncing": "Syncing",
+  "evvOfflineSynced": "Synced",
+  "evvOfflineFailed": "Failed",
+  "evvOfflineDetailTitle": "Offline Queue Item Details",
+  "evvOfflineRecordId": "Record ID",
+  "evvOfflineOperation": "Operation",
+  "evvOfflineCaregiverId": "Caregiver ID",
+  "evvOfflineDeviceId": "Device ID",
+  "evvOfflineQueuedAt": "Queued At",
+  "evvOfflineAttempts": "Attempts",
+  "evvOfflineSyncAttempts": "Sync Attempts",
+  "evvOfflineLastAttempt": "Last Attempt",
+  "evvOfflineLastSyncAttempt": "Last Sync Attempt",
+  "evvOfflineLastError": "Last Error",
+  "evvOfflineError": "Error",
+  "evvOfflinePriority": "Priority",
+  "evvOfflineRecordData": "Record Data:",
+  "evvOfflineClose": "Close",
+  "evvOfflineNormal": "Normal",
+  "evvOfflineHigh": "High",
+  "evvOfflineUrgent": "Urgent",
+  "evvOfflineSyncDone": "Offline data sync completed",
+  "evvOfflineRetryPlaceholder": "Retry functionality would be implemented here",
+  "evvOfflineRecord": "Record",
+  "evvOfflineQueued": "Queued"
 }

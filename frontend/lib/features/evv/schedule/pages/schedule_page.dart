@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -274,12 +275,12 @@ class _SchedulePageState extends State<SchedulePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('EVV Visit Schedules'),
+        title: Text(AppLocalizations.of(context)!.evvScheduleTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refreshAllData,
-            tooltip: 'Refresh',
+            tooltip: AppLocalizations.of(context)!.evvScheduleRefresh,
           ),
         ],
       ),
@@ -312,18 +313,18 @@ class _SchedulePageState extends State<SchedulePage> {
         scrollDirection: Axis.horizontal,
         child: Row(
           children: [
-            _buildViewModeButton('List', 'list', Icons.list, context),
+            _buildViewModeButton(AppLocalizations.of(context)!.evvScheduleList, 'list', Icons.list, context),
             const SizedBox(width: 8),
             _buildViewModeButton(
-              'Month',
+              AppLocalizations.of(context)!.evvScheduleMonth,
               'month',
               Icons.calendar_month,
               context,
             ),
             const SizedBox(width: 8),
-            _buildViewModeButton('Week', 'week', Icons.view_week, context),
+            _buildViewModeButton(AppLocalizations.of(context)!.evvScheduleWeek, 'week', Icons.view_week, context),
             const SizedBox(width: 8),
-            _buildViewModeButton('Day', 'day', Icons.view_day, context),
+            _buildViewModeButton(AppLocalizations.of(context)!.evvScheduleDay, 'day', Icons.view_day, context),
           ],
         ),
       ),
@@ -356,6 +357,17 @@ class _SchedulePageState extends State<SchedulePage> {
       selectedColor: cs.primaryContainer,
       side: BorderSide(color: isSelected ? cs.primary : theme.dividerColor),
     );
+  }
+
+  String _localizedVisitStatus(String status) {
+    final t = AppLocalizations.of(context)!;
+    switch (status) {
+      case 'Scheduled': return t.evvScheduleStatusScheduled;
+      case 'In Progress': return t.evvScheduleStatusInProgress;
+      case 'Completed': return t.evvScheduleStatusCompleted;
+      case 'Cancelled': return t.evvScheduleStatusCancelled;
+      default: return status;
+    }
   }
 
   // ─── Filter helpers ────────────────────────────────────────────────────────
@@ -421,16 +433,16 @@ class _SchedulePageState extends State<SchedulePage> {
         children: [
           Expanded(
             child: SegmentedButton<_SchedulePerspective>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: _SchedulePerspective.caregiver,
-                  icon: Icon(Icons.badge_outlined, size: 18),
-                  label: Text('Caregiver View'),
+                  icon: const Icon(Icons.badge_outlined, size: 18),
+                  label: Text(AppLocalizations.of(context)!.evvScheduleCaregiverView),
                 ),
                 ButtonSegment(
                   value: _SchedulePerspective.patient,
-                  icon: Icon(Icons.person_outline, size: 18),
-                  label: Text('Patient View'),
+                  icon: const Icon(Icons.person_outline, size: 18),
+                  label: Text(AppLocalizations.of(context)!.evvSchedulePatientView),
                 ),
               ],
               selected: {_perspective},
@@ -446,7 +458,9 @@ class _SchedulePageState extends State<SchedulePage> {
           Badge(
             isLabelVisible: _hasActiveFilters,
             child: IconButton(
-              tooltip: _filtersExpanded ? 'Hide Filters' : 'Show Filters',
+              tooltip: _filtersExpanded
+                  ? AppLocalizations.of(context)!.evvScheduleHideFilters
+                  : AppLocalizations.of(context)!.evvScheduleShowFilters,
               icon: Icon(
                 _filtersExpanded ? Icons.filter_list_off : Icons.filter_list,
                 color: _hasActiveFilters ? cs.primary : cs.onSurfaceVariant,
@@ -467,7 +481,9 @@ class _SchedulePageState extends State<SchedulePage> {
 
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final dateFormat = DateFormat('MMM d, yyyy');
+    final dateFormat = Localizations.localeOf(context).languageCode == 'es'
+        ? DateFormat.yMMMd('es')
+        : DateFormat('MMM d, yyyy');
 
     // Collect unique patients from loaded visits for the dropdown
     final allVisits = [..._scheduledVisits, ..._upcomingVisits];
@@ -505,7 +521,7 @@ class _SchedulePageState extends State<SchedulePage> {
             children: [
               Expanded(
                 child: _buildDateFilterField(
-                  label: 'From Date',
+                  label: AppLocalizations.of(context)!.evvScheduleFrom,
                   value: _filterStartDate != null
                       ? dateFormat.format(_filterStartDate!)
                       : null,
@@ -528,7 +544,7 @@ class _SchedulePageState extends State<SchedulePage> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildDateFilterField(
-                  label: 'To Date',
+                  label: AppLocalizations.of(context)!.evvScheduleTo,
                   value: _filterEndDate != null
                       ? dateFormat.format(_filterEndDate!)
                       : null,
@@ -556,7 +572,7 @@ class _SchedulePageState extends State<SchedulePage> {
             children: [
               Expanded(
                 child: _buildDropdownFilter<int>(
-                  label: 'Patient',
+                  label: AppLocalizations.of(context)!.evvSchedulePatient,
                   value: _filterPatientId,
                   icon: Icons.person_outline,
                   items: patientMap.entries
@@ -577,7 +593,7 @@ class _SchedulePageState extends State<SchedulePage> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildDropdownFilter<String>(
-                  label: 'Service Type',
+                  label: AppLocalizations.of(context)!.evvScheduleServiceType,
                   value: _filterServiceType,
                   icon: Icons.medical_services_outlined,
                   items: serviceTypes
@@ -600,12 +616,12 @@ class _SchedulePageState extends State<SchedulePage> {
             children: [
               Expanded(
                 child: _buildDropdownFilter<String>(
-                  label: 'Status',
+                  label: AppLocalizations.of(context)!.evvScheduleStatus,
                   value: _filterStatus,
                   icon: Icons.flag_outlined,
                   items: statuses
                       .map(
-                        (s) => DropdownMenuItem(value: s, child: Text(s)),
+                        (s) => DropdownMenuItem(value: s, child: Text(_localizedVisitStatus(s))),
                       )
                       .toList(),
                   onChanged: (v) => setState(() => _filterStatus = v),
@@ -625,7 +641,7 @@ class _SchedulePageState extends State<SchedulePage> {
                           })
                       : null,
                   icon: const Icon(Icons.clear_all, size: 18),
-                  label: const Text('Clear Filters'),
+                  label: Text(AppLocalizations.of(context)!.evvScheduleClearFilters),
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     foregroundColor: cs.error,
@@ -673,7 +689,7 @@ class _SchedulePageState extends State<SchedulePage> {
           fillColor: cs.surface,
         ),
         child: Text(
-          value ?? 'Any',
+          value ?? AppLocalizations.of(context)!.evvScheduleAny,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: value != null ? cs.onSurface : cs.onSurfaceVariant,
@@ -704,11 +720,11 @@ class _SchedulePageState extends State<SchedulePage> {
         filled: true,
         fillColor: cs.surface,
       ),
-      hint: Text('Any', style: TextStyle(color: cs.onSurfaceVariant)),
+      hint: Text(AppLocalizations.of(context)!.evvScheduleAny, style: TextStyle(color: cs.onSurfaceVariant)),
       items: [
         DropdownMenuItem<T>(
           value: null,
-          child: Text('Any', style: TextStyle(color: cs.onSurfaceVariant)),
+          child: Text(AppLocalizations.of(context)!.evvScheduleAny, style: TextStyle(color: cs.onSurfaceVariant)),
         ),
         ...items,
       ],
@@ -756,12 +772,12 @@ class _SchedulePageState extends State<SchedulePage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No visits match the current filters',
+              AppLocalizations.of(context)!.evvScheduleBatchNoMatchingVisits,
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Adjust filters or schedule new visits',
+              AppLocalizations.of(context)!.evvScheduleBatchAdjustFilters,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -779,8 +795,8 @@ class _SchedulePageState extends State<SchedulePage> {
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              '${sortedPatients.length} Patient${sortedPatients.length != 1 ? 's' : ''} · '
-              '${allFiltered.length} Visit${allFiltered.length != 1 ? 's' : ''}',
+              '${AppLocalizations.of(context)!.evvSchedulePatientCount(sortedPatients.length)} · '
+              '${AppLocalizations.of(context)!.evvScheduleVisitCount(allFiltered.length)}',
               style: theme.textTheme.labelLarge?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -847,25 +863,25 @@ class _SchedulePageState extends State<SchedulePage> {
                         children: [
                           if (scheduled > 0)
                             _buildStatusPill(
-                              '$scheduled Scheduled',
+                              '$scheduled ${_localizedVisitStatus('Scheduled')}',
                               cs.primary,
                               cs.onPrimary,
                             ),
                           if (inProgress > 0)
                             _buildStatusPill(
-                              '$inProgress In Progress',
+                              '$inProgress ${_localizedVisitStatus('In Progress')}',
                               Colors.orange,
                               Colors.white,
                             ),
                           if (completed > 0)
                             _buildStatusPill(
-                              '$completed Completed',
+                              '$completed ${_localizedVisitStatus('Completed')}',
                               Colors.green,
                               Colors.white,
                             ),
                           if (cancelled > 0)
                             _buildStatusPill(
-                              '$cancelled Cancelled',
+                              '$cancelled ${_localizedVisitStatus('Cancelled')}',
                               cs.error,
                               cs.onError,
                             ),
@@ -912,7 +928,10 @@ class _SchedulePageState extends State<SchedulePage> {
   ) {
     final cs = theme.colorScheme;
     final statusColor = _getStatusColor(visit.status);
-    final timeStr = DateFormat('MMM d · HH:mm').format(visit.scheduledTime);
+    final locale = Localizations.localeOf(context).languageCode;
+    final timeStr = locale == 'es'
+        ? '${DateFormat.MMMd('es').format(visit.scheduledTime)} · ${DateFormat('HH:mm').format(visit.scheduledTime)}'
+        : DateFormat('MMM d · HH:mm').format(visit.scheduledTime);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -964,7 +983,7 @@ class _SchedulePageState extends State<SchedulePage> {
               border: Border.all(color: statusColor.withOpacity(0.5)),
             ),
             child: Text(
-              visit.status,
+              _localizedVisitStatus(visit.status),
               style: TextStyle(
                 color: statusColor,
                 fontSize: 11,
@@ -1057,29 +1076,29 @@ class _SchedulePageState extends State<SchedulePage> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDetailRow('Service Type:', visit.serviceType, theme),
+          _buildDetailRow('${AppLocalizations.of(context)!.evvScheduleServiceType}:', visit.serviceType, theme),
           const SizedBox(height: 12),
           _buildDetailRow(
-            'Date & Time:',
+            '${AppLocalizations.of(context)!.evvScheduleInfoDateTime}:',
             '${DateFormat('MMM d, yyyy').format(visit.scheduledTime)} at ${visit.scheduledTime.hour.toString().padLeft(2, '0')}:${visit.scheduledTime.minute.toString().padLeft(2, '0')}',
             theme,
           ),
           const SizedBox(height: 12),
           _buildDetailRow(
-            'Duration:',
+            '${AppLocalizations.of(context)!.evvScheduleDuration}:',
             '${visit.duration.inMinutes} minutes',
             theme,
           ),
           const SizedBox(height: 12),
-          _buildDetailRow('Priority:', visit.priority, theme),
+          _buildDetailRow('${AppLocalizations.of(context)!.evvScheduleFormPriority}:', visit.priority, theme),
           const SizedBox(height: 12),
-          _buildDetailRow('Status:', visit.status, theme),
+          _buildDetailRow('${AppLocalizations.of(context)!.evvScheduleStatus}:', _localizedVisitStatus(visit.status), theme),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close'),
+          child: Text(AppLocalizations.of(context)!.evvScheduleClose),
         ),
       ],
     );
@@ -1116,7 +1135,7 @@ class _SchedulePageState extends State<SchedulePage> {
         children: [
           Expanded(
             child: Text(
-              'Manage your visit schedule',
+              AppLocalizations.of(context)!.evvScheduleManage,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -1126,7 +1145,7 @@ class _SchedulePageState extends State<SchedulePage> {
           FilledButton.icon(
             onPressed: _scheduleNewVisit,
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Schedule New Visit'),
+            label: Text(AppLocalizations.of(context)!.evvScheduleNewVisit),
             style: FilledButton.styleFrom(
               backgroundColor: cs.primary,
               foregroundColor: cs.onPrimary,
@@ -1163,7 +1182,7 @@ class _SchedulePageState extends State<SchedulePage> {
             children: [
               _buildSummaryCard(
                 context: context,
-                title: 'Overdue',
+                title: AppLocalizations.of(context)!.evvScheduleBatchOverdue,
                 count: _summaryData['overdue'].toString(),
                 icon: Icons.error_outline,
                 iconColor: cs.error,
@@ -1171,7 +1190,7 @@ class _SchedulePageState extends State<SchedulePage> {
               ),
               _buildSummaryCard(
                 context: context,
-                title: 'Ready',
+                title: AppLocalizations.of(context)!.evvScheduleBatchReady,
                 count: _summaryData['ready'].toString(),
                 icon: Icons.play_arrow,
                 iconColor: cs.tertiary,
@@ -1179,7 +1198,7 @@ class _SchedulePageState extends State<SchedulePage> {
               ),
               _buildSummaryCard(
                 context: context,
-                title: 'Upcoming',
+                title: AppLocalizations.of(context)!.evvScheduleBatchUpcoming,
                 count: _summaryData['upcoming'].toString(),
                 icon: Icons.access_time,
                 iconColor: cs.primary,
@@ -1187,7 +1206,7 @@ class _SchedulePageState extends State<SchedulePage> {
               ),
               _buildSummaryCard(
                 context: context,
-                title: 'Total Today',
+                title: AppLocalizations.of(context)!.evvScheduleBatchTotalToday,
                 count: _summaryData['totalToday'].toString(),
                 icon: Icons.calendar_today,
                 iconColor: cs.secondary,
@@ -1286,7 +1305,7 @@ class _SchedulePageState extends State<SchedulePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Today's Scheduled Visits",
+            AppLocalizations.of(context)!.evvScheduleBatchTodayVisits,
             style: theme.textTheme.titleLarge?.copyWith(
               color: theme.colorScheme.onSurface,
               fontWeight: FontWeight.bold,
@@ -1322,12 +1341,12 @@ class _SchedulePageState extends State<SchedulePage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No visits scheduled for today',
+              AppLocalizations.of(context)!.evvScheduleBatchNoToday,
               style: theme.textTheme.titleMedium?.copyWith(color: cs.onSurface),
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap the + button to schedule a new visit',
+              AppLocalizations.of(context)!.evvCalendarScheduleHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurfaceVariant,
               ),
@@ -1373,22 +1392,22 @@ class _SchedulePageState extends State<SchedulePage> {
       backgroundColor = cs.errorContainer.withOpacity(0.35);
       borderColor = cs.error;
       statusBadgeColor = cs.error;
-      statusText = 'Overdue';
-      buttonText = 'Start Overdue Visit';
+      statusText = AppLocalizations.of(context)!.evvScheduleBatchOverdue;
+      buttonText = AppLocalizations.of(context)!.evvScheduleBatchStartOverdue;
       buttonIcon = Icons.play_arrow;
     } else if (status == 'ready') {
       backgroundColor = cs.primaryContainer.withOpacity(0.35);
       borderColor = cs.primary;
       statusBadgeColor = cs.primary;
-      statusText = 'Ready';
-      buttonText = 'Start Visit';
+      statusText = AppLocalizations.of(context)!.evvScheduleBatchReady;
+      buttonText = AppLocalizations.of(context)!.evvScheduleStartVisit;
       buttonIcon = Icons.play_arrow;
     } else {
       backgroundColor = cs.surface;
       borderColor = theme.dividerColor;
       statusBadgeColor = cs.outline;
-      statusText = 'Upcoming';
-      buttonText = 'View Details';
+      statusText = AppLocalizations.of(context)!.evvScheduleBatchUpcoming;
+      buttonText = AppLocalizations.of(context)!.evvScheduleViewDetails;
       buttonIcon = Icons.info_outline;
     }
 
@@ -1479,7 +1498,7 @@ class _SchedulePageState extends State<SchedulePage> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Scheduled Time: ',
+                  AppLocalizations.of(context)!.evvScheduleBatchScheduledTime,
                   style: TextStyle(
                     fontSize: 13,
                     color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
@@ -1505,7 +1524,7 @@ class _SchedulePageState extends State<SchedulePage> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Estimated Duration: ',
+                  AppLocalizations.of(context)!.evvScheduleBatchEstimatedDuration,
                   style: TextStyle(
                     fontSize: 13,
                     color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
@@ -1606,7 +1625,7 @@ class _SchedulePageState extends State<SchedulePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Upcoming Visits',
+              AppLocalizations.of(context)!.evvScheduleBatchUpcomingVisits,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: cs.onSurface,
@@ -1617,7 +1636,9 @@ class _SchedulePageState extends State<SchedulePage> {
               final dateStr = entry.key;
               final visits = entry.value;
               final date = DateTime.parse(dateStr);
-              final formattedDate = DateFormat('EEEE, MMMM d').format(date);
+              final formattedDate = (Localizations.localeOf(context).languageCode == 'es'
+                  ? DateFormat.MMMMEEEEd('es')
+                  : DateFormat('EEEE, MMMM d')).format(date);
 
               return _buildDateGroup(formattedDate, visits);
             }),
@@ -1742,7 +1763,7 @@ class _SchedulePageState extends State<SchedulePage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'upcoming',
+                    AppLocalizations.of(context)!.evvScheduleBatchUpcoming.toLowerCase(),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -1775,40 +1796,40 @@ class _SchedulePageState extends State<SchedulePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Visit Details - ${visit.patientName}'),
+        title: Text(AppLocalizations.of(context)!.evvScheduleDetailsTitle(visit.patientName)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDetailRow(
-              'Service Type',
+              AppLocalizations.of(context)!.evvScheduleServiceType,
               visit.serviceType,
               Theme.of(context),
             ),
             _buildDetailRow(
-              'Time',
+              AppLocalizations.of(context)!.evvScheduleTime,
               '${visit.scheduledTime.hour}:${visit.scheduledTime.minute.toString().padLeft(2, '0')}',
               Theme.of(context),
             ),
             _buildDetailRow(
-              'Duration',
+              AppLocalizations.of(context)!.evvScheduleDuration,
               '${visit.duration.inHours}h ${visit.duration.inMinutes.remainder(60)}m',
               Theme.of(context),
             ),
-            _buildDetailRow('Status', visit.status, Theme.of(context)),
+            _buildDetailRow(AppLocalizations.of(context)!.evvScheduleStatus, _localizedVisitStatus(visit.status), Theme.of(context)),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(AppLocalizations.of(context)!.evvScheduleClose),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               context.push('/evv/select-patient');
             },
-            child: const Text('Start Visit'),
+            child: Text(AppLocalizations.of(context)!.evvScheduleStartVisit),
           ),
         ],
       ),
@@ -1918,8 +1939,8 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
 
     if (_selectedPatient == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a patient'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.evvScheduleFormSelectPatientError),
           backgroundColor: Colors.red,
         ),
       );
@@ -1928,8 +1949,8 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
 
     if (_selectedServiceType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a service type'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.evvScheduleFormSelectServiceError),
           backgroundColor: Colors.red,
         ),
       );
@@ -1938,8 +1959,8 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
 
     if (_selectedTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a time'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.evvScheduleFormSelectTimeError),
           backgroundColor: Colors.red,
         ),
       );
@@ -1985,8 +2006,8 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
       if (response.statusCode == 201) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Visit scheduled successfully!'),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.evvScheduleFormSuccess),
               backgroundColor: Colors.green,
             ),
           );
@@ -2039,7 +2060,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Scheduling Conflict',
+                AppLocalizations.of(context)!.evvScheduleConflictTitle,
                 style: theme.textTheme.titleLarge?.copyWith(
                   color: cs.error,
                   fontWeight: FontWeight.bold,
@@ -2088,7 +2109,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'What to do:',
+                          AppLocalizations.of(context)!.evvScheduleConflictAdvice,
                           style: theme.textTheme.labelLarge?.copyWith(
                             color: cs.primary,
                             fontWeight: FontWeight.bold,
@@ -2098,9 +2119,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '• Choose a different time\n'
-                      '• Select a different date\n'
-                      '• Assign to a different caregiver',
+                      AppLocalizations.of(context)!.evvScheduleConflictSteps,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: cs.onSurface,
                       ),
@@ -2115,7 +2134,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Try Different Time',
+              AppLocalizations.of(context)!.evvScheduleConflictTryAgain,
               style: TextStyle(color: cs.primary),
             ),
           ),
@@ -2128,7 +2147,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
               });
             },
             icon: const Icon(Icons.edit_calendar),
-            label: const Text('Modify Details'),
+            label: Text(AppLocalizations.of(context)!.evvScheduleConflictModify),
             style: ElevatedButton.styleFrom(
               backgroundColor: cs.primary,
               foregroundColor: cs.onPrimary,
@@ -2164,7 +2183,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Schedule New Visit',
+                    AppLocalizations.of(context)!.evvScheduleNewVisit,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -2190,14 +2209,14 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Patient dropdown
-                      _buildLabel('Patient *'),
+                      _buildLabel(AppLocalizations.of(context)!.evvScheduleFormPatientRequired),
                       const SizedBox(height: 8),
                       _isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : DropdownButtonFormField<Patient>(
                               initialValue: _selectedPatient,
                               decoration: InputDecoration(
-                                hintText: 'Select a patient',
+                                hintText: AppLocalizations.of(context)!.evvScheduleFormSelectPatient,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -2223,12 +2242,12 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                       const SizedBox(height: 16),
 
                       // Service Type dropdown
-                      _buildLabel('Service Type *'),
+                      _buildLabel(AppLocalizations.of(context)!.evvScheduleFormServiceRequired),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: _selectedServiceType,
                         decoration: InputDecoration(
-                          hintText: 'Select service type',
+                          hintText: AppLocalizations.of(context)!.evvScheduleFormSelectService,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -2259,7 +2278,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildLabel('Date *'),
+                                _buildLabel(AppLocalizations.of(context)!.evvScheduleFormDateRequired),
                                 const SizedBox(height: 8),
                                 InkWell(
                                   onTap: () => _selectDate(context),
@@ -2275,9 +2294,10 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                                       ),
                                     ),
                                     child: Text(
-                                      DateFormat(
-                                        'MM/dd/yyyy',
-                                      ).format(_selectedDate),
+                                      (Localizations.localeOf(context).languageCode == 'es'
+                                          ? DateFormat.yMd('es')
+                                          : DateFormat('MM/dd/yyyy'))
+                                          .format(_selectedDate),
                                     ),
                                   ),
                                 ),
@@ -2290,7 +2310,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildLabel('Time *'),
+                                _buildLabel(AppLocalizations.of(context)!.evvScheduleFormTimeRequired),
                                 const SizedBox(height: 8),
                                 InkWell(
                                   onTap: () => _selectTime(context),
@@ -2327,7 +2347,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildLabel('Duration (minutes)'),
+                                _buildLabel(AppLocalizations.of(context)!.evvScheduleFormDurationMinutes),
                                 const SizedBox(height: 8),
                                 Container(
                                   decoration: BoxDecoration(
@@ -2387,7 +2407,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _buildLabel('Priority'),
+                                _buildLabel(AppLocalizations.of(context)!.evvScheduleFormPriority),
                                 const SizedBox(height: 8),
                                 DropdownButtonFormField<String>(
                                   initialValue: _priority,
@@ -2420,12 +2440,12 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                       const SizedBox(height: 16),
 
                       // Notes
-                      _buildLabel('Notes'),
+                      _buildLabel(AppLocalizations.of(context)!.evvScheduleFormNotes),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _notesController,
                         decoration: InputDecoration(
-                          hintText: 'Add any special instructions or notes...',
+                          hintText: AppLocalizations.of(context)!.evvScheduleFormNotesHint,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -2459,7 +2479,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                         vertical: 12,
                       ),
                     ),
-                    child: const Text('Cancel'),
+                    child: Text(AppLocalizations.of(context)!.evvScheduleFormCancel),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
@@ -2484,7 +2504,7 @@ class _ScheduleVisitDialogState extends State<_ScheduleVisitDialog> {
                               color: Colors.white,
                             ),
                           )
-                        : const Text('Schedule Visit'),
+                        : Text(AppLocalizations.of(context)!.evvScheduleFormSubmit),
                   ),
                 ],
               ),

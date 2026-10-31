@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for PatientSelectionPage
 // (lib/features/evv/presentation/pages/patient_selection_page.dart).
 //
@@ -14,6 +15,9 @@ import '../../mock_user_provider.dart';
 Widget _wrap() {
   final provider = MockUserProvider(mockUser: MockUser(id: 1, role: 'CAREGIVER'));
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const PatientSelectionPage(),

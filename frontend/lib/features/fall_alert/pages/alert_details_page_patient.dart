@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 
 /// Patient-facing fall prompt screen
 /// - Shows "I'm Okay" and "Call for Help"
@@ -73,28 +74,37 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
     if (_completed) return;
     _completed = true;
     _timer?.cancel();
+
     if (widget.onAcknowledgeOk != null) {
       try {
         await widget.onAcknowledgeOk!();
       } catch (_) {}
     }
+
     if (!mounted) return;
+
+    final t = AppLocalizations.of(context)!;
     Navigator.of(context).maybePop();
-    _toast('Glad you are okay. We will dismiss this alert.');
+    _toast(t.fallAlertGladYouAreOkay);
   }
 
   Future<void> _callEmergencyDirect() async {
     if (_completed) return;
     _completed = true;
     _timer?.cancel();
+
     if (widget.onEscalate != null) {
       try {
         await widget.onEscalate!();
       } catch (_) {}
     }
+
     final uri = Uri(scheme: 'tel', path: widget.emergencyNumber);
+
     if (!await launchUrl(uri)) {
-      _toast('Could not start the call.');
+      if (!mounted) return;
+      final t = AppLocalizations.of(context)!;
+      _toast(t.fallAlertCouldNotStartCall);
       _completed = false; // allow retry
       _startTimer();
     }
@@ -103,14 +113,18 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
   Future<void> _autoCallEmergency() async {
     if (!mounted || _completed) return;
     _completed = true;
+
     if (widget.onEscalate != null) {
       try {
         await widget.onEscalate!();
       } catch (_) {}
     }
+
     final uri = Uri(scheme: 'tel', path: widget.emergencyNumber);
+
     if (!await launchUrl(uri) && mounted) {
-      _toast('Auto call failed to start.');
+      final t = AppLocalizations.of(context)!;
+      _toast(t.fallAlertAutoCallFailed);
     }
   }
 
@@ -125,7 +139,11 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
+        final t = AppLocalizations.of(context)!;
         final canCallContact = (widget.emergencyContactPhone ?? '').isNotEmpty;
+        final contactName =
+            widget.emergencyContactName ?? t.fallAlertEmergencyContact;
+
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -136,18 +154,20 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                   dense: true,
                   contentPadding: EdgeInsets.zero,
                   title: Text(
-                    'Emergency actions',
+                    t.fallAlertEmergencyActions,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  subtitle: const Text('Choose how you want to escalate'),
+                  subtitle: Text(
+                    t.fallAlertChooseHowToEscalate,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 _EmergencyTile(
                   icon: Icons.local_phone_rounded,
-                  label: 'Call ${widget.emergencyNumber}',
-                  subtitle: 'Connect to local emergency services',
+                  label: t.fallAlertCallEmergencyNumber(widget.emergencyNumber),
+                  subtitle: t.fallAlertConnectLocalEmergencyServices,
                   onTap: () {
                     Navigator.pop(context);
                     _callEmergencyDirect();
@@ -156,16 +176,17 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                 const SizedBox(height: 8),
                 _EmergencyTile(
                   icon: Icons.contact_phone_rounded,
-                  label:
-                      'Call ${widget.emergencyContactName ?? 'Emergency Contact'}',
-                  subtitle: widget.emergencyContactPhone ?? 'No phone on file',
+                  label: t.fallAlertCallContact(contactName),
+                  subtitle:
+                      widget.emergencyContactPhone ?? t.fallAlertNoPhoneOnFile,
                   enabled: canCallContact,
                   onTap: () async {
                     Navigator.pop(context);
                     final phone = widget.emergencyContactPhone!;
                     final uri = Uri(scheme: 'tel', path: phone);
+
                     if (!await launchUrl(uri)) {
-                      _toast('Could not start the call.');
+                      _toast(t.fallAlertCouldNotStartCall);
                     }
                   },
                 ),
@@ -182,13 +203,14 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: theme.appBarTheme.backgroundColor ?? cs.surface,
         foregroundColor: theme.appBarTheme.foregroundColor ?? cs.onSurface,
-        title: const Text('Fall Detected'),
+        title: Text(t.fallAlertDetected),
       ),
       body: SafeArea(
         child: Padding(
@@ -201,8 +223,8 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: theme.dividerColor.withOpacity(0.12)),
+                  border: Border.all(
+                      color: theme.dividerColor.withValues(alpha: 0.12)),
                 ),
                 child: Row(
                   children: [
@@ -213,13 +235,13 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Are You Okay?',
+                          Text(t.fallAlertAreYouOkay,
                               style: theme.textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                               )),
                           const SizedBox(height: 6),
                           Text(
-                            'It looks like you may have fallen. Do you need help?',
+                            t.fallAlertMayHaveFallen,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: cs.onSurfaceVariant,
                             ),
@@ -236,10 +258,10 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
               // "I'm Okay"
               _ActionButton(
                 icon: Icons.check_circle_outline,
-                label: "I'm Okay",
+                label: t.fallAlertImOkay,
                 onPressed: _acknowledgeOk,
                 background: cs.surface,
-                border: theme.dividerColor.withOpacity(0.24),
+                border: theme.dividerColor.withValues(alpha: 0.24),
                 textColor: cs.onSurface,
               ),
               const SizedBox(height: 12),
@@ -247,7 +269,7 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
               // Call for help
               _ActionButton(
                 icon: Icons.emergency_share_rounded,
-                label: 'Call for Help',
+                label: t.fallAlertCallForHelp,
                 onPressed: _openEmergencySheet,
                 background: cs.error,
                 textColor: cs.onError,
@@ -270,8 +292,7 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'If you do not respond within ${widget.autoCallSeconds} seconds, '
-                        'emergency services will be contacted automatically.',
+                        t.fallAlertNoResponseAutoCall(widget.autoCallSeconds),
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
@@ -280,7 +301,7 @@ class _PatientFallPromptPageState extends State<PatientFallPromptPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Auto-calling in $_remaining seconds...',
+                t.fallAlertAutoCallingIn(_remaining),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),

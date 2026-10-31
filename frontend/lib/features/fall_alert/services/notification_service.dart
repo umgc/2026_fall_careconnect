@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import '../models/fall_alert.dart';
 
 class NotificationService {
@@ -76,8 +79,20 @@ class NotificationService {
     final details =
         NotificationDetails(android: androidDetails, iOS: iosDetails);
 
-    final title = 'Fall detected: ${alert.patientName}';
-    final body = 'Source: ${alert.source}  •  Tap to view details';
+    // Respect the language chosen in Settings, or the device language when
+    // System Default is selected. Notifications have no BuildContext.
+    final prefs = await SharedPreferences.getInstance();
+    final savedLanguage = prefs.getString('selected_locale');
+    final languageCode = savedLanguage == 'en' || savedLanguage == 'es'
+        ? savedLanguage!
+        : ui.PlatformDispatcher.instance.locale.languageCode == 'es'
+            ? 'es'
+            : 'en';
+    final t = await AppLocalizations.delegate.load(Locale(languageCode));
+
+    final title = '${t.fallAlertDetected}: ${alert.patientName}';
+    final body =
+        '${t.fallAlertSource}: ${alert.source}  •  ${t.fallAlertViewDetails}';
 
     await _plugin.show(
       alert.hashCode,
