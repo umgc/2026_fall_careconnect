@@ -1,3 +1,4 @@
+import '../../../../m4_localization_coverage_cases.dart' as m4_coverage;
 // Tests for SmartDevicesPage
 // (lib/features/integrations/presentation/pages/smart_devices.dart).
 //
@@ -42,7 +43,8 @@ void _setupSecureStorageForRole(String role) {
 }
 
 /// Returns a mock HTTP handler for patient profile responses.
-Future<http.Response> Function(http.Request) _patientProfileHandler({bool alexaLinked = false}) {
+Future<http.Response> Function(http.Request) _patientProfileHandler(
+    {bool alexaLinked = false}) {
   return (http.Request request) async {
     final url = request.url.toString();
     if (url.contains('validate-token')) {
@@ -102,9 +104,11 @@ Widget _wrap(Widget child) {
   ));
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: MaterialApp(locale: const Locale('en'),
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales, home: child),
+    child: MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: child),
   );
 }
 
@@ -117,6 +121,7 @@ Future<void> _pumpAndWait(WidgetTester tester) async {
 }
 
 void main() {
+  m4_coverage.registerM4Coverage('smart');
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
@@ -192,7 +197,6 @@ void main() {
 
   group('SmartDevicesPage - error state (null profile)', () {
     testWidgets('shows error when profile is null', (tester) async {
-
       await http.runWithClient(
         () async {
           await tester.pumpWidget(_wrap(const SmartDevicesPage()));
@@ -204,8 +208,8 @@ void main() {
       );
     });
 
-    testWidgets('error state shows AppBar with Smart Devices title', (tester) async {
-
+    testWidgets('error state shows AppBar with Smart Devices title',
+        (tester) async {
       await http.runWithClient(
         () async {
           await tester.pumpWidget(_wrap(const SmartDevicesPage()));
@@ -218,7 +222,6 @@ void main() {
     });
 
     testWidgets('error text is styled red', (tester) async {
-
       await http.runWithClient(
         () async {
           await tester.pumpWidget(_wrap(const SmartDevicesPage()));
@@ -234,7 +237,6 @@ void main() {
     });
 
     testWidgets('error state has Center widget', (tester) async {
-
       await http.runWithClient(
         () async {
           await tester.pumpWidget(_wrap(const SmartDevicesPage()));
@@ -247,7 +249,6 @@ void main() {
     });
 
     testWidgets('error state does NOT show ElevatedButton', (tester) async {
-
       await http.runWithClient(
         () async {
           await tester.pumpWidget(_wrap(const SmartDevicesPage()));
@@ -263,7 +264,8 @@ void main() {
   // ─── Exception error state tests ───────────────────────────
 
   group('SmartDevicesPage - exception error state', () {
-    testWidgets('shows error when exception occurs during profile load', (tester) async {
+    testWidgets('shows error when exception occurs during profile load',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       await http.runWithClient(
@@ -351,7 +353,8 @@ void main() {
       );
     });
 
-    testWidgets('shows Coming Soon badges for unavailable devices', (tester) async {
+    testWidgets('shows Coming Soon badges for unavailable devices',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       await http.runWithClient(
@@ -373,7 +376,8 @@ void main() {
           await tester.pumpWidget(_wrap(const SmartDevicesPage()));
           await _pumpAndWait(tester);
 
-          expect(find.text('Enable Google Action (Coming Soon)'), findsOneWidget);
+          expect(
+              find.text('Enable Google Action (Coming Soon)'), findsOneWidget);
         },
         () => MockClient(_patientProfileHandler(alexaLinked: true)),
       );
@@ -388,7 +392,8 @@ void main() {
           await _pumpAndWait(tester);
 
           expect(
-            find.text('Google Home integration is under development. Stay tuned for updates!'),
+            find.text(
+                'Google Home integration is under development. Stay tuned for updates!'),
             findsOneWidget,
           );
         },
@@ -424,7 +429,8 @@ void main() {
       );
     });
 
-    testWidgets('shows g_mobiledata_rounded icon in Google card', (tester) async {
+    testWidgets('shows g_mobiledata_rounded icon in Google card',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       await http.runWithClient(
@@ -452,7 +458,8 @@ void main() {
       );
     });
 
-    testWidgets('tapping Disable Alexa calls unlink and shows snackbar', (tester) async {
+    testWidgets('tapping Disable Alexa calls unlink and shows snackbar',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       bool unlinkCalled = false;
@@ -480,7 +487,8 @@ void main() {
           await tester.pump(const Duration(milliseconds: 500));
 
           expect(unlinkCalled, isTrue);
-          expect(find.text('Alexa Skill disabled successfully.'), findsOneWidget);
+          expect(
+              find.text('Alexa account unlinked successfully'), findsOneWidget);
 
           tester.view.resetPhysicalSize();
           tester.view.resetDevicePixelRatio();
@@ -495,7 +503,11 @@ void main() {
               jsonEncode({
                 'id': 1,
                 'alexaLinked': true,
-                'user': {'id': 1, 'role': 'PATIENT', 'email': 'test@example.com'},
+                'user': {
+                  'id': 1,
+                  'role': 'PATIENT',
+                  'email': 'test@example.com'
+                },
               }),
               200,
             );
@@ -582,7 +594,8 @@ void main() {
       );
     });
 
-    testWidgets('enablement dialog can be dismissed with Cancel', (tester) async {
+    testWidgets('enablement dialog can be dismissed with Cancel',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       await http.runWithClient(
@@ -626,7 +639,8 @@ void main() {
           await _pumpAndWait(tester);
 
           expect(
-            find.text('Connect Alexa or Google Nest compatible smart devices to help monitor and assist with daily activities.'),
+            find.text(
+                'Connect Alexa or Google Nest compatible smart devices to help monitor and assist with daily activities.'),
             findsOneWidget,
           );
         },
@@ -647,7 +661,8 @@ void main() {
           await _pumpAndWait(tester);
 
           expect(
-            find.text('Alexa integration is currently available for patients only. Development is underway to support caregivers soon!'),
+            find.text(
+                'Alexa integration is currently available for patients only. Development is underway to support caregivers soon!'),
             findsOneWidget,
           );
           expect(find.text('Coming Soon for Caregivers'), findsOneWidget);
@@ -656,7 +671,8 @@ void main() {
       );
     });
 
-    testWidgets('caregiver does not see Alexa link status indicators', (tester) async {
+    testWidgets('caregiver does not see Alexa link status indicators',
+        (tester) async {
       _setupSecureStorageForRole('CAREGIVER');
 
       await http.runWithClient(
@@ -681,7 +697,8 @@ void main() {
           await _pumpAndWait(tester);
 
           expect(
-            find.text('Google Home integration is currently available for patients only. Development is underway to support caregivers soon!'),
+            find.text(
+                'Google Home integration is currently available for patients only. Development is underway to support caregivers soon!'),
             findsOneWidget,
           );
         },
@@ -722,7 +739,8 @@ void main() {
   // ─── Unlink failure tests ──────────────────────────────────
 
   group('SmartDevicesPage - unlink failure', () {
-    testWidgets('shows error snackbar when unlink returns failure response', (tester) async {
+    testWidgets('shows error snackbar when unlink returns failure response',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       await http.runWithClient(
@@ -760,7 +778,11 @@ void main() {
               jsonEncode({
                 'id': 1,
                 'alexaLinked': true,
-                'user': {'id': 1, 'role': 'PATIENT', 'email': 'test@example.com'},
+                'user': {
+                  'id': 1,
+                  'role': 'PATIENT',
+                  'email': 'test@example.com'
+                },
               }),
               200,
             );
@@ -779,7 +801,8 @@ void main() {
       );
     });
 
-    testWidgets('shows error snackbar when unlink throws exception', (tester) async {
+    testWidgets('shows error snackbar when unlink throws exception',
+        (tester) async {
       _setupSecureStorageForRole('PATIENT');
 
       await http.runWithClient(
@@ -802,7 +825,8 @@ void main() {
           await tester.pump(const Duration(milliseconds: 500));
           await tester.pump(const Duration(milliseconds: 500));
 
-          expect(find.textContaining('An unexpected error occurred'), findsOneWidget);
+          expect(find.textContaining('An unexpected error occurred'),
+              findsOneWidget);
 
           tester.view.resetPhysicalSize();
           tester.view.resetDevicePixelRatio();
@@ -817,7 +841,11 @@ void main() {
               jsonEncode({
                 'id': 1,
                 'alexaLinked': true,
-                'user': {'id': 1, 'role': 'PATIENT', 'email': 'test@example.com'},
+                'user': {
+                  'id': 1,
+                  'role': 'PATIENT',
+                  'email': 'test@example.com'
+                },
               }),
               200,
             );
@@ -883,7 +911,8 @@ void main() {
   // ─── SmartDevicesPage widget construction ──────────────────
 
   group('SmartDevicesPage - widget construction', () {
-    testWidgets('SmartDevicesPage can be constructed with const', (tester) async {
+    testWidgets('SmartDevicesPage can be constructed with const',
+        (tester) async {
       const widget = SmartDevicesPage();
       expect(widget, isA<SmartDevicesPage>());
     });

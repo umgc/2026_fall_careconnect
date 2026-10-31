@@ -44,10 +44,13 @@ jobs:
           flutter build web --release \
             --no-tree-shake-icons \
             --dart-define=BACKEND_URL="$BACKEND_URL" \
-            --dart-define=WEBSOCKET_GATEWAY_URL="${WEBSOCKET_GATEWAY_URL:-}"
+            --dart-define=WEBSOCKET_GATEWAY_URL="${WEBSOCKET_GATEWAY_URL:-}" \
+            --dart-define=ORACLE_HEALTH_FHIR_ISSUER="${ORACLE_HEALTH_FHIR_ISSUER:-}"
         env:
           BACKEND_URL: ${{ vars.STAGING_BACKEND_URL }}
           WEBSOCKET_GATEWAY_URL: ${{ vars.STAGING_WEBSOCKET_GATEWAY_URL }}
+
+          ORACLE_HEALTH_FHIR_ISSUER: ${{ vars.STAGING_ORACLE_HEALTH_FHIR_ISSUER }}
 
       - name: Zip build output
         run: |

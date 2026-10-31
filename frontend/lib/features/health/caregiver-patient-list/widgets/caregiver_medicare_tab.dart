@@ -14,8 +14,13 @@ import '../../health_data/services/medicare_data_service.dart';
 class CaregiverMedicareTab extends StatefulWidget {
   /// The `patient.id` the caregiver is viewing, not a user id.
   final int patientId;
+  final String patientName;
 
-  const CaregiverMedicareTab({super.key, required this.patientId});
+  const CaregiverMedicareTab({
+    super.key,
+    required this.patientId,
+    required this.patientName,
+  });
 
   @override
   State<CaregiverMedicareTab> createState() => _CaregiverMedicareTabState();
@@ -89,8 +94,20 @@ class _CaregiverMedicareTabState extends State<CaregiverMedicareTab>
     final problem = _result.problem;
     // The API answers "not shared" and "not connected" the same way on
     // purpose (FR-MCR-17), so a caregiver sees one message for both.
-    if (problem == MedicareReadProblem.notLinked ||
-        problem == MedicareReadProblem.forbidden) {
+    if (problem == MedicareReadProblem.notLinked) {
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        children: [
+          _anchor(),
+          _notice(
+            Icons.lock_outline,
+            '${widget.patientName} hasn\'t shared this with you.',
+          ),
+        ],
+      );
+    }
+
+    if (problem == MedicareReadProblem.forbidden) {
       return ListView(
         padding: const EdgeInsets.symmetric(vertical: 12),
         children: [

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for AlertNavigation
 // (lib/features/fall_alert/navigation/alert_navigation.dart).
 //
@@ -48,6 +49,9 @@ Widget _buildApp({
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
     child: MaterialApp(
+      locale: const Locale('en'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       navigatorObservers: [observer],
       home: Builder(
         builder: (context) => Scaffold(
@@ -64,13 +68,15 @@ Widget _buildApp({
 
 void main() {
   group('AlertNavigation.navigateFromPayload', () {
-    testWidgets('pushes PatientFallPromptPage for patient role', (tester) async {
+    testWidgets('pushes PatientFallPromptPage for patient role',
+        (tester) async {
       final provider = MockUserProvider(
         mockUser: MockUser(role: 'PATIENT', patientId: 1),
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       await tester.tap(find.text('Navigate'));
       await tester.pump();
 
@@ -86,7 +92,8 @@ void main() {
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       await tester.tap(find.text('Navigate'));
       await tester.pump();
 
@@ -102,7 +109,8 @@ void main() {
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       expect(find.text('Navigate'), findsOneWidget);
     });
 
@@ -112,7 +120,8 @@ void main() {
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       expect(find.byType(ElevatedButton), findsOneWidget);
     });
 
@@ -122,18 +131,21 @@ void main() {
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       expect(find.byType(Scaffold), findsOneWidget);
     });
 
-    testWidgets('pushes correct route for patient role with different patientId',
+    testWidgets(
+        'pushes correct route for patient role with different patientId',
         (tester) async {
       final provider = MockUserProvider(
         mockUser: MockUser(role: 'PATIENT', patientId: 99),
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       await tester.tap(find.text('Navigate'));
       await tester.pump();
 
@@ -143,14 +155,16 @@ void main() {
       );
     });
 
-    testWidgets('pushes correct route for caregiver role with different caregiverId',
+    testWidgets(
+        'pushes correct route for caregiver role with different caregiverId',
         (tester) async {
       final provider = MockUserProvider(
         mockUser: MockUser(role: 'CAREGIVER', caregiverId: 99, patientId: null),
       );
       final observer = _TestObserver();
 
-      await tester.pumpWidget(_buildApp(provider: provider, observer: observer));
+      await tester
+          .pumpWidget(_buildApp(provider: provider, observer: observer));
       await tester.tap(find.text('Navigate'));
       await tester.pump();
 

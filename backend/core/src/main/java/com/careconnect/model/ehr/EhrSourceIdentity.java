@@ -95,6 +95,12 @@ public class EhrSourceIdentity extends Auditable {
         this.postalCode = patient.getAddressFirstRep().getPostalCode();
     }
 
+    public EhrSourceIdentity(String s, String oracleHealth) {
+        super();
+        this.givenName = s;
+        this.managingOrg = oracleHealth;
+    }
+
     /**
      * The birth date as FHIR states it, with no time zone involved. Null when it is missing or
      * not a full date (FHIR allows a year, or a year and month, alone).
@@ -111,6 +117,9 @@ public class EhrSourceIdentity extends Auditable {
         return LocalDate.of(birthDate.getYear(), birthDate.getMonth() + 1, birthDate.getDay());
     }
 
+    public Long getId() {
+        return id;
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -229,4 +238,72 @@ public class EhrSourceIdentity extends Auditable {
      */
     @Column(name = "language", length = 35)
     private String language;
+
+    public Long getPatientId() {
+        return patientId;
+    }
+
+    public Long getSourceId() {
+        return sourceId;
+    }
+
+    public Instant getSourceUpdatedAt() {
+        return sourceUpdatedAt;
+    }
+
+    public String getGivenName() {
+        return givenName;
+    }
+
+    public String getFamilyName() {
+        return familyName;
+    }
+
+    public LocalDate getDateOfBirth() {
+        return dateOfBirth;
+    }
+
+    public String getPhone() {
+        return phone;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getAddressLine1() {
+        return addressLine1;
+    }
+
+    public String getAddressLine2() {
+        return addressLine2;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public String getPostalCode() {
+        return postalCode;
+    }
+
+    public String getMemberId() {
+        return memberId;
+    }
+
+    public String getGender() {
+        return gender;
+    }
+
+    public String getManagingOrg() {
+        return managingOrg;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
 }

@@ -23,6 +23,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+
+import java.util.concurrent.TimeoutException;
+import org.springframework.web.client.HttpStatusCodeException;
+
+
 /** Provisional read-only Patient/Appointment API pending the unified OpenAPI contract. */
 @RestController
 @ConditionalOnProperty(
@@ -88,6 +96,87 @@ public class CernerPatientAppointmentController {
                 "source", CernerProperties.SOURCE_ORACLE_HEALTH,
                 "appointments", records));
     }
+
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<?> missingDateParameter(final MissingServletRequestParameterException error) {
+        final String name = error.getParameterName();
+        if ("start".equals(name) || "end".equals(name)) {
+            return error(
+                    HttpStatus.BAD_REQUEST,
+                    "MISSING_APPOINTMENT_DATE_PARAMETER",
+                    "Missing required appointment date parameter: " + name,
+                    "CARECONNECT",
+                    false);
+        }
+        return error(
+                HttpStatus.BAD_REQUEST,
+                "MISSING_REQUEST_PARAMETER",
+                "Missing required request parameter: " + name,
+                "CARECONNECT",
+                false);
+    }
+
+    @ExceptionHandler({
+            MethodArgumentTypeMismatchException.class,
+            HttpMessageNotReadableException.class
+    })
+
+    ResponseEntity<?> malformedDateParameter(final Exception error) {
+        return error(
+                HttpStatus.BAD_REQUEST,
+                "MALFORMED_APPOINTMENT_DATE_PARAMETER",
+                "Invalid appointment date parameter. Use ISO-8601 date-time, e.g. 2026-01-30T10:15:30Z",
+                "CARECONNECT",
+                false);
+    }
+
+
+//    cl
+
+
+// add inside CernerPatientAppointmentController
+
+    @ExceptionHandler(TimeoutException.class)
+    ResponseEntity<?> timeout(final TimeoutException timeoutError) {
+        return error(
+                HttpStatus.GATEWAY_TIMEOUT,
+                "CERNER_TIMEOUT",
+                "Cerner source timeout",
+                CernerProperties.SOURCE_ORACLE_HEALTH,
+                true);
+    }
+
+    @ExceptionHandler(HttpStatusCodeException.class)
+    ResponseEntity<?> upstreamHttp(final HttpStatusCodeException httpError) {
+        final int status = httpError.getStatusCode().value();
+
+        if (status == 429) {
+            return error(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "CERNER_RATE_LIMITED",
+                    "Cerner rate limit exceeded",
+                    CernerProperties.SOURCE_ORACLE_HEALTH,
+                    true);
+        }
+
+        if (status == 408 || status == 504) {
+            return error(
+                    HttpStatus.GATEWAY_TIMEOUT,
+                    "CERNER_TIMEOUT",
+                    "Cerner source timeout",
+                    CernerProperties.SOURCE_ORACLE_HEALTH,
+                    true);
+        }
+
+        return error(
+                HttpStatus.BAD_GATEWAY,
+                "CERNER_SOURCE_HTTP_ERROR",
+                "Cerner source error",
+                CernerProperties.SOURCE_ORACLE_HEALTH,
+                false);
+    }
+
 
     private Long authorizedPatientId(final String patientId, final Principal principal) {
         if (principal == null) {

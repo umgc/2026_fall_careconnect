@@ -70,10 +70,66 @@ Parameters:
     Type: String
     Default: amazon.nova-lite-v1:0
 
+  # Epic SMART configuration is off unless explicitly enabled for this environment.
+  EpicEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  EpicClientId:
+    Type: String
+    Default: ''
+  EpicRedirectUri:
+    Type: String
+    Default: ''
+  EpicWebReturnUrl:
+    Type: String
+    Default: ''
+  EpicClientSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+  EmailCryptoSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+
   # SendGrid from-address for prod profile email (API key loaded from SSM when SpringProfile=prod).
   FromEmail:
     Type: String
     Default: noreply@careconnect.com
+
+  # Medicare (Blue Button 2.0). Defaults match application.properties, so an environment that
+  # leaves these unset behaves as it did before they existed. MedicareRedirectUri must match the
+  # CMS sandbox app registration exactly and end in /login/oauth2/code/medicare.
+  MedicareEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  MedicareMode:
+    Type: String
+    Default: live
+    AllowedValues:
+      - live
+      - mock
+
+  MedicareClientId:
+    Type: String
+    Default: not-configured
+
+  MedicareRedirectUri:
+    Type: String
+    Default: http://localhost:8080/login/oauth2/code/medicare
+
+  # Stored in Secrets Manager by this stack, so app-only deploys can set or change it.
+  MedicareClientSecret:
+    Type: String
+    NoEcho: true
+    Default: not-configured
 
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
@@ -114,6 +170,49 @@ Parameters:
     Type: String
     NoEcho: true
     Default: not-configured
+
+  # Cerner/Oracle Health staging integration; disabled unless explicitly enabled.
+  CareConnectCernerEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CareConnectCernerAllergiesEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CareConnectCernerClinicalEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CareConnectCernerPatientAppointmentEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  CernerFhirBaseUrl:
+    Type: String
+    Default: ''
+
+  CernerClientId:
+    Type: String
+    Default: ''
+
+  CernerRedirectUri:
+    Type: String
+    Default: ''
+
+  CernerWebReturnUrl:
+    Type: String
+    Default: ''
+
+  # Existing Secrets Manager ARN, configured only when Cerner is enabled.
+  CernerClientSecretArn:
+    Type: String
+    Default: ''
+    Description: Optional ARN of an existing Cerner OAuth client secret
 
   # The backend currently binds to 8081 in ECS.
   ContainerPort:
@@ -173,7 +272,28 @@ Parameters:
     Default: ''
     Description: Route 53 Hosted Zone ID (required if DomainName is set)
 
+Rules:
+  EpicRequiredSettings:
+    RuleCondition: !Equals [!Ref EpicEnabled, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref EpicClientId, '']]
+        AssertDescription: EpicClientId is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EpicRedirectUri, '']]
+        AssertDescription: EpicRedirectUri is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EpicWebReturnUrl, '']]
+        AssertDescription: EpicWebReturnUrl is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EmailCryptoSecret, '']]
+        AssertDescription: EmailCryptoSecret is required to encrypt Epic tokens.
+  AthenaNeedsPractice:
+    RuleCondition: !Equals [!Ref AthenaEnabled, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref AthenaPracticeId, '']]
+        AssertDescription: AthenaPracticeId is required when AthenaEnabled is true (e.g. a-1.Practice-195900).
+
 Conditions:
+  HasCernerClientSecret: !And
+    - !Equals [!Ref CareConnectCernerEnabled, 'true']
+    - !Not [!Equals [!Ref CernerClientSecretArn, '']]
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
@@ -181,13 +301,10 @@ Conditions:
   HasConditionSidecar: !Not [!Equals [!Ref SidecarImageUri, '']]
   HasAthenaClientId: !Not [!Equals [!Ref AthenaClientId, '']]
   HasAthenaPracticeId: !Not [!Equals [!Ref AthenaPracticeId, '']]
-
-Rules:
-  AthenaNeedsPractice:
-    RuleCondition: !Equals [!Ref AthenaEnabled, 'true']
-    Assertions:
-      - Assert: !Not [!Equals [!Ref AthenaPracticeId, '']]
-        AssertDescription: AthenaPracticeId is required when AthenaEnabled is true (e.g. a-1.Practice-195900).
+  UseEpic: !Equals [!Ref EpicEnabled, 'true']
+  UseEpicClientSecret: !And
+    - !Condition UseEpic
+    - !Not [!Equals [!Ref EpicClientSecret, '']]
 
 Resources:
   # Consumed by ECS as ATHENA_CLIENT_SECRET. Kept in this stack rather than the data stack
@@ -197,6 +314,22 @@ Resources:
     Properties:
       Name: !Sub /careconnect/${Environment}/athena-client-secret
       SecretString: !Ref AthenaClientSecret
+
+  # ECS injects these values from Secrets Manager; they never appear in the task
+  # definition's plaintext Environment list. Both values come from NoEcho inputs.
+  EpicClientSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseEpicClientSecret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/epic-client-secret
+      SecretString: !Ref EpicClientSecret
+
+  EmailCryptoSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseEpic
+    Properties:
+      Name: !Sub /careconnect/${Environment}/email-crypto-secret
+      SecretString: !Ref EmailCryptoSecret
 
   # ---------------------------------------------------------------------------
   # Cloud Map namespace and service for ECS service discovery.
@@ -560,6 +693,14 @@ Resources:
   # ECS Task Definition and Service.
   # ---------------------------------------------------------------------------
 
+  # Consumed by ECS as CARECONNECT_MEDICARE_CLIENT_SECRET. Kept in this stack rather than the
+  # data stack so app-only deploys, which skip the data stack, can create and update it.
+  MedicareClientSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/medicare-client-secret
+      SecretString: !Ref MedicareClientSecret
+
   # ECS task definition tied to the runtime contract used by the backend code.
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -654,6 +795,23 @@ Resources:
               - !Ref AWS::NoValue
             - Name: ATHENA_SCOPES
               Value: !Ref AthenaScopes
+            # Cerner/Oracle Health configuration.
+            - Name: CARECONNECT_CERNER_ENABLED
+              Value: !Ref CareConnectCernerEnabled
+            - Name: CARECONNECT_CERNER_ALLERGIES_ENABLED
+              Value: !Ref CareConnectCernerAllergiesEnabled
+            - Name: CARECONNECT_CERNER_CLINICAL_ENABLED
+              Value: !Ref CareConnectCernerClinicalEnabled
+            - Name: CARECONNECT_CERNER_PATIENT_APPOINTMENT_ENABLED
+              Value: !Ref CareConnectCernerPatientAppointmentEnabled
+            - Name: CERNER_FHIR_BASE_URL
+              Value: !Ref CernerFhirBaseUrl
+            - Name: CERNER_CLIENT_ID
+              Value: !Ref CernerClientId
+            - Name: CERNER_REDIRECT_URI
+              Value: !Ref CernerRedirectUri
+            - Name: CERNER_WEB_RETURN_URL
+              Value: !Ref CernerWebReturnUrl
             # Ask AI / Bedrock (Task 0.1 P0 deploy unblock)
             - Name: CARECONNECT_AI_ENABLED
               Value: !Ref CareConnectAiEnabled
@@ -663,6 +821,19 @@ Resources:
               Value: !Ref AiModel
             - Name: CARECONNECT_LLM_ENABLED
               Value: !Ref CareConnectLlmEnabled
+            # Epic SMART is explicitly enabled and configured per environment.
+            - Name: EPIC_ENABLED
+              Value: !Ref EpicEnabled
+            - Name: EPIC_CLIENT_ID
+              Value: !Ref EpicClientId
+            - Name: EPIC_REDIRECT_URI
+              Value: !Ref EpicRedirectUri
+            - Name: EPIC_WEB_RETURN_URL
+              Value: !Ref EpicWebReturnUrl
+            # Staging uses the dev Spring profile, whose default enables verbose
+            # Epic error responses. Keep diagnostics server-side on deployed ECS.
+            - Name: EPIC_DIAGNOSTICS_VERBOSE
+              Value: 'false'
             # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
             - Name: EMAIL_PROVIDER
               Value: !If [IsProdProfile, 'sendgrid', 'console']
@@ -699,16 +870,42 @@ Resources:
               Value: !If [HasConditionSidecar, 'true', 'false']
             - Name: CARECONNECT_DAM_URL
               Value: http://localhost:8000
+            # Medicare (Blue Button 2.0) sign-in and retrieval.
+            - Name: CARECONNECT_MEDICARE_ENABLED
+              Value: !Ref MedicareEnabled
+            - Name: CARECONNECT_MEDICARE_MODE
+              Value: !Ref MedicareMode
+            - Name: CARECONNECT_MEDICARE_CLIENT_ID
+              Value: !Ref MedicareClientId
+            - Name: CARECONNECT_MEDICARE_REDIRECT_URI
+              Value: !Ref MedicareRedirectUri
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-DatabasePasswordSecretArn
+            - Name: CARECONNECT_MEDICARE_CLIENT_SECRET
+              ValueFrom: !Ref MedicareClientSecretValue
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
             - Name: ATHENA_CLIENT_SECRET
               ValueFrom: !Ref AthenaClientSecretValue
+            - !If
+              - HasCernerClientSecret
+              - Name: CERNER_CLIENT_SECRET
+                ValueFrom: !Ref CernerClientSecretArn
+              - !Ref AWS::NoValue
+            - !If
+              - UseEpic
+              - Name: EMAIL_CRYPTO_SECRET
+                ValueFrom: !Ref EmailCryptoSecretStore
+              - !Ref AWS::NoValue
+            - !If
+              - UseEpicClientSecret
+              - Name: EPIC_CLIENT_SECRET
+                ValueFrom: !Ref EpicClientSecretStore
+              - !Ref AWS::NoValue
         # DAM depression/anxiety inference (CPU). Not essential: if it stops, the API keeps
         # serving and voice screening runs retry. Reachable only from cc-backend on localhost.
         - !If

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import '../../../../services/evv_service.dart';
 import '../../../../widgets/common_drawer.dart';
@@ -80,7 +81,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error searching records: $e'),
+            content: Text(AppLocalizations.of(context)!.evvHistorySearchError(e.toString())),
             backgroundColor: Colors.red,
           ),
         );
@@ -132,12 +133,12 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
       drawer: const CommonDrawer(currentRoute: '/evv/visit-history'),
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'EVV Visit History',
+        title: AppLocalizations.of(context)!.evvHistoryTitle,
         additionalActions: [
           IconButton(
             icon: const Icon(Icons.clear_all),
             onPressed: _clearFilters,
-            tooltip: 'Clear Filters',
+            tooltip: AppLocalizations.of(context)!.evvHistoryClear,
           ),
         ],
       ),
@@ -156,7 +157,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                     Row(
                       children: [
                         Text(
-                          'Search Filters',
+                          AppLocalizations.of(context)!.evvHistoryFilters,
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.bold,
@@ -166,7 +167,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                         TextButton.icon(
                           onPressed: _performSearch,
                           icon: const Icon(Icons.search),
-                          label: const Text('Search'),
+                          label: Text(AppLocalizations.of(context)!.evvHistorySearch),
                         ),
                       ],
                     ),
@@ -178,8 +179,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                         Expanded(
                           child: TextFormField(
                             controller: _patientNameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Patient Name',
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(context)!.evvHistoryPatientName,
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.person),
                             ),
@@ -189,8 +190,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                         Expanded(
                           child: TextFormField(
                             controller: _serviceTypeController,
-                            decoration: const InputDecoration(
-                              labelText: 'Service Type',
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(context)!.evvHistoryServiceType,
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.medical_services),
                             ),
@@ -206,8 +207,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                         Expanded(
                           child: TextFormField(
                             controller: _caregiverIdController,
-                            decoration: const InputDecoration(
-                              labelText: 'Caregiver ID',
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(context)!.evvHistoryCaregiverId,
                               border: OutlineInputBorder(),
                               prefixIcon: Icon(Icons.badge),
                             ),
@@ -233,7 +234,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                     child: Text(
                                       _startDate != null && _endDate != null
                                           ? '${_formatDate(_startDate!)} - ${_formatDate(_endDate!)}'
-                                          : 'Select Date Range',
+                                          : AppLocalizations.of(context)!.evvHistoryDateRange,
                                       style: TextStyle(
                                         color: _startDate != null
                                             ? Colors.black
@@ -258,13 +259,13 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                             initialValue: _selectedStateCode.isEmpty
                                 ? null
                                 : _selectedStateCode,
-                            decoration: const InputDecoration(
-                              labelText: 'State',
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(context)!.evvHistoryState,
                               border: OutlineInputBorder(),
                             ),
                             items: [
-                              const DropdownMenuItem(
-                                  value: '', child: Text('All States')),
+                              DropdownMenuItem(
+                                  value: '', child: Text(AppLocalizations.of(context)!.evvHistoryAllStates)),
                               ...EvvService.stateCodes.map((code) {
                                 String stateName = '';
                                 switch (code) {
@@ -297,20 +298,20 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                             initialValue: _selectedStatus.isEmpty
                                 ? null
                                 : _selectedStatus,
-                            decoration: const InputDecoration(
-                              labelText: 'Status',
+                            decoration: InputDecoration(
+                              labelText: AppLocalizations.of(context)!.evvHistoryStatus,
                               border: OutlineInputBorder(),
                             ),
-                            items: const [
+                            items: [
                               DropdownMenuItem(
-                                  value: '', child: Text('All Statuses')),
+                                  value: '', child: Text(AppLocalizations.of(context)!.evvHistoryAllStatuses)),
                               DropdownMenuItem(
                                   value: 'UNDER_REVIEW',
-                                  child: Text('Under Review')),
+                                  child: Text(AppLocalizations.of(context)!.evvHistoryUnderReview)),
                               DropdownMenuItem(
-                                  value: 'APPROVED', child: Text('Approved')),
+                                  value: 'APPROVED', child: Text(AppLocalizations.of(context)!.evvHistoryApproved)),
                               DropdownMenuItem(
-                                  value: 'REJECTED', child: Text('Rejected')),
+                                  value: 'REJECTED', child: Text(AppLocalizations.of(context)!.evvHistoryRejected)),
                             ],
                             onChanged: (value) {
                               setState(() {
@@ -332,7 +333,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _searchResult == null || _searchResult!.content.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -343,7 +344,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                             ),
                             SizedBox(height: 16),
                             Text(
-                              'No records found',
+                              AppLocalizations.of(context)!.evvHistoryNone,
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Colors.grey,
@@ -351,7 +352,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                             ),
                             SizedBox(height: 8),
                             Text(
-                              'Try adjusting your search filters',
+                              AppLocalizations.of(context)!.evvHistoryAdjustFilters,
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey,
@@ -369,13 +370,13 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                             child: Row(
                               children: [
                                 Text(
-                                  'Found ${_searchResult!.totalElements} records',
+                                  AppLocalizations.of(context)!.evvHistoryFound(_searchResult!.totalElements),
                                   style: const TextStyle(
                                       fontWeight: FontWeight.w500),
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'Page ${_currentPage + 1} of ${_searchResult!.totalPages}',
+                                  AppLocalizations.of(context)!.evvHistoryPage(_currentPage + 1, _searchResult!.totalPages),
                                   style: const TextStyle(color: Colors.grey),
                                 ),
                               ],
@@ -397,7 +398,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                     child: Center(
                                       child: ElevatedButton(
                                         onPressed: _loadMore,
-                                        child: const Text('Load More'),
+                                        child: Text(AppLocalizations.of(context)!.evvHistoryLoadMore),
                                       ),
                                     ),
                                   );
@@ -445,7 +446,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                                     BorderRadius.circular(8),
                                               ),
                                               child: Text(
-                                                record.status,
+                                                _localizedStatus(record.status),
                                                 style: TextStyle(
                                                   color: _getStatusColor(
                                                       record.status),
@@ -488,8 +489,8 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                 ),
-                                                child: const Text(
-                                                  'OFFLINE',
+                                                child: Text(
+                                                  AppLocalizations.of(context)!.evvHistoryOffline,
                                                   style: TextStyle(
                                                     color: Colors.orange,
                                                     fontSize: 12,
@@ -522,24 +523,24 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Record Details'),
+        title: Text(AppLocalizations.of(context)!.evvHistoryDetails),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildDetailRow('Service Type', record.serviceType),
-              _buildDetailRow('Individual', record.individualName),
-              _buildDetailRow('Caregiver ID', record.caregiverId.toString()),
-              _buildDetailRow('Date', _formatDate(record.dateOfService)),
-              _buildDetailRow('Time In', _formatTime(record.timeIn)),
-              _buildDetailRow('Time Out', _formatTime(record.timeOut)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryServiceType, record.serviceType),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryIndividual, record.individualName),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryCaregiverId, record.caregiverId.toString()),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryDate, _formatDate(record.dateOfService)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryTimeIn, _formatTime(record.timeIn)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryTimeOut, _formatTime(record.timeOut)),
               const SizedBox(height: 8),
               const Divider(),
               const SizedBox(height: 8),
               // Check-in location
               _buildLocationSection(
-                'Check-In Location',
+                AppLocalizations.of(context)!.evvHistoryCheckInLocation,
                 record.checkinLocationSource,
                 record.checkinLocationLat,
                 record.checkinLocationLng,
@@ -548,7 +549,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
               const SizedBox(height: 8),
               // Check-out location
               _buildLocationSection(
-                'Check-Out Location',
+                AppLocalizations.of(context)!.evvHistoryCheckOutLocation,
                 record.checkoutLocationSource,
                 record.checkoutLocationLat,
                 record.checkoutLocationLng,
@@ -557,11 +558,11 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
               const SizedBox(height: 8),
               const Divider(),
               const SizedBox(height: 8),
-              _buildDetailRow('State', record.stateCode),
-              _buildDetailRow('Status', record.status),
-              _buildDetailRow('MA Number', record.patient?.maNumber ?? 'N/A'),
-              _buildDetailRow('Created', _formatDateTime(record.createdAt)),
-              _buildDetailRow('Updated', _formatDateTime(record.updatedAt)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryState, record.stateCode),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryStatus, _localizedStatus(record.status)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryMaNumber, record.patient?.maNumber ?? 'N/A'),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryCreated, _formatDateTime(record.createdAt)),
+              _buildDetailRow(AppLocalizations.of(context)!.evvHistoryUpdated, _formatDateTime(record.updatedAt)),
               if (record.isOffline) ...[
                 const SizedBox(height: 8),
                 Container(
@@ -571,11 +572,11 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.orange),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
                       Icon(Icons.cloud_off, color: Colors.orange),
                       SizedBox(width: 8),
-                      Text('This record was created offline'),
+                      Text(AppLocalizations.of(context)!.evvHistoryCreatedOffline),
                     ],
                   ),
                 ),
@@ -586,7 +587,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(AppLocalizations.of(context)!.evvHistoryClose),
           ),
         ],
       ),
@@ -626,7 +627,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
     IconData iconData;
 
     if (locationSource == null || locationSource.isEmpty) {
-      locationDisplay = 'Not recorded';
+      locationDisplay = AppLocalizations.of(context)!.evvHistoryNotRecorded;
       iconColor = Colors.grey;
       iconData = Icons.help_outline;
     } else if (locationSource == 'GPS') {
@@ -636,7 +637,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
         iconColor = Colors.blue;
         iconData = Icons.gps_fixed;
       } else {
-        locationDisplay = 'GPS (coordinates not available)';
+        locationDisplay = AppLocalizations.of(context)!.evvHistoryGpsUnavailable;
         iconColor = Colors.orange;
         iconData = Icons.gps_off;
       }
@@ -650,11 +651,11 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
         if (addr.state?.isNotEmpty == true) parts.add(addr.state!);
         if (addr.zip?.isNotEmpty == true) parts.add(addr.zip!);
         locationDisplay =
-            parts.isNotEmpty ? parts.join(', ') : 'Address not available';
+            parts.isNotEmpty ? parts.join(', ') : AppLocalizations.of(context)!.evvHistoryAddressUnavailable;
         iconColor = Colors.green;
         iconData = Icons.home;
       } else {
-        locationDisplay = 'Patient Address (not available)';
+        locationDisplay = AppLocalizations.of(context)!.evvHistoryPatientAddressUnavailable;
         iconColor = Colors.orange;
         iconData = Icons.home_outlined;
       }
@@ -683,7 +684,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                locationSource ?? 'Unknown',
+                locationSource ?? AppLocalizations.of(context)!.evvHistoryUnknown,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -703,6 +704,16 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
         ),
       ],
     );
+  }
+
+  String _localizedStatus(String status) {
+    final t = AppLocalizations.of(context)!;
+    switch (status) {
+      case 'UNDER_REVIEW': return t.evvHistoryUnderReview;
+      case 'APPROVED': return t.evvHistoryApproved;
+      case 'REJECTED': return t.evvHistoryRejected;
+      default: return status;
+    }
   }
 
   Color _getStatusColor(String status) {
@@ -732,7 +743,7 @@ class _EvvVisitHistoryPageState extends State<EvvVisitHistoryPage> {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+    return MaterialLocalizations.of(context).formatShortDate(date);
   }
 
   String _formatTime(DateTime time) {

@@ -18,7 +18,7 @@ void main() {
       value: provider,
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: const <Locale>[Locale('en'), Locale('es')],
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) {
             return Scaffold(
@@ -35,7 +35,7 @@ void main() {
     );
   }
 
-  testWidgets('uses a centered dialog with only supported choices', (
+  testWidgets('uses a centered dialog with all supported language choices', (
     tester,
   ) async {
     final provider = LocaleProvider();
@@ -49,13 +49,58 @@ void main() {
 
     expect(find.text('System default'), findsOneWidget);
     expect(find.text('English'), findsOneWidget);
-    expect(find.text('Español (Spanish)'), findsOneWidget);
 
     expect(find.text('EN'), findsOneWidget);
     expect(find.text('ES'), findsOneWidget);
+
     expect(find.byIcon(Icons.translate), findsNothing);
-    expect(find.textContaining('Arabic'), findsNothing);
+
+    final languageList = find.byType(ListView);
+    expect(languageList, findsOneWidget);
+
+    for (var i = 0;
+        i < 5 && find.text('Français (French)').evaluate().isEmpty;
+        i++) {
+      await tester.drag(languageList, const Offset(0, -200));
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Français (French)'), findsOneWidget);
+    expect(find.text('FR'), findsOneWidget);
   });
+
+  testWidgets(
+    'selects and persists a supported language outside English and Spanish',
+    (tester) async {
+      final provider = LocaleProvider();
+
+      await tester.pumpWidget(buildApp(provider));
+      await tester.tap(find.text('Open language picker'));
+      await tester.pumpAndSettle();
+
+      final languageList = find.byType(ListView);
+      expect(languageList, findsOneWidget);
+
+      for (var i = 0;
+          i < 5 && find.text('Français (French)').evaluate().isEmpty;
+          i++) {
+        await tester.drag(languageList, const Offset(0, -200));
+        await tester.pumpAndSettle();
+      }
+
+      expect(find.text('Français (French)'), findsOneWidget);
+      expect(find.text('FR'), findsOneWidget);
+
+      await tester.tap(find.text('Français (French)'));
+      await tester.pumpAndSettle();
+
+      expect(provider.locale, const Locale('fr'));
+      expect(find.byType(Dialog), findsNothing);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('selected_locale'), 'fr');
+    },
+  );
 
   testWidgets('System Default clears an explicit selection', (tester) async {
     final provider = LocaleProvider();

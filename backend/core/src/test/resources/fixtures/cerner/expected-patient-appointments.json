@@ -1,0 +1,16 @@
+{
+  "source": "ORACLE_HEALTH",
+  "patient": {
+    "source": "ORACLE_HEALTH",
+    "sourceRecordId": "cerner-patient-1"
+  },
+  "appointments": [
+    {
+      "source": "ORACLE_HEALTH",
+      "sourceRecordId": "appointment-1",
+      "status": "proposed",
+      "startTime": "2026-10-25T14:00:00",
+      "endTime": "2026-10-25T14:30:00"
+    }
+  ]
+}

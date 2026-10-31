@@ -10,6 +10,7 @@ import java.util.Optional;
 
 import com.careconnect.model.Patient;
 import com.careconnect.model.User;
+import org.springframework.stereotype.Repository;
 
 public interface PatientRepository extends JpaRepository<Patient, Long> {
     Optional<Patient> findByUser(User user);

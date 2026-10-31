@@ -36,10 +36,11 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
       setState(() => isLoading = true);
 
       final profile = await ProfileService.getCurrentUserProfile();
+      if (!mounted) return;
 
       if (profile == null) {
         setState(() {
-          error = "Unable to load user profile.";
+          error = AppLocalizations.of(context)!.smartDevicesProfileUnavailable;
           isLoading = false;
         });
         return;
@@ -53,37 +54,42 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
               .toUpperCase() ??
           '';
 
-      print("DEBUG: Extracted role: '$role'");
+      debugPrint("DEBUG: Extracted role: '$role'");
 
       // Extract Alexa status directly from profile (using alexaLinked field)
       isAlexaLinked = profile['alexaLinked'] ?? false;
-      print("DEBUG: Alexa linked status from profile: $isAlexaLinked");
+      debugPrint("DEBUG: Alexa linked status from profile: $isAlexaLinked");
 
       setState(() {
         isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        error = "An error occurred: $e";
+        error = AppLocalizations.of(context)!
+            .smartDevicesErrorOccurred(e.toString());
         isLoading = false;
       });
     }
   }
 
   Future<void> _linkAlexaAccount() async {
-    print("Opening Alexa linking flow...");
+    debugPrint("Opening Alexa linking flow...");
     _showEnablementDialog('Alexa', alexaSkillUrl);
   }
 
   Future<void> _unlinkAlexaAccount() async {
     setState(() => isLoading = true);
     try {
-      final result =
-          await AuthService.unlinkAlexaAccount(AppLocalizations.of(context)!);
+      final l10n = AppLocalizations.of(context)!;
+      final result = await AuthService.unlinkAlexaAccount(l10n);
+      if (!mounted) return;
 
       if (result['isSuccess'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Alexa Skill disabled successfully.')),
+          SnackBar(
+              content: Text(AppLocalizations.of(context)!
+                  .authservice_alexaUnlinkedSuccess)),
         );
         setState(() {
           isAlexaLinked = false;
@@ -92,13 +98,18 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(result['message'] ?? 'Failed to unlink Alexa.')),
+              content: Text(result['message'] ??
+                  AppLocalizations.of(context)!
+                      .authservice_alexaUnlinkedFailed)),
         );
         setState(() => isLoading = false);
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error unlinking Alexa: $e')),
+        SnackBar(
+            content: Text(AppLocalizations.of(context)!
+                .smartDevicesUnlinkError(e.toString()))),
       );
       setState(() => isLoading = false);
     }
@@ -117,7 +128,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
         drawer: const CommonDrawer(currentRoute: '/smart-devices'),
         appBar: AppBarHelper.createAppBar(
           context,
-          title: 'Smart Devices',
+          title: AppLocalizations.of(context)!.smartDevices,
           centerTitle: true,
         ),
         body: Center(
@@ -132,7 +143,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
       drawer: const CommonDrawer(currentRoute: '/smart-devices'),
       appBar: AppBarHelper.createAppBar(
         context,
-        title: 'Smart Devices',
+        title: AppLocalizations.of(context)!.smartDevices,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -144,7 +155,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -157,7 +168,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             const SizedBox(height: 24),
 
             Text(
-              'Smart Device Integration',
+              AppLocalizations.of(context)!.smartDevicesIntegrationTitle,
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -167,8 +178,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
 
             const SizedBox(height: 12),
 
-            const Text(
-              'Connect Alexa or Google Nest compatible smart devices to help monitor and assist with daily activities.',
+            Text(
+              AppLocalizations.of(context)!.smartDevicesIntro,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.4),
             ),
@@ -183,14 +194,16 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                 if (await canLaunchUrl(uri)) {
                   await launchUrl(uri, mode: LaunchMode.externalApplication);
                 } else {
+                  if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Could not open Privacy Policy')),
+                    SnackBar(
+                        content: Text(AppLocalizations.of(context)!
+                            .smartDevicesPrivacyOpenFailed)),
                   );
                 }
               },
               child: Text(
-                'Privacy Policy',
+                AppLocalizations.of(context)!.smartDevicesPrivacyPolicy,
                 style: TextStyle(
                   color: Colors.blue.shade700,
                   decoration: TextDecoration.underline,
@@ -236,14 +249,30 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
 
   Widget _buildAlexaPlatformCard(BuildContext context, bool isPatient) {
     final devices = [
-      _DeviceInfo(icon: Icons.speaker, name: 'Echo Devices', available: true),
       _DeviceInfo(
-          icon: Icons.lightbulb, name: 'Smart Lights', available: false),
+          icon: Icons.speaker,
+          name: AppLocalizations.of(context)!.smartDevicesEchoDevices,
+          available: true),
       _DeviceInfo(
-          icon: Icons.thermostat, name: 'Thermostats', available: false),
-      _DeviceInfo(icon: Icons.lock, name: 'Smart Locks', available: false),
-      _DeviceInfo(icon: Icons.outlet, name: 'Smart Plugs', available: false),
-      _DeviceInfo(icon: Icons.sensor_door, name: 'Sensors', available: false),
+          icon: Icons.lightbulb,
+          name: AppLocalizations.of(context)!.smartDevicesSmartLights,
+          available: false),
+      _DeviceInfo(
+          icon: Icons.thermostat,
+          name: AppLocalizations.of(context)!.smartDevicesThermostats,
+          available: false),
+      _DeviceInfo(
+          icon: Icons.lock,
+          name: AppLocalizations.of(context)!.smartDevicesSmartLocks,
+          available: false),
+      _DeviceInfo(
+          icon: Icons.outlet,
+          name: AppLocalizations.of(context)!.smartDevicesSmartPlugs,
+          available: false),
+      _DeviceInfo(
+          icon: Icons.sensor_door,
+          name: AppLocalizations.of(context)!.smartDevicesSensors,
+          available: false),
     ];
 
     return Card(
@@ -260,7 +289,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
+                color: Colors.blue.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.mic, color: Colors.blue, size: 32),
@@ -286,8 +315,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
               const SizedBox(height: 8),
               Text(
                 isAlexaLinked == true
-                    ? "Your Alexa account is linked!"
-                    : "Alexa is not linked yet.",
+                    ? AppLocalizations.of(context)!.smartDevicesAlexaLinked
+                    : AppLocalizations.of(context)!.smartDevicesAlexaNotLinked,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 14,
@@ -309,8 +338,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
 
             // Message for non-patients
             if (!isPatient) ...[
-              const Text(
-                'Alexa integration is currently available for patients only. Development is underway to support caregivers soon!',
+              Text(
+                AppLocalizations.of(context)!.smartDevicesAlexaPatientOnly,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,
@@ -336,9 +365,12 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                 label: Text(
                   isPatient
                       ? (isAlexaLinked == true
-                          ? 'Disable Alexa Skill'
-                          : 'Enable Alexa Skill')
-                      : 'Coming Soon for Caregivers',
+                          ? AppLocalizations.of(context)!
+                              .smartDevicesDisableAlexa
+                          : AppLocalizations.of(context)!
+                              .smartDevicesEnableAlexa)
+                      : AppLocalizations.of(context)!
+                          .smartDevicesCaregiversComingSoon,
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isPatient
@@ -360,16 +392,30 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
 
   Widget _buildGooglePlatformCard(BuildContext context, bool isPatient) {
     final devices = [
-      _DeviceInfo(icon: Icons.home, name: 'Nest Hubs', available: true),
-      _DeviceInfo(icon: Icons.speaker, name: 'Google Home', available: true),
       _DeviceInfo(
-          icon: Icons.lightbulb, name: 'Smart Lights', available: false),
+          icon: Icons.home,
+          name: AppLocalizations.of(context)!.smartDevicesNestHubs,
+          available: true),
       _DeviceInfo(
-          icon: Icons.thermostat, name: 'Nest Thermostat', available: false),
+          icon: Icons.speaker,
+          name: AppLocalizations.of(context)!.smartDevicesGoogleHome,
+          available: true),
       _DeviceInfo(
-          icon: Icons.doorbell, name: 'Nest Doorbell', available: false),
+          icon: Icons.lightbulb,
+          name: AppLocalizations.of(context)!.smartDevicesSmartLights,
+          available: false),
       _DeviceInfo(
-          icon: Icons.camera_alt, name: 'Nest Cameras', available: false),
+          icon: Icons.thermostat,
+          name: AppLocalizations.of(context)!.smartDevicesNestThermostat,
+          available: false),
+      _DeviceInfo(
+          icon: Icons.doorbell,
+          name: AppLocalizations.of(context)!.smartDevicesNestDoorbell,
+          available: false),
+      _DeviceInfo(
+          icon: Icons.camera_alt,
+          name: AppLocalizations.of(context)!.smartDevicesNestCameras,
+          available: false),
     ];
 
     return Card(
@@ -386,7 +432,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: Colors.red.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.g_mobiledata_rounded,
@@ -416,8 +462,9 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             // Message for all users (Google not available yet)
             Text(
               isPatient
-                  ? 'Google Home integration is under development. Stay tuned for updates!'
-                  : 'Google Home integration is currently available for patients only. Development is underway to support caregivers soon!',
+                  ? AppLocalizations.of(context)!
+                      .smartDevicesGoogleUnderDevelopment
+                  : AppLocalizations.of(context)!.smartDevicesGooglePatientOnly,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 12,
@@ -433,7 +480,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
               child: ElevatedButton.icon(
                 onPressed: null,
                 icon: const Icon(Icons.add),
-                label: const Text('Enable Google Action (Coming Soon)'),
+                label: Text(AppLocalizations.of(context)!
+                    .smartDevicesEnableGoogleComingSoon),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey,
                   foregroundColor: Colors.white,
@@ -465,8 +513,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             height: 36,
             decoration: BoxDecoration(
               color: available
-                  ? color.withOpacity(0.1)
-                  : Colors.grey.withOpacity(0.1),
+                  ? color.withValues(alpha: 0.1)
+                  : Colors.grey.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -490,11 +538,11 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
+                color: Colors.orange.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: const Text(
-                'Coming Soon',
+              child: Text(
+                AppLocalizations.of(context)!.smartDevicesComingSoon,
                 style: TextStyle(
                   fontSize: 10,
                   color: Colors.orange,
@@ -514,18 +562,20 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('Enable $platform $skillType'),
+          title: Text(AppLocalizations.of(context)!
+              .smartDevicesEnablePlatform(platform, skillType)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Click the button below to open the $platform $skillType store and enable CareConnect.',
+                AppLocalizations.of(context)!
+                    .smartDevicesOpenStoreInstruction(platform, skillType),
                 style: const TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Note: Currently using a sample URL for demonstration.',
+              Text(
+                AppLocalizations.of(context)!.smartDevicesSampleUrlNote,
                 style: TextStyle(
                   fontSize: 12,
                   color: Colors.grey,
@@ -537,7 +587,7 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(AppLocalizations.of(context)!.cancel),
             ),
             ElevatedButton.icon(
               onPressed: () async {
@@ -548,14 +598,16 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Opening $platform $skillType store...'),
+                      content: Text(AppLocalizations.of(context)!
+                          .smartDevicesOpeningStore(platform, skillType)),
                     ),
                   );
                 } else {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Could not open the store URL'),
+                    SnackBar(
+                      content: Text(AppLocalizations.of(context)!
+                          .smartDevicesStoreOpenFailed),
                     ),
                   );
                 }
@@ -565,7 +617,8 @@ class _SmartDevicesPageState extends State<SmartDevicesPage> {
                 foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.open_in_new),
-              label: Text('Open $platform Store'),
+              label: Text(AppLocalizations.of(context)!
+                  .smartDevicesOpenPlatformStore(platform)),
             ),
           ],
         );

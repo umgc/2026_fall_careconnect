@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for EvvVisitHistoryPage
 // (lib/features/evv/presentation/pages/evv_visit_history.dart)
 //
@@ -89,11 +90,16 @@ void _wireSearch(String body, {int statusCode = 200}) {
   }));
 }
 
-Widget _host() {
+Widget _host({Locale locale = const Locale('en')}) {
   final provider = UserProvider()..setUser(_caregiver());
   return ChangeNotifierProvider<UserProvider>.value(
     value: provider,
-    child: const MaterialApp(home: EvvVisitHistoryPage()),
+    child: MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const EvvVisitHistoryPage(),
+    ),
   );
 }
 
@@ -108,6 +114,87 @@ void main() {
   tearDown(() {
     _teardownStubs();
     ApiServiceOffline.debugOverrideHttpClient(null);
+  });
+
+  testWidgets('Spanish history shows localized records and filters', (tester) async {
+    _wireSearch(_result());
+    await tester.pumpWidget(_host(locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('Historial de visitas EVV'), findsWidgets);
+    expect(find.text('Filtros de búsqueda'), findsOneWidget);
+    expect(find.text('Buscar'), findsOneWidget);
+    expect(find.text('Mary Johnson'), findsOneWidget);
+    expect(find.text('Aprobado'), findsOneWidget);
+    expect(find.text('Se encontró 1 registro'), findsOneWidget);
+  });
+
+  testWidgets('Spanish history localizes an empty search', (tester) async {
+    _wireSearch(_result(count: 0));
+    await tester.pumpWidget(_host(locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('No se encontraron registros'), findsOneWidget);
+    expect(find.text('Intenta ajustar los filtros de búsqueda'), findsOneWidget);
+  });
+
+  testWidgets('Spanish offline record shows localized details', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    final record = _rec(1)
+      ..['status'] = 'UNDER_REVIEW'
+      ..['isOffline'] = true
+      ..['checkinLocationSource'] = 'GPS'
+      ..['checkoutLocationSource'] = 'PATIENT_ADDRESS';
+    _wireSearch(jsonEncode({
+      'content': [record], 'totalElements': 1, 'totalPages': 1,
+      'size': 20, 'number': 0, 'first': true, 'last': true,
+    }));
+    await tester.pumpWidget(_host(locale: const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('En revisión'), findsOneWidget);
+    expect(find.text('SIN CONEXIÓN'), findsOneWidget);
+    await tester.tap(find.text('Mary Johnson'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detalles del registro'), findsOneWidget);
+    expect(find.text('GPS (coordenadas no disponibles)'), findsOneWidget);
+    expect(find.text('Dirección del paciente (no disponible)'), findsOneWidget);
+    expect(find.text('Este registro se creó sin conexión'), findsOneWidget);
+    await tester.tap(find.text('Cerrar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detalles del registro'), findsNothing);
+  });
+
+  testWidgets('English rejected record shows missing locations in details', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    final record = _rec(1)..['status'] = 'REJECTED';
+    _wireSearch(jsonEncode({
+      'content': [record], 'totalElements': 1, 'totalPages': 1,
+      'size': 20, 'number': 0, 'first': true, 'last': true,
+    }));
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+    expect(find.text('Rejected'), findsOneWidget);
+    await tester.tap(find.text('Mary Johnson'));
+    await tester.pumpAndSettle();
+    expect(find.text('Record Details'), findsOneWidget);
+    expect(find.text('Not recorded'), findsNWidgets(2));
+    expect(find.text('Unknown'), findsNWidgets(2));
+    expect(find.text('Close'), findsOneWidget);
+  });
+
+  testWidgets('load more action is shown for non-final result pages', (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() => tester.view.resetPhysicalSize());
+    addTearDown(() => tester.view.resetDevicePixelRatio());
+    _wireSearch(_result(last: false));
+    await tester.pumpWidget(_host());
+    await tester.pumpAndSettle();
+    expect(find.text('Load More'), findsOneWidget);
   });
 
   testWidgets('shows a loading indicator while the initial search runs',

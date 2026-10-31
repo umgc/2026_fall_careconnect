@@ -88,6 +88,7 @@ public class DefaultCernerPatientAppointmentService
             final long patientId,
             final Instant startInclusive,
             final Instant endExclusive) {
+
         final Context context = context(patientId);
         final List<JsonNode> resources = fetchAppointmentsWithRefresh(
                 context, startInclusive, endExclusive);
@@ -116,6 +117,31 @@ public class DefaultCernerPatientAppointmentService
             result.add(appointments.save(incoming));
         }
         return List.copyOf(result);
+    }
+
+    @Override
+    public List<EhrAppointmentRecord> synchronizeAppointmentsWithTokenRefresh(long patientId, Instant startInclusive, Instant endExclusive) {
+        return List.of();
+    }
+
+    @Override
+    public List<EhrAppointmentRecord> synchronizeAppointmentsAllowingEmptyResults(long patientId, Instant startInclusive, Instant endExclusive) {
+        return List.of();
+    }
+
+    @Override
+    public List<EhrAppointmentRecord> synchronizeAppointmentsWithPaginationAndRateLimiting(long patientId, Instant startInclusive, Instant endExclusive) {
+        return List.of();
+    }
+
+    @Override
+    public List<EhrAppointmentRecord> synchronizeAppointmentsWithReferenceMismatchHandling(long patientId, Instant startInclusive, Instant endExclusive) {
+        return List.of();
+    }
+
+    @Override
+    public boolean validatePatientAndAppointmentExpectedOutputFixtures(long patientId, Instant startInclusive, Instant endExclusive) {
+        return false;
     }
 
     private JsonNode fetchPatientWithRefresh(final Context context) {

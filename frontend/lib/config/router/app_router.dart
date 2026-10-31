@@ -30,6 +30,7 @@ import 'package:care_connect_app/features/health/health_data/pages/athena_resour
 import 'package:care_connect_app/features/health/health_data/pages/medicare_connect_page.dart';
 import 'package:care_connect_app/features/health/health_data/pages/medicare_sharing_page.dart';
 import 'package:care_connect_app/features/health/health_data/services/medicare_connect_service.dart';
+import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
 import 'package:care_connect_app/features/medical_passport/pages/medical_passport_page.dart';
 import 'package:care_connect_app/features/invoices/screens/invoice_tabbed_page.dart';
 import 'package:care_connect_app/features/profile/presentation/pages/profile_settings_page.dart';
@@ -401,6 +402,29 @@ final GoRouter appRouter = _appRouterRef = GoRouter(
       path: '/medicare-sharing',
       redirect: _requireSignIn,
       builder: (_, __) => const MedicareSharingPage(),
+    ),
+    GoRoute(
+      path: '/patients/:patientId',
+      redirect: _requireSignIn,
+      builder: (context, state) {
+        final patientId = state.pathParameters['patientId'] ?? '';
+        if (int.tryParse(patientId) == null) {
+          return const Scaffold(
+            body: Center(child: Text('Invalid patient ID')),
+          );
+        }
+        final user = Provider.of<UserProvider>(context, listen: false).user;
+        final initialTab = switch (state.uri.queryParameters['tab']) {
+          'health' => 'health',
+          'medicare' => 'medicare',
+          _ => null,
+        };
+        return PatientDetailsPage(
+          patientId: patientId,
+          isCaregiver: user?.role.toUpperCase() == 'CAREGIVER',
+          initialTab: initialTab,
+        );
+      },
     ),
     // CC-12: what a phone camera opens after scanning a patient's emergency
     // QR code. Public on purpose: whoever scans it at a scene has no account.

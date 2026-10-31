@@ -615,6 +615,23 @@ fi
 # parameters/<env>-service.json. Listed after the flags so that when both are
 # supplied the environment wins — aws cloudformation deploy takes the last
 # value given for a repeated parameter key.
+# Medicare (Blue Button). These template parameters are listed in parameters/staging-service.json;
+# a key the parameter file does not list is dropped by build_parameter_overrides.
+if [[ -n "${CARECONNECT_MEDICARE_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareEnabled=${CARECONNECT_MEDICARE_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_MODE-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareMode=${CARECONNECT_MEDICARE_MODE}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_CLIENT_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareClientId=${CARECONNECT_MEDICARE_CLIENT_ID}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_REDIRECT_URI-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareRedirectUri=${CARECONNECT_MEDICARE_REDIRECT_URI}")
+fi
+if [[ -n "${CARECONNECT_MEDICARE_CLIENT_SECRET-}" ]]; then
+  SERVICE_OVERRIDES+=("MedicareClientSecret=${CARECONNECT_MEDICARE_CLIENT_SECRET}")
+fi
 if [[ -n "${CARECONNECT_CORS_ALLOWED_LIST-}" ]]; then
   SERVICE_OVERRIDES+=("CorsAllowedList=${CARECONNECT_CORS_ALLOWED_LIST}")
 fi
@@ -623,6 +640,44 @@ if [[ -n "${CARECONNECT_FRONTEND_BASE_URL-}" ]]; then
 fi
 if [[ -n "${CARECONNECT_FROM_EMAIL-}" ]]; then
   SERVICE_OVERRIDES+=("FromEmail=${CARECONNECT_FROM_EMAIL}")
+fi
+# Cerner settings: absent values preserve CloudFormation defaults.
+if [[ -n "${CARECONNECT_CERNER_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerEnabled=${CARECONNECT_CERNER_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_CERNER_ALLERGIES_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerAllergiesEnabled=${CARECONNECT_CERNER_ALLERGIES_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_CERNER_CLINICAL_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerClinicalEnabled=${CARECONNECT_CERNER_CLINICAL_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_CERNER_PATIENT_APPOINTMENT_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("CareConnectCernerPatientAppointmentEnabled=${CARECONNECT_CERNER_PATIENT_APPOINTMENT_ENABLED}")
+fi
+if [[ -n "${CERNER_FHIR_BASE_URL-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerFhirBaseUrl=${CERNER_FHIR_BASE_URL}")
+fi
+if [[ -n "${CERNER_CLIENT_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerClientId=${CERNER_CLIENT_ID}")
+fi
+if [[ -n "${CERNER_REDIRECT_URI-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerRedirectUri=${CERNER_REDIRECT_URI}")
+fi
+if [[ -n "${CERNER_WEB_RETURN_URL-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerWebReturnUrl=${CERNER_WEB_RETURN_URL}")
+fi
+if [[ -n "${CERNER_CLIENT_SECRET_ARN-}" ]]; then
+  SERVICE_OVERRIDES+=("CernerClientSecretArn=${CERNER_CLIENT_SECRET_ARN}")
+fi
+if [[ -n "${CARECONNECT_EPIC_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("EpicEnabled=${CARECONNECT_EPIC_ENABLED}")
+fi
+if [[ "${CARECONNECT_EPIC_ENABLED-}" == "true" ]]; then
+  SERVICE_OVERRIDES+=("EpicClientId=${CARECONNECT_EPIC_CLIENT_ID-}")
+  SERVICE_OVERRIDES+=("EpicRedirectUri=${CARECONNECT_EPIC_REDIRECT_URI-}")
+  SERVICE_OVERRIDES+=("EpicWebReturnUrl=${CARECONNECT_EPIC_WEB_RETURN_URL-}")
+  SERVICE_OVERRIDES+=("EpicClientSecret=${CARECONNECT_EPIC_CLIENT_SECRET-}")
+  SERVICE_OVERRIDES+=("EmailCryptoSecret=${CARECONNECT_EMAIL_CRYPTO_SECRET-}")
 fi
 # athenahealth. Unset leaves the stack's current value in place.
 if [[ -n "${CARECONNECT_ATHENA_ENABLED-}" ]]; then

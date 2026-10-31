@@ -92,6 +92,7 @@ jobs:
           for SECRET in \
             "/careconnect/${ENV_NAME}/db-password" \
             "/careconnect/${ENV_NAME}/jwt-secret" \
+            "/careconnect/${ENV_NAME}/medicare-client-secret" \
             "/careconnect/${ENV_NAME}/athena-client-secret"; do
             if aws secretsmanager describe-secret \
                  --secret-id "$SECRET" --region "$REGION" >/dev/null 2>&1; then
