@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -132,7 +133,8 @@ class _IncidentReportHistoryScreenState
                             child: ListTile(
                               onTap: () {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
+                                  TitledMaterialPageRoute<void>(
+                                    title: 'Incident Report Details',
                                     builder: (context) =>
                                         IncidentReportDetailScreen(
                                       clientName: widget.clientName,

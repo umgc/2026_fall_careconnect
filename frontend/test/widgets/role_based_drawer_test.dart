@@ -26,7 +26,7 @@ Widget _wrap({UserProvider? provider, GlobalKey<NavigatorState>? navKey}) {
       '/patients': (_) => const Scaffold(body: Text('Patients Page')),
       '/patients/add': (_) => const Scaffold(body: Text('Add Patient Page')),
       '/tasks': (_) => const Scaffold(body: Text('Tasks Page')),
-      '/health': (_) => const Scaffold(body: Text('Health Page')),
+      '/health-data': (_) => const Scaffold(body: Text('Health Page')),
       '/analytics': (_) => const Scaffold(body: Text('Analytics Page')),
       '/messages': (_) => const Scaffold(body: Text('Messages Page')),
       '/settings': (_) => const Scaffold(body: Text('Settings Page')),
@@ -66,6 +66,19 @@ Widget _wrapRouter({required UserProvider provider}) {
       GoRoute(
         path: '/admin/users',
         builder: (_, __) => const Scaffold(body: Text('User Mgmt Page')),
+      ),
+      // As app_router.dart has it: the app's Health Data screen.
+      GoRoute(
+        path: '/health-data',
+        builder: (context, _) => Scaffold(
+          body: Column(children: [
+            const Text('Health Page'),
+            TextButton(
+              onPressed: () => context.pop(),
+              child: const Text('Back'),
+            ),
+          ]),
+        ),
       ),
     ],
   );
@@ -109,14 +122,14 @@ void main() {
   });
 
   group('RoleBasedDrawer – null userSession', () {
-    testWidgets('renders without crashing', (tester) async {
+    testWidgets('TC-RBD-001: renders without crashing', (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
       expect(find.byType(Drawer), findsOneWidget);
     });
 
-    testWidgets('shows "Not logged in" when userSession is null',
+    testWidgets('TC-RBD-002: shows "Not logged in" when userSession is null',
         (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.tap(find.text('Open'));
@@ -126,7 +139,7 @@ void main() {
   });
 
   group('RoleBasedDrawer – logged-in user', () {
-    testWidgets('shows user name and email for PATIENT', (tester) async {
+    testWidgets('TC-RBD-003: shows user name and email for PATIENT', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Alice',
         email: 'alice@test.com',
@@ -139,7 +152,7 @@ void main() {
       expect(find.text('alice@test.com'), findsOneWidget);
     });
 
-    testWidgets('shows Dashboard for all roles', (tester) async {
+    testWidgets('TC-RBD-004: shows Dashboard for all roles', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'bob@test.com',
@@ -151,7 +164,7 @@ void main() {
       expect(find.text('Dashboard'), findsOneWidget);
     });
 
-    testWidgets('shows Health Data for all roles', (tester) async {
+    testWidgets('TC-RBD-005: shows Health Data for all roles', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'b@t.com',
@@ -163,7 +176,7 @@ void main() {
       expect(find.text('Health Data'), findsOneWidget);
     });
 
-    testWidgets('shows Messages for all roles', (tester) async {
+    testWidgets('TC-RBD-006: shows Messages for all roles', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'b@t.com',
@@ -175,7 +188,7 @@ void main() {
       expect(find.text('Messages'), findsOneWidget);
     });
 
-    testWidgets('shows role badge text for Patient', (tester) async {
+    testWidgets('TC-RBD-007: shows role badge text for Patient', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'b@t.com',
@@ -187,7 +200,7 @@ void main() {
       expect(find.text('Patient'), findsOneWidget);
     });
 
-    testWidgets('does NOT show Administration for PATIENT', (tester) async {
+    testWidgets('TC-RBD-008: does NOT show Administration for PATIENT', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'b@t.com',
@@ -199,7 +212,7 @@ void main() {
       expect(find.text('Administration'), findsNothing);
     });
 
-    testWidgets('does NOT show Tasks for FAMILY_MEMBER', (tester) async {
+    testWidgets('TC-RBD-009: does NOT show Tasks for FAMILY_MEMBER', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Carol',
         email: 'c@t.com',
@@ -211,7 +224,7 @@ void main() {
       expect(find.text('Tasks'), findsNothing);
     });
 
-    testWidgets('shows Tasks for CAREGIVER', (tester) async {
+    testWidgets('TC-RBD-010: shows Tasks for CAREGIVER', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
         email: 'd@t.com',
@@ -223,7 +236,7 @@ void main() {
       expect(find.text('Tasks'), findsOneWidget);
     });
 
-    testWidgets('shows Administration for ADMIN', (tester) async {
+    testWidgets('TC-RBD-011: shows Administration for ADMIN', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Admin',
         email: 'a@t.com',
@@ -235,7 +248,7 @@ void main() {
       expect(find.text('Administration'), findsOneWidget);
     });
 
-    testWidgets('shows Analytics for CAREGIVER', (tester) async {
+    testWidgets('TC-RBD-012: shows Analytics for CAREGIVER', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
         email: 'd@t.com',
@@ -247,7 +260,7 @@ void main() {
       expect(find.text('Analytics'), findsOneWidget);
     });
 
-    testWidgets('shows Patient Management for CAREGIVER', (tester) async {
+    testWidgets('TC-RBD-013: shows Patient Management for CAREGIVER', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
         email: 'd@t.com',
@@ -259,7 +272,7 @@ void main() {
       expect(find.text('Patient Management'), findsOneWidget);
     });
 
-    testWidgets('shows Logout for all logged-in users', (tester) async {
+    testWidgets('TC-RBD-014: shows Logout for all logged-in users', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'b@t.com',
@@ -271,7 +284,7 @@ void main() {
       expect(find.text('Logout'), findsOneWidget);
     });
 
-    testWidgets('shows Settings for all logged-in users', (tester) async {
+    testWidgets('TC-RBD-015: shows Settings for all logged-in users', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Bob',
         email: 'b@t.com',
@@ -283,7 +296,7 @@ void main() {
       expect(find.text('Settings'), findsOneWidget);
     });
 
-    testWidgets('role badge shows Caregiver for CAREGIVER role',
+    testWidgets('TC-RBD-016: role badge shows Caregiver for CAREGIVER role',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
@@ -296,7 +309,7 @@ void main() {
       expect(find.text('Caregiver'), findsOneWidget);
     });
 
-    testWidgets('role badge shows Administrator for ADMIN role',
+    testWidgets('TC-RBD-017: role badge shows Administrator for ADMIN role',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Admin',
@@ -309,7 +322,7 @@ void main() {
       expect(find.text('Administrator'), findsOneWidget);
     });
 
-    testWidgets('role badge shows Family Member for FAMILY_MEMBER role',
+    testWidgets('TC-RBD-018: role badge shows Family Member for FAMILY_MEMBER role',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Fam',
@@ -324,7 +337,7 @@ void main() {
   });
 
   group('RoleBasedDrawer – drawer structure and icons', () {
-    testWidgets('drawer contains UserAccountsDrawerHeader', (tester) async {
+    testWidgets('TC-RBD-019: drawer contains UserAccountsDrawerHeader', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Alice',
         email: 'a@t.com',
@@ -336,7 +349,7 @@ void main() {
       expect(find.byType(UserAccountsDrawerHeader), findsOneWidget);
     });
 
-    testWidgets('header shows first letter of name in avatar', (tester) async {
+    testWidgets('TC-RBD-020: header shows first letter of name in avatar', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Zach',
         email: 'z@t.com',
@@ -348,7 +361,7 @@ void main() {
       expect(find.text('Z'), findsOneWidget);
     });
 
-    testWidgets('header shows ? for empty name', (tester) async {
+    testWidgets('TC-RBD-021: header shows ? for empty name', (tester) async {
       final provider = _SessionUserProvider(
         name: '',
         email: 'e@t.com',
@@ -360,7 +373,7 @@ void main() {
       expect(find.text('?'), findsOneWidget);
     });
 
-    testWidgets('drawer has dashboard icon', (tester) async {
+    testWidgets('TC-RBD-022: drawer has dashboard icon', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -372,7 +385,7 @@ void main() {
       expect(find.byIcon(Icons.dashboard), findsOneWidget);
     });
 
-    testWidgets('drawer has health_and_safety icon', (tester) async {
+    testWidgets('TC-RBD-023: drawer has health_and_safety icon', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -384,7 +397,7 @@ void main() {
       expect(find.byIcon(Icons.health_and_safety), findsOneWidget);
     });
 
-    testWidgets('drawer has message icon', (tester) async {
+    testWidgets('TC-RBD-024: drawer has message icon', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -396,7 +409,7 @@ void main() {
       expect(find.byIcon(Icons.message), findsOneWidget);
     });
 
-    testWidgets('drawer has settings icon', (tester) async {
+    testWidgets('TC-RBD-025: drawer has settings icon', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -408,7 +421,7 @@ void main() {
       expect(find.byIcon(Icons.settings), findsOneWidget);
     });
 
-    testWidgets('drawer has logout icon', (tester) async {
+    testWidgets('TC-RBD-026: drawer has logout icon', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -420,7 +433,7 @@ void main() {
       expect(find.byIcon(Icons.logout), findsOneWidget);
     });
 
-    testWidgets('drawer has task icon for PATIENT', (tester) async {
+    testWidgets('TC-RBD-027: drawer has task icon for PATIENT', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -432,7 +445,7 @@ void main() {
       expect(find.byIcon(Icons.task), findsOneWidget);
     });
 
-    testWidgets('drawer has analytics icon for ADMIN', (tester) async {
+    testWidgets('TC-RBD-028: drawer has analytics icon for ADMIN', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -444,7 +457,7 @@ void main() {
       expect(find.byIcon(Icons.analytics), findsOneWidget);
     });
 
-    testWidgets('ADMIN drawer has admin_panel_settings icon', (tester) async {
+    testWidgets('TC-RBD-029: ADMIN drawer has admin_panel_settings icon', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -457,7 +470,7 @@ void main() {
     });
 
     testWidgets(
-        'CAREGIVER drawer has people_outline icon for Patient Management',
+        'TC-RBD-030: CAREGIVER drawer has people_outline icon for Patient Management',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
@@ -470,7 +483,7 @@ void main() {
       expect(find.byIcon(Icons.people_outline), findsOneWidget);
     });
 
-    testWidgets('Dividers present in drawer', (tester) async {
+    testWidgets('TC-RBD-031: Dividers present in drawer', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -484,7 +497,7 @@ void main() {
   });
 
   group('RoleBasedDrawer – role-specific menu visibility', () {
-    testWidgets('PATIENT does NOT see Patient Management', (tester) async {
+    testWidgets('TC-RBD-032: PATIENT does NOT see Patient Management', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Pat',
         email: 'p@t.com',
@@ -496,7 +509,7 @@ void main() {
       expect(find.text('Patient Management'), findsNothing);
     });
 
-    testWidgets('PATIENT does NOT see Analytics', (tester) async {
+    testWidgets('TC-RBD-033: PATIENT does NOT see Analytics', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Pat',
         email: 'p@t.com',
@@ -508,7 +521,7 @@ void main() {
       expect(find.text('Analytics'), findsNothing);
     });
 
-    testWidgets('PATIENT sees Tasks', (tester) async {
+    testWidgets('TC-RBD-034: PATIENT sees Tasks', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Pat',
         email: 'p@t.com',
@@ -520,7 +533,7 @@ void main() {
       expect(find.text('Tasks'), findsOneWidget);
     });
 
-    testWidgets('FAMILY_MEMBER does NOT see Analytics', (tester) async {
+    testWidgets('TC-RBD-035: FAMILY_MEMBER does NOT see Analytics', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Fam',
         email: 'f@t.com',
@@ -532,7 +545,7 @@ void main() {
       expect(find.text('Analytics'), findsNothing);
     });
 
-    testWidgets('FAMILY_MEMBER does NOT see Patient Management',
+    testWidgets('TC-RBD-036: FAMILY_MEMBER does NOT see Patient Management',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Fam',
@@ -545,7 +558,7 @@ void main() {
       expect(find.text('Patient Management'), findsNothing);
     });
 
-    testWidgets('FAMILY_MEMBER does NOT see Administration', (tester) async {
+    testWidgets('TC-RBD-037: FAMILY_MEMBER does NOT see Administration', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Fam',
         email: 'f@t.com',
@@ -557,7 +570,7 @@ void main() {
       expect(find.text('Administration'), findsNothing);
     });
 
-    testWidgets('FAMILY_MEMBER sees Dashboard, Health Data, Messages, Settings',
+    testWidgets('TC-RBD-038: FAMILY_MEMBER sees Dashboard, Health Data, Messages, Settings',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Fam',
@@ -574,7 +587,7 @@ void main() {
     });
 
     testWidgets(
-        'ADMIN sees Administration, Patient Management, Tasks, Analytics',
+        'TC-RBD-039: ADMIN sees Administration, Patient Management, Tasks, Analytics',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Admin',
@@ -590,7 +603,7 @@ void main() {
       expect(find.text('Analytics'), findsOneWidget);
     });
 
-    testWidgets('FAMILY_LINK sees Patient Management and Analytics',
+    testWidgets('TC-RBD-040: FAMILY_LINK sees Patient Management and Analytics',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Link',
@@ -604,7 +617,7 @@ void main() {
       expect(find.text('Analytics'), findsOneWidget);
     });
 
-    testWidgets('FAMILY_LINK role badge shows Family Link', (tester) async {
+    testWidgets('TC-RBD-041: FAMILY_LINK role badge shows Family Link', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Link',
         email: 'l@t.com',
@@ -616,7 +629,7 @@ void main() {
       expect(find.text('Family Link'), findsOneWidget);
     });
 
-    testWidgets('unknown role shows raw role text', (tester) async {
+    testWidgets('TC-RBD-042: unknown role shows raw role text', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Unknown',
         email: 'u@t.com',
@@ -630,7 +643,7 @@ void main() {
   });
 
   group('RoleBasedDrawer – menu item navigation', () {
-    testWidgets('tapping Dashboard navigates to /dashboard', (tester) async {
+    testWidgets('TC-RBD-043: tapping Dashboard navigates to /dashboard', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -646,13 +659,17 @@ void main() {
       expect(find.text('Dashboard Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Health Data navigates to /health', (tester) async {
+    testWidgets(
+        'TC-RBD-044: tapping Health Data opens /health-data in the app '
+        'GoRouter (DEF-MCR-38)', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
         role: 'PATIENT',
       );
-      await tester.pumpWidget(_wrap(provider: provider));
+      // The app is a MaterialApp.router: a plain MaterialApp with a routes:
+      // table hid that Navigator.pushNamed throws there.
+      await tester.pumpWidget(_wrapRouter(provider: provider));
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
 
@@ -662,7 +679,7 @@ void main() {
       expect(find.text('Health Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Messages navigates to /messages', (tester) async {
+    testWidgets('TC-RBD-045: tapping Messages navigates to /messages', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -678,7 +695,7 @@ void main() {
       expect(find.text('Messages Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Settings navigates to /settings', (tester) async {
+    testWidgets('TC-RBD-046: tapping Settings navigates to /settings', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -694,7 +711,7 @@ void main() {
       expect(find.text('Settings Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Tasks navigates to /tasks', (tester) async {
+    testWidgets('TC-RBD-047: tapping Tasks navigates to /tasks', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -710,7 +727,7 @@ void main() {
       expect(find.text('Tasks Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Analytics navigates to /analytics for CAREGIVER',
+    testWidgets('TC-RBD-048: tapping Analytics navigates to /analytics for CAREGIVER',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
@@ -727,7 +744,7 @@ void main() {
       expect(find.text('Analytics Page'), findsOneWidget);
     });
 
-    testWidgets('tapping My Patients navigates to /patients for CAREGIVER',
+    testWidgets('TC-RBD-049: tapping My Patients navigates to /patients for CAREGIVER',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
@@ -748,7 +765,7 @@ void main() {
       expect(find.text('Patients Page'), findsOneWidget);
     });
 
-    testWidgets('tapping Add Patient navigates to /patients/add for CAREGIVER',
+    testWidgets('TC-RBD-050: tapping Add Patient navigates to /patients/add for CAREGIVER',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Dan',
@@ -769,7 +786,7 @@ void main() {
       expect(find.text('Add Patient Page'), findsOneWidget);
     });
 
-    testWidgets('tapping User Management navigates to /admin/users for ADMIN',
+    testWidgets('TC-RBD-051: tapping User Management navigates to /admin/users for ADMIN',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Admin',
@@ -790,10 +807,35 @@ void main() {
 
       expect(find.text('User Mgmt Page'), findsOneWidget);
     });
+
+    // ---- PR #428 review (2026-10-25), Testing Lead ----
+
+    testWidgets(
+        'TC-RBD-056: an ADMIN on an admin page opens Health Data from the '
+        'menu, and Back returns to that page (DEF-MCR-38)', (tester) async {
+      final provider = _SessionUserProvider(
+        name: 'Admin',
+        email: 'a@t.com',
+        role: 'ADMIN',
+      );
+      await tester.pumpWidget(_wrapRouter(provider: provider));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Health Data'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Health Page'), findsOneWidget);
+      expect(find.byType(Drawer), findsNothing);
+
+      await tester.tap(find.text('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open'), findsOneWidget);
+    });
   });
 
   group('RoleBasedDrawer – logout functionality', () {
-    testWidgets('tapping Logout shows confirmation dialog', (tester) async {
+    testWidgets('TC-RBD-052: tapping Logout shows confirmation dialog', (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
         email: 't@t.com',
@@ -813,7 +855,7 @@ void main() {
       expect(find.text('Logout'), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('cancelling logout dialog does not navigate away',
+    testWidgets('TC-RBD-053: cancelling logout dialog does not navigate away',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Test',
@@ -840,7 +882,7 @@ void main() {
 
   group('RoleBasedDrawer – ExpansionTile children visibility', () {
     testWidgets(
-        'Administration ExpansionTile has User Management and no dead Role Management link',
+        'TC-RBD-054: Administration ExpansionTile has User Management and no dead Role Management link',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Admin',
@@ -863,7 +905,7 @@ void main() {
     });
 
     testWidgets(
-        'Patient Management ExpansionTile has My Patients and Add Patient',
+        'TC-RBD-055: Patient Management ExpansionTile has My Patients and Add Patient',
         (tester) async {
       final provider = _SessionUserProvider(
         name: 'Care',

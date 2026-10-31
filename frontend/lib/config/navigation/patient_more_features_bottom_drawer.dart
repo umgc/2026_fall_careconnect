@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/dashboard/presentation/sosscreen.dart';
 import 'package:care_connect_app/features/health/medication-tracker/pages/medication-tracker.dart';
 import 'package:care_connect_app/features/health/virtual_check_in/presentation/pages/patient_check_in_page.dart';
@@ -22,7 +23,9 @@ class PatientMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const SosScreen()),
+            TitledMaterialPageRoute(
+              title: 'Emergency Assistance',
+              builder: (context) => const SosScreen()),
           );
         },
       ),
@@ -35,7 +38,8 @@ class PatientMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Medication Tracker',
               builder: (context) => const MedicationsTrackerPage(),
             ),
           );
@@ -50,7 +54,8 @@ class PatientMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Calendar',
               builder: (context) => const CalendarAssistantScreen(),
             ),
           );
@@ -65,7 +70,8 @@ class PatientMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Informed Delivery',
               builder: (context) => const InformedDeliveryScreen(),
             ),
           );
@@ -80,7 +86,8 @@ class PatientMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Virtual Check-In',
               builder: (context) => const PatientVirtualCheckIn(),
             ),
           );

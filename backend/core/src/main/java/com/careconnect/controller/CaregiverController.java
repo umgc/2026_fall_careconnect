@@ -13,6 +13,7 @@ import com.careconnect.security.AuthorizationService;
 import com.careconnect.security.Role;
 import com.careconnect.security.UnauthorizedException;
 import com.careconnect.service.CaregiverPatientLinkService;
+import com.careconnect.service.ConnectionRequestService;
 import com.careconnect.service.CaregiverService;
 import com.careconnect.dto.CaregiverRegistration;
 import com.careconnect.dto.PatientRegistration;
@@ -44,6 +45,9 @@ public class CaregiverController {
 
     @Autowired
     private CaregiverPatientLinkService caregiverPatientLinkService;
+
+    @Autowired
+    private ConnectionRequestService connectionRequestService;
 
     @Autowired
     private UserRepository userRepository;
@@ -154,6 +158,12 @@ public class CaregiverController {
         Caregiver caregiver = caregiverRepository.findById(caregiverId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Caregiver not found"));
 
+        // A caregiver may add patients only to their own list; caregiverId is the caregiver entity ID.
+        if (!currentUser.isAdmin()
+                && (caregiver.getUser() == null || !currentUser.getId().equals(caregiver.getUser().getId()))) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Caregivers can only add patients to their own list");
+        }
+
         // Look up patient by email in the User table
         User patientUser = userRepository.findByEmailAndRole(patientEmail, Role.PATIENT)
                 .orElse(null);
@@ -185,7 +195,25 @@ public class CaregiverController {
                     "Patient is already linked to this caregiver");
         }
 
-        // Create the caregiver-patient link using the permanent link method
+        // A caregiver only asks; the patient decides in the app. Admins still link directly.
+        if (!currentUser.isAdmin()) {
+            try {
+                connectionRequestService.createRequest(
+                        currentUser.getId(), patientEmail, "Caregiver", null);
+            } catch (IllegalStateException e) {
+                // The add-patient screen shows "message"; "error" matches the other error bodies.
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", e.getMessage(),
+                        "error", e.getMessage()
+                ));
+            }
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of(
+                    "message", "Connection request sent to " + patientEmail
+                            + ". They will appear in your patient list once they accept.",
+                    "action", "request_sent"
+            ));
+        }
+
         caregiverPatientLinkService.createPermanentLink(
                 caregiver.getUser().getId(),
                 patientUser.getId(),

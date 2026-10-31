@@ -50,7 +50,7 @@ public class AiAllergyController {
         }
         Long pid = body.getPatientId();
         if (pid != null) {
-            authorizationService.requirePatientAccess(currentUser, pid);
+            authorizationService.requirePatientRecordAccess(currentUser, pid);
         }
         try {
             List<Allergy> history = pid == null

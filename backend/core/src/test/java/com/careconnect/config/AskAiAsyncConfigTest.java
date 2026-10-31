@@ -29,4 +29,21 @@ class AskAiAsyncConfigTest {
 
         taskExecutor.shutdown();
     }
+
+    @Test
+    void retrievalIndexExecutor_runsRejectedWorkOnCallerInsteadOfDropping() {
+        final AskAiAsyncConfig config = new AskAiAsyncConfig();
+        final ThreadPoolTaskExecutor taskExecutor =
+                (ThreadPoolTaskExecutor) config.retrievalIndexExecutor();
+        final ThreadPoolExecutor pool = taskExecutor.getThreadPoolExecutor();
+
+        final AtomicBoolean ran = new AtomicBoolean(false);
+        pool.getRejectedExecutionHandler()
+                .rejectedExecution(() -> ran.set(true), pool);
+
+        assertThat(ran.get())
+                .as("rejected indexing work must still run, or the record is never indexed")
+                .isTrue();
+        taskExecutor.shutdown();
+    }
 }

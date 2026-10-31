@@ -10,11 +10,17 @@ import com.careconnect.repository.VitalsRepository;
 import com.careconnect.repository.retrieval.RetrievalIndexChunkRepository;
 import com.careconnect.service.ai.retrieval.RetrievalRecordType;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -33,15 +39,22 @@ import org.springframework.transaction.annotation.Transactional;
  * exactly one of the two paths, not both, or {@code sourceRecordId} values
  * and chunk shapes can diverge for the same logical record.
  *
- * <p>Canonical usage: this service is for manual/admin re-index and
- * local dev/test seeding (it has no event trigger of its own — callers decide
- * when to run it). The outbox-driven pipeline is what production relies on to
- * index new content as it's created; this service does not replace it.
+ * <p>Medications and tasks are also re-indexed one record at a time after every
+ * committed create, update, or delete ({@link RetrievalRecordChangeListener} and
+ * {@link RetrievalRecordIndexer}), so records entered in the app are answerable
+ * by Ask AI without calling the endpoint. {@link RetrievalRecordIndexer} embeds those
+ * per-record chunks as soon as they commit so the vector arm finds them too;
+ * {@link #indexPatient}, which can write hundreds of chunks in one request, leaves
+ * embedding to the backfill worker.
+ * {@link #indexPatient} remains for manual/admin re-index and local dev/test seeding.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RetrievalIndexingService {
+
+    private static final DateTimeFormatter HUMAN_DATE =
+            DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy", Locale.US);
 
     private final RetrievalIndexChunkRepository chunkRepository;
     private final MedicationRepository medicationRepository;
@@ -148,30 +161,134 @@ public class RetrievalIndexingService {
         return count;
     }
 
+    /**
+     * Replaces the chunk for one medication with its committed state. Inactive or
+     * deleted medications end with no chunk, matching {@link #indexMedications}.
+     *
+     * @return the saved chunk, or empty when the medication now has none
+     *
+     * <p>Runs in its own transaction because callers invoke it after the
+     * medication's transaction has committed.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<RetrievalIndexChunk> reindexMedication(Long medicationId, Long patientId) {
+        String sourceId = "medication-" + medicationId;
+        String recordType = RetrievalRecordType.MEDICATION.name();
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(patientId, sourceId, recordType);
+        return medicationRepository.findById(medicationId)
+                .filter(med -> Boolean.TRUE.equals(med.getIsActive()))
+                .map(med -> saveChunk(patientId, sourceId, recordType, buildMedicationText(med)));
+    }
+
+    /**
+     * Replaces the chunk for one task with its committed state. A deleted task
+     * ends with no chunk.
+     *
+     * @return the saved chunk, or empty when the task no longer exists
+     *
+     * <p>Runs in its own transaction because callers invoke it after the task's
+     * transaction has committed.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<RetrievalIndexChunk> reindexTask(Long taskId, Long patientId) {
+        String sourceId = "task-" + taskId;
+        String recordType = RetrievalRecordType.TASK.name();
+        chunkRepository.deleteByPatientIdAndSourceRecordIdAndRecordType(patientId, sourceId, recordType);
+        return taskRepository.findById(taskId)
+                .map(task -> saveChunk(patientId, sourceId, recordType, buildTaskText(task)));
+    }
+
+    private RetrievalIndexChunk saveChunk(Long patientId, String sourceId, String recordType, String text) {
+        return chunkRepository.save(RetrievalIndexChunk.builder()
+                .patientId(patientId)
+                .recordType(recordType)
+                .sourceRecordId(sourceId)
+                .chunkText(text)
+                .build());
+    }
+
+    // Medication and task text is written one fact per sentence, each naming its
+    // subject. Ask AI accepts a claim only when it quotes complete sentences that
+    // mention what was asked about, and models quote fragments of a single long
+    // "Key: value, Key: value" line, which fails that check. mock_data.sql builds
+    // the seed chunks with the same wording; keep the two in step.
     private String buildMedicationText(Medication med) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Medication: ").append(med.getMedicationName());
-        if (med.getDosage() != null) sb.append(", Dosage: ").append(med.getDosage());
-        if (med.getFrequency() != null) sb.append(", Frequency: ").append(med.getFrequency());
-        if (med.getRoute() != null) sb.append(", Route: ").append(med.getRoute());
-        if (med.getPrescribedBy() != null) sb.append(", Prescribed by: ").append(med.getPrescribedBy());
-        if (med.getStartDate() != null) sb.append(", Start date: ").append(med.getStartDate());
-        if (med.getEndDate() != null) sb.append(", End date: ").append(med.getEndDate());
-        if (med.getNotes() != null) sb.append(". Notes: ").append(med.getNotes());
-        sb.append(". Status: ").append(Boolean.TRUE.equals(med.getIsActive()) ? "Active" : "Inactive");
+        String name = med.getMedicationName();
+        StringBuilder sb = new StringBuilder(name);
+        if (med.getDosage() != null) sb.append(' ').append(med.getDosage());
+        sb.append(Boolean.TRUE.equals(med.getIsActive()) ? " is an active medication." : " is an inactive medication.");
+        if (med.getDosage() != null) appendSentence(sb, "The " + name + " dose is " + med.getDosage());
+        // One instruction sentence ("Take X 10mg by the oral route once daily") because
+        // that is the sentence models compose when asked what a patient takes; written
+        // as separate facts, their composite is not in the source and gets rejected.
+        if (med.getDosage() != null || med.getRoute() != null || med.getFrequency() != null) {
+            StringBuilder take = new StringBuilder("Take ").append(name);
+            if (med.getDosage() != null) take.append(' ').append(med.getDosage());
+            if (med.getRoute() != null) take.append(" by the ").append(med.getRoute()).append(" route");
+            if (med.getFrequency() != null) take.append(' ').append(med.getFrequency());
+            appendSentence(sb, take.toString());
+        }
+        if (med.getPrescribedBy() != null) appendSentence(sb, name + " was prescribed by " + med.getPrescribedBy());
+        if (hasText(med.getStartDate())) appendSentence(sb, name + " was started on " + humanDate(med.getStartDate()));
+        if (hasText(med.getEndDate())) appendSentence(sb, name + " ends on " + humanDate(med.getEndDate()));
+        if (med.getNotes() != null) appendSentence(sb, name + " notes: " + med.getNotes());
         return sb.toString();
     }
 
     private String buildTaskText(Task task) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Task: ").append(task.getName());
-        if (task.getTaskType() != null) sb.append(", Type: ").append(task.getTaskType());
-        if (task.getDescription() != null) sb.append(", Description: ").append(task.getDescription());
-        if (task.getDate() != null) sb.append(", Date: ").append(task.getDate());
-        if (task.getTimeOfDay() != null) sb.append(", Time: ").append(task.getTimeOfDay());
-        if (task.getFrequency() != null) sb.append(", Frequency: ").append(task.getFrequency());
-        sb.append(", Completed: ").append(task.isCompleted() ? "Yes" : "No");
+        String name = task.getName();
+        StringBuilder sb = new StringBuilder(name);
+        String type = task.getTaskType() == null ? "" : task.getTaskType().trim();
+        sb.append(type.isEmpty() ? " is a task" : " is " + article(type) + " " + type + " task");
+        if (hasText(task.getDate())) sb.append(" scheduled for ").append(humanDate(task.getDate()));
+        if (hasText(task.getTimeOfDay())) sb.append(" at ").append(task.getTimeOfDay().trim());
+        sb.append('.');
+        if (isRecurring(task.getFrequency())) appendSentence(sb, name + " repeats " + task.getFrequency());
+        if (hasText(task.getDescription())) appendSentence(sb, name + " details: " + task.getDescription());
+        // "pending" is how people ask about open tasks ("Do I have any pending tasks?").
+        appendSentence(sb, name + (task.isCompleted() ? " is completed" : " is pending and not yet completed"));
         return sb.toString();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    // The calendar stores dates as ISO date-times ("2026-10-20T00:00:00.000"); the
+    // time of day is a separate field, so only the date part belongs in the sentence.
+    private static String datePart(String date) {
+        String trimmed = date.trim();
+        int t = trimmed.indexOf('T');
+        return t == 10 ? trimmed.substring(0, t) : trimmed;
+    }
+
+    // People ask "anything in October?" or "what's on Wednesday?", so dates are written
+    // the way they are asked about ("Wednesday, October 21, 2026"). Anything that is not
+    // an ISO date is kept as entered.
+    private static String humanDate(String date) {
+        String day = datePart(date);
+        try {
+            return LocalDate.parse(day).format(HUMAN_DATE);
+        } catch (DateTimeParseException e) {
+            return day;
+        }
+    }
+
+    private static String article(String word) {
+        return "AEIOUaeiou".indexOf(word.charAt(0)) >= 0 ? "an" : "a";
+    }
+
+    // "once" is how the app marks a one-off task; "repeats once" would misdescribe it.
+    private static boolean isRecurring(String frequency) {
+        return frequency != null && !frequency.isBlank() && !"once".equalsIgnoreCase(frequency.trim());
+    }
+
+    private static void appendSentence(StringBuilder sb, String sentence) {
+        String trimmed = sentence.trim();
+        sb.append(' ').append(trimmed);
+        if (!trimmed.endsWith(".") && !trimmed.endsWith("!") && !trimmed.endsWith("?")) {
+            sb.append('.');
+        }
     }
 
     private String buildVitalText(Vital vital) {

@@ -6,6 +6,7 @@ import com.careconnect.model.TerminationStep;
 import com.careconnect.service.BedrockSentimentService.SentimentResult;
 import com.careconnect.service.CallSessionService.TerminationProgress;
 import com.careconnect.service.RecordingStopResult.Status;
+import com.careconnect.service.conditiondetection.ConditionDetectionService;
 
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -13,11 +14,13 @@ import java.util.Map;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 /**
  * Executes every durable, UUID-fenced call termination step in a retry-safe order.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CallTerminationExecutor {
@@ -31,6 +34,7 @@ public class CallTerminationExecutor {
     private final CallRecordingService callRecordingService;
     private final ChimeService chimeService;
     private final CallSessionService callSessionService;
+    private final ConditionDetectionService conditionDetectionService;
 
     private static boolean isRecordingAdvanced(final Status status) {
         return status == Status.STOPPED
@@ -93,6 +97,9 @@ public class CallTerminationExecutor {
                     return false;
                 }
             }
+            // The recording is finalized, so screening runs can be queued. Idempotent, so
+            // termination retries and the reconciler are safe to reach this more than once.
+            enqueueConditionDetection(callId);
 
             progress = callSessionService.renewTerminationOwnership(callId, claimId);
             if (progress == null) {
@@ -144,6 +151,18 @@ public class CallTerminationExecutor {
         return callSessionService.advanceTerminationStep(
                 callId, claimId, TerminationStep.SUMMARY)
                 || alreadyDone(callId, claimId, TerminationStep.SUMMARY);
+    }
+
+    /** Best-effort: condition screening must never block or fail call termination. */
+    private void enqueueConditionDetection(final String callId) {
+        try {
+            conditionDetectionService.enqueueForCall(callId);
+        } catch (RuntimeException e) {
+            if (log.isWarnEnabled()) {
+                log.warn("Could not enqueue condition detection for call {}: {}",
+                        callId, e.getClass().getSimpleName());
+            }
+        }
     }
 
     private RecordingOutcome runRecordingStep(final String callId, final UUID claimId) {

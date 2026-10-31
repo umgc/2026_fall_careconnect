@@ -6,8 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -39,23 +38,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // Not /v1/api/emergency: those endpoints decide access by the caller, so a signed-in
             // user's token must be read there like anywhere else (DEF-EMG-02).
     );
+    private static final List<String> MASKED_PATHS = List.of(
+            "/v1/api/passport/scan"
+    );
+
     private final JwtTokenProvider jwt;
     private final UserDetailsService uds;
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+    protected boolean shouldNotFilter(HttpServletRequest request){
         String path = request.getRequestURI();
         return EXCLUDED_PATHS.stream().anyMatch(path::startsWith);
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest req,
-                                    HttpServletResponse res,
-                                    FilterChain chain)
+                                    @NonNull HttpServletResponse res,
+                                    @NonNull FilterChain chain)
             throws ServletException, IOException {
 
         String requestURI = req.getRequestURI();
-        log.debug("Processing JWT authentication for: {}", requestURI);
+        List<String> matches = MASKED_PATHS.stream().filter(requestURI::startsWith).toList();
+        if(matches.isEmpty()){
+            log.debug("Processing JWT authentication for: {}", requestURI);
+        }else{
+            log.debug("Processing JWT authentication for masked path {}", matches.get(0));
+        }
+
 
         /* ---------- 1. Find token (header or cookie) --------------------- */
         String token = resolveToken(req);

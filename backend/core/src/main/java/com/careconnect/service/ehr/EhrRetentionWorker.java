@@ -2,9 +2,13 @@ package com.careconnect.service.ehr;
 
 import com.careconnect.ehr.StoredDateOfBirth;
 import com.careconnect.repository.ehr.EhrAuditEventRepository;
+import com.careconnect.repository.ehr.EhrConditionRecordRepository;
 import com.careconnect.repository.ehr.EhrCoverageRecordRepository;
 import com.careconnect.repository.ehr.EhrIdentityConflictRepository;
+import com.careconnect.repository.ehr.EhrMedicationRecordRepository;
+import com.careconnect.repository.ehr.EhrObservationRecordRepository;
 import com.careconnect.repository.ehr.EhrRawPayloadRepository;
+import com.careconnect.repository.ehr.EhrResourceRepository;
 import com.careconnect.repository.ehr.EhrSourceIdentityRepository;
 import com.careconnect.repository.ehr.EhrVisitRecordRepository;
 import com.careconnect.repository.ehr.PatientDateOfBirth;
@@ -49,6 +53,10 @@ import java.util.function.Function;
  * <h2>Which tables, and which date each is measured from</h2>
  * <ul>
  *   <li>{@code ehr_raw_payload}: {@code retrieved_at}, when the source answered.</li>
+ *   <li>{@code ehr_resource}: {@code last_synced_at}, when this application last stored the
+ *       current-state mirror. A mirror for a patient who is still syncing is simply written again
+ *       by the next sync; rows with no {@code patient_id} yet (nullable, additive column) are
+ *       skipped, as the age rule needs a patient.</li>
  *   <li>{@code ehr_identity_conflict}: {@code resolved_at}. Only resolved rows; a {@code PENDING}
  *       row is a question still waiting for the patient and is never purged. The whole row goes,
  *       values and decision together: the trail has by then been kept for the full period.</li>
@@ -59,6 +67,10 @@ import java.util.function.Function;
  *   <li>{@code ehr_coverage_record} and {@code ehr_visit_record}: {@code updated_at}, as for
  *       {@code ehr_source_identity}. Rows still being synced are rewritten, so they do not age
  *       out.</li>
+ *   <li>{@code ehr_medication_record}, {@code ehr_condition_record} and
+ *       {@code ehr_observation_record}: {@code updated_at}, as for {@code ehr_source_identity}.
+ *       These typed projections of the canonical data are rewritten by the next sync, so only data
+ *       nobody has refreshed in the period ages out.</li>
  * </ul>
  * Each of those dates is at or after the moment the record was made, so nothing is purged early.
  * <p>
@@ -105,8 +117,12 @@ public class EhrRetentionWorker {
             final EhrIdentityConflictRepository conflicts,
             final EhrSourceIdentityRepository sourceIdentities,
             final EhrAuditEventRepository auditEvents,
+            final EhrResourceRepository resources,
             final EhrCoverageRecordRepository coverages,
             final EhrVisitRecordRepository visits,
+            final EhrMedicationRecordRepository medications,
+            final EhrConditionRecordRepository conditions,
+            final EhrObservationRecordRepository observations,
             @Value("${careconnect.ehr.retention.years:7}") final int retentionYears,
             @Value("${careconnect.ehr.retention.retain-until-age:25}") final int retainUntilAge) {
         if (retainUntilAge < 0) {
@@ -119,6 +135,9 @@ public class EhrRetentionWorker {
                 new Target("ehr_raw_payload",
                         rawPayloads::findPatientsWithPayloadRetrievedBefore,
                         rawPayloads::deleteRetrievedBeforeForPatients),
+                new Target("ehr_resource",
+                        cutoff -> resources.findPatientsWithResourceSyncedBefore(cutoff.toInstant()),
+                        (cutoff, ids) -> resources.deleteSyncedBeforeForPatients(cutoff.toInstant(), ids)),
                 new Target("ehr_identity_conflict",
                         cutoff -> conflicts.findPatientsWithConflictResolvedBefore(cutoff.toInstant()),
                         (cutoff, ids) -> conflicts.deleteResolvedBeforeForPatients(cutoff.toInstant(), ids)),
@@ -133,7 +152,16 @@ public class EhrRetentionWorker {
                         (cutoff, ids) -> coverages.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)),
                 new Target("ehr_visit_record",
                         cutoff -> visits.findPatientsWithVisitUpdatedBefore(auditableTime(cutoff)),
-                        (cutoff, ids) -> visits.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)));
+                        (cutoff, ids) -> visits.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)),
+                new Target("ehr_medication_record",
+                        cutoff -> medications.findPatientsWithMedicationUpdatedBefore(auditableTime(cutoff)),
+                        (cutoff, ids) -> medications.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)),
+                new Target("ehr_condition_record",
+                        cutoff -> conditions.findPatientsWithConditionUpdatedBefore(auditableTime(cutoff)),
+                        (cutoff, ids) -> conditions.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)),
+                new Target("ehr_observation_record",
+                        cutoff -> observations.findPatientsWithObservationUpdatedBefore(auditableTime(cutoff)),
+                        (cutoff, ids) -> observations.deleteUpdatedBeforeForPatients(auditableTime(cutoff), ids)));
         if (retentionYears <= 0) {
             log.warn("EHR retention purge is OFF (careconnect.ehr.retention.years={}); the ehr_* tables "
                     + "hold PHI and nothing will be purged (issue #214)", retentionYears);

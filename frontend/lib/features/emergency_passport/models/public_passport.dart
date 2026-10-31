@@ -10,7 +10,8 @@ class PassportAllergy {
 
   const PassportAllergy({required this.allergen, this.severity, this.reaction});
 
-  factory PassportAllergy.fromJson(Map<String, dynamic> json) => PassportAllergy(
+  factory PassportAllergy.fromJson(Map<String, dynamic> json) =>
+      PassportAllergy(
         allergen: (json['allergen'] ?? '').toString(),
         severity: json['severity'] as String?,
         reaction: _text(json['reaction']),
@@ -39,7 +40,8 @@ class PassportContact {
 
   const PassportContact({this.name, this.relationship, this.phone});
 
-  factory PassportContact.fromJson(Map<String, dynamic> json) => PassportContact(
+  factory PassportContact.fromJson(Map<String, dynamic> json) =>
+      PassportContact(
         name: _text(json['name']),
         relationship: _text(json['relationship']),
         phone: _text(json['phone']),
@@ -91,8 +93,9 @@ class PublicPassport {
       allergies: list('allergies', PassportAllergy.fromJson),
       medications: list('medications', PassportMedication.fromJson),
       chronicConditions: _text(json['chronicConditions']),
-      emergencyContact:
-          contact is Map<String, dynamic> ? PassportContact.fromJson(contact) : null,
+      emergencyContact: contact is Map<String, dynamic>
+          ? PassportContact.fromJson(contact)
+          : null,
       lastUpdated: updated is String ? DateTime.tryParse(updated) : null,
     );
   }

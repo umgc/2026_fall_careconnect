@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:convert';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -1264,7 +1265,11 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                                       ),
                                                     ),
                                                     Expanded(
-                                                      child: ListTile(
+                                                      // The selected row is tinted, so give the tile its own
+                                                      // Material to keep its ink splash visible.
+                                                      child: Material(
+                                                        type: MaterialType.transparency,
+                                                        child: ListTile(
                                                         dense: false,
                                                         contentPadding:
                                                             const EdgeInsets
@@ -1350,7 +1355,8 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                                                 Navigator.of(
                                                                         context)
                                                                     .push(
-                                                                  MaterialPageRoute(
+                                                                  TitledMaterialPageRoute(
+                                                                    title: 'Call Summary',
                                                                     builder: (_) =>
                                                                         PostCallTelemetrySummaryScreen(
                                                                       callId:
@@ -1359,6 +1365,7 @@ class _CaregiverAnalyticsTabState extends State<CaregiverAnalyticsTab> {
                                                                   ),
                                                                 );
                                                               },
+                                                      ),
                                                       ),
                                                     ),
                                                   ],

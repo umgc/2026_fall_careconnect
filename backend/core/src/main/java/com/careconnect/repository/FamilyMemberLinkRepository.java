@@ -41,25 +41,17 @@ public interface FamilyMemberLinkRepository extends JpaRepository<FamilyMemberLi
     boolean existsByFamilyUserAndPatientUserAndStatus(
             User familyUser, User patientUser, FamilyMemberLink.LinkStatus status);
 
-    @Query("SELECT COUNT(f) > 0 FROM FamilyMemberLink f " +
-            "WHERE f.familyUser.id = :familyMemberUserId " +
-            "AND (f.patientId = :patientId OR f.patientUser.id = :patientId) " +
-            "AND f.status = 'ACTIVE' " +
-            "AND (f.expiresAt IS NULL OR f.expiresAt > :now)")
-    boolean existsByFamilyMemberUserIdAndPatientId(
-            @Param("familyMemberUserId") Long familyMemberUserId,
-            @Param("patientId") Long patientId,
-            @Param("now") LocalDateTime now);
-
-    // patientId column is denormalized for faster lookups; OR covers rows where only patientUser is set.
+    // Matches the patient by user ID only. patientUser is set on every link (the
+    // denormalized patientId column is not), and comparing a user ID against the
+    // patientId column could match an unrelated patient whose entity ID is equal.
     // NULL expiresAt means a permanent link (see FamilyMemberLink#isActive). :now uses JVM default TZ.
     @Query("SELECT CASE WHEN COUNT(f) > 0 THEN true ELSE false END FROM FamilyMemberLink f " +
             "WHERE f.familyUser.id = :familyMemberUserId " +
-            "AND (f.patientId = :patientId OR f.patientUser.id = :patientId) " +
+            "AND f.patientUser.id = :patientUserId " +
             "AND f.status = 'ACTIVE' " +
             "AND (f.expiresAt IS NULL OR f.expiresAt > :now)")
     boolean existsActiveNonExpiredLinkByUserIds(
             @Param("familyMemberUserId") Long familyMemberUserId,
-            @Param("patientId") Long patientId,
+            @Param("patientUserId") Long patientUserId,
             @Param("now") LocalDateTime now);
 }

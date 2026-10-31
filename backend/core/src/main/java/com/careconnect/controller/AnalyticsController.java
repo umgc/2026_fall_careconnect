@@ -35,7 +35,6 @@ import com.careconnect.exception.AppException;
 import com.careconnect.model.Patient;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.PatientCaregiverRepository;
-import com.careconnect.repository.FamilyMemberLinkRepository;
 import com.careconnect.model.FamilyMemberLink;
 import com.careconnect.repository.UserRepository;
 import com.careconnect.service.CaregiverService;
@@ -59,7 +58,6 @@ import java.time.Period;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/v1/api/analytics")
@@ -83,8 +81,6 @@ public class AnalyticsController {
     @Autowired
     private final PatientCaregiverRepository caregiverPatientLinkRepository;
 
-    @Autowired
-    private final FamilyMemberLinkRepository familyMemberPatientLinkRepository;
     private final ScheduledExecutorService sseExecutor = Executors.newScheduledThreadPool(2);
     @Autowired
     private AnalyticsService analyticsService;
@@ -254,11 +250,7 @@ public class AnalyticsController {
             } else if (currentUser.getRole() == Role.CAREGIVER) {
                 hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
             } else if (currentUser.getRole() == Role.FAMILY_MEMBER) {
-                hasAccess = familyMemberPatientLinkRepository.existsByFamilyMemberUserIdAndPatientId(
-                        currentUser.getId(),
-                        patientId,
-                        LocalDateTime.now()
-                );
+                hasAccess = caregiverService.hasAccessToPatient(currentUser.getId(), patientId);
             } else if (currentUser.getRole() == Role.ADMIN) {
                 hasAccess = true;
             }

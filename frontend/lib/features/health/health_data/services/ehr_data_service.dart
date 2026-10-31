@@ -2,6 +2,7 @@ import '../../../../services/auth_token_manager.dart';
 import '../../../../services/api_client.dart';
 import '../models/health_record.dart';
 import '../models/patient_demographics.dart';
+import 'ehr_resource_mapper.dart';
 
 class EhrDataService {
   Future<List<HealthRecord>> fetchRecords({int? patientId}) async =>
@@ -24,6 +25,7 @@ class EhrDataService {
 
     final unifiedResources = await _tryFetchList(
       '/api/ehr/resources',
+      query: {'source': 'ALL'},
       headers: headers,
     );
 
@@ -32,8 +34,8 @@ class EhrDataService {
 
       records.addAll(
         unifiedResources
-            .where((resource) => _sourceFrom(resource['source']) != null)
-            .map(_toHealthRecord),
+            .map(EhrResourceMapper.toHealthRecord)
+            .whereType<HealthRecord>(),
       );
     }
 
@@ -84,11 +86,13 @@ class EhrDataService {
 
   Future<List<Map<String, dynamic>>?> _tryFetchList(
     String path, {
+    Map<String, dynamic>? query,
     required Map<String, String> headers,
   }) async {
     try {
       final values = await ApiClient.instance.getJson<List<dynamic>>(
         path,
+        query: query,
         headers: headers,
         parser: (json) => json is List ? json : <dynamic>[],
       );
@@ -139,12 +143,48 @@ class EhrDataService {
     }
   }
 
-  Future<PatientDemographics?> fetchPatientDemographics() async {
+  /// Sources the Patient Information card reads, most preferred first.
+  /// Epic is the default source of /api/ehr/patient; athenahealth fills any
+  /// field Epic doesn't have, or the whole card when there is no Epic chart.
+  static const demographicsSources = ['EPIC', 'ATHENAHEALTH'];
+
+  /// The patient's demographics, field by field from the first source in
+  /// [demographicsSources] that has each one. Null when no source has any.
+  Future<PatientDemographics?> fetchPatientDemographics() async =>
+      mergeDemographics(await fetchDemographicsBySource());
+
+  /// Each source's demographics by source name (null where a source has
+  /// none), so a caller can see where they disagree. Callers look sources
+  /// up by name: a source that isn't there is null, never an error.
+  Future<Map<String, PatientDemographics?>> fetchDemographicsBySource() async {
+    final results = await Future.wait(
+        demographicsSources.map(_fetchPatientDemographicsFrom));
+    return {
+      for (var i = 0; i < demographicsSources.length; i++)
+        demographicsSources[i]: results[i],
+    };
+  }
+
+  /// Field by field from the first source, in [demographicsSources] order,
+  /// that has each one. A source missing from [bySource] is skipped.
+  static PatientDemographics? mergeDemographics(
+      Map<String, PatientDemographics?> bySource) {
+    PatientDemographics? merged;
+    for (final source in demographicsSources) {
+      final d = bySource[source];
+      merged = merged == null ? d : merged.fillFrom(d);
+    }
+    return merged == null || merged.isEmpty ? null : merged;
+  }
+
+  Future<PatientDemographics?> _fetchPatientDemographicsFrom(
+      String source) async {
     try {
       final headers = await AuthTokenManager.getAuthHeaders();
 
       return await ApiClient.instance.getJson<PatientDemographics>(
         '/api/ehr/patient',
+        query: {'source': source},
         headers: headers,
         parser: (json) => PatientDemographics.fromJson(
           json as Map<String, dynamic>,
@@ -154,18 +194,6 @@ class EhrDataService {
       return null;
     }
   }
-
-  HealthRecord _toHealthRecord(Map<String, dynamic> resource) {
-    return HealthRecord.single(
-      id: (resource['resourceId'] ?? '').toString(),
-      source: _sourceFrom(resource['source'])!,
-      type: _recordTypeFrom(resource['category']),
-      title: _stringOrNull(resource['title']) ?? 'Health record',
-      date: _parseDate(resource['occurredAt']),
-      status: _stringOrNull(resource['status']),
-    );
-  }
-
   HealthRecord _toCernerAllergy(Map<String, dynamic> allergy) {
     return HealthRecord.single(
       id: (allergy['sourceRecordId'] ?? '').toString(),
@@ -230,35 +258,6 @@ class EhrDataService {
     return null;
   }
 
-  RecordSource? _sourceFrom(dynamic source) {
-    switch (source?.toString().trim().toUpperCase()) {
-      case 'EPIC':
-        return RecordSource.epic;
-      case 'CERNER':
-      case 'ORACLE_HEALTH':
-        return RecordSource.cerner;
-      case 'ATHENA':
-        return RecordSource.athena;
-      case 'MEDICARE':
-        return RecordSource.medicare;
-      default:
-        return null;
-    }
-  }
-
-  RecordType _recordTypeFrom(dynamic category) {
-    switch (category?.toString()) {
-      case 'Conditions':
-        return RecordType.condition;
-      case 'Medications':
-        return RecordType.medication;
-      case 'Allergies':
-        return RecordType.allergy;
-      default:
-        return RecordType.other;
-    }
-  }
-
   String? _stringOrNull(dynamic value) {
     if (value == null) {
       return null;
@@ -275,4 +274,5 @@ class EhrDataService {
 
     return DateTime.tryParse(value);
   }
+
 }

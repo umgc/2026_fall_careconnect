@@ -103,7 +103,7 @@ public class MedicareConnectionService {
 
     /** The body of {@code GET /v1/api/medicare/status}, the shape the Medicare tile expects. */
     public record ConnectionStatus(boolean connected, String status, LocalDateTime connectedAt) {
-        static ConnectionStatus unlinked() {
+        public static ConnectionStatus unlinked() {
             return new ConnectionStatus(false, "UNLINKED", null);
         }
     }
@@ -277,7 +277,7 @@ public class MedicareConnectionService {
     }
 
     /** Whether this patient has Medicare linked. A pending link that never finished is not linked. */
-    public ConnectionStatus status(final Long patientId) {
+    public ConnectionStatus status(Long patientId) {
         return crosswalkFor(patientId)
                 .filter(EhrPatientCrosswalk::isLinked)
                 .map(c -> new ConnectionStatus(true, "LINKED", c.getLastLoggedIn()))

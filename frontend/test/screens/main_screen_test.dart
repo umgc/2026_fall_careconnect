@@ -2,6 +2,8 @@
 // MainScreen is the post-login navigation shell with a bottom nav bar.
 
 import 'package:care_connect_app/config/navigation/bottom_nav_config.dart';
+import 'package:care_connect_app/config/navigation/navigation_helper.dart';
+import 'package:care_connect_app/widgets/app_bar_helper.dart';
 import 'package:care_connect_app/config/navigation/main_screen_config.dart';
 import 'package:care_connect_app/features/ai/presentation/pages/voice_command_ai.dart';
 import 'package:care_connect_app/screens/main_screen.dart';
@@ -773,9 +775,11 @@ void main() {
       await tester.pump();
 
       // Invoke the settings TextButton programmatically to avoid shader exception.
-      tester.widget<TextButton>(
-        find.widgetWithIcon(TextButton, Icons.settings),
-      ).onPressed!();
+      tester
+          .widget<TextButton>(
+            find.widgetWithIcon(TextButton, Icons.settings),
+          )
+          .onPressed!();
       await tester.pump();
 
       // Should navigate to last tab (index 1)
@@ -1164,6 +1168,212 @@ void main() {
       // Messages, and Menu.
       expect(navBar.items.length, 6);
     });
+  });
+  // Real router + shell, with lightweight tab contents to isolate navigation
+  // from backend/platform dependencies. No live requests are needed.
+  group('issue #316 dashboard navigation', () {
+    Future<GoRouter> mountShell(
+      WidgetTester tester, {
+      bool animate = false,
+      String initialLocation = '/calendar',
+    }) async {
+      tester.view.physicalSize = const Size(1440, 1920);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final labels = [
+        'Home',
+        'Patient List',
+        'Analytics',
+        'Schedule',
+        'Messages',
+      ];
+      final names = ['home', 'tasks', 'analytics', 'schedule', 'messages'];
+      final config = MainScreenConfig(
+        userRole: 'CAREGIVER',
+        userId: 2,
+        enablePageAnimation: animate,
+        customNavItems: List.generate(
+          names.length,
+          (i) => BottomNavItem(
+            label: labels[i],
+            icon: Icons.circle,
+            routeName: names[i],
+            screen: Scaffold(appBar: AppBar(title: Text('${labels[i]} page'))),
+          ),
+        ),
+      );
+      final router = GoRouter(
+        initialLocation: initialLocation,
+        routes: [
+          GoRoute(
+            path: '/calendar',
+            builder: (context, state) => Scaffold(
+              appBar: AppBarHelper.createAppBar(
+                context,
+                title: 'Calendar Assistant',
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/dashboard',
+            builder: (context, state) => MainScreen(
+              config: config,
+              initialTabIndex: NavigationHelper.getTabIndexFromName(
+                'CAREGIVER',
+                state.uri.queryParameters['tab'] ?? 'home',
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/detail',
+            builder: (_, __) =>
+                Scaffold(appBar: AppBar(title: const Text('Detail page'))),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      final provider = _TestableUserProvider(
+        mockUser: MockUser(id: 2, role: 'CAREGIVER', caregiverId: 2),
+      );
+      addTearDown(provider.dispose);
+      await tester.pumpWidget(
+        ChangeNotifierProvider<UserProvider>.value(
+          value: provider,
+          child: MaterialApp.router(
+            routerConfig: router,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return router;
+    }
+
+    for (final entry in {
+      2: 'analytics',
+      3: 'schedule',
+      4: 'messages',
+    }.entries) {
+      testWidgets('${entry.value} AppBar Back returns to Home after Calendar', (
+        tester,
+      ) async {
+        final router = await mountShell(tester);
+        await tester.tap(find.byIcon(Icons.arrow_back));
+        await tester.pumpAndSettle();
+        expect(router.canPop(), isFalse);
+        final bar = tester.widget<BottomNavigationBar>(
+          find.byType(BottomNavigationBar),
+        );
+        bar.onTap!(entry.key);
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['tab'],
+          entry.value,
+        );
+        await tester.tap(find.byType(BackButton));
+        await tester.pumpAndSettle();
+        expect(find.text('Home page'), findsOneWidget);
+        expect(find.text('Calendar Assistant'), findsNothing);
+        expect(
+          tester
+              .widget<BottomNavigationBar>(find.byType(BottomNavigationBar))
+              .currentIndex,
+          0,
+        );
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
+
+    testWidgets('system Back consumes the tab before leaving dashboard', (
+      tester,
+    ) async {
+      await mountShell(tester, initialLocation: '/dashboard?tab=schedule');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Home page'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('browser Back/Forward route information restores tab and Home',
+        (
+      tester,
+    ) async {
+      final router = await mountShell(tester, initialLocation: '/dashboard');
+      final state = tester.state(find.byType(MainScreen));
+      tester
+          .widget<BottomNavigationBar>(find.byType(BottomNavigationBar))
+          .onTap!(4);
+      await tester.pumpAndSettle();
+      // Simulate the platform route updates delivered by browser Back/Forward.
+      await router.routeInformationProvider.didPushRouteInformation(
+        RouteInformation(uri: Uri.parse('/dashboard')),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(MainScreen)), same(state));
+      expect(find.text('Home page'), findsOneWidget);
+      await router.routeInformationProvider.didPushRouteInformation(
+        RouteInformation(uri: Uri.parse('/dashboard?tab=messages')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Messages page'), findsOneWidget);
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['tab'],
+        'messages',
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('animated tab change skips intermediate pages in history', (
+      tester,
+    ) async {
+      final router = await mountShell(
+        tester,
+        initialLocation: '/dashboard',
+        animate: true,
+      );
+      tester
+          .widget<BottomNavigationBar>(find.byType(BottomNavigationBar))
+          .onTap!(4);
+      await tester.pumpAndSettle();
+      expect(find.text('Messages page'), findsOneWidget);
+      expect(
+        router.routeInformationProvider.value.uri.queryParameters['tab'],
+        'messages',
+      );
+      // A detail route still pops before the selected tab is reset.
+      router.push('/detail');
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Messages page'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Home page'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets(
+      'swiping updates browser location and Home removes local history',
+      (tester) async {
+        final router = await mountShell(tester, initialLocation: '/dashboard');
+        await tester.drag(find.byType(PageView), const Offset(-1440, 0));
+        await tester.pumpAndSettle();
+        expect(
+          router.routeInformationProvider.value.uri.queryParameters['tab'],
+          'tasks',
+        );
+        tester
+            .widget<BottomNavigationBar>(find.byType(BottomNavigationBar))
+            .onTap!(0);
+        await tester.pumpAndSettle();
+        expect(
+            router.routeInformationProvider.value.uri.toString(), '/dashboard');
+        expect(find.byType(BackButton), findsNothing);
+        expect(router.canPop(), isFalse);
+        await tester.pumpWidget(const SizedBox());
+      },
+    );
   });
 }
 

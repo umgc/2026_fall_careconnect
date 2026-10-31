@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:care_connect_app/features/ai_hitl/presentation/hitl_queue_page.dart';
 import 'package:care_connect_app/features/tasks/presentation/calendar_assisiant.dart';
 import 'package:care_connect_app/features/invoices/screens/dashboard/invoice_dashboard_page.dart';
@@ -28,7 +29,8 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Calendar',
               builder: (context) => const CalendarAssistantScreen(),
             ),
           );
@@ -43,7 +45,8 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Invoice Dashboard',
               builder: (context) => const InvoiceDashboardPage(),
             ),
           );
@@ -58,7 +61,8 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(
+            TitledMaterialPageRoute(
+              title: 'Notetaker Search',
               builder: (context) => const NotetakerSearchPage(),
             ),
           );
@@ -74,7 +78,8 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
             Navigator.pop(context);
             Navigator.push(
               context,
-              MaterialPageRoute(
+              TitledMaterialPageRoute(
+                title: 'AI Review Queue',
                 builder: (context) => const HitlQueuePage(),
               ),
             );
@@ -89,7 +94,9 @@ class CaregiverMoreFeaturesBottomDrawerWidget extends StatelessWidget {
           Navigator.pop(context);
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const SettingsPage()),
+            TitledMaterialPageRoute(
+              title: 'Settings',
+              builder: (context) => const SettingsPage()),
           );
         },
       ),

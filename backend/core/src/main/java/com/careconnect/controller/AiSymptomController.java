@@ -53,7 +53,7 @@ public class AiSymptomController {
         }
         Long pid = body.getPatientId();
         if (pid != null) {
-            authorizationService.requirePatientAccess(currentUser, pid);
+            authorizationService.requirePatientRecordAccess(currentUser, pid);
         }
         try {
             List<Allergy> allergies = (pid == null)

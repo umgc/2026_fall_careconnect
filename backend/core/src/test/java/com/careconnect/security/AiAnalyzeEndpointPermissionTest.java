@@ -7,6 +7,7 @@ import com.careconnect.dto.AiSymptomDTO;
 import com.careconnect.model.User;
 import com.careconnect.repository.CaregiverPatientLinkRepository;
 import com.careconnect.repository.FamilyMemberLinkRepository;
+import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -53,7 +54,8 @@ class AiAnalyzeEndpointPermissionTest {
         setField(permissionAspect, "authorizationService",
                 new AuthorizationService(
                         mock(CaregiverPatientLinkRepository.class),
-                        mock(FamilyMemberLinkRepository.class)));
+                        mock(FamilyMemberLinkRepository.class),
+                        mock(PatientRepository.class)));
         setField(permissionAspect, "userRepository", userRepository);
 
         SecurityContextHolder.getContext().setAuthentication(

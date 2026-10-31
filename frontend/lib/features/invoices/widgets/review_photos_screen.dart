@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
@@ -226,7 +227,8 @@ class _ReviewPhotosScreenState extends State<ReviewPhotosScreen> {
                               if (isPdf) {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  TitledMaterialPageRoute(
+                                    title: 'PDF Viewer',
                                     builder: (context) =>
                                         _FullScreenPdfViewer(file: file),
                                     fullscreenDialog: true,

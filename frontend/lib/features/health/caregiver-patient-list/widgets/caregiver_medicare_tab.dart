@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 // caregiver_medicare_tab.dart
 //
 // The Medicare tab on a caregiver's patient page (WBS 6.2.58, FR-MCR-16/17).
@@ -251,7 +252,8 @@ class _CaregiverMedicareTabState extends State<CaregiverMedicareTab>
         subtitle: subtitle.isEmpty ? null : Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
+          TitledMaterialPageRoute<void>(
+            title: 'Health Event Details',
             builder: (_) => HealthEventDetailsScreen(record: r),
           ),
         ),

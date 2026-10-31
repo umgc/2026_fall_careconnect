@@ -40,6 +40,22 @@ services:
       - postgres
     restart: unless-stopped
 
+  dam-sidecar:
+    container_name: dam_sidecar_container
+    # Named so `up` reuses an existing local build instead of rebuilding (~10 min, ~1.7 GB of
+    # model downloads). Rebuild after sidecar changes with: docker compose build dam-sidecar
+    image: careconnect-dam-sidecar:local
+    build: ../../condition-detection-sidecar
+    environment:
+      MIN_SPEECH_SECONDS: ${MIN_SPEECH_SECONDS:-30}
+      MAX_SPEECH_SECONDS: ${MAX_SPEECH_SECONDS:-600}
+      TORCH_NUM_THREADS: ${TORCH_NUM_THREADS:-1}
+    # The backend runs on the host and calls http://localhost:8000; no shared network needed.
+    ports:
+      - "8000:8000"
+    mem_limit: 4g
+    restart: unless-stopped
+
 networks:
   postgres:
     driver: bridge

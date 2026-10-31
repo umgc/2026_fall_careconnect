@@ -173,6 +173,13 @@ public class TaskDtoV2 {
     private Long patientId;
 
     /**
+     * Parent task identifier when this task is an occurrence in a recurring
+     * series. Null identifies the parent occurrence or a one-time task.
+     */
+    @Nullable
+    private Long parentTaskId;
+
+    /**
      * Notifications associated with this task.
      *
      * <p>

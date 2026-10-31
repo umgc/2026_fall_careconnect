@@ -121,8 +121,13 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
     /**
      * Patient-scoped full-text search over {@code search_vector} (Task 4.2).
      *
-     * <p>Uses {@code plainto_tsquery('english', :query)} and ranks with
-     * {@code ts_rank_cd}. Only portable entity columns are selected so Hibernate
+     * <p>Matches a chunk containing <em>any</em> of the query's terms and ranks with
+     * {@code ts_rank_cd}, so chunks matching more terms come first. Questions are
+     * natural language ("What dose of X am I taking?"); requiring every term, as a
+     * plain {@code plainto_tsquery} does, misses a record that never uses the word
+     * "dose" or "take". The terms come from {@code plainto_tsquery('english', :query)},
+     * which already drops stop words and punctuation, with its {@code &} joins
+     * rewritten to {@code |}. Only portable entity columns are selected so Hibernate
      * can map rows without binding {@code search_vector} / {@code embedding}.
      *
      * @param patientId mandatory RBAC scope key (FR-AI-1)
@@ -140,8 +145,8 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND migration_status = 'ACTIVE'
-                      AND search_vector @@ plainto_tsquery('english', :query)
-                    ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
+                      AND search_vector @@ CAST(replace(CAST(plainto_tsquery('english', :query) AS text), ' & ', ' | ') AS tsquery)
+                    ORDER BY ts_rank_cd(search_vector, CAST(replace(CAST(plainto_tsquery('english', :query) AS text), ' & ', ' | ') AS tsquery)) DESC,
                              indexed_at DESC,
                              id ASC
                     LIMIT :limit
@@ -169,9 +174,9 @@ public interface RetrievalIndexChunkRepository extends JpaRepository<RetrievalIn
                     FROM retrieval_index_chunk
                     WHERE patient_id = :patientId
                       AND migration_status = 'ACTIVE'
-                      AND search_vector @@ plainto_tsquery('english', :query)
+                      AND search_vector @@ CAST(replace(CAST(plainto_tsquery('english', :query) AS text), ' & ', ' | ') AS tsquery)
                       AND record_type IN (:recordTypes)
-                    ORDER BY ts_rank_cd(search_vector, plainto_tsquery('english', :query)) DESC,
+                    ORDER BY ts_rank_cd(search_vector, CAST(replace(CAST(plainto_tsquery('english', :query) AS text), ' & ', ' | ') AS tsquery)) DESC,
                              indexed_at DESC,
                              id ASC
                     LIMIT :limit

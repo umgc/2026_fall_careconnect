@@ -23,7 +23,6 @@ public class MedicationService {
     private final MedicationRepository medicationRepository;
     private final PatientRepository patientRepository;
     private final NotificationService notificationService;
-    private final CaregiverPatientLinkService caregiverPatientLinkService;
 
     // -------------------------------------------------------
     // Basic retrieval methods
@@ -43,7 +42,7 @@ public class MedicationService {
     }
 
     /**
-     * Get all medications (active/inactive)
+     * Get current medications, including pending changes but excluding archived history
      */
     public List<MedicationDTO> getAllMedicationsForPatient(Long patientId) {
         Patient patient = patientRepository.findById(patientId)
@@ -51,6 +50,7 @@ public class MedicationService {
 
         return medicationRepository.findByPatientOrderByCreatedAtDesc(patient)
                 .stream()
+                .filter(medication -> !"REMOVED".equals(medication.getApprovalStatus()))
                 .map(this::mapToDTO)
                 .toList();
     }
@@ -198,27 +198,21 @@ public class MedicationService {
     }
 
     /**
-     * Hard delete medication (Caregiver-side) - Actually removes from database
+     * Archive medication (Caregiver-side) while retaining its history
      */
     @Transactional
     public void hardDeleteMedication(Long patientId, Long medicationId, Long caregiverId) {
         Medication medication = medicationRepository.findById(medicationId)
                 .orElseThrow(() -> new AppException(HttpStatus.NOT_FOUND, "Medication not found with id: " + medicationId));
 
-        if (!caregiverPatientLinkService.hasActiveLink(caregiverId, patientId)) {
-            throw new AppException(HttpStatus.FORBIDDEN,
-                    "Caregiver does not have active link to patient");
-        }
-
         if (!medication.getPatient().getId().equals(patientId)) {
             throw new AppException(HttpStatus.FORBIDDEN, "Medication does not belong to patient");
         }
 
-        // Optional: Verify caregiver has access to this patient
-        // You can add caregiver-patient relationship validation here if needed
-
-        // Hard delete from database
-        medicationRepository.delete(medication);
+        medication.setIsActive(false);
+        medication.setApprovalStatus("REMOVED");
+        medication.setUpdatedAt(Instant.now());
+        medicationRepository.save(medication);
 
         // Send notification to patient
         notificationService.sendNotificationToUser(
