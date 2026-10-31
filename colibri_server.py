@@ -28,6 +28,33 @@ def _detect_local_gemma_model():
     return None
 
 
+def _resolve_litert_backend(backend_cls, attr_name: str):
+    """Creates a LiteRT-LM Backend object (e.g., Backend.GPU() or Backend.CPU())."""
+    member = getattr(backend_cls, attr_name)
+    return member() if callable(member) else member
+
+
+def _extract_litert_text(response) -> str:
+    """Extracts assistant text from a LiteRT-LM send_message dict or string response."""
+    if response is None:
+        return ""
+    if isinstance(response, str):
+        return response.strip()
+    if isinstance(response, dict):
+        content = response.get("content")
+        if isinstance(content, list):
+            parts = [
+                str(item.get("text", ""))
+                for item in content
+                if isinstance(item, dict) and item.get("text")
+            ]
+            if parts:
+                return "".join(parts).strip()
+        if isinstance(response.get("text"), str):
+            return response["text"].strip()
+    return str(response).strip()
+
+
 def _init_litert_if_available():
     """Initializes Google LiteRT-LM Python engine if installed and a local model file exists."""
     global _LITERT_ENGINE, _LITERT_MODEL_PATH
@@ -36,24 +63,42 @@ def _init_litert_if_available():
     if not model_path:
         return
     try:
-        from litert_lm import Engine  # type: ignore
+        import litert_lm  # type: ignore
+
+        gpu_backend = _resolve_litert_backend(litert_lm.Backend, "GPU")
+        cpu_backend = _resolve_litert_backend(litert_lm.Backend, "CPU")
         # Use GPU (Metal on M2 Mac / OpenCL-Vulkan on Desktop) with automatic CPU fallback for VMs/Hackintosh
         try:
-            _LITERT_ENGINE = Engine(model_path=model_path, backend="gpu")
+            engine = litert_lm.Engine(model_path, backend=gpu_backend)
+            if hasattr(engine, "__enter__"):
+                engine = engine.__enter__() or engine
         except Exception:
-            _LITERT_ENGINE = Engine(model_path=model_path, backend="cpu")
+            engine = litert_lm.Engine(model_path, backend=cpu_backend)
+            if hasattr(engine, "__enter__"):
+                engine = engine.__enter__() or engine
+        _LITERT_ENGINE = engine
         print(f"[Colibri Local Server] Loaded Google LiteRT-LM engine from {model_path}")
     except Exception:
         _LITERT_ENGINE = None
 
 
+def _configured_ollama_model() -> str:
+    """Returns the exact configured Ollama model tag."""
+    return os.environ.get("CARECONNECT_OLLAMA_MODEL", "gemma2:2b").strip()
+
+
 def _is_ollama_gemma_ready() -> bool:
-    """Checks whether local Ollama fallback is explicitly enabled and serves the Gemma model."""
+    """Checks whether local Ollama fallback is explicitly enabled and serves the exact configured model tag."""
     if os.environ.get("CARECONNECT_USE_OLLAMA", "0") != "1":
         return False
-    target_model = os.environ.get("CARECONNECT_OLLAMA_MODEL", "gemma2:2b").strip()
+    target_model = _configured_ollama_model()
     if not target_model:
         return False
+    expected_tags = (
+        {target_model}
+        if ":" in target_model
+        else {target_model, f"{target_model}:latest"}
+    )
     try:
         req = urllib.request.Request(
             "http://127.0.0.1:11434/api/tags",
@@ -65,10 +110,11 @@ def _is_ollama_gemma_ready() -> bool:
                 return False
             payload = json.loads(resp.read().decode("utf-8"))
             models = payload.get("models") or []
-            target_base = target_model.split(":")[0]
             for item in models:
-                name = str(item.get("name") or item.get("model") or "")
-                if name == target_model or name.split(":")[0] == target_base:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or item.get("model") or "").strip()
+                if name in expected_tags:
                     return True
     except Exception:
         return False
@@ -85,17 +131,25 @@ def _try_litert_or_ollama_generation(prompt: str):
     if _LITERT_ENGINE is not None:
         try:
             conv = _LITERT_ENGINE.create_conversation()
-            resp = conv.send_message(prompt)
-            if resp and str(resp).strip():
-                return str(resp).strip(), "gemma-2b-mediapipe"
+            if hasattr(conv, "__enter__") and hasattr(conv, "__exit__"):
+                with conv as active_conv:
+                    resp = active_conv.send_message(prompt)
+            else:
+                resp = conv.send_message(prompt)
+            text = _extract_litert_text(resp)
+            if text:
+                return text, "gemma-2b-mediapipe"
         except Exception:
             pass
 
     # Optional local Ollama (gemma2:2b) fallback on 127.0.0.1:11434 if running on the VM/host
     if os.environ.get("CARECONNECT_USE_OLLAMA", "0") == "1":
+        target_model = _configured_ollama_model()
+        if not target_model:
+            return None, None
         try:
             req_data = json.dumps({
-                "model": os.environ.get("CARECONNECT_OLLAMA_MODEL", "gemma2:2b"),
+                "model": target_model,
                 "prompt": prompt,
                 "stream": False,
             }).encode("utf-8")
@@ -310,8 +364,19 @@ class ColibriHandler(BaseHTTPRequestHandler):
                     return
                 reply = llm_reply
                 requested_model = llm_model or "gemma-2b-mediapipe"
+            elif _is_gemma_engine_ready():
+                # When a real local engine is loaded, execute real inference for ordinary desktop chat
+                # rather than returning canned demo strings.
+                llm_reply, llm_model = _try_litert_or_ollama_generation(user_msg)
+                if llm_reply:
+                    reply = llm_reply
+                    requested_model = llm_model or requested_model
+                elif is_spanish:
+                    reply = "[ESCALATE_TO_CLINICAL_CLOUD] Consultando su expediente médico completo a través de la IA clínica de CareConnect para responder con precisión."
+                else:
+                    reply = "[ESCALATE_TO_CLINICAL_CLOUD] Reviewing your comprehensive medical records and clinical guidelines via CareConnect Cloud AI."
 
-            # 4. Doctor / Physician inquiries (Colibri local demo router only)
+            # 4. Doctor / Physician inquiries (offline Colibri demo router when no engine is loaded)
             elif any(k in lower for k in ['who is my doctor', 'my doctor', 'doctor name', 'physician', 'pcp', 'primary care', 'provider', 'quien es mi doctor', 'quién es mi doctor', 'quien es mi medico', 'quién es mi médico']):
                 if is_spanish:
                     reply = "Su médica de atención primaria es la Dra. Sarah Mitchell en Medicina Familiar de CareConnect. Su consultorio está ubicado en el campus principal y el teléfono de contacto es (555) 0101."
@@ -350,7 +415,7 @@ class ColibriHandler(BaseHTTPRequestHandler):
                 else:
                     reply = "Hello Mary! I am your CareConnect On-Device Edge Assistant. How can I help you manage your health, medications, or appointments today?"
 
-            # 9. Escalate unhandled Colibri queries to Cloud AI
+            # 9. Escalate unhandled offline queries to Cloud AI
             else:
                 if is_spanish:
                     reply = "[ESCALATE_TO_CLINICAL_CLOUD] Consultando su expediente médico completo a través de la IA clínica de CareConnect para responder con precisión."
@@ -390,6 +455,7 @@ class ColibriHandler(BaseHTTPRequestHandler):
 
 
 def run(port=8000):
+    global _LITERT_ENGINE
     _init_litert_if_available()
     server = HTTPServer(('0.0.0.0', port), ColibriHandler)
     print(
@@ -402,6 +468,12 @@ def run(port=8000):
         pass
     finally:
         server.server_close()
+        if _LITERT_ENGINE is not None and hasattr(_LITERT_ENGINE, "__exit__"):
+            try:
+                _LITERT_ENGINE.__exit__(None, None, None)
+            except Exception:
+                pass
+            _LITERT_ENGINE = None
 
 
 if __name__ == '__main__':
