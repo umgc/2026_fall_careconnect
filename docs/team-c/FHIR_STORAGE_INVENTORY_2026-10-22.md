@@ -1,5 +1,7 @@
 # Current FHIR storage inventory for Team B review
 
+October 31 source update: see [the pre-handoff review](M4_PRE_HANDOFF_REVIEW_2026-10-31.md#storage-and-trust-boundary-updates). Condition retention is now present. The findings below retain their October 22 source scope.
+
 Reviewed October 22, 2026 (America/New_York). Author role: Team C Technical Architect.
 Status: review draft. Related work: CR-2 / issue #305 and WBS 4.2.9, 4.2.10, 4.2.11.
 
