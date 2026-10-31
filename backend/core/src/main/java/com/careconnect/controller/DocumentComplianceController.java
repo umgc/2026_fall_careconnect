@@ -200,7 +200,7 @@ public class DocumentComplianceController {
             throw new UnauthorizedException(
                     "Admin or caregiver role required to view another employee's checklist");
         }
-        authorizationService.requirePatientAccess(user, subjectId);
+        authorizationService.requirePatientRecordAccess(user, subjectId);
     }
 
     private SubjectType parseOptionalSubjectType(String raw) {

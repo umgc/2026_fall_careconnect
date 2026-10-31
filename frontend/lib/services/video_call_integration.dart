@@ -1,3 +1,4 @@
+import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import '../widgets/hybrid_video_call_widget.dart';
 import '../services/backend_api_service.dart';
@@ -52,7 +53,8 @@ class VideoCallIntegration {
 
     // Navigate to video call widget with real data
     Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Video Call',
         builder: (context) => HybridVideoCallWidget(
           userId: caregiverId,
           callId: callId,
@@ -110,7 +112,8 @@ class VideoCallIntegration {
     debugPrint('   Patient: $patientName ($patientEmail)');
 
     Navigator.of(context).push(
-      MaterialPageRoute(
+      TitledMaterialPageRoute(
+        title: 'Video Call',
         builder: (context) => HybridVideoCallWidget(
           userId: caregiverId,
           callId: callId,

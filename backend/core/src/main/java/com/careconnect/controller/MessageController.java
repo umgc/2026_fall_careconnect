@@ -12,8 +12,9 @@ import com.careconnect.repository.CaregiverRepository;
 import com.careconnect.repository.MessageRepository;
 import com.careconnect.repository.PatientRepository;
 import com.careconnect.repository.UserRepository;
-import com.careconnect.service.CaregiverPatientLinkService;
 import com.careconnect.service.FileManagementService;
+import com.careconnect.service.MessageShareService;
+import com.careconnect.service.MessagingPolicy;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -45,9 +46,6 @@ public class MessageController {
     private CaregiverRepository caregiverRepo;
 
     @Autowired
-    private CaregiverPatientLinkService linkService;
-
-    @Autowired
     private FileManagementService fileManagementService;
 
     @Autowired
@@ -55,6 +53,14 @@ public class MessageController {
 
     @Autowired
     private AuthorizationService authorizationService;
+
+    @Autowired
+    private MessagingPolicy messagingPolicy;
+
+    @Autowired
+    private MessageShareService messageShareService;
+
+    static final String NOT_ALLOWED = MessagingPolicy.NOT_ALLOWED;
 
     private static String fullName(String first, String last) {
         String f = (first != null) ? first.trim() : "";
@@ -66,13 +72,43 @@ public class MessageController {
     @RequirePermission(Permission.SEND_MESSAGES)
 
     @PostMapping("/send")
-    public ResponseEntity<Message> sendMessage(@RequestBody Message message) throws UnauthorizedException {
+    public ResponseEntity<?> sendMessage(@RequestBody Message request) throws UnauthorizedException {
         User currentUser = securityUtil.resolveCurrentUser();
-        authorizationService.requireSelfOrAdmin(currentUser, message.getSenderId());
-        message.setTimestamp(LocalDateTime.now());
-        message.setRead(false);
+        authorizationService.requireSelfOrAdmin(currentUser, request.getSenderId());
+        if (!messagingPolicy.canMessage(request.getSenderId(), request.getReceiverId())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(NOT_ALLOWED);
+        }
+
+        // Only the sender, receiver and content come from the request. Saving the body as sent would let a
+        // client set id (overwriting another message) or attachmentId (FileController lets anyone in a
+        // conversation download its attachments, so that would expose any file by id).
+        Message message = new Message(request.getSenderId(), request.getReceiverId(), request.getContent());
         Message saved = messageRepo.save(message);
         return ResponseEntity.ok(saved);
+    }
+
+    /** Body of {@code POST /share}: who gets the card and what it opens, for example MEDICARE. */
+    public record ShareRequest(Long receiverId, String kind) {
+    }
+
+    /**
+     * A patient shares one kind of their data with a linked caregiver as a card in chat. The patient
+     * is the signed-in user; the card holds only what it opens, and the data's own access rule is
+     * checked when the caregiver opens it (see {@link MessageShareService}).
+     *
+     * @return {@code { message, receiverCanView }}. receiverCanView false means the caregiver cannot
+     *         open the card yet, because the patient has not given the consent.
+     */
+    @RequirePermission(Permission.SEND_MESSAGES)
+    @PostMapping("/share")
+    public ResponseEntity<Map<String, Object>> share(@RequestBody ShareRequest request) {
+        User currentUser = securityUtil.resolveCurrentUser();
+        MessageShareService.ShareResult result = messageShareService.share(
+                currentUser, request.receiverId(), request.kind());
+        return ResponseEntity.ok(Map.of(
+                "message", result.message(),
+                "receiverCanView", result.receiverCanView()
+        ));
     }
 
     // ✅ Fetch full conversation between two users
@@ -136,12 +172,11 @@ public class MessageController {
             @RequestParam("file") MultipartFile file,
             @RequestParam Long senderId,
             @RequestParam Long receiverId
-    ) {
-        boolean allowed = linkService.isPatientMessagingEnabled(senderId, receiverId)
-                || linkService.isPatientMessagingEnabled(receiverId, senderId);
-        if (!allowed) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("Messaging is not enabled for this caregiver-patient link.");
+    ) throws UnauthorizedException {
+        User currentUser = securityUtil.resolveCurrentUser();
+        authorizationService.requireSelfOrAdmin(currentUser, senderId);
+        if (!messagingPolicy.canMessage(senderId, receiverId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(NOT_ALLOWED);
         }
 
         try {

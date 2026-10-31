@@ -669,10 +669,10 @@ void main() {
     });
 
     test('getPendingRequestsByCaregiver returns 200', () async {
-      // Pending connection requests are listed for a specific caregiver.
+      // Pending connection requests are listed for the signed-in caregiver.
       final resp = await _withSpec(
         const _FakeSpec(200, '[]'),
-        () => ApiService.getPendingRequestsByCaregiver(1),
+        () => ApiService.getPendingRequestsByCaregiver(),
       );
       expect(resp.statusCode, 200);
     });
@@ -2085,6 +2085,59 @@ void main() {
       final result = await _withSpec(
         const _FakeSpec(403, '{"error":"forbidden"}'),
         () => ApiService.getCallRecordingPlaybackData('call-1'),
+      );
+
+      expect(result, isNull);
+    });
+  });
+
+  // getConditionFlags backs the post-call condition screening card, which treats null as
+  // "couldn't load" and shows a retry message, so every failure must come back as null.
+  group('getConditionFlags', () {
+    // Scenario: caregiver view of a finished screening.
+    test('returns the screening map on 200', () async {
+      final body = {
+        'callId': 'chime_call_1',
+        'models': [
+          {'modelId': 'kintsugi-dam-3.1', 'state': 'COMPLETE'},
+        ],
+      };
+
+      final result = await _withSpec(
+        _FakeSpec(200, _okJson(body)),
+        () => ApiService.getConditionFlags('chime_call_1'),
+      );
+
+      expect(result, isNotNull);
+      expect(result!['callId'], 'chime_call_1');
+      expect((result['models'] as List).single['state'], 'COMPLETE');
+    });
+
+    // Scenario: the backend refuses patients with 403.
+    test('returns null on non-200', () async {
+      final result = await _withSpec(
+        const _FakeSpec(403, '{"error":"forbidden"}'),
+        () => ApiService.getConditionFlags('chime_call_1'),
+      );
+
+      expect(result, isNull);
+    });
+
+    // Scenario: a 200 whose JSON is not an object is not a screening result.
+    test('returns null when the body is not a JSON object', () async {
+      final result = await _withSpec(
+        const _FakeSpec(200, '[1, 2]'),
+        () => ApiService.getConditionFlags('chime_call_1'),
+      );
+
+      expect(result, isNull);
+    });
+
+    // Scenario: a proxy error page arrives with 200; decoding throws and is contained.
+    test('returns null when the body is not JSON', () async {
+      final result = await _withSpec(
+        const _FakeSpec(200, '<html>Bad Gateway</html>'),
+        () => ApiService.getConditionFlags('chime_call_1'),
       );
 
       expect(result, isNull);

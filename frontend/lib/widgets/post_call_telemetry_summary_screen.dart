@@ -3,9 +3,13 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/theme/sentiment_colors.dart';
+import '../features/condition_detection/models/condition_flags.dart';
+import '../features/condition_detection/presentation/widgets/condition_flags_card.dart';
+import '../providers/user_provider.dart';
 import '../services/api_service.dart';
 import '../utils/sentiment_clip_recording_status.dart';
 import '../utils/sentiment_clip_window.dart';
@@ -49,6 +53,8 @@ class _PostCallTelemetrySummaryScreenState
   Map<String, dynamic>? _callSummary;
   List<Map<String, dynamic>> _transcriptSegments = const [];
   Map<String, dynamic>? _recording;
+  bool _showConditionFlags = false;
+  ConditionFlagsResult? _conditionFlags;
   bool _loadingPlaybackUrl = false;
   bool _loadingClip = false;
   String? _clipPlaybackUrl;
@@ -279,18 +285,36 @@ class _PostCallTelemetrySummaryScreenState
     }
   }
 
+  /// Condition screening is never shown to patients (the backend also refuses them).
+  /// Unknown or missing users are treated as not allowed.
+  bool _viewerMaySeeConditionFlags() {
+    try {
+      final role = Provider.of<UserProvider>(context, listen: false).user?.role;
+      return role != null &&
+          role.trim().isNotEmpty &&
+          role.toUpperCase() != 'PATIENT';
+    } on ProviderNotFoundException {
+      return false;
+    }
+  }
+
   Future<void> _loadTelemetry() async {
     setState(() => _loading = true);
+    final showConditionFlags = _viewerMaySeeConditionFlags();
     final results = await Future.wait([
       ApiService.getCallTelemetry(widget.callId),
       ApiService.getCallSummary(widget.callId),
       ApiService.getCallTranscriptSegments(widget.callId),
       ApiService.getCallRecording(widget.callId),
+      showConditionFlags
+          ? ApiService.getConditionFlags(widget.callId)
+          : Future<Map<String, dynamic>?>.value(null),
     ]);
     final callEvents = (results[0] as List<Map<String, dynamic>>);
     final callSummary = results[1] as Map<String, dynamic>?;
     final transcriptSegments = (results[2] as List<Map<String, dynamic>>);
     final recording = results[3] as Map<String, dynamic>?;
+    final conditionFlagsJson = results[4] as Map<String, dynamic>?;
     final sorted = _sortByOccurredAtAsc(callEvents);
     if (!mounted) return;
     setState(() {
@@ -298,6 +322,10 @@ class _PostCallTelemetrySummaryScreenState
       _callSummary = callSummary;
       _transcriptSegments = transcriptSegments;
       _recording = recording;
+      _showConditionFlags = showConditionFlags;
+      _conditionFlags = conditionFlagsJson == null
+          ? null
+          : ConditionFlagsResult.fromJson(conditionFlagsJson);
       _clearSentimentSelectionState();
       _customTimelineRange = null;
       _loading = false;
@@ -1184,6 +1212,12 @@ class _PostCallTelemetrySummaryScreenState
                       const SizedBox(height: 16),
                     if (_recording != null) ...[
                       _buildRecordingCard(isDark),
+                      const SizedBox(height: 16),
+                    ],
+                    if (_showConditionFlags &&
+                        (_conditionFlags == null ||
+                            _conditionFlags!.runs.isNotEmpty)) ...[
+                      ConditionFlagsCard(result: _conditionFlags),
                       const SizedBox(height: 16),
                     ],
                     Text(

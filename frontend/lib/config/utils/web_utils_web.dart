@@ -8,17 +8,15 @@ class WebUtils {
   static void configureWebViewport() {
     if (!kIsWeb) return;
 
-    // Set viewport meta tag for better responsive behavior
+    // Preserve responsive sizing without blocking browser pinch-zoom.
     final meta =
         document.querySelector('meta[name="viewport"]') as HTMLMetaElement?;
     if (meta != null) {
-      meta.content =
-          'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      meta.content = 'width=device-width, initial-scale=1.0';
     } else {
       final viewportMeta = HTMLMetaElement()
         ..name = 'viewport'
-        ..content =
-            'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        ..content = 'width=device-width, initial-scale=1.0';
       document.head!.append(viewportMeta);
     }
   }

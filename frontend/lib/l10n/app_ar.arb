@@ -165,6 +165,7 @@
   "ptdashboard_onceAtBed": "مرة واحدة يوميًا عند وقت النوم",
   
   "login_loginFailedError": "فشل تسجيل الدخول",
+  "login_invalidCredentials": "اسم المستخدم أو كلمة المرور غير صحيحة. تحقق منهما وحاول مرة أخرى.",
 
   "roles_Patient": "مريض",
   "roles_Caregiver": "مقدم رعاية",

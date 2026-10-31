@@ -45,6 +45,16 @@ Resources:
       ImageScanningConfiguration:
         ScanOnPush: false
 
+  # AI condition detection (DAM) inference sidecar image repository.
+  # Runs as a second container in the backend task; see backend/condition-detection-sidecar.
+  ConditionSidecarRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${RepositoryName}-dam-sidecar
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: false
+
   # Log group used by the ECS task definition.
   BackendLogGroup:
     Type: AWS::Logs::LogGroup
@@ -257,6 +267,16 @@ Outputs:
     Value: !Ref BackendRepository
     Export:
       Name: !Sub careconnect-${Environment}-EcrRepositoryName
+
+  ConditionSidecarRepositoryUri:
+    Value: !GetAtt ConditionSidecarRepository.RepositoryUri
+    Export:
+      Name: !Sub careconnect-${Environment}-ConditionSidecarRepositoryUri
+
+  ConditionSidecarRepositoryName:
+    Value: !Ref ConditionSidecarRepository
+    Export:
+      Name: !Sub careconnect-${Environment}-ConditionSidecarRepositoryName
 
   EcsClusterName:
     Value: !Ref EcsCluster

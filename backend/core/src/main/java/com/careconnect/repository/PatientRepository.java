@@ -24,7 +24,8 @@ public interface PatientRepository extends JpaRepository<Patient, Long> {
     @Query("SELECT COUNT(p) > 0 FROM Patient p JOIN CaregiverPatientLink cpl " +
             "ON p.user.id = cpl.patientUser.id " +
             "WHERE p.id = :patientId AND cpl.caregiverUser.id = :caregiverId " +
-            "AND cpl.status = 'ACTIVE'")
+            "AND cpl.status = 'ACTIVE' " +
+            "AND (cpl.expiresAt IS NULL OR cpl.expiresAt > CURRENT_TIMESTAMP)")
     boolean hasAccessByCaregiverId(@Param("patientId") Long patientId,
                                    @Param("caregiverId") Long caregiverId);
 

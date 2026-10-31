@@ -12,8 +12,15 @@ one (a file whose diff only deletes lines needs no test):
         -> backend/core/src/test/java/com/careconnect/FooTest.java
     backend implementation FooImpl.java may instead use FooTest.java
 
-Test files changed directly on the PR are run as well. Exemptions live in
-scripts/test-exemptions.txt and are shared with coverage_gate.py.
+Test files changed directly on the PR are run as well, and so are a changed
+file's related tests: tests in the same folder whose name extends its own,
+for example SchemaPatchRunner.java -> SchemaPatchRunnerStartupTest.java, or
+foo.dart -> foo_offline_test.dart. Without them a file whose coverage comes
+from those tests fails the coverage gate on a PR that doesn't change them
+(seen on #334). A longer name that is itself a source file belongs to that
+file instead (Patient.java does not pull in PatientControllerTest.java).
+Exemptions live in scripts/test-exemptions.txt and are shared with
+coverage_gate.py.
 
 Usage:
     python scripts/test_mapping.py \
@@ -192,6 +199,46 @@ def expected_tests(path: str) -> list[str]:
     return candidates
 
 
+def related_tests(path: str, repo_root: str) -> list[str]:
+    """
+    Repo-root paths of a source file's related tests: tests in the folder of
+    its expected test whose name extends the source's own name, unless that
+    longer name is itself a source file in the source's folder.
+    """
+    expected = expected_test(path)
+    if expected is None:
+        return []
+    root = Path(repo_root)
+    test_dir = (root / expected).parent
+    source_dir = (root / path).parent
+    if not test_dir.is_dir():
+        return []
+
+    if is_frontend_source(path):
+        stem = Path(path).stem  # foo
+        prefix, suffix, src_ext = f"{stem}_", "_test.dart", ".dart"
+    else:
+        stem = Path(path).stem  # SchemaPatchRunner
+        prefix, suffix, src_ext = stem, "Test.java", ".java"
+
+    related = []
+    for candidate in sorted(test_dir.iterdir()):
+        name = candidate.name
+        if not (candidate.is_file() and name.startswith(prefix) and name.endswith(suffix)):
+            continue
+        middle = name[len(stem):-len(suffix)]  # "Startup" or "_offline"
+        if not middle.strip("_"):
+            continue  # the same-name test itself
+        if is_backend_source(path) and not middle[0].isupper():
+            continue  # FooBarTest, not FoobarTest
+        # A longer name that is a source file of its own belongs to that file.
+        owner = name[: -len(suffix)] + src_ext
+        if (source_dir / owner).is_file():
+            continue
+        related.append(candidate.relative_to(root).as_posix())
+    return related
+
+
 # ---------------------------------------------------------------------------
 # Test selection
 # ---------------------------------------------------------------------------
@@ -231,6 +278,8 @@ def select_tests(
             tests.add(candidate)
         elif added_lines is None or added_lines.get(f):
             missing.append((f, candidates[0]))
+        # Related tests run too, but don't replace the same-name test above.
+        tests.update(related_tests(f, repo_root))
 
     frontend = sorted(
         t.removeprefix("frontend/") for t in tests if t.startswith(FRONTEND_TEST)

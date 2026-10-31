@@ -21,6 +21,14 @@ Parameters:
     Type: String
     Description: Full ECR image URI including tag
 
+  # Full ECR image URI (with tag) for the AI condition detection (DAM) inference sidecar.
+  # Leave empty to run without it: the task keeps its single container and voice
+  # screening (depression/anxiety) is switched off; transcript screening still runs.
+  SidecarImageUri:
+    Type: String
+    Default: ''
+    Description: Full ECR image URI including tag for the DAM sidecar, or empty to omit it
+
   # Spring profile: use prod for cfdemo/staging/prod (SSM, SendGrid, AI); dev for local cloud experiments.
   SpringProfile:
     Type: String
@@ -62,10 +70,66 @@ Parameters:
     Type: String
     Default: amazon.nova-lite-v1:0
 
+  # Epic SMART configuration is off unless explicitly enabled for this environment.
+  EpicEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+  EpicClientId:
+    Type: String
+    Default: ''
+  EpicRedirectUri:
+    Type: String
+    Default: ''
+  EpicWebReturnUrl:
+    Type: String
+    Default: ''
+  EpicClientSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+  EmailCryptoSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+
   # SendGrid from-address for prod profile email (API key loaded from SSM when SpringProfile=prod).
   FromEmail:
     Type: String
     Default: noreply@careconnect.com
+
+  # Medicare (Blue Button 2.0). Defaults match application.properties, so an environment that
+  # leaves these unset behaves as it did before they existed. MedicareRedirectUri must match the
+  # CMS sandbox app registration exactly and end in /login/oauth2/code/medicare.
+  MedicareEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  MedicareMode:
+    Type: String
+    Default: live
+    AllowedValues:
+      - live
+      - mock
+
+  MedicareClientId:
+    Type: String
+    Default: not-configured
+
+  MedicareRedirectUri:
+    Type: String
+    Default: http://localhost:8080/login/oauth2/code/medicare
+
+  # Stored in Secrets Manager by this stack, so app-only deploys can set or change it.
+  MedicareClientSecret:
+    Type: String
+    NoEcho: true
+    Default: not-configured
 
   # Used by backend auth / redirect flows and some generated links.
   FrontendBaseUrl:
@@ -178,6 +242,19 @@ Parameters:
     Default: ''
     Description: Route 53 Hosted Zone ID (required if DomainName is set)
 
+Rules:
+  EpicRequiredSettings:
+    RuleCondition: !Equals [!Ref EpicEnabled, 'true']
+    Assertions:
+      - Assert: !Not [!Equals [!Ref EpicClientId, '']]
+        AssertDescription: EpicClientId is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EpicRedirectUri, '']]
+        AssertDescription: EpicRedirectUri is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EpicWebReturnUrl, '']]
+        AssertDescription: EpicWebReturnUrl is required when Epic is enabled.
+      - Assert: !Not [!Equals [!Ref EmailCryptoSecret, '']]
+        AssertDescription: EmailCryptoSecret is required to encrypt Epic tokens.
+
 Conditions:
   HasCernerClientSecret: !And
     - !Equals [!Ref CareConnectCernerEnabled, 'true']
@@ -185,8 +262,30 @@ Conditions:
   # Only create custom domain resources when a domain name is provided.
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
   IsProdProfile: !Equals [!Ref SpringProfile, 'prod']
+  # Run the DAM inference sidecar only when an image has been pushed for it.
+  HasConditionSidecar: !Not [!Equals [!Ref SidecarImageUri, '']]
+  UseEpic: !Equals [!Ref EpicEnabled, 'true']
+  UseEpicClientSecret: !And
+    - !Condition UseEpic
+    - !Not [!Equals [!Ref EpicClientSecret, '']]
 
 Resources:
+  # ECS injects these values from Secrets Manager; they never appear in the task
+  # definition's plaintext Environment list. Both values come from NoEcho inputs.
+  EpicClientSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseEpicClientSecret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/epic-client-secret
+      SecretString: !Ref EpicClientSecret
+
+  EmailCryptoSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Condition: UseEpic
+    Properties:
+      Name: !Sub /careconnect/${Environment}/email-crypto-secret
+      SecretString: !Ref EmailCryptoSecret
+
   # ---------------------------------------------------------------------------
   # Cloud Map namespace and service for ECS service discovery.
   # API Gateway VPC Link routes traffic through Cloud Map to ECS tasks.
@@ -549,6 +648,14 @@ Resources:
   # ECS Task Definition and Service.
   # ---------------------------------------------------------------------------
 
+  # Consumed by ECS as CARECONNECT_MEDICARE_CLIENT_SECRET. Kept in this stack rather than the
+  # data stack so app-only deploys, which skip the data stack, can create and update it.
+  MedicareClientSecretValue:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub /careconnect/${Environment}/medicare-client-secret
+      SecretString: !Ref MedicareClientSecret
+
   # ECS task definition tied to the runtime contract used by the backend code.
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -566,10 +673,19 @@ Resources:
       RuntimePlatform:
         OperatingSystemFamily: LINUX
         CpuArchitecture: X86_64
+      # The sidecar image (PyTorch + ~1.7 GB of model weights) needs more than the 20 GiB default.
+      EphemeralStorage: !If
+        - HasConditionSidecar
+        - SizeInGiB: 40
+        - !Ref AWS::NoValue
       ContainerDefinitions:
         - Name: cc-backend
           Image: !Ref BackendImageUri
           Essential: true
+          # With the sidecar, pin the backend to its pre-sidecar 3 GB and give it priority on
+          # the shared vCPU (CPU units are soft shares; idle CPU stays usable by either).
+          Memory: !If [HasConditionSidecar, 3072, !Ref AWS::NoValue]
+          Cpu: !If [HasConditionSidecar, 768, !Ref AWS::NoValue]
           PortMappings:
             - ContainerPort: !Ref ContainerPort
               HostPort: !Ref ContainerPort
@@ -580,6 +696,18 @@ Resources:
               HostPort: !Ref InternalWebSocketPort
               Protocol: tcp
               Name: websocket-callback-port
+          # Cloud Map (HealthCheckCustomConfig) takes its health from ECS task health, which
+          # counts only essential containers' health checks. Once the non-essential sidecar
+          # defines one, a backend without its own never reports HEALTHY, the Cloud Map
+          # instance stays UNHEALTHY, and the deployment never stabilizes.
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - !Sub 'curl -fsS http://localhost:${ContainerPort}${HealthCheckPath} || exit 1'
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 180
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -633,6 +761,19 @@ Resources:
               Value: !Ref AiModel
             - Name: CARECONNECT_LLM_ENABLED
               Value: !Ref CareConnectLlmEnabled
+            # Epic SMART is explicitly enabled and configured per environment.
+            - Name: EPIC_ENABLED
+              Value: !Ref EpicEnabled
+            - Name: EPIC_CLIENT_ID
+              Value: !Ref EpicClientId
+            - Name: EPIC_REDIRECT_URI
+              Value: !Ref EpicRedirectUri
+            - Name: EPIC_WEB_RETURN_URL
+              Value: !Ref EpicWebReturnUrl
+            # Staging uses the dev Spring profile, whose default enables verbose
+            # Epic error responses. Keep diagnostics server-side on deployed ECS.
+            - Name: EPIC_DIAGNOSTICS_VERBOSE
+              Value: 'false'
             # Prod profile email (SendGrid API key via SSM; dev profile ignores these)
             - Name: EMAIL_PROVIDER
               Value: !If [IsProdProfile, 'sendgrid', 'console']
@@ -664,11 +805,27 @@ Resources:
             # Must match ChimeKvsStreamDiscoveryConnection ApiKeyValue (X-EventBridge-Connection).
             - Name: CARECONNECT_KVS_EVENT_WEBHOOK_SHARED_SECRET
               Value: !Sub 'careconnect-${Environment}-kvs-discovery'
+            # AI condition detection. Voice screening needs the sidecar on localhost.
+            - Name: CARECONNECT_CONDITION_DETECTION_DAM_ENABLED
+              Value: !If [HasConditionSidecar, 'true', 'false']
+            - Name: CARECONNECT_DAM_URL
+              Value: http://localhost:8000
+            # Medicare (Blue Button 2.0) sign-in and retrieval.
+            - Name: CARECONNECT_MEDICARE_ENABLED
+              Value: !Ref MedicareEnabled
+            - Name: CARECONNECT_MEDICARE_MODE
+              Value: !Ref MedicareMode
+            - Name: CARECONNECT_MEDICARE_CLIENT_ID
+              Value: !Ref MedicareClientId
+            - Name: CARECONNECT_MEDICARE_REDIRECT_URI
+              Value: !Ref MedicareRedirectUri
           Secrets:
             # Secret injection from the data stack.
             - Name: DB_PASSWORD
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-DatabasePasswordSecretArn
+            - Name: CARECONNECT_MEDICARE_CLIENT_SECRET
+              ValueFrom: !Ref MedicareClientSecretValue
             - Name: SECURITY_JWT_SECRET
               ValueFrom:
                 Fn::ImportValue: !Sub careconnect-${Environment}-JwtSecretArn
@@ -677,6 +834,95 @@ Resources:
               - Name: CERNER_CLIENT_SECRET
                 ValueFrom: !Ref CernerClientSecretArn
               - !Ref AWS::NoValue
+            - !If
+              - UseEpic
+              - Name: EMAIL_CRYPTO_SECRET
+                ValueFrom: !Ref EmailCryptoSecretStore
+              - !Ref AWS::NoValue
+            - !If
+              - UseEpicClientSecret
+              - Name: EPIC_CLIENT_SECRET
+                ValueFrom: !Ref EpicClientSecretStore
+              - !Ref AWS::NoValue
+        # DAM depression/anxiety inference (CPU). Not essential: if it stops, the API keeps
+        # serving and voice screening runs retry. Reachable only from cc-backend on localhost.
+        - !If
+          - HasConditionSidecar
+          - Name: dam-sidecar
+            Image: !Ref SidecarImageUri
+            Essential: false
+            # The sidecar exits after its model-load retries are exhausted; ECS restarts it in
+            # place (the API keeps serving). It must have run 300 s before a restart is attempted
+            # again, so a permanently broken image doesn't restart in a tight loop.
+            RestartPolicy:
+              Enabled: true
+              RestartAttemptPeriod: 300
+            Memory: 4096
+            Cpu: 256
+            PortMappings:
+              - ContainerPort: 8000
+                HostPort: 8000
+                Protocol: tcp
+                Name: dam-port
+            Environment:
+              - Name: TORCH_NUM_THREADS
+                Value: '1'
+              - Name: MIN_SPEECH_SECONDS
+                Value: '30'
+              - Name: MAX_SPEECH_SECONDS
+                Value: '600'
+            HealthCheck:
+              Command:
+                - CMD
+                - python
+                - -c
+                - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"
+              Interval: 30
+              Timeout: 5
+              Retries: 3
+              # Model load takes about 90 s on one vCPU.
+              StartPeriod: 240
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group:
+                  Fn::ImportValue: !Sub careconnect-${Environment}-BackendLogGroupName
+                awslogs-region: !Ref AWS::Region
+                awslogs-stream-prefix: dam
+          - !Ref AWS::NoValue
+
+  # Voice screening is unavailable while the sidecar can't load its model. Count each failed
+  # load and raise a console-only alarm (no notification actions by design).
+  SidecarModelLoadFailureMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Condition: HasConditionSidecar
+    Properties:
+      LogGroupName:
+        Fn::ImportValue: !Sub careconnect-${Environment}-BackendLogGroupName
+      FilterPattern: '"model load failed"'
+      MetricTransformations:
+        - MetricNamespace: CareConnect/ConditionDetection
+          MetricName: !Sub SidecarModelLoadFailures-${Environment}
+          MetricValue: '1'
+          DefaultValue: 0
+
+  SidecarModelLoadFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: HasConditionSidecar
+    Properties:
+      AlarmName: !Sub careconnect-${Environment}-dam-sidecar-model-load-failed
+      AlarmDescription: >-
+        The DAM sidecar failed to load its model, so voice (depression/anxiety) screening is
+        paused. The sidecar retries, then exits and ECS restarts it; check the dam/ log streams.
+      Namespace: CareConnect/ConditionDetection
+      MetricName: !Sub SidecarModelLoadFailures-${Environment}
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
   # ECS Fargate service registered with Cloud Map for API Gateway discovery
   # and with the websocket NLB target group for the WebSocket API.
   EcsService:
@@ -691,6 +937,13 @@ Resources:
       TaskDefinition: !Ref TaskDefinition
       # Spring Boot startup takes a while; don't let NLB health checks kill new tasks.
       HealthCheckGracePeriodSeconds: 240
+      # Fail a deployment whose tasks keep crashing or failing health checks instead of
+      # leaving CloudFormation waiting for up to 3 hours; roll back to the last working
+      # task definition when there is one.
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
       LoadBalancers:
         - ContainerName: cc-backend
           ContainerPort: !Ref InternalWebSocketPort

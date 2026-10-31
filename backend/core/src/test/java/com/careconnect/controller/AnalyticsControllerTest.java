@@ -707,4 +707,40 @@ class AnalyticsControllerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
+    @Nested
+    class RecentVitalAlerts {
+
+        @Test
+        void familyMemberWithAccessCanReadAlerts() throws Exception {
+            mockAuth();
+            final User familyMember = makeUser(USER_ID, Role.FAMILY_MEMBER);
+            final Patient patient = makePatient(makeUser(OTHER_ID, Role.PATIENT));
+
+            when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(familyMember));
+            when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+            when(caregiverService.hasAccessToPatient(USER_ID, PATIENT_ID)).thenReturn(true);
+            when(analyticsService.getRecentVitalAlertEvents(PATIENT_ID, 5)).thenReturn(List.of());
+
+            final ResponseEntity<?> response = controller.recentVitalAlerts(PATIENT_ID, 5);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        }
+
+        @Test
+        void familyMemberWithoutAccessIsRejected() throws Exception {
+            mockAuth();
+            final User familyMember = makeUser(USER_ID, Role.FAMILY_MEMBER);
+            final Patient patient = makePatient(makeUser(OTHER_ID, Role.PATIENT));
+
+            when(userRepository.findByEmail(USER_EMAIL)).thenReturn(Optional.of(familyMember));
+            when(patientRepository.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+            when(caregiverService.hasAccessToPatient(USER_ID, PATIENT_ID)).thenReturn(false);
+
+            final ResponseEntity<?> response = controller.recentVitalAlerts(PATIENT_ID, 5);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            verifyNoInteractions(analyticsService);
+        }
+    }
 }

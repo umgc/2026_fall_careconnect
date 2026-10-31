@@ -34,7 +34,8 @@ class ScanFailed extends ScanResult {
 /// Calls the public scan endpoint. No sign-in, no auth header: whoever
 /// scans the code at a scene has no account.
 class PassportScanService {
-  PassportScanService({http.Client? client}) : _client = client ?? http.Client();
+  PassportScanService({http.Client? client})
+      : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -48,9 +49,8 @@ class PassportScanService {
         '${getBackendBaseUrl()}/v1/api/passport/scan/${Uri.encodeComponent(code)}');
     final http.Response resp;
     try {
-      resp = await _client
-          .get(uri, headers: const {'Accept': 'application/json'})
-          .timeout(_timeout);
+      resp = await _client.get(uri,
+          headers: const {'Accept': 'application/json'}).timeout(_timeout);
     } catch (_) {
       return const ScanFailed();
     }

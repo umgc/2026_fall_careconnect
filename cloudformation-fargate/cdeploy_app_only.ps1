@@ -30,6 +30,11 @@ param(
     # update (e.g. just -FrontendUrl or -AiEnabled) with no backend code change.
     [switch]$SkipBuild,
 
+    # Skips building/pushing the condition-detection sidecar image and deploys
+    # with SidecarImageUri='' (voice screening off). Overrides the -SkipBuild
+    # reuse of the currently-deployed SidecarImageUri.
+    [switch]$SkipSidecar,
+
     [Alias("h")]
     [switch]$Help
 )
@@ -72,7 +77,11 @@ Options:
   -SkipBuild            Skip the Maven/Docker build+push and reuse the
                          service stack's currently-deployed image — useful
                          for a parameter-only update (e.g. just -FrontendUrl,
-                         -AiEnabled, or -AiModel) with no backend code change
+                         -AiEnabled, or -AiModel) with no backend code change;
+                         the currently-deployed sidecar image is reused too
+  -SkipSidecar          Do not build/push the condition-detection sidecar
+                         image; deploys with SidecarImageUri='' (voice
+                         screening off)
   -Help, -h             Show this help text
 "@ | Write-Host
     exit 0
@@ -104,6 +113,7 @@ $RepoRoot = Split-Path -Parent $ScriptRoot
 $TemplateDir = Join-Path $ScriptRoot "templates"
 $ParameterDir = Join-Path $ScriptRoot "parameters"
 $BackendDir = Join-Path $RepoRoot "backend\core"
+$SidecarDir = Join-Path $RepoRoot "backend\condition-detection-sidecar"
 
 $StackPrefix = "careconnect"
 $PlatformStackName = "$StackPrefix-platform-$Environment"
@@ -388,6 +398,25 @@ try {
         }
         Write-Host "Reusing image: $ImageUri" -ForegroundColor DarkCyan
         $RepositoryName = "(skipped -- reused existing image)"
+
+        $SidecarImageUri = ""
+        if ($SkipSidecar) {
+            Write-Host "Skipping sidecar (-SkipSidecar); voice screening will be off." -ForegroundColor Yellow
+        }
+        else {
+            Write-Step "Reading current SidecarImageUri from $ServiceStackName (-SkipBuild)"
+            $script:CurrentOperation = "Reading current SidecarImageUri"
+            $SidecarImageUri = (Get-CloudFormationParameter -StackName $ServiceStackName -ParameterKey "SidecarImageUri").Trim()
+            if ($SidecarImageUri -eq "None") {
+                $SidecarImageUri = ""
+            }
+            if ($SidecarImageUri) {
+                Write-Host "Reusing the currently-deployed sidecar image." -ForegroundColor DarkCyan
+            }
+            else {
+                Write-Host "No sidecar image currently deployed; voice screening stays off." -ForegroundColor Yellow
+            }
+        }
     }
     else {
         Write-Step "Reading ECR repository URI"
@@ -437,11 +466,44 @@ try {
         finally {
             Pop-Location
         }
+
+        # Condition-detection sidecar image. Same tag, login and platform as the
+        # backend image. An empty SidecarImageUri leaves the sidecar container out
+        # (voice screening off).
+        $SidecarImageUri = ""
+        if ($SkipSidecar) {
+            Write-Host "Skipping sidecar build/push (-SkipSidecar); voice screening will be off." -ForegroundColor Yellow
+        }
+        else {
+            Write-Step "Reading sidecar ECR repository URI"
+            $script:CurrentOperation = "Reading sidecar ECR repository URI"
+            $SidecarRepositoryUri = (Get-CloudFormationOutput -StackName $PlatformStackName -OutputKey "ConditionSidecarRepositoryUri").Trim()
+            if (-not $SidecarRepositoryUri -or $SidecarRepositoryUri -eq "None") {
+                Write-Host "WARNING: Platform stack '$PlatformStackName' did not return ConditionSidecarRepositoryUri (stack predates the sidecar repo -- run the full deploy first); deploying with SidecarImageUri='' (voice screening off)." -ForegroundColor Yellow
+            }
+            else {
+                $SidecarImageUri = "$SidecarRepositoryUri`:$ImageTag"
+                $SidecarLocalImageName = "careconnect-dam-sidecar-local:$ImageTag"
+
+                Write-Step "Building sidecar Docker image"
+                $script:CurrentOperation = "Building sidecar Docker image"
+                & docker build --platform linux/amd64 -t $SidecarLocalImageName $SidecarDir
+                Assert-LastExitCode "Sidecar Docker build"
+
+                Write-Step "Tagging and pushing sidecar Docker image to ECR"
+                $script:CurrentOperation = "Pushing sidecar Docker image to ECR"
+                & docker tag $SidecarLocalImageName $SidecarImageUri
+                Assert-LastExitCode "Sidecar Docker tag"
+                & docker push $SidecarImageUri
+                Assert-LastExitCode "Sidecar Docker push"
+            }
+        }
     }
 
     Write-Step "Deploying service stack: $ServiceStackName"
     $ServiceOverrides = @{
         BackendImageUri = $ImageUri
+        SidecarImageUri = $SidecarImageUri
     }
     if ($AiEnabled) {
         $ServiceOverrides["CareConnectAiEnabled"] = $AiEnabled
@@ -452,6 +514,20 @@ try {
     if ($FrontendUrl) {
         $ServiceOverrides["FrontendBaseUrl"] = $FrontendUrl
         $ServiceOverrides["CorsAllowedList"] = "http://localhost:*,http://127.0.0.1:*,$FrontendUrl"
+    }
+    # Medicare (Blue Button), from the same CARECONNECT_MEDICARE_* variables the bash scripts and CI use.
+    # Unset leaves the parameter file's value in place.
+    $medicareOverrides = [ordered]@{
+        MedicareEnabled      = $env:CARECONNECT_MEDICARE_ENABLED
+        MedicareMode         = $env:CARECONNECT_MEDICARE_MODE
+        MedicareClientId     = $env:CARECONNECT_MEDICARE_CLIENT_ID
+        MedicareRedirectUri  = $env:CARECONNECT_MEDICARE_REDIRECT_URI
+        MedicareClientSecret = $env:CARECONNECT_MEDICARE_CLIENT_SECRET
+    }
+    foreach ($key in $medicareOverrides.Keys) {
+        if (-not [string]::IsNullOrWhiteSpace($medicareOverrides[$key])) {
+            $ServiceOverrides[$key] = [string]$medicareOverrides[$key]
+        }
     }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides
 

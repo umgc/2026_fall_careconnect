@@ -598,17 +598,14 @@ class ApiService {
         .timeout(const Duration(seconds: 20));
   }
 
-  /// Get pending connection requests for a caregiver
-  static Future<http.Response> getPendingRequestsByCaregiver(
-    int caregiverId,
-  ) async {
+  /// Get the signed-in caregiver's pending connection requests (the server
+  /// scopes them to the caller).
+  static Future<http.Response> getPendingRequestsByCaregiver() async {
     final headers = await AuthTokenManager.getAuthHeaders();
 
     return await _httpClient
         .get(
-          Uri.parse(
-            '${ApiConstants.connectionRequests}/pending/caregiver/$caregiverId',
-          ),
+          Uri.parse('${ApiConstants.connectionRequests}/outgoing'),
           headers: headers,
         )
         .timeout(const Duration(seconds: 20));
@@ -2721,6 +2718,29 @@ class ApiService {
       return map;
     } catch (e, st) {
       debugPrint('getCallRecording error callId=$callId: $e\n$st');
+      return null;
+    }
+  }
+
+  /// Returns AI condition screening (per-model status + flags) for [callId], or null on
+  /// any failure. The backend refuses patients (403); callers should not ask for them.
+  static Future<Map<String, dynamic>?> getConditionFlags(String callId) async {
+    try {
+      final headers = await AuthTokenManager.getAuthHeaders();
+      final uri = Uri.parse('${ApiConstants.callsV3}/$callId/condition-flags');
+      final response = await _httpClient
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) {
+        debugPrint(
+          'getConditionFlags failed callId=$callId status=${response.statusCode}',
+        );
+        return null;
+      }
+      final decoded = jsonDecode(response.body);
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+    } catch (e) {
+      debugPrint('getConditionFlags error callId=$callId: $e');
       return null;
     }
   }

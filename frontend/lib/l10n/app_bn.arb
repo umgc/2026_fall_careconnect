@@ -132,6 +132,7 @@
   "ptdashboard_onceAtBed": "প্রতিদিন ঘুমানোর সময় একবার",
   
   "login_loginFailedError": "লগইন ব্যর্থ হয়েছে",
+  "login_invalidCredentials": "ব্যবহারকারীর নাম বা পাসওয়ার্ড ভুল। এগুলো যাচাই করে আবার চেষ্টা করুন।",
 
   "roles_Patient": "রোগী",
   "roles_Caregiver": "সেবা প্রদানকারী",

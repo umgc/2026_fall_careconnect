@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../../services/api_client.dart';
 import '../models/health_record.dart';
+import 'ehr_resource_mapper.dart';
 
 class MedicareFetchResult {
   final List<HealthRecord> records;
@@ -50,8 +51,8 @@ class MedicareDataService {
     final synthetic =
         (visits?['synthetic'] == true) || (coverage?['synthetic'] == true);
     final records = <HealthRecord>[
-      ..._mapVisits(visits),
-      ..._mapCoverage(coverage),
+      ..._withRetrieved(_mapVisits(visits), visits),
+      ..._withRetrieved(_mapCoverage(coverage), coverage),
     ];
     return MedicareFetchResult(
       records: records,
@@ -88,6 +89,19 @@ class MedicareDataService {
       failures.add(null);
       return null;
     }
+  }
+
+  /// FR-MCR-21: overview and detail show when each record was retrieved,
+  /// from the envelope's `fetchedAt`.
+  static List<HealthRecord> _withRetrieved(
+      List<HealthRecord> records, Map<String, dynamic>? env) {
+    final at = EhrResourceMapper.parseDate(env?['fetchedAt']);
+    if (at == null) return records;
+    final retrieved = RecordDetail(
+        EhrResourceMapper.lastUpdatedLabel, EhrResourceMapper.shortDate(at));
+    return [
+      for (final r in records) r.copyWith(details: [...r.details, retrieved]),
+    ];
   }
 
   List<HealthRecord> _mapVisits(Map<String, dynamic>? env) {

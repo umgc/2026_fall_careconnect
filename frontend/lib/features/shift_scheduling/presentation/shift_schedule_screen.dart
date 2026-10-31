@@ -36,7 +36,7 @@ class _CaregiverShiftSchedulingScreenState
     ];
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.shiftTitle),
+        title: Semantics(headingLevel: 1, child: Text(l10n.shiftTitle)),
         centerTitle: true,
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,

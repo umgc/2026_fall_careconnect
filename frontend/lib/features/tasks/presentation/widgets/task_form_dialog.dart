@@ -518,10 +518,9 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                   initialDaysOfWeek: daysOfWeek,
                   initialInterval: interval,
                   initialCount: count,
-                  initialStartDate: startDate,
+                  initialStartDate: widget.seriesAnchorDate ?? startDate,
                   initialEndDate: endDate,
                   initialDayOfMonth: dayOfMonth,
-                  showApplyToSeries: widget.initialTask != null,
                   anchorStartDate: widget.seriesAnchorDate,
                   onChanged: ({
                     bool? isRecurring,
@@ -629,6 +628,7 @@ class _TaskFormDialogState extends State<TaskFormDialog> {
                                 interval: interval,
                                 count: count,
                                 startDate: rawTask.date,
+                                countStartDate: widget.seriesAnchorDate,
                                 endDate: endDate,
                                 dayOfMonth: dayOfMonth,
                               );

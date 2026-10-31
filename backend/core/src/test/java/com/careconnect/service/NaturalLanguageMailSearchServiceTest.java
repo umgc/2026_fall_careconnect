@@ -80,7 +80,7 @@ class NaturalLanguageMailSearchServiceTest {
         caregiver = new User();
         caregiver.setId(9L);
         caregiver.setRole(Role.CAREGIVER);
-        lenient().doNothing().when(authorizationService).requirePatientAccess(any(), anyLong());
+        lenient().doNothing().when(authorizationService).requirePatientRecordAccess(any(), anyLong());
         lenient().when(chunkEmbeddingService.embedQuery(anyString())).thenReturn(java.util.Optional.empty());
     }
 
