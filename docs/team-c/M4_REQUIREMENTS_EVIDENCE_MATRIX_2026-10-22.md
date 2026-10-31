@@ -1,5 +1,7 @@
 # M4 requirements and evidence table
 
+October 31 follow-up: [the pre-handoff review](M4_PRE_HANDOFF_REVIEW_2026-10-31.md) records newer source/CI evidence and CR-2 issue closure. Keep the dated baseline below separate from current acceptance decisions.
+
 October 22, 2026 (America/New_York). Prepared for Terence Boyce, Technical Architect; Jonathan, Team C lead; and Tiffany, Test Lead.
 Status: review draft, updated with Tiffany's October 22 follow-up. Shared-branch code baseline: `team-c-develop` at `21d5a521e87f70eb9c304bd5d993d24cdad9adad`.
 

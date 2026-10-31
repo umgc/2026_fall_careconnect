@@ -1,0 +1,203 @@
+{
+  "review_date": "2026-10-31",
+  "source_sha": "a9ddb659ba3597c964b81007f7ef6a954489410c",
+  "release_candidate": null,
+  "release_disposition": "Pending QA",
+  "sources": [
+    {
+      "path": "backend/core/src/main/java/com/careconnect/service/ehr/EhrRetentionWorker.java",
+      "baseline_sha256": "e32ddd0e196fb8556c4c45ac416a5a1b94f59615090de0d5f1c23a50077df71d",
+      "review_sha256": "e32ddd0e196fb8556c4c45ac416a5a1b94f59615090de0d5f1c23a50077df71d",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/service/ehr/EhrRetentionWorker.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/service/ehr/EhrSourceDataPurger.java",
+      "baseline_sha256": "96117e5df1198abbef6a6b01deec15b1b2e8711f612d9ff97d9500671c77c9aa",
+      "review_sha256": "96117e5df1198abbef6a6b01deec15b1b2e8711f612d9ff97d9500671c77c9aa",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/service/ehr/EhrSourceDataPurger.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/service/ehr/CernerOAuthService.java",
+      "baseline_sha256": "0746cc1b99e19c4e45e6db55ec696cc428ddf49bf311f1e152b56e29a1369189",
+      "review_sha256": "0746cc1b99e19c4e45e6db55ec696cc428ddf49bf311f1e152b56e29a1369189",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/service/ehr/CernerOAuthService.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerIntegrationConfiguration.java",
+      "baseline_sha256": "0fb6168a9d0c1d941ae442f53cd1f810d88e69b5c97a14fcffb1fc474487eafd",
+      "review_sha256": "0fb6168a9d0c1d941ae442f53cd1f810d88e69b5c97a14fcffb1fc474487eafd",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/integration/cerner/CernerIntegrationConfiguration.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerPatientAppointmentController.java",
+      "baseline_sha256": "935f32fd67646134862bbe3a8c324e7a8241bbd2a7d8d287ad42292559707993",
+      "review_sha256": "935f32fd67646134862bbe3a8c324e7a8241bbd2a7d8d287ad42292559707993",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/integration/cerner/CernerPatientAppointmentController.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerClinicalController.java",
+      "baseline_sha256": "045901a249a85108cec368d841934fd1ac3cea64c72a0ee5543c03c93358a539",
+      "review_sha256": "045901a249a85108cec368d841934fd1ac3cea64c72a0ee5543c03c93358a539",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/integration/cerner/CernerClinicalController.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/integration/cerner/DefaultCernerAllergyService.java",
+      "baseline_sha256": "4b4b5e1c2245ebbb5a625241a4e25d2fcea579c970e030d00a62229456889e46",
+      "review_sha256": "4b4b5e1c2245ebbb5a625241a4e25d2fcea579c970e030d00a62229456889e46",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/integration/cerner/DefaultCernerAllergyService.java"
+    },
+    {
+      "path": "backend/core/src/main/java/com/careconnect/model/ConsentGrant.java",
+      "baseline_sha256": "b5e3c5b68f23ad055b132534d26b8d90ba47ee00c9760f3217885008666c454e",
+      "review_sha256": "b5e3c5b68f23ad055b132534d26b8d90ba47ee00c9760f3217885008666c454e",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/main/java/com/careconnect/model/ConsentGrant.java"
+    },
+    {
+      "path": "backend/core/src/test/java/com/careconnect/service/KvsAudioTranscodeServiceTest.java",
+      "baseline_sha256": "ee3bce5cdb31e844bca330103ec37b6a8c5b42a3dc029cdc44bb78d5e3fa946d",
+      "review_sha256": "802d1caf7959028857cbb5a00938d5b03936e8861031e433311bb6c1434b8827",
+      "changed_in_review": true,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/test/java/com/careconnect/service/KvsAudioTranscodeServiceTest.java"
+    },
+    {
+      "path": "backend/core/src/test/java/com/careconnect/config/TestDatabaseIsolationTest.java",
+      "baseline_sha256": "d08b7e8d0cc8ece3630dc5bb72f474396c0d90e3d4cd43d2447f448c5ae003e1",
+      "review_sha256": "d08b7e8d0cc8ece3630dc5bb72f474396c0d90e3d4cd43d2447f448c5ae003e1",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/backend/core/src/test/java/com/careconnect/config/TestDatabaseIsolationTest.java"
+    },
+    {
+      "path": "docs/testing/m4-test-plan.md",
+      "baseline_sha256": "29f7f3370b458d4d3b2d34b81594de03bce3f936449e2e9b323e363212bda552",
+      "review_sha256": "29f7f3370b458d4d3b2d34b81594de03bce3f936449e2e9b323e363212bda552",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/testing/m4-test-plan.md"
+    },
+    {
+      "path": "docs/testing/m4-test-summary.md",
+      "baseline_sha256": "899b4c1d175e49d543ee2e4c3182a7a5113020cb4c71ea90cbc11ee76c6cc098",
+      "review_sha256": "899b4c1d175e49d543ee2e4c3182a7a5113020cb4c71ea90cbc11ee76c6cc098",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/testing/m4-test-summary.md"
+    },
+    {
+      "path": "docs/testing/m4-traceability-matrix.md",
+      "baseline_sha256": "f9a2fb9111078ff47c1e2efb3c4907054118d017b6ba4ab65ad2628ddc50b915",
+      "review_sha256": "f9a2fb9111078ff47c1e2efb3c4907054118d017b6ba4ab65ad2628ddc50b915",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/testing/m4-traceability-matrix.md"
+    },
+    {
+      "path": "docs/testing/m4-localization-qa-checklist.md",
+      "baseline_sha256": "4aaf4b4873428d0502f22390b6efbde3bf4d4cce9454d01c3ea2c6654112d01d",
+      "review_sha256": "4aaf4b4873428d0502f22390b6efbde3bf4d4cce9454d01c3ea2c6654112d01d",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/testing/m4-localization-qa-checklist.md"
+    },
+    {
+      "path": "docs/testing/cerner-secure-sandbox-smoke-checklist.md",
+      "baseline_sha256": "3baf16e51dc3e60974096a6c379fc6388d379cf883603cf0d73345df603b3e12",
+      "review_sha256": "3baf16e51dc3e60974096a6c379fc6388d379cf883603cf0d73345df603b3e12",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/testing/cerner-secure-sandbox-smoke-checklist.md"
+    },
+    {
+      "path": "docs/team-c/FHIR_STORAGE_INVENTORY_2026-10-22.md",
+      "baseline_sha256": "6cd99f6fb852059117bf0b71a121fe6050bdbac4aad3b9f4f787b78f6798b71a",
+      "review_sha256": "9cd785b152246e3ce4ea45be4b0805b48d0df78f451fb6857e585f5deabdb09e",
+      "changed_in_review": true,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/team-c/FHIR_STORAGE_INVENTORY_2026-10-22.md"
+    },
+    {
+      "path": "docs/team-c/M4_HANDOFF_PACKAGE_INDEX_2026-10-22.md",
+      "baseline_sha256": "4c6e8deacaecd003f78214ce8a5d1e09a78ecfcdfff2aa097468422ea0878db8",
+      "review_sha256": "cd34c2cfe3e070baa070f8abd35dd384e7054903b5582b745cd9976733d9b73e",
+      "changed_in_review": true,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/docs/team-c/M4_HANDOFF_PACKAGE_INDEX_2026-10-22.md"
+    },
+    {
+      "path": ".github/workflows/develop-merge-ci.yml",
+      "baseline_sha256": "90c5e17aefda74675f084b38bc0a3f289b1444413d27d703756f82793c0343e4",
+      "review_sha256": "90c5e17aefda74675f084b38bc0a3f289b1444413d27d703756f82793c0343e4",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/.github/workflows/develop-merge-ci.yml"
+    },
+    {
+      "path": "quality/ci/gate/policy.yaml",
+      "baseline_sha256": "3e5b4c338b2ec1803dcb44c5536d870b4567eb65ed523e7f3b1d62e712cf4980",
+      "review_sha256": "3e5b4c338b2ec1803dcb44c5536d870b4567eb65ed523e7f3b1d62e712cf4980",
+      "changed_in_review": false,
+      "source_url": "https://github.com/umgc/2026_fall_careconnect/blob/a9ddb659ba3597c964b81007f7ef6a954489410c/quality/ci/gate/policy.yaml"
+    }
+  ],
+  "ci": {
+    "run": 41163636591,
+    "sha": "a9ddb659ba3597c964b81007f7ef6a954489410c",
+    "backend_total": 9077,
+    "backend_failures": 0,
+    "backend_errors": 0,
+    "backend_skipped": 80,
+    "backend_passed": 8997,
+    "frontend_shards": [
+      {
+        "shard": 3,
+        "passed": 3185,
+        "skipped": 2
+      },
+      {
+        "shard": 0,
+        "passed": 3377,
+        "skipped": 2
+      },
+      {
+        "shard": 2,
+        "passed": 3194,
+        "skipped": 4
+      },
+      {
+        "shard": 1,
+        "passed": 3362,
+        "skipped": 2
+      }
+    ],
+    "frontend_passed": 13118,
+    "frontend_skipped": 10,
+    "backend_coverage_percent": 86.1,
+    "frontend_coverage_percent": 70.5
+  },
+  "initial_local_run": {
+    "total": 9077,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 80,
+    "failing_test": "KvsAudioTranscodeServiceTest.toWav_transcoderFails_throwsWithExitCodeAndOutput"
+  },
+  "test_patch": "Deterministic ProcessBuilder fixture adapted to current clip/list API",
+  "handoff_delivered": false,
+  "receiver_receipt": null,
+  "local_targeted": {
+    "exit_code": 0,
+    "log": "backend-targeted.log"
+  },
+  "available_surefire_reports": {
+    "tests": 9077,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 80
+  },
+  "report_directory_scope": "Mixed initial full-run and later targeted XML; not a full fixed-source rerun.",
+  "targeted_results": {
+    "tests": 12,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+}
