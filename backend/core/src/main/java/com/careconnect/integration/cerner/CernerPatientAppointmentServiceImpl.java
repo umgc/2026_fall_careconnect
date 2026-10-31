@@ -13,8 +13,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 //import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanWrapper;
 import org.springframework.beans.BeanWrapperImpl;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
@@ -26,9 +24,11 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
-@Service
-//@RequiredArgsConstructor
-@ConditionalOnProperty(name = "careconnect.cerner.enabled", havingValue = "true")
+/**
+ * Extended Patient and Appointment synchronization helper retained for fixture validation and
+ * specialized retry/reference-mismatch workflows; Spring registers
+ * {@link DefaultCernerPatientAppointmentService} as the runtime bean when Cerner is enabled.
+ */
 public class CernerPatientAppointmentServiceImpl implements CernerPatientAppointmentService {
 
     private final PatientRepository patients;

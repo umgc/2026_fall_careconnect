@@ -4,10 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sun.net.httpserver.HttpServer;
-import java.net.InetSocketAddress;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +14,11 @@ class CernerFhirBundleHttpClientTest {
 
     @Test
     void resourceTypesUseExpectedFhirNames() {
+        assertThat(CernerFhirBundleHttpClient.ResourceType.values())
+                .containsExactly(
+                        CernerFhirBundleHttpClient.ResourceType.CONDITION,
+                        CernerFhirBundleHttpClient.ResourceType.ENCOUNTER,
+                        CernerFhirBundleHttpClient.ResourceType.APPOINTMENT);
         assertThat(CernerFhirBundleHttpClient.ResourceType.CONDITION.fhirName())
                 .isEqualTo("Condition");
         assertThat(CernerFhirBundleHttpClient.ResourceType.ENCOUNTER.fhirName())
@@ -52,40 +54,14 @@ class CernerFhirBundleHttpClientTest {
     }
 
     @Test
-    void getAllergiesReturnsOnlyAllergyConditions() throws Exception {
-        final String bundle = """
-                {
-                  "resourceType":"Bundle",
-                  "type":"searchset",
-                  "entry":[
-                    {"resource":{"resourceType":"Condition","id":"allergy-1",
-                      "subject":{"reference":"Patient/patient-1"},
-                      "category":[{"text":"allergy"}]}},
-                    {"resource":{"resourceType":"Condition","id":"problem-1",
-                      "subject":{"reference":"Patient/patient-1"},
-                      "category":[{"text":"problem-list-item"}]}}
-                  ]
-                }
-                """;
-        final HttpServer server = HttpServer.create(
-                new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/fhir/Condition", exchange -> {
-            final byte[] response = bundle.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "application/fhir+json");
-            exchange.sendResponseHeaders(200, response.length);
-            exchange.getResponseBody().write(response);
-            exchange.close();
-        });
-        server.start();
-        try {
-            final URI base = URI.create("http://127.0.0.1:"
-                    + server.getAddress().getPort() + "/fhir/");
+    void rejectsMissingBearerTokenBeforeMakingRequests() {
+        final CernerFhirBundleHttpClient client = new CernerFhirBundleHttpClient(
+                URI.create("https://example.test/fhir/"), Duration.ofSeconds(1));
 
-            assertThat(new CernerFhirBundleHttpClient(base, Duration.ofSeconds(2))
-                    .getAllergies("patient-1").path(0).path("id").asText())
-                    .isEqualTo("allergy-1");
-        } finally {
-            server.stop(0);
-        }
+        assertThatThrownBy(() -> client.getResources(
+                CernerFhirBundleHttpClient.ResourceType.CONDITION, "patient-1", " "))
+                .isInstanceOf(CernerAllergyService.CernerSourceException.class)
+                .extracting(ex -> ((CernerAllergyService.CernerSourceException) ex).code())
+                .isEqualTo("CERNER_AUTH_EXPIRED");
     }
 }

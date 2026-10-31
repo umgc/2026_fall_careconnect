@@ -13,11 +13,22 @@ class ColibriService {
   ColibriService._internal();
 
   static const String escalateToken = '[ESCALATE_TO_CLINICAL_CLOUD]';
+  static const String gemmaModelId = 'gemma-2b-mediapipe';
 
   final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 120),
   ));
+
+  @visibleForTesting
+  void debugSetHttpClientAdapter(HttpClientAdapter adapter) {
+    _dio.httpClientAdapter = adapter;
+  }
+
+  @visibleForTesting
+  void debugResetResolvedBaseUrl() {
+    _resolvedBaseUrl = null;
+  }
 
   /// Evaluates whether a query must be escalated to the Cloud AI (Claude/Bedrock)
   /// due to clinical medication safety, symptoms, or multi-campus directory searches.
@@ -69,15 +80,17 @@ class ColibriService {
     return 'http://127.0.0.1:8000/v1';
   }
 
+  List<String> _candidateBaseUrls(String? customBaseUrl) {
+    if (customBaseUrl != null) return [customBaseUrl];
+    if (!kIsWeb && Platform.isAndroid) {
+      return ['http://10.0.2.2:8000/v1', 'http://127.0.0.1:8000/v1'];
+    }
+    return [getDefaultColibriUrl()];
+  }
+
   /// Checks if the Colibri server is active and returns available models
   Future<List<String>> checkHealth({String? customBaseUrl}) async {
-    final candidateUrls = customBaseUrl != null
-        ? [customBaseUrl]
-        : (!kIsWeb && Platform.isAndroid
-            ? ['http://10.0.2.2:8000/v1', 'http://127.0.0.1:8000/v1']
-            : [getDefaultColibriUrl()]);
-
-    for (final baseUrl in candidateUrls) {
+    for (final baseUrl in _candidateBaseUrls(customBaseUrl)) {
       try {
         final response = await _dio.get(
           '$baseUrl/models',
@@ -88,7 +101,11 @@ class ColibriService {
           if (data is Map && data.containsKey('data')) {
             final models = data['data'] as List<dynamic>? ?? [];
             _resolvedBaseUrl = baseUrl;
-            return models.map((m) => m['id'].toString()).toList();
+            return models
+                .whereType<Map>()
+                .map((m) => m['id']?.toString() ?? '')
+                .where((id) => id.isNotEmpty)
+                .toList();
           }
         }
       } catch (e) {
@@ -96,6 +113,53 @@ class ColibriService {
       }
     }
     return [];
+  }
+
+  /// Verifies that the local bridge server both advertises Gemma and explicitly
+  /// confirms that a real Gemma engine (LiteRT-LM or verified Ollama) is loaded.
+  Future<Map<String, dynamic>> checkGemmaReadiness({String? customBaseUrl}) async {
+    String failureReason =
+        'Local bridge server is unreachable. Start colibri_server.py with a loaded Gemma model.';
+
+    for (final baseUrl in _candidateBaseUrls(customBaseUrl)) {
+      try {
+        final response = await _dio.get(
+          '$baseUrl/models',
+          options: Options(receiveTimeout: const Duration(seconds: 3)),
+        );
+        if (response.statusCode == 200 && response.data is Map) {
+          final data = response.data as Map;
+          final rawModels = data['data'] as List<dynamic>? ?? [];
+          final modelIds = rawModels
+              .whereType<Map>()
+              .map((m) => m['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty)
+              .toList();
+          final bool engineConfirmed =
+              data['gemma_ready'] == true || data['litert_model_loaded'] == true;
+          final bool advertisesGemma = modelIds.contains(gemmaModelId);
+
+          if (advertisesGemma && engineConfirmed) {
+            _resolvedBaseUrl = baseUrl;
+            return {
+              'ready': true,
+              'baseUrl': baseUrl,
+              'models': modelIds,
+            };
+          }
+
+          failureReason =
+              'Local bridge responded at $baseUrl, but no Gemma engine is loaded.';
+        }
+      } catch (e) {
+        debugPrint('Gemma readiness check failed at $baseUrl: $e');
+      }
+    }
+
+    return {
+      'ready': false,
+      'reason': failureReason,
+    };
   }
 
   /// Sends a chat completion request to Colibri
@@ -130,26 +194,33 @@ class ColibriService {
 
       stopwatch.stop();
 
-      if (response.statusCode == 200 && response.data != null) {
-        final data = response.data;
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = response.data as Map;
         String content = '';
-        if (data['choices'] != null && (data['choices'] as List).isNotEmpty) {
-          content = data['choices'][0]['message']?['content'] ?? '';
+        if (data['choices'] is List && (data['choices'] as List).isNotEmpty) {
+          final firstChoice = (data['choices'] as List).first;
+          if (firstChoice is Map) {
+            final message = firstChoice['message'];
+            if (message is Map) {
+              content = message['content']?.toString() ?? '';
+            }
+          }
         }
 
-        final usage = data['usage'] ?? {};
-        final totalTokens = usage['total_tokens'] ?? 0;
+        final usage = data['usage'] is Map ? data['usage'] as Map : const {};
+        final totalTokens = (usage['total_tokens'] as num?)?.toInt() ?? 0;
         final latencyMs = stopwatch.elapsedMilliseconds;
         final tokPerSec = latencyMs > 0 && totalTokens > 0
             ? (totalTokens / (latencyMs / 1000.0)).toStringAsFixed(1)
             : '0.0';
 
         final bool escalated = content.contains(escalateToken);
+        final String servedModel = data['model']?.toString() ?? model;
 
         return {
           'success': true,
           'content': content,
-          'model': model,
+          'model': servedModel,
           'latencyMs': latencyMs,
           'totalTokens': totalTokens,
           'tokensPerSec': tokPerSec,
