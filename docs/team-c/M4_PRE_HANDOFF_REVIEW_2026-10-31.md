@@ -91,4 +91,3 @@ The current `docs/testing/m4-test-summary.md` still says **Not Run**, with relea
 ## Source map
 
 The companion JSON manifest records paths and SHA-256 hashes for the reviewed implementation and test-plan sources. It also identifies the local test patch separately. Use the original source SHA to reproduce the baseline, then apply the reviewed test change. No historical result is carried forward as a new pass.
-
