@@ -46,24 +46,6 @@ public final class CernerFhirBundleHttpClient {
         }
     }
 
-
-    public JsonNode getAllergies(final String patientId) {
-        validatePatientAndToken(patientId, "internal-token-placeholder");
-        final var allergies = mapper.createArrayNode();
-        for (final JsonNode resource : getResources(
-                ResourceType.CONDITION, patientId, "internal-token-placeholder").resources()) {
-            if (resource.path("category").isArray()
-                    && java.util.stream.StreamSupport.stream(
-                            resource.path("category").spliterator(), false)
-                            .anyMatch(category -> "allergy".equalsIgnoreCase(
-                                    category.path("text").asText()))) {
-                allergies.add(resource);
-            }
-        }
-        return allergies;
-    }
-
-
     public record Result(List<JsonNode> resources) {
 
         public Result {

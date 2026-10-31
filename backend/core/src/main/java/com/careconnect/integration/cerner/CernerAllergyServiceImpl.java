@@ -1,52 +1,51 @@
 package com.careconnect.integration.cerner;
 
+import com.careconnect.repository.PatientRepository;
+import com.careconnect.repository.ehr.EhrPatientCrosswalkRepository;
+import com.careconnect.repository.ehr.EhrRawPayloadRepository;
+import com.careconnect.repository.ehr.EhrSourceRepository;
+import com.careconnect.service.ehr.CernerOAuthService;
+import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Service;
-
-@Service
-@ConditionalOnProperty(name = "careconnect.cerner.enabled", havingValue = "true")
+/**
+ * Non-bean adapter around the authenticated {@link DefaultCernerAllergyService} and
+ * {@link CernerAllergyHttpClient} {@code AllergyIntolerance} Bundle transport. Spring registers
+ * {@link DefaultCernerAllergyService} directly when {@code careconnect.cerner.enabled=true}.
+ */
 public class CernerAllergyServiceImpl implements CernerAllergyService {
 
-     private final CernerPatientAppointmentService patientAppointmentService;
-     private final CernerFhirBundleHttpClient fhirClient;
+    private final CernerAllergyService delegate;
 
-     public CernerAllergyServiceImpl(
-             CernerPatientAppointmentService patientAppointmentService,
-             CernerFhirBundleHttpClient fhirClient) {
-      this.patientAppointmentService = patientAppointmentService;
-      this.fhirClient = fhirClient;
-     }
+    public CernerAllergyServiceImpl(final CernerAllergyService delegate) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate is required");
+    }
 
-     @Override
-     public List<CernerAllergyMapper.Allergy> getAllergies(long patientId) {
-          if (patientId <= 0L) {
-              throw new IllegalArgumentException("patientId must be positive");
-          }
-          try {
-              final String authorizedPatientId = resolveAuthorizedPatientId(patientId);
-              final var bundle = fhirClient.getAllergies(authorizedPatientId);
-              return CernerAllergyMapper.map(bundle, authorizedPatientId);
-          } catch (UnknownPatientException ex) {
-              throw ex;
-          } catch (CernerSourceException ex) {
-              throw ex;
-          } catch (Exception ex) {
-              throw new CernerSourceException("CERNER_SOURCE_UNAVAILABLE", true);
-          }
-     }
+    public CernerAllergyServiceImpl(
+            final PatientRepository patients,
+            final EhrSourceRepository sources,
+            final EhrPatientCrosswalkRepository crosswalks,
+            final EhrRawPayloadRepository rawPayloads,
+            final CernerOAuthService oauth,
+            final CernerAllergyHttpClient client,
+            final Clock clock) {
+        this(new DefaultCernerAllergyService(
+                patients, sources, crosswalks, rawPayloads, oauth, client, clock));
+    }
 
- private String resolveAuthorizedPatientId(long patientId) {
-     final boolean valid = patientAppointmentService.validatePatientAndAppointmentExpectedOutputFixtures(
-          patientId,
-          java.time.Instant.now().minusSeconds(3600),
-          java.time.Instant.now());
-
-     if (!valid) {
-         throw new UnknownPatientException();
-     }
-
-     return String.valueOf(patientId);
+    @Override
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    public List<CernerAllergyMapper.Allergy> getAllergies(final long patientId) {
+        if (patientId <= 0L) {
+            throw new IllegalArgumentException("patientId must be positive");
+        }
+        try {
+            return delegate.getAllergies(patientId);
+        } catch (UnknownPatientException | CernerSourceException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new CernerSourceException("CERNER_SOURCE_UNAVAILABLE", true);
+        }
     }
 }
