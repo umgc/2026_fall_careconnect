@@ -1,3 +1,5 @@
+import '../../../m4_localization_coverage_cases.dart' as m4_coverage;
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for AlertDetailsPage and PatientFallPromptPage
 // (lib/features/fall_alert/pages/alert_details_page.dart)
 // (lib/features/fall_alert/pages/alert_details_page_patient.dart)
@@ -18,9 +20,14 @@ FallAlert _makeAlert() => FallAlert(
       hasLiveVideo: false,
     );
 
-Widget _wrap() => MaterialApp(home: AlertDetailsPage(alert: _makeAlert()));
+Widget _wrap() => MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: AlertDetailsPage(alert: _makeAlert()));
 
 void main() {
+  m4_coverage.registerM4Coverage('alert');
   group('AlertDetailsPage – initial render', () {
     testWidgets('renders without crashing', (tester) async {
       await tester.pumpWidget(_wrap());
@@ -77,7 +84,7 @@ void main() {
 
     testWidgets('shows camera source text', (tester) async {
       await tester.pumpWidget(_wrap());
-      expect(find.text('camera'), findsOneWidget);
+      expect(find.text('Camera'), findsOneWidget);
     });
 
     testWidgets('shows videocam_outlined icon', (tester) async {
@@ -108,7 +115,8 @@ void main() {
       expect(find.byIcon(Icons.emergency_share_rounded), findsOneWidget);
     });
 
-    testWidgets('shows Playback Unavailable when no playback data', (tester) async {
+    testWidgets('shows Playback Unavailable when no playback data',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       expect(find.text('Playback Unavailable'), findsOneWidget);
       expect(find.byIcon(Icons.videocam_off), findsOneWidget);
@@ -136,7 +144,8 @@ void main() {
       expect(find.text('Playback'), findsOneWidget);
     });
 
-    testWidgets('shows "No response from patient" for old alerts', (tester) async {
+    testWidgets('shows "No response from patient" for old alerts',
+        (tester) async {
       // Alert detected at 2025-01-01 12:00 UTC, which is more than 2 minutes ago
       await tester.pumpWidget(_wrap());
       expect(find.text('No response from patient'), findsOneWidget);
@@ -147,7 +156,8 @@ void main() {
       expect(find.byType(SingleChildScrollView), findsOneWidget);
     });
 
-    testWidgets('tapping Call Patient with no phone shows SnackBar', (tester) async {
+    testWidgets('tapping Call Patient with no phone shows SnackBar',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.ensureVisible(find.text('Call Patient'));
       await tester.pump();
@@ -156,7 +166,8 @@ void main() {
       expect(find.text('No phone number available'), findsOneWidget);
     });
 
-    testWidgets('tapping Send Message with no phone shows SnackBar', (tester) async {
+    testWidgets('tapping Send Message with no phone shows SnackBar',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.ensureVisible(find.text('Send Message'));
       await tester.pump();
@@ -165,7 +176,8 @@ void main() {
       expect(find.text('No phone number available'), findsOneWidget);
     });
 
-    testWidgets('tapping Contact Emergency Services opens bottom sheet', (tester) async {
+    testWidgets('tapping Contact Emergency Services opens bottom sheet',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.ensureVisible(find.text('Contact Emergency Services'));
       await tester.pump();
@@ -175,7 +187,8 @@ void main() {
       expect(find.text('Call 911'), findsOneWidget);
     });
 
-    testWidgets('emergency bottom sheet shows "Call Emergency Contact"', (tester) async {
+    testWidgets('emergency bottom sheet shows "Call Emergency Contact"',
+        (tester) async {
       await tester.pumpWidget(_wrap());
       await tester.ensureVisible(find.text('Contact Emergency Services'));
       await tester.pump();
@@ -196,7 +209,11 @@ void main() {
         source: 'camera',
         hasLiveVideo: false,
       );
-      await tester.pumpWidget(MaterialApp(home: AlertDetailsPage(alert: alert)));
+      await tester.pumpWidget(MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AlertDetailsPage(alert: alert)));
       expect(find.text('M'), findsOneWidget);
     });
 
@@ -209,7 +226,11 @@ void main() {
         source: 'camera',
         hasLiveVideo: false,
       );
-      await tester.pumpWidget(MaterialApp(home: AlertDetailsPage(alert: alert)));
+      await tester.pumpWidget(MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AlertDetailsPage(alert: alert)));
       expect(find.text('?'), findsOneWidget);
     });
 
@@ -222,7 +243,11 @@ void main() {
         source: 'camera',
         hasLiveVideo: false,
       );
-      await tester.pumpWidget(MaterialApp(home: AlertDetailsPage(alert: alert)));
+      await tester.pumpWidget(MaterialApp(
+          locale: const Locale('en'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: AlertDetailsPage(alert: alert)));
       expect(find.text('MW'), findsOneWidget);
     });
   });
@@ -264,7 +289,8 @@ void main() {
     testWidgets('shows info banner about auto-call', (tester) async {
       await tester.pumpWidget(_wrapPatient(autoCallSeconds: 30));
       expect(
-        find.textContaining('emergency services will be contacted automatically'),
+        find.textContaining(
+            'emergency services will be contacted automatically'),
         findsOneWidget,
       );
     });
@@ -371,8 +397,7 @@ void main() {
       expect(escalated, isTrue);
     });
 
-    testWidgets('tapping emergency contact calls their number',
-        (tester) async {
+    testWidgets('tapping emergency contact calls their number', (tester) async {
       await tester.pumpWidget(_wrapPatient(
         emergencyContactName: 'Bob',
         emergencyContactPhone: '555-9999',
@@ -481,6 +506,9 @@ Widget _wrapPatient({
   Future<void> Function()? onEscalate,
 }) {
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: PatientFallPromptPage(
       autoCallSeconds: autoCallSeconds,
       emergencyNumber: emergencyNumber,

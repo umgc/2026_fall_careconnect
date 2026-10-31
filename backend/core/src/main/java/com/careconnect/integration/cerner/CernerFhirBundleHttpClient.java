@@ -29,6 +29,7 @@ public final class CernerFhirBundleHttpClient {
     private final ObjectMapper mapper = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+
     public enum ResourceType {
         CONDITION("Condition"),
         ENCOUNTER("Encounter"),
@@ -46,8 +47,12 @@ public final class CernerFhirBundleHttpClient {
     }
 
     public record Result(List<JsonNode> resources) {
+
         public Result {
             resources = resources.stream().map(node -> (JsonNode) node.deepCopy()).toList();
+        }
+        public List<JsonNode> resources() {
+            return List.copyOf(resources);
         }
     }
 

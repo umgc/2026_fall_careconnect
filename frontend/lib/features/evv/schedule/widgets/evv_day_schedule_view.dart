@@ -74,7 +74,7 @@ class _EVVDayScheduleViewState extends State<EVVDayScheduleView> {
                   },
                 ),
                 Text(
-                  DateFormat('EEEE, MMMM d, yyyy').format(widget.selectedDate),
+                  DateFormat.yMMMMEEEEd(Localizations.localeOf(context).toString()).format(widget.selectedDate),
                   style: theme.textTheme.headlineSmall,
                 ),
                 IconButton(

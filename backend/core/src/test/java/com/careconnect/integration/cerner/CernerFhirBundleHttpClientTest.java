@@ -14,6 +14,11 @@ class CernerFhirBundleHttpClientTest {
 
     @Test
     void resourceTypesUseExpectedFhirNames() {
+        assertThat(CernerFhirBundleHttpClient.ResourceType.values())
+                .containsExactly(
+                        CernerFhirBundleHttpClient.ResourceType.CONDITION,
+                        CernerFhirBundleHttpClient.ResourceType.ENCOUNTER,
+                        CernerFhirBundleHttpClient.ResourceType.APPOINTMENT);
         assertThat(CernerFhirBundleHttpClient.ResourceType.CONDITION.fhirName())
                 .isEqualTo("Condition");
         assertThat(CernerFhirBundleHttpClient.ResourceType.ENCOUNTER.fhirName())
@@ -46,5 +51,17 @@ class CernerFhirBundleHttpClientTest {
 
         assertThat(result.resources()).singleElement()
                 .extracting(node -> node.path("id").asText()).isEqualTo("one");
+    }
+
+    @Test
+    void rejectsMissingBearerTokenBeforeMakingRequests() {
+        final CernerFhirBundleHttpClient client = new CernerFhirBundleHttpClient(
+                URI.create("https://example.test/fhir/"), Duration.ofSeconds(1));
+
+        assertThatThrownBy(() -> client.getResources(
+                CernerFhirBundleHttpClient.ResourceType.CONDITION, "patient-1", " "))
+                .isInstanceOf(CernerAllergyService.CernerSourceException.class)
+                .extracting(ex -> ((CernerAllergyService.CernerSourceException) ex).code())
+                .isEqualTo("CERNER_AUTH_EXPIRED");
     }
 }

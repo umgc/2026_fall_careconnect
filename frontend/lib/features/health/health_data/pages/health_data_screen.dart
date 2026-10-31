@@ -1,6 +1,8 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:care_connect_app/widgets/page_title.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../providers/user_provider.dart';
 import '../../../../services/epic_service.dart';
@@ -19,6 +21,9 @@ import '../widgets/record_conflict_dialog.dart';
 import '../../../../widgets/epic_connect_tile.dart';
 
 import 'health_event_details_screen.dart';
+
+AppLocalizations _l10n(BuildContext context) =>
+    AppLocalizations.of(context) ?? lookupAppLocalizations(const Locale('en'));
 
 class HealthDataScreen extends StatefulWidget {
   final int? patientId;
@@ -114,23 +119,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   // TODO: Use the patient-confirmed DOB once the DOB confirmation flow
   // is connected to the unified health data screen.
-  String _formatBirthDate(DateTime date) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  String _formatBirthDate(BuildContext context, DateTime date) {
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    return DateFormat.yMMMMd(locale).format(date);
   }
 
   @override
@@ -354,6 +345,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = _l10n(context);
     final allRecords = _records;
 
     final records = allRecords.where((record) {
@@ -429,7 +421,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Health Data'),
+        title: Text(l10n.healthDataTitle),
       ),
       body: _loading
           ? Center(
@@ -438,7 +430,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 children: [
                   const CircularProgressIndicator(color: _teal),
                   const SizedBox(height: 16),
-                  Text('Loading your health data…',
+                  Text(l10n.healthDataLoading,
                       style: TextStyle(color: _mutedText(context))),
                 ],
               ),
@@ -451,7 +443,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   _noticeBanner(
                     Icons.link_off,
                     // SRS ERR-MCR-05 (FR-MCR-09, AC-MCR-09-1), exact wording.
-                    'Your Medicare connection has expired. Connect again to see current records.',
+                    l10n.healthDataMedicareExpired,
                     action: _connectMedicareButton(),
                   ),
                 // Normal not-connected status is now shown in Connected Sources.
@@ -468,7 +460,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   _noticeBanner(
                     Icons.cloud_off_outlined,
                     // SRS ERR-MCR-03 (FR-MCR-24, AC-MCR-24-2), exact wording.
-                    'Showing your saved records. We couldn\'t check Medicare for updates.',
+                    l10n.healthDataMedicareUpdateUnavailable,
                     warning: true,
                   ),
                 // Normal athenahealth not-connected status is now shown in Connected Sources.
@@ -546,10 +538,10 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                   _noticeBanner(
                     Icons.info_outline,
                     // SRS AC-MCR-28-1 (FR-MCR-28).
-                    'No Medicare records found.',
+                    l10n.healthDataMedicareNoRecords,
                   ),
                 Text(
-                  'One searchable health history from all of your connected healthcare providers.',
+                  l10n.healthDataHistoryDescription,
                   style: TextStyle(color: _mutedText(context)),
                 ),
                 if (_showManageMedicare())
@@ -573,7 +565,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Search',
+                          l10n.search,
                           style:
                               Theme.of(context).textTheme.labelLarge?.copyWith(
                                     fontWeight: FontWeight.w600,
@@ -583,7 +575,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         TextField(
                           controller: _searchController,
                           decoration: InputDecoration(
-                            hintText: 'Search your health history',
+                            hintText: l10n.healthDataSearchHistory,
                             prefixIcon: const Icon(Icons.search),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -620,7 +612,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     child: TextButton.icon(
                       onPressed: _clearFilters,
                       icon: const Icon(Icons.filter_alt_off_outlined),
-                      label: const Text('Clear filters'),
+                      label: Text(l10n.healthDataClearFilters),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -648,7 +640,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Patient Information',
+                                    l10n.healthDataPatientInformation,
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleMedium
@@ -667,7 +659,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Name',
+                                              l10n.healthDataName,
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .bodySmall
@@ -680,7 +672,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                             const SizedBox(height: 4),
                                             Text(
                                               _patientDemographics?.name ??
-                                                  'Not available',
+                                                  l10n.healthDataNotAvailable,
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .bodyMedium
@@ -698,7 +690,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Date of Birth',
+                                              l10n.healthDataDateOfBirth,
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .bodySmall
@@ -713,9 +705,11 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                               _patientDemographics?.birthDate !=
                                                       null
                                                   ? _formatBirthDate(
+                                                      context,
                                                       _patientDemographics!
-                                                          .birthDate!)
-                                                  : 'Not available',
+                                                          .birthDate!,
+                                                    )
+                                                  : l10n.healthDataNotAvailable,
                                               style: Theme.of(context)
                                                   .textTheme
                                                   .bodyMedium
@@ -741,7 +735,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                   ),
                                   const SizedBox(height: 20),
                                   Text(
-                                    'Gender',
+                                    l10n.healthDataGender,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
@@ -754,8 +748,9 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                   const SizedBox(height: 4),
                                   Text(
                                     _patientDemographics?.gender == null
-                                        ? 'Not available'
-                                        : '${_patientDemographics!.gender![0].toUpperCase()}${_patientDemographics!.gender!.substring(1)}',
+                                        ? l10n.healthDataNotAvailable
+                                        : _localizedGender(
+                                            _patientDemographics!.gender!),
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodyMedium
@@ -1022,7 +1017,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
-                              'Your health history',
+                              l10n.healthDataYourHistory,
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineSmall
@@ -1031,7 +1026,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                                   ),
                             ),
                             Text(
-                              '${records.length} events',
+                              l10n.healthDataEventCount(records.length),
                               style: Theme.of(context)
                                   .textTheme
                                   .bodyMedium
@@ -1045,7 +1040,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Health Information',
+                          l10n.healthDataInformation,
                           style:
                               Theme.of(context).textTheme.labelLarge?.copyWith(
                                     fontWeight: FontWeight.w600,
@@ -1057,31 +1052,31 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                           runSpacing: 8,
                           children: [
                             _recordTypeChip(
-                              label: 'All',
+                              label: l10n.healthDataFilterAll,
                               type: null,
                             ),
                             _recordTypeChip(
-                              label: 'Medications',
+                              label: l10n.healthDataFilterMedications,
                               type: RecordType.medication,
                             ),
                             _recordTypeChip(
-                              label: 'Conditions',
+                              label: l10n.healthDataFilterConditions,
                               type: RecordType.condition,
                             ),
                             _recordTypeChip(
-                              label: 'Allergies',
+                              label: l10n.healthDataFilterAllergies,
                               type: RecordType.allergy,
                             ),
                             _recordTypeChip(
-                              label: 'Visits',
+                              label: l10n.healthDataFilterVisits,
                               type: RecordType.appointment,
                             ),
                             _recordTypeChip(
-                              label: 'Clinical Records',
+                              label: l10n.healthDataFilterClinicalRecords,
                               type: RecordType.clinicalRecord,
                             ),
                             _recordTypeChip(
-                              label: 'Claims',
+                              label: l10n.healthDataFilterClaims,
                               type: RecordType.claimService,
                             ),
                           ],
@@ -1360,42 +1355,14 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     );
   }
 
-  String _formatDate(DateTime date) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  String _formatDate(BuildContext context, DateTime date) {
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    return DateFormat.yMMMMd(locale).format(date);
   }
 
-  String _formatMonthYear(DateTime date) {
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    return '${months[date.month - 1]} ${date.year}';
+  String _formatMonthYear(BuildContext context, DateTime date) {
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    return DateFormat.yMMMM(locale).format(date);
   }
 
   Widget _emptyResults() {
@@ -1412,14 +1379,14 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'No health records found',
+              _l10n(context).healthDataNoRecords,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Try changing your search or filters.',
+              _l10n(context).healthDataChangeSearchFilters,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -1435,8 +1402,8 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
 
     for (final record in records) {
       final group = record.date != null
-          ? _formatMonthYear(record.date!)
-          : 'Health information without a date';
+          ? _formatMonthYear(context, record.date!)
+          : _l10n(context).healthDataNoDate;
 
       if (group != currentGroup) {
         widgets.add(
@@ -1472,6 +1439,27 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
     return widgets;
   }
 
+  String _localizedRecordType(RecordType type) {
+    final l10n = _l10n(context);
+
+    switch (type) {
+      case RecordType.medication:
+        return l10n.healthDataRecordTypeMedication;
+      case RecordType.condition:
+        return l10n.healthDataRecordTypeCondition;
+      case RecordType.allergy:
+        return l10n.healthDataRecordTypeAllergy;
+      case RecordType.appointment:
+        return l10n.healthDataRecordTypeVisit;
+      case RecordType.clinicalRecord:
+        return l10n.healthDataRecordTypeClinicalRecord;
+      case RecordType.claimService:
+        return l10n.healthDataRecordTypeClaimService;
+      default:
+        return l10n.healthDataRecordTypeRecord;
+    }
+  }
+
   Widget _recordCard(HealthRecord r) {
     return Card(
         margin: const EdgeInsets.only(bottom: 16),
@@ -1498,7 +1486,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      r.type.label.toUpperCase(),
+                      _localizedRecordType(r.type).toUpperCase(),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -1517,7 +1505,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
               if (r.date != null) ...[
                 const SizedBox(height: 16),
                 Text(
-                  'Date',
+                  _l10n(context).healthDataDate,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -1525,7 +1513,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _formatDate(r.date!),
+                  _formatDate(context, r.date!),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
@@ -1575,7 +1563,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          'View details',
+                          _l10n(context).healthDataViewDetails,
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: _accent(context),
@@ -1596,6 +1584,30 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         ));
   }
 
+  String _localizedGender(String gender) {
+    final l10n = _l10n(context);
+
+    switch (gender.toLowerCase()) {
+      case 'female':
+        return l10n.healthDataGenderFemale;
+      case 'male':
+        return l10n.healthDataGenderMale;
+      default:
+        return gender;
+    }
+  }
+
+  String _localizedStatus(String status) {
+    final l10n = _l10n(context);
+
+    switch (status.toLowerCase()) {
+      case 'active':
+        return l10n.healthDataStatusActive;
+      default:
+        return status;
+    }
+  }
+
   Widget _statusChip(String status) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -1603,7 +1615,7 @@ class _HealthDataScreenState extends State<HealthDataScreen> {
         color: const Color(0xFFD1FAE5),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(status,
+      child: Text(_localizedStatus(status),
           style: const TextStyle(
               fontSize: 11, color: _greenText, fontWeight: FontWeight.w600)),
     );

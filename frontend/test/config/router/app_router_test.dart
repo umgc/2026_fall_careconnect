@@ -18,6 +18,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:care_connect_app/config/router/app_router.dart';
+import 'package:care_connect_app/features/health/caregiver-patient-list/page/patient_details_page.dart';
 import 'package:care_connect_app/pages/epic_resource_detail_page.dart';
 import 'package:care_connect_app/providers/user_provider.dart';
 import 'package:care_connect_app/features/health/health_data/pages/athena_connect_page.dart';
@@ -29,6 +30,8 @@ import 'package:care_connect_app/services/api_service.dart';
 import 'package:care_connect_app/services/pending_oracle_health_launch.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+import '../../mock_user_provider.dart';
 
 /// Recursively extracts all route paths from a GoRouter's route tree.
 List<String> _extractPaths(List<RouteBase> routes, [String prefix = '']) {
@@ -353,6 +356,15 @@ void main() {
       expect(allPaths, contains('/medical-passport'));
       final route = _findRoute(appRouter.configuration.routes, '/medical-passport');
       expect(route!.redirect, isNotNull);
+    });
+
+    test('share-card patient route requires sign-in', () {
+      expect(allPaths, contains('/patients/:patientId'));
+      expect(
+        _findRoute(appRouter.configuration.routes, '/patients/:patientId')!
+            .redirect,
+        isNotNull,
+      );
     });
 
     test('TC-ROUTE-014: caregiver-dashboard route exists', () {
@@ -1841,10 +1853,11 @@ void main() {
     );
   }
 
-  Future<BuildContext> contextWithUser(WidgetTester tester) async {
+  Future<BuildContext> contextWithUser(WidgetTester tester,
+      {UserProvider? userProvider}) async {
     late BuildContext ctx;
     await tester.pumpWidget(ChangeNotifierProvider<UserProvider>.value(
-      value: UserProvider(),
+      value: userProvider ?? UserProvider(),
       child: MaterialApp(home: Builder(builder: (c) {
         ctx = c;
         return const SizedBox();
@@ -1852,6 +1865,48 @@ void main() {
     ));
     return ctx;
   }
+
+  group('share-card patient route builder', () {
+    testWidgets('builds selected caregiver tabs', (tester) async {
+      final route =
+          _findRoute(appRouter.configuration.routes, '/patients/:patientId')!;
+      final context = await contextWithUser(
+        tester,
+        userProvider: MockUserProvider(
+          mockUser: MockUser(id: 20, role: 'CAREGIVER', caregiverId: 7),
+        ),
+      );
+
+      for (final tab in ['health', 'medicare', 'other']) {
+        final page = route.builder!(
+          context,
+          routeState(
+            '/patients/42?tab=$tab',
+            params: const {'patientId': '42'},
+          ),
+        ) as PatientDetailsPage;
+        expect(page.patientId, '42');
+        expect(page.isCaregiver, isTrue);
+        expect(page.initialTab, tab == 'other' ? isNull : tab);
+      }
+    });
+
+    testWidgets('rejects an invalid patient ID', (tester) async {
+      final route =
+          _findRoute(appRouter.configuration.routes, '/patients/:patientId')!;
+      final context = await contextWithUser(tester);
+      final page = route.builder!(
+        context,
+        routeState(
+          '/patients/not-a-number?tab=health',
+          params: const {'patientId': 'not-a-number'},
+        ),
+      ) as Scaffold;
+
+      expect((page.body as Center).child, isA<Text>());
+      expect(((page.body as Center).child as Text).data, 'Invalid patient ID');
+    });
+  });
 
   group('TC-ROUTE-174: each route builds the page it names', () {
     // (route pattern, location, path parameters, extra, page type,

@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for EvvVisitHistoryPage
 // (lib/features/evv/presentation/pages/evv_visit_history.dart).
 //
@@ -21,6 +22,9 @@ import '../../mock_user_provider.dart';
 Widget _wrap({String role = 'CAREGIVER'}) {
   final provider = MockUserProvider(mockUser: MockUser(id: 1, role: role, caregiverId: 10));
   return MaterialApp(
+    locale: const Locale('en'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: ChangeNotifierProvider<UserProvider>.value(
       value: provider,
       child: const EvvVisitHistoryPage(),

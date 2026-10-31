@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,15 @@ import '../../../../providers/user_provider.dart';
 import '../../../../services/api_service.dart';
 import '../../../../config/theme/app_theme.dart';
 import '../../../dashboard/models/patient_model.dart';
+
+class _UnauthenticatedPatientSelection implements Exception {
+  const _UnauthenticatedPatientSelection();
+}
+
+class _PatientSelectionHttpFailure implements Exception {
+  const _PatientSelectionHttpFailure(this.statusCode);
+  final int statusCode;
+}
 
 class PatientSelectionPage extends StatefulWidget {
   const PatientSelectionPage({super.key});
@@ -17,7 +27,7 @@ class PatientSelectionPage extends StatefulWidget {
 class _PatientSelectionPageState extends State<PatientSelectionPage> {
   List<Patient> _patients = [];
   bool _isLoading = true;
-  String? _error;
+  Object? _error;
 
   @override
   void initState() {
@@ -36,7 +46,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
       final user = userProvider.user;
 
       if (user == null) {
-        throw Exception('User not authenticated');
+        throw const _UnauthenticatedPatientSelection();
       }
 
       // Fetch patients for the current caregiver using ApiService
@@ -74,11 +84,11 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
           _isLoading = false;
         });
       } else {
-        throw Exception('Failed to load patients: ${response.statusCode}');
+        throw _PatientSelectionHttpFailure(response.statusCode);
       }
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = e;
         _isLoading = false;
       });
     }
@@ -97,12 +107,12 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Select Patient'),
+        title: Text(AppLocalizations.of(context)!.evvSelectPatientTitle),
         actions: [
           TextButton.icon(
             onPressed: () => context.go('/dashboard?role=CAREGIVER'),
             icon: const Icon(Icons.cancel, color: Colors.red),
-            label: const Text('Cancel', style: TextStyle(color: Colors.red)),
+            label: Text(AppLocalizations.of(context)!.evvSelectPatientCancel, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -127,6 +137,13 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   }
 
   Widget _buildErrorState() {
+    final error = _error;
+    final localizations = AppLocalizations.of(context)!;
+    final message = error is _UnauthenticatedPatientSelection
+        ? localizations.evvSelectPatientUnauthenticated
+        : error is _PatientSelectionHttpFailure
+            ? localizations.evvSelectPatientHttpError(error.statusCode)
+            : error.toString();
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -139,14 +156,14 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
               color: Theme.of(context).colorScheme.error,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'Error Loading Patients',
+            Text(
+              AppLocalizations.of(context)!.evvSelectPatientErrorTitle,
               style: AppTheme.headingSmall,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              _error!,
+              message,
               style: AppTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -154,7 +171,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
             ElevatedButton(
               onPressed: _loadPatients,
               style: AppTheme.primaryButtonStyle,
-              child: const Text('Try Again'),
+              child: Text(AppLocalizations.of(context)!.evvSelectPatientRetry),
             ),
           ],
         ),
@@ -175,14 +192,14 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
               color: Theme.of(context).hintColor,
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No Patients Found',
+            Text(
+              AppLocalizations.of(context)!.evvSelectPatientEmptyTitle,
               style: AppTheme.headingSmall,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
-              'You don\'t have any patients assigned to you yet.',
+            Text(
+              AppLocalizations.of(context)!.evvSelectPatientEmptyBody,
               style: AppTheme.bodyMedium,
               textAlign: TextAlign.center,
             ),
@@ -190,7 +207,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
             ElevatedButton(
               onPressed: () => context.go('/add-patient'),
               style: AppTheme.primaryButtonStyle,
-              child: const Text('Add Patient'),
+              child: Text(AppLocalizations.of(context)!.evvSelectPatientAdd),
             ),
           ],
         ),
@@ -235,7 +252,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Select Patient',
+                  AppLocalizations.of(context)!.evvSelectPatientTitle,
                   style: TextStyle(
                     color: theme.textTheme.titleMedium?.color,
                     fontSize: 16,
@@ -343,7 +360,7 @@ class _PatientSelectionPageState extends State<PatientSelectionPage> {
   String _formatAddress(Patient patient) {
     final address = patient.address;
     if (address == null) {
-      return 'Address not available';
+      return AppLocalizations.of(context)!.evvSelectPatientNoAddress;
     }
 
     final line1 = address.line1 ?? '';

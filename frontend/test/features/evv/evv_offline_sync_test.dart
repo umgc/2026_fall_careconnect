@@ -1,3 +1,4 @@
+import 'package:care_connect_app/l10n/app_localizations.dart';
 // Tests for EvvOfflineSyncPage
 // (lib/features/evv/presentation/pages/evv_offline_sync.dart).
 //
@@ -7,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:care_connect_app/features/evv/presentation/pages/evv_offline_sync.dart';
 
-Widget _wrap() => const MaterialApp(home: EvvOfflineSyncPage());
+Widget _wrap() => MaterialApp(locale: const Locale('en'), localizationsDelegates: AppLocalizations.localizationsDelegates, supportedLocales: AppLocalizations.supportedLocales, home: const EvvOfflineSyncPage());
 
 void main() {
   group('EvvOfflineSyncPage – initial render', () {

@@ -22,8 +22,8 @@ import '../../health_data/health_data_test_support.dart';
 const _visits = '/v1/api/medicare/visits';
 const _coverage = '/v1/api/medicare/coverage';
 
-/// FR-MCR-17: "not shared" and "not connected" look the same.
-const _unavailable = 'Medicare data isn\'t available for this patient yet.';
+const _notShared = 'Jane hasn\'t shared this with you.';
+const _forbidden = 'Medicare data isn\'t available for this patient yet.';
 const _unreachable = 'We couldn\'t reach Medicare right now.';
 const _noRecords = 'No Medicare records found.';
 const _demo =
@@ -49,14 +49,17 @@ void main() {
             synthetic: synthetic),
       }, gate: gate);
 
-  Future<void> pump(WidgetTester t, RouteAdapter a, {ThemeData? theme}) async {
+  Future<void> pump(WidgetTester t, RouteAdapter a,
+      {ThemeData? theme, String patientName = 'Jane'}) async {
     ApiClient.instance.debugSetHttpClientAdapter(a);
     await t.pumpWidget(MaterialApp(
       locale: const Locale('en'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: theme,
-      home: const Scaffold(body: CaregiverMedicareTab(patientId: 3)),
+      home: Scaffold(
+        body: CaregiverMedicareTab(patientId: 3, patientName: patientName),
+      ),
     ));
   }
 
@@ -130,21 +133,20 @@ void main() {
   });
 
   testWidgets(
-      'TC-MCR-CG-004: a 404 shows the one unavailable message and no '
+      'a 404 shows the patient-specific not-shared message and no '
       'records', (t) async {
     await pump(t, RouteAdapter({}, status: {_visits: 404, _coverage: 404}));
     await settle(t);
-    expect(find.text(_unavailable), findsOneWidget);
+    expect(find.text(_notShared), findsOneWidget);
     expectNoRecords();
     expect(find.text('Retry'), findsNothing);
   });
 
   testWidgets(
-      'TC-MCR-CG-005: a 403 looks exactly like a 404, so not shared and not '
-      'connected can\'t be told apart (FR-MCR-17)', (t) async {
+      'a 403 retains the generic Medicare unavailable message', (t) async {
     await pump(t, RouteAdapter({}, status: {_visits: 403, _coverage: 403}));
     await settle(t);
-    expect(find.text(_unavailable), findsOneWidget);
+    expect(find.text(_forbidden), findsOneWidget);
     expectNoRecords();
     expect(find.text('Retry'), findsNothing);
   });
@@ -160,7 +162,7 @@ void main() {
           _visits: 404
         }));
     await settle(t);
-    expect(find.text(_unavailable), findsOneWidget);
+    expect(find.text(_notShared), findsOneWidget);
     expectNoRecords();
   });
 
@@ -170,7 +172,7 @@ void main() {
     await pump(t, RouteAdapter({}, status: {_visits: 409, _coverage: 409}));
     await settle(t);
     expect(find.text(_expired), findsOneWidget);
-    expect(find.text(_unavailable), findsNothing);
+    expect(find.text(_forbidden), findsNothing);
     expect(find.text(_noRecords), findsNothing);
   });
 
@@ -259,11 +261,8 @@ void main() {
           reason: 'only the expired notice may mention connecting');
       expect(find.byType(ElevatedButton), findsNothing);
       expect(find.byType(FilledButton), findsNothing);
+      expect(find.byType(TextButton), findsNothing);
       expect(find.byType(Switch), findsNothing);
-      expect(
-          find.textContaining(
-              RegExp('share|disconnect|unlink', caseSensitive: false)),
-          findsNothing);
     }
   });
 
@@ -496,7 +495,9 @@ void main() {
         home: const MediaQuery(
           data: MediaQueryData(
               size: Size(320, 640), textScaler: TextScaler.linear(2)),
-          child: Scaffold(body: CaregiverMedicareTab(patientId: 3)),
+          child: const Scaffold(
+            body: CaregiverMedicareTab(patientId: 3, patientName: 'Jane'),
+          ),
         ),
       ));
       await settle(t);

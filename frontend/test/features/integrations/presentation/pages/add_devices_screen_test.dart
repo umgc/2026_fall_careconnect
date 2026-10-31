@@ -1,3 +1,5 @@
+import '../../../../m4_health_connection_coverage_cases.dart' as m4_health;
+import '../../../../m4_localization_coverage_cases.dart' as m4_coverage;
 // Tests for AddDeviceScreen widget
 // (lib/features/integrations/presentation/pages/add_devices_screen.dart).
 //
@@ -46,6 +48,8 @@ Widget _wrap(Widget child) {
 }
 
 void main() {
+  m4_health.registerM4HealthCoverage('add');
+  m4_coverage.registerM4Coverage('add');
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
