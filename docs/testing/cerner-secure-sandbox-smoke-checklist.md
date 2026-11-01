@@ -27,11 +27,22 @@ The supported release workflow is Patient/Online: a patient starts in deployed C
 - [ ] Request only approved read scopes for the five-resource workflow. Do not request create, update, delete, or wildcard write scopes.
 - [ ] Confirm the authorization endpoint, token endpoint host segment, `aud`, and FHIR base belong to the same persona/host pair.
 - [ ] Confirm successful authorization returns through the backend callback with `status=ok`, the UI reports Connected, and reopening the connection view still reports the expected state.
+- [ ] Confirm every FHIR resource request sends `Accept: application/fhir+json` and an `Authorization: Bearer <token>` header. Verify header presence without recording the bearer value.
+- [ ] Keep OAuth token exchange headers separate from FHIR resource headers: the token request uses `Content-Type: application/x-www-form-urlencoded`; read-only FHIR `GET` requests use `Accept: application/fhir+json` and do not require a request-body content type.
 - [ ] Prepare a sanitized evidence location. Disable or redact verbose network/header capture.
 
 ## Resource checks
 
 Record HTTP status, FHIR `resourceType`, Bundle type/count, next-link presence, application result summary, and pass/fail. Use server-controlled patient context in the application; the patterns below describe the Oracle Health boundary.
+
+Required headers for every request in the resource table:
+
+```http
+Accept: application/fhir+json
+Authorization: Bearer <short-lived-access-token>
+```
+
+Never copy the bearer value into screenshots, logs, fixtures, evidence, or commits.
 
 | Resource | Read-only request pattern | Check |
 |---|---|---|
@@ -63,6 +74,7 @@ Entry workflow: deployed CareConnect direct patient connection
 Sandbox persona and base alias: Patient/Online; fhir-myrecord
 Synthetic patient alias (no stable identifier):
 SMART scopes requested (no token):
+FHIR Accept header confirmed (`application/fhir+json`): yes/no
 Resources checked:
 Request-pattern summary:
 HTTP/application-result summary:
