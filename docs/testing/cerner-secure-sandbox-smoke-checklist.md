@@ -7,22 +7,26 @@
 ## Verified environment references
 
 - Oracle Health service-root documentation: <https://docs.oracle.com/en/industries/health/millennium-platform-apis/mfrap/srv_root_url.html>
-- Provider FHIR base: `https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d`
 - Patient FHIR base: `https://fhir-myrecord.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d`
-- Provider SMART discovery: `{providerBase}/.well-known/smart-configuration`
-- Provider authorization endpoint: `https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/personas/provider/authorize`
-- Provider token endpoint: `https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/hosts/fhir-ehr-code.cerner.com/protocols/oauth2/profiles/smart-v1/token`
+- Patient SMART discovery: `{patientBase}/.well-known/smart-configuration`
+- Patient authorization endpoint: `https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/protocols/oauth2/profiles/smart-v1/personas/patient/authorize`
+- Patient token endpoint: `https://authorization.cerner.com/tenants/ec2458f2-1e24-41c8-b71b-0e701af7583d/hosts/fhir-myrecord.cerner.com/protocols/oauth2/profiles/smart-v1/token`
+- Deployed staging entry point: `https://staging.d2rx8or1jgx2rw.amplifyapp.com/`
+- Backend callback: `https://lvg02g7m6j.execute-api.us-east-1.amazonaws.com/api/oracle-health/callback`
 
-If the patient persona is tested, discover and use the patient authorization/token endpoints and keep the `fhir-myrecord.cerner.com` audience/base consistent. Never mix a provider token with the patient FHIR host or the reverse.
+The supported release workflow is Patient/Online: a patient starts in deployed CareConnect and authorizes access to their own records. Keep the patient authorization endpoint, token endpoint host, audience, issuer and FHIR base consistent. Never mix a provider token or `fhir-ehr-code.cerner.com` host with this patient workflow. Provider/Code Console launch may be executed separately as a diagnostic check, but it is not the primary release journey.
 
 ## Before the test
 
 - [ ] Record the candidate branch, commit SHA, application configuration profile, tester, and UTC start time.
 - [ ] Confirm the patient is synthetic and approved for sandbox testing.
+- [ ] Confirm the Oracle Health registration is Patient/Online with intended user Individual/Caregiver and purpose Access Their EHI.
+- [ ] Start from the deployed CareConnect website, sign into CareConnect, and select Oracle Health Connect. Do not begin the primary release smoke from Code Console.
 - [ ] Confirm the OAuth registration redirect URI exactly matches the client request.
 - [ ] Use S256 PKCE and a new unpredictable `state`; do not save the code verifier or authorization code as evidence.
 - [ ] Request only approved read scopes for the five-resource workflow. Do not request create, update, delete, or wildcard write scopes.
 - [ ] Confirm the authorization endpoint, token endpoint host segment, `aud`, and FHIR base belong to the same persona/host pair.
+- [ ] Confirm successful authorization returns through the backend callback with `status=ok`, the UI reports Connected, and reopening the connection view still reports the expected state.
 - [ ] Prepare a sanitized evidence location. Disable or redact verbose network/header capture.
 
 ## Resource checks
@@ -41,6 +45,7 @@ When a Bundle includes `link.relation = next`, verify the application follows th
 
 ## Authorization and failure checks
 
+- [ ] Direct patient authorization begins from deployed CareConnect without an EHR-provided `launch` token.
 - [ ] A valid short-lived bearer token returns the expected successful resource response.
 - [ ] An expired/invalid token produces a source-authorization outcome, not an empty clinical result.
 - [ ] Insufficient scope is distinguishable from expired token and from CareConnect patient-access denial.
@@ -54,7 +59,8 @@ UTC date/time:
 Tester:
 Branch and commit SHA:
 Application build/CI link:
-Sandbox persona and base alias:
+Entry workflow: deployed CareConnect direct patient connection
+Sandbox persona and base alias: Patient/Online; fhir-myrecord
 Synthetic patient alias (no stable identifier):
 SMART scopes requested (no token):
 Resources checked:
@@ -70,4 +76,4 @@ Confirmed secrets and stable identifiers removed: yes/no
 
 ## Completion
 
-The smoke is complete only when each in-scope resource has a recorded outcome, any differences from fixtures are triaged, secrets and identifiers are removed from evidence, defects are linked, and the traceability matrix is updated. A Postman-only request proves Oracle Health availability; it does not replace application integration, contract, frontend, or automated regression evidence.
+The smoke is complete only when the direct patient connection and each in-scope resource have a recorded outcome, disconnect/reconnect is assessed, any differences from fixtures are triaged, secrets and identifiers are removed from evidence, defects are linked, and the traceability matrix is updated. A Postman-only request or provider/Code Console launch proves only its tested boundary; neither replaces the deployed patient journey, contract, frontend, or automated regression evidence.

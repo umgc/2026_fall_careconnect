@@ -1,8 +1,8 @@
 # Milestone 4 Team C Test Summary
 
 **Owner:** Team C QA Lead (Tiffany Obi)  
-**Status:** Execution and sign-off template - not a passing report  
-**Current disposition:** Not Run
+**Status:** Execution and sign-off working record - preliminary staging evidence captured; not a final passing report
+**Current disposition:** In Progress
 
 Complete this document against one frozen release-candidate commit. Do not treat code presence, fixture presence, or an earlier focused run as final release evidence.
 
@@ -10,11 +10,11 @@ Complete this document against one frozen release-candidate commit. Do not treat
 
 | Field | Value |
 |---|---|
-| Release-candidate commit | TBD |
-| Branch/build | TBD |
-| Execution window | TBD |
-| Backend environment | TBD |
-| Frontend platforms/devices/browsers | TBD |
+| Release-candidate commit | Final candidate TBD; preliminary staging validation used `c6bff036` |
+| Branch/build | `staging`; backend and Amplify configuration redeployed for Patient/Online access |
+| Execution window | Preliminary live workflow: October 31, 2026; final regression window TBD |
+| Backend environment | AWS staging backend and Oracle Health secure sandbox |
+| Frontend platforms/devices/browsers | Deployed Flutter web staging; exact browser/device evidence TBD |
 | Cerner environment | Secure sandbox; synthetic data only |
 | OpenAPI path/version/checksum | TBD |
 | Canonical model/mapping approval | TBD |
@@ -40,7 +40,7 @@ Summarize what was tested, the business/user workflows demonstrated, the most im
 | End-to-end | TBD | TBD | TBD | TBD | TBD | TBD |
 | Localization catalog/generation | TBD | TBD | TBD | TBD | TBD | TBD |
 | Localization manual/accessibility/RTL | TBD | TBD | TBD | TBD | TBD | TBD |
-| Live Cerner smoke | TBD | TBD | TBD | TBD | TBD | TBD |
+| Live Cerner smoke | 1 preliminary connection workflow plus five-resource checklist | 1 connection workflow | 0 | 0 | Five-resource results pending | Direct Patient/Online connection returned `status=ok`, reported Connected and loaded records; sanitized evidence and per-resource results pending |
 | Regression | TBD | TBD | TBD | TBD | TBD | TBD |
 | Demo rehearsal | TBD | TBD | TBD | TBD | TBD | TBD |
 
@@ -53,7 +53,7 @@ Summarize what was tested, the business/user workflows demonstrated, the most im
 | AllergyIntolerance | Focused baseline | Provisional baseline | Blocked | Not Run for candidate | Not Run | Not Run | Canonical persistence decision pending |
 | Encounter | Candidate baseline | Provisional baseline | Blocked | Partial baseline | Not Run | Not Run | Approval and final evidence pending |
 | Appointment (provisional) | Focused baseline | Not Run | Blocked | Not Run | Not Run | Not Run | Controller, output and date-window approval pending |
-| SMART OAuth/connect/reconnect | Focused baseline | Provisional baseline | Blocked | Partial baseline | Not Run | Not Run | Secure-sandbox evidence pending |
+| SMART OAuth/connect/reconnect | Focused baseline | Provisional baseline | Blocked | Partial baseline | Manual direct-patient path passed; automated E2E Not Run | Connection passed; reconnect not yet recorded | Patient/Online staging authorization returned `status=ok`, reported Connected and loaded records; persistence, disconnect/reconnect and negative cases pending |
 | Partial results/multi-source | Not Run | Not Run | Blocked | Not Run | Not Run | N/A | Contract/policy pending |
 
 ## 5. Localization status
@@ -78,7 +78,7 @@ Summarize what was tested, the business/user workflows demonstrated, the most im
 | Consecutive CI runs | Three passing on candidate | TBD | Not Run | CI links TBD |
 | Endpoint contract validation | Every implemented endpoint | TBD | Blocked | Contract report TBD |
 | Frontend fixture validation | Same contract/checksum | TBD | Blocked | Contract report TBD |
-| Recent live smoke | Passing in sign-off window | TBD | Not Run | Smoke record TBD |
+| Recent live smoke | Passing in sign-off window | Partial: direct connection passed; five-resource and reconnect checklist pending | In Progress | [Secure-sandbox checklist](cerner-secure-sandbox-smoke-checklist.md) |
 | Retrieval-only/no write-back | Confirmed | TBD | Not Run | Review/evidence TBD |
 
 ## 7. Defects and deviations
@@ -107,16 +107,16 @@ Record local focused runs separately from required integration-branch CI evidenc
 
 | Field | Value |
 |---|---|
-| Date/tester | TBD |
-| Candidate commit/config | TBD |
-| Synthetic patient/persona | TBD (sanitized alias only) |
+| Date/tester | October 31, 2026 / Tiffany Obi |
+| Candidate commit/config | Preliminary staging commit `c6bff036`; Patient/Online configuration redeployed |
+| Synthetic patient/persona | Synthetic patient alias pending evidence record / Patient/Online |
 | Resources checked | Patient, Condition, AllergyIntolerance, Encounter, provisional Appointment |
-| OAuth/connect result | Not Run |
-| Retrieval result | Not Run |
+| OAuth/connect result | Pass: direct deployed CareConnect flow returned `status=ok` and displayed Connected |
+| Retrieval result | Partial Pass: records loaded; result for each of the five resources still requires separate recording |
 | No-write-back confirmed | Not Run |
 | Fixture drift observed | TBD |
-| Sanitized evidence | TBD |
-| Defects/follow-up | TBD |
+| Sanitized evidence | Pending screenshot/log link; no token, code, cookie, password or stable patient identifier may be included |
+| Defects/follow-up | Complete five-resource result table, disconnect/reconnect, persistence-after-reopen and negative authorization cases |
 
 ## 10. Accessibility, RTL, and translation review
 

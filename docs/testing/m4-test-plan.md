@@ -30,13 +30,14 @@ Contract-dependent paths, response fields, error codes, partial-result structure
 
 ## 3. Current repository baseline
 
-This plan was prepared from branch `feature/team-c-cerner-qa-implementation` on October 21, 2026. The baseline must be refreshed before final execution because implementation will continue during M4.
+This plan was initially prepared from branch `feature/team-c-cerner-qa-implementation` on October 21, 2026. It was refreshed on October 31, 2026 against shared staging/develop commit `c6bff036` after the deployed patient-facing Oracle Health connection succeeded. Final execution must still pin the eventual release-candidate commit because implementation and evidence collection continue during M4.
 
 | Area | Observed state | M4 implication |
 |---|---|---|
 | Cerner AllergyIntolerance | A vertical slice exists with mapping, provisional controller/service wiring, SMART OAuth/PKCE, encrypted credential handling, patient crosswalk, bounded pagination, one-time refresh after an upstream 401, raw-payload retention, fixtures, and focused offline tests. | Reuse this as the reference pattern. Add remaining integration, contract, frontend, live-smoke, and sign-off evidence. |
 | Cerner Patient and Appointment | Limited mapper/storage behavior and source fixtures exist. | Complete approved field mapping, service/client/controller coverage, expected outputs, failure cases, and end-to-end evidence where the resource changes the user workflow. |
 | Cerner Condition and Encounter | Shared source-neutral records, repositories, pure fixture-driven mappers, bounded same-source Bundle retrieval, OAuth refresh, original-resource retention, normalized upserts, stale-update protection, provisional controllers, MVC slices, candidate expected outputs, and Spring/WireMock coverage now exist. The public shapes and candidate outputs remain unapproved and disabled by default. | Review and approve or revise the field/route assumptions, then add formal contract, E2E, and smoke evidence. |
+| Patient-facing SMART connection | The intended release workflow now uses a Patient/Online Oracle Health registration. A patient opened deployed CareConnect, selected Connect, completed patient-persona authorization against `fhir-myrecord.cerner.com`, returned through the backend callback with `status=ok`, and loaded records in staging. | Preserve the successful direct-patient path as the primary release workflow. Complete sanitized evidence, disconnect/reconnect, authorization-failure, persistence, automated E2E, and per-resource smoke results before sign-off. |
 | Unified OpenAPI contract | `contracts/unified-health-data.openapi.yaml` was not found in the inspected repository. | API paths, normalized response fields, error codes, source-status behavior, and formal contract tests remain provisional. |
 | Localization foundation | Flutter generated localization, locale selection, 14 ARB catalogs, and focused localization tests exist. | Reuse the foundation; validate it from a clean checkout and extend evidence to complete workflows. |
 | Current catalog parity | English currently contains 1,130 message keys, Spanish 1,109, most other locale catalogs 948, and Urdu 949. | File presence is not translation completion. Produce a key-by-key parity report, resolve approved gaps, and document qualified human review for sensitive copy. |
@@ -56,7 +57,7 @@ Status language in this plan is deliberate:
 
 - All unresolved requirements from the M3 Cerner test plan.
 - Read-only Cerner retrieval for Patient, Condition, AllergyIntolerance, Encounter, and provisional Appointment.
-- SMART-on-FHIR authorization, patient context, source credentials, refresh behavior, crosswalk enforcement, and disconnect/reconnect behavior.
+- Patient-initiated SMART-on-FHIR authorization from deployed CareConnect, patient context, source credentials, refresh behavior, crosswalk enforcement, and disconnect/reconnect behavior. The primary release persona is Patient/Online; provider/EHR-initiated launch remains diagnostic/historical evidence rather than the supported patient journey.
 - Mapping, normalization, source identity, `sourceRecordId` or approved equivalent, provenance, and approved raw-payload retention.
 - Successful, empty, missing-field, malformed, authorization, timeout, rate-limit, pagination, duplicate, loop, mixed-entry, upstream-error, and partial-result cases.
 - Backend unit, controller-slice, OpenAPI contract, WireMock integration, and regression testing.
@@ -195,7 +196,7 @@ Each workflow is localization-complete only when:
 The following must be represented in the scenario catalog and assigned to the lowest useful level:
 
 - Missing CareConnect login, forbidden local-patient access, missing source connection, insufficient SMART scope, upstream 401, expired token with one approved successful refresh, refresh failure, and wrong audience/host.
-- OAuth state mismatch, PKCE/redirect mismatch, missing patient context when required, disconnect, reconnect, and credentials marked for reauthorization.
+- Direct patient authorization from the deployed CareConnect website, Patient/Online persona discovery, `fhir-myrecord.cerner.com` audience/issuer consistency, OAuth state mismatch, PKCE/redirect mismatch, missing patient context, disconnect, reconnect, and credentials marked for reauthorization.
 - Connection timeout, read timeout, connection refusal, upstream 5xx, malformed JSON/FHIR, wrong resource type, missing required/core identifiers, mixed valid/invalid entries, and safe error logging.
 - HTTP 429 behavior using the approved retry/backoff and `Retry-After` policy; call counts prove there is no retry storm.
 - Empty Bundles, multiple pages, same-source next links, maximum-page enforcement, duplicate/loop protection, and later-page failure.
@@ -262,6 +263,7 @@ No locale may be reported as fully translated solely because its ARB file exists
 - YAML `.meta.yaml` files document provenance, capture date, purpose, sanitization, and expected handling; they do not replace expected JSON output.
 - Never commit authorization codes, PKCE verifiers, access/refresh tokens, cookies, secrets, bearer headers, production PHI, or unsanitized logs/screenshots.
 - WireMock represents OAuth and FHIR behavior for automation. The live sandbox is used only for a small scheduled smoke test with synthetic patients and sanitized evidence.
+- The release smoke starts in deployed CareConnect and uses the Patient/Online registration. Oracle Code Console provider launch may be retained as a separate diagnostic check, but it does not replace the direct patient journey.
 - Localization tests use repository catalogs and controlled locale/device settings; manual reviewers record locale, device/viewport, text scale, workflow, commit, and result.
 
 ## 12. Entry criteria

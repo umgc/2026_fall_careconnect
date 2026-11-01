@@ -9,8 +9,8 @@ Contract-dependent rows remain provisional until the unified health-data OpenAPI
 | Requirement ID | Description | Test/scenario identifiers | Level | Expected result | Latest result | Evidence |
 |---|---|---|---|---|---|---|
 | M4-REQ-01 | Carry unresolved M3 requirements into M4 without weakening safety boundaries. | All open `M3-REQ-*`; M4-SC-SIGN-001 | All | Every open M3 row has an M4 owner, scenario and final disposition; synthetic-only, retrieval-only and no-write-back remain enforced. | In Progress | [M3 matrix](m3-traceability-matrix.md), [M4 plan](m4-test-plan.md) |
-| M4-REQ-02 | Complete approved read-only Patient, Condition, AllergyIntolerance, Encounter and provisional Appointment workflows. | M4-SC-CER-PAT-001-003; CON-001-003; ALG-001-003; ENC-001-003; APT-001-004; E2E-001; SMOKE-001 | Unit through smoke | All five resources pass approved mapping, retrieval, provenance, authorization and user-workflow checks. | Partly Met | [Scenario catalog](m4-scenario-catalog.md); focused Cerner tests on `0deee2ab`; final contract/E2E/smoke pending |
-| M4-REQ-03 | Verify deterministic Cerner authorization and failure handling. | M4-SC-CER-*-003; AUTH-001-002; PARTIAL-001 | Unit/integration/E2E | Denial, expiry, refresh failure, timeout, malformed data, 429, upstream failure, pagination and partial results follow bounded approved behavior. | Partly Met | Focused HTTP/service/WireMock baseline; remaining Spring and partial-result cases Not Run |
+| M4-REQ-02 | Complete approved read-only Patient, Condition, AllergyIntolerance, Encounter and provisional Appointment workflows. | M4-SC-CER-PAT-001-003; CON-001-003; ALG-001-003; ENC-001-003; APT-001-004; AUTH-003; E2E-001; SMOKE-001 | Unit through smoke | All five resources pass approved mapping, retrieval, provenance, authorization and user-workflow checks. | Partly Met | Direct Patient/Online connection and record loading passed in staging on `c6bff036` after configuration redeploy; [scenario catalog](m4-scenario-catalog.md); formal five-resource results, contract and automated E2E remain pending |
+| M4-REQ-03 | Verify deterministic Cerner authorization and failure handling. | M4-SC-CER-*-003; AUTH-001-003; PARTIAL-001 | Unit/integration/E2E/smoke | Denial, expiry, refresh failure, timeout, malformed data, 429, upstream failure, pagination and partial results follow bounded approved behavior. | Partly Met | Patient-persona happy path passed in deployed staging; focused HTTP/service/WireMock baseline exists; remaining denial, refresh-failure, Spring and partial-result cases Not Run |
 | M4-REQ-04 | Validate backend and frontend against one OpenAPI contract. | M4-SC-CTL-001; CONTRACT-001; PARTIAL-001 | Slice/contract/integration | Every success, error and partial response plus frontend fixture validates against one version/checksum. | Blocked | `contracts/unified-health-data.openapi.yaml` not found at plan baseline |
 | M4-REQ-05 | Localize complete Social Feed workflow. | M4-SC-L10N-001-008, Social Feed checklist rows | Static/unit/widget/manual | Complete workflow text, layout, semantics and supported-locale behavior pass. | Not Run | [Localization checklist](m4-localization-qa-checklist.md) |
 | M4-REQ-06 | Localize complete Gamification workflow. | M4-SC-L10N-001-008, Gamification checklist rows | Static/unit/widget/manual | Complete workflow text, parameters/plurals, layout, semantics and supported-locale behavior pass. | Not Run | [Localization checklist](m4-localization-qa-checklist.md) |
@@ -22,14 +22,14 @@ Contract-dependent rows remain provisional until the unified health-data OpenAPI
 | M4-REQ-12 | Verify representative RTL patient and caregiver workflows. | M4-SC-L10N-006 | Widget/manual accessibility | Direction, reading/focus order, icons, semantics and layout pass in an approved RTL locale. | Not Run | RTL screenshots/checklist TBD |
 | M4-REQ-13 | Record qualified review for sensitive translations. | M4-SC-L10N-007 | Human review | Reviewer, locale, scope, date, disposition and evidence are recorded; unresolved review blocks completion. | Not Run | Translation review record TBD |
 | M4-REQ-14 | Preserve Cerner, localization and shared health-data behavior. | M4-SC-L10N-008; REL-001 | Unit/widget/API/regression | All affected suites pass on the release candidate with no unexplained regression. | Not Run for release candidate | Focused Cerner suite passed on `0deee2ab`; full candidate run TBD |
-| M4-REQ-15 | Produce complete sign-off evidence. | M4-SC-REL-001-003; SIGN-001; SMOKE-001 | All | Traceability, coverage, CI, contract, E2E, smoke, localization, accessibility and defects support a defensible disposition. | Not Run | [M4 summary](m4-test-summary.md) |
+| M4-REQ-15 | Produce complete sign-off evidence. | M4-SC-REL-001-003; SIGN-001; SMOKE-001 | All | Traceability, coverage, CI, contract, E2E, smoke, localization, accessibility and defects support a defensible disposition. | In Progress | Preliminary deployed patient-connection evidence recorded; final five-resource smoke, sanitized screenshots, coverage, CI, contract, defects and sign-off remain open. See [M4 summary](m4-test-summary.md). |
 | M4-REQ-16 | Demonstrate agreed M4 journeys in a stable rehearsed environment. | M4-SC-DEMO-001 | Rehearsal/manual | Demo order, presenters, timing, synthetic data, fallback and handoffs pass rehearsal. | Not Run | Demo rehearsal record TBD |
 
 ## Evidence register
 
 | Evidence item | Required value | Candidate/link | Verified by/date |
 |---|---|---|---|
-| Release-candidate commit | Immutable SHA | TBD | TBD |
+| Release-candidate commit | Immutable SHA | Staging validation used `c6bff036`; final candidate TBD | Tiffany Obi / 2026-10-31 |
 | Approved OpenAPI | Path, version and checksum | TBD | TBD |
 | Mapping coverage | At least 80% line and 70% branch | TBD | TBD |
 | Cerner integration coverage | At least 70% line | TBD | TBD |
@@ -37,7 +37,7 @@ Contract-dependent rows remain provisional until the unified health-data OpenAPI
 | Contract validation | Every implemented endpoint and frontend fixture | TBD | TBD |
 | Critical scenarios | 100% passing | TBD | TBD |
 | Critical/High defects | Zero open | TBD | TBD |
-| Live sandbox smoke | Passing within final sign-off window | TBD | TBD |
+| Live sandbox smoke | Passing within final sign-off window | Partial: direct Patient/Online connection, `status=ok`, Connected state and record loading passed; five-resource checklist/evidence pending | Tiffany Obi / 2026-10-31 |
 | Localization parity/generation | Approved parity and clean generation | TBD | TBD |
 | RTL/accessibility | Representative patient and caregiver evidence | TBD | TBD |
 | Sensitive translation review | Qualified review or recorded blocker | TBD | TBD |
