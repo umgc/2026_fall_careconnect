@@ -170,6 +170,20 @@ class CernerOAuthServiceTest {
     }
 
     @Test
+    void tokenResponseWithoutPatientContextUsesTheDiagnosticException() {
+        when(config.isConfidentialClient()).thenReturn(false);
+        when(http.postForEntity(eq(TOKEN), any(HttpEntity.class), eq(CernerTokenResponse.class)))
+                .thenReturn(ResponseEntity.ok(new CernerTokenResponse(
+                        "access-token", null, "Bearer", 300L, "patient/Patient.read", null)));
+
+        assertThatThrownBy(() -> service().exchangeAndStore(18L, "code", "verifier"))
+                .isInstanceOf(CernerOAuthService.CernerPatientContextMissingException.class);
+        verify(audit).record(18L, CernerProperties.SOURCE_ORACLE_HEALTH,
+                "ORACLE_HEALTH_CONNECT", "ERROR");
+        verify(credentials, never()).save(any());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void confidentialClientUsesBasicAuthenticationWithoutClientIdFormField() {
         when(config.isConfidentialClient()).thenReturn(true);
