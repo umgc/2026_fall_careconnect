@@ -271,9 +271,11 @@ function Get-ParameterOverrides {
     # Key=Value format expected by `aws cloudformation deploy`.
     $entries = Get-Content -LiteralPath $ParameterFile -Raw | ConvertFrom-Json
     $result = New-Object System.Collections.Generic.List[string]
+    $seen = New-Object System.Collections.Generic.HashSet[string]
 
     foreach ($entry in $entries) {
         $key = [string]$entry.ParameterKey
+        [void]$seen.Add($key)
         $value = [string]$entry.ParameterValue
 
         if ($Overrides.ContainsKey($key)) {
@@ -281,6 +283,14 @@ function Get-ParameterOverrides {
         }
 
         $result.Add("$key=$value")
+    }
+
+    # Overrides for template parameters the file does not list (e.g. Athena*) would
+    # otherwise be dropped; append them.
+    foreach ($key in $Overrides.Keys) {
+        if (-not $seen.Contains([string]$key)) {
+            $result.Add("$key=$([string]$Overrides[$key])")
+        }
     }
 
     return $result.ToArray()
@@ -527,6 +537,20 @@ try {
     foreach ($key in $medicareOverrides.Keys) {
         if (-not [string]::IsNullOrWhiteSpace($medicareOverrides[$key])) {
             $ServiceOverrides[$key] = [string]$medicareOverrides[$key]
+        }
+    }
+    # athenahealth, from the same CARECONNECT_ATHENA_* variables the bash scripts and CI use.
+    # Unset leaves the stack's current value in place.
+    $athenaOverrides = [ordered]@{
+        AthenaEnabled      = $env:CARECONNECT_ATHENA_ENABLED
+        AthenaClientId     = $env:CARECONNECT_ATHENA_CLIENT_ID
+        AthenaPracticeId   = $env:CARECONNECT_ATHENA_PRACTICE_ID
+        AthenaScopes       = $env:CARECONNECT_ATHENA_SCOPES
+        AthenaClientSecret = $env:CARECONNECT_ATHENA_CLIENT_SECRET
+    }
+    foreach ($key in $athenaOverrides.Keys) {
+        if (-not [string]::IsNullOrWhiteSpace($athenaOverrides[$key])) {
+            $ServiceOverrides[$key] = [string]$athenaOverrides[$key]
         }
     }
     Invoke-CloudFormationDeploy -StackName $ServiceStackName -TemplatePath $ServiceTemplate -ParameterFile $ServiceParameters -Overrides $ServiceOverrides

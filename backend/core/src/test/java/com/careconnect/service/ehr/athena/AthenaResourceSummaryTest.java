@@ -30,6 +30,18 @@ class AthenaResourceSummaryTest {
     }
 
     @Test
+    @DisplayName("a MedicationRequest with only a medicationReference is titled by its display")
+    void medicationReference() {
+        final ObjectNode request = resource("MedicationRequest");
+        request.putObject("medicationReference")
+                .put("reference", "Medication/a-195900.historicalcompmedication-13075")
+                .put("display", "brompheniram-PE-dihydrocodeine");
+
+        assertEquals("MedicationRequest: brompheniram-PE-dihydrocodeine",
+                AthenaResourceSummary.title("MedicationRequest", request));
+    }
+
+    @Test
     @DisplayName("a Procedure with only performedPeriod is dated by its start")
     void procedurePeriod() {
         final ObjectNode procedure = resource("Procedure");

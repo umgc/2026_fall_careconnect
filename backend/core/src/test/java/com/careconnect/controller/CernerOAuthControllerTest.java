@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -73,7 +74,7 @@ class CernerOAuthControllerTest {
         when(config.getWebReturnUrl()).thenReturn("https://careconnect.example/settings");
         when(oauth.exchangeAndStore(7L, "code-1", "verifier-1")).thenReturn(credential);
 
-        ResponseEntity<Void> response = controller.callback("code-1", "state-1", null);
+        ResponseEntity<Void> response = controller.callback("code-1", "state-1", null, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation()).hasToString(
@@ -99,7 +100,8 @@ class CernerOAuthControllerTest {
         when(states.consume("unknown")).thenReturn(null);
         when(config.getAppReturnDeepLink()).thenReturn("careconnect://oracle-health/linked");
 
-        final ResponseEntity<Void> response = controller.callback(null, "unknown", "denied");
+        final ResponseEntity<Void> response = controller.callback(
+                null, "unknown", "denied", "missing-patient");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FOUND);
         assertThat(response.getHeaders().getLocation()).hasToString(
@@ -115,7 +117,47 @@ class CernerOAuthControllerTest {
         when(oauth.exchangeAndStore(7L, "code-1", "verifier-1"))
                 .thenThrow(new IllegalStateException("synthetic failure"));
 
-        final ResponseEntity<Void> response = controller.callback("code-1", "state-1", null);
+        final ResponseEntity<Void> response = controller.callback(
+                "code-1", "state-1", null, null);
+
+        assertThat(response.getHeaders().getLocation()).hasToString(
+                "https://careconnect.example/settings?status=error");
+        verify(oauth).disconnect(7L);
+    }
+
+    @Test
+    void oracleDenialReturnsGenericErrorWithoutExchangingTheCode() {
+        final CernerAuthStateStore.Entry state = new CernerAuthStateStore.Entry(
+                7L, "verifier-1", "web", Instant.now().plusSeconds(60));
+        when(states.consume("state-1")).thenReturn(state);
+        when(config.getWebReturnUrl()).thenReturn("https://careconnect.example/settings");
+
+        final ResponseEntity<Void> response = controller.callback(
+                null, "state-1", "access_denied", "missing-patient");
+
+        assertThat(response.getHeaders().getLocation()).hasToString(
+                "https://careconnect.example/settings?status=error");
+        assertThat(CernerOAuthController.oracleFailure("access_denied", "missing-patient"))
+                .isEqualTo(CernerOAuthController.CallbackFailure.PATIENT_CONTEXT_MISSING);
+        verifyNoInteractions(links);
+    }
+
+    @Test
+    void crosswalkFailureDisconnectsAndKeepsThePublicRedirectGeneric() {
+        final CernerAuthStateStore.Entry state = new CernerAuthStateStore.Entry(
+                7L, "verifier-1", "web", Instant.now().plusSeconds(60));
+        final EhrCredential credential = EhrCredential.builder()
+                .userId(7L)
+                .patientFhirId("12724066")
+                .build();
+        when(states.consume("state-1")).thenReturn(state);
+        when(config.getWebReturnUrl()).thenReturn("https://careconnect.example/settings");
+        when(oauth.exchangeAndStore(7L, "code-1", "verifier-1")).thenReturn(credential);
+        when(links.link(7L, "12724066"))
+                .thenThrow(new IllegalStateException("synthetic crosswalk failure"));
+
+        final ResponseEntity<Void> response = controller.callback(
+                "code-1", "state-1", null, null);
 
         assertThat(response.getHeaders().getLocation()).hasToString(
                 "https://careconnect.example/settings?status=error");

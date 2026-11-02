@@ -679,6 +679,22 @@ if [[ "${CARECONNECT_EPIC_ENABLED-}" == "true" ]]; then
   SERVICE_OVERRIDES+=("EpicClientSecret=${CARECONNECT_EPIC_CLIENT_SECRET-}")
   SERVICE_OVERRIDES+=("EmailCryptoSecret=${CARECONNECT_EMAIL_CRYPTO_SECRET-}")
 fi
+# athenahealth. Unset leaves the stack's current value in place.
+if [[ -n "${CARECONNECT_ATHENA_ENABLED-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaEnabled=${CARECONNECT_ATHENA_ENABLED}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_CLIENT_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaClientId=${CARECONNECT_ATHENA_CLIENT_ID}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_PRACTICE_ID-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaPracticeId=${CARECONNECT_ATHENA_PRACTICE_ID}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_SCOPES-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaScopes=${CARECONNECT_ATHENA_SCOPES}")
+fi
+if [[ -n "${CARECONNECT_ATHENA_CLIENT_SECRET-}" ]]; then
+  SERVICE_OVERRIDES+=("AthenaClientSecret=${CARECONNECT_ATHENA_CLIENT_SECRET}")
+fi
 deploy_stack "$SERVICE_STACK_NAME" "$SERVICE_TEMPLATE" "$SERVICE_PARAMETERS" "${SERVICE_OVERRIDES[@]}"
 
 step "Reading final API endpoint"

@@ -80,11 +80,16 @@ public class CernerOAuthService {
         addPublicClientId(form);
 
         CernerTokenResponse token = postForToken(form);
-        if (token == null || blank(token.accessToken()) || blank(token.patient())) {
+        if (token == null || blank(token.accessToken())) {
             audit.record(userId, CernerProperties.SOURCE_ORACLE_HEALTH,
                     "ORACLE_HEALTH_CONNECT", "ERROR");
             throw new CernerReauthorizationRequiredException(
-                    "Oracle Health token response did not include access token and patient context");
+                    "Oracle Health token response did not include an access token");
+        }
+        if (blank(token.patient())) {
+            audit.record(userId, CernerProperties.SOURCE_ORACLE_HEALTH,
+                    "ORACLE_HEALTH_CONNECT", "ERROR");
+            throw new CernerPatientContextMissingException();
         }
 
         EhrCredential credential = credentials.findFirstByUserIdAndSourceOrderByIdDesc(
@@ -280,6 +285,14 @@ public class CernerOAuthService {
         public CernerReauthorizationRequiredException(
                 final String message, final Throwable cause) {
             super(message, cause);
+        }
+    }
+
+    /** Identifies a successful token response that omitted required SMART patient context. */
+    public static final class CernerPatientContextMissingException
+            extends CernerReauthorizationRequiredException {
+        public CernerPatientContextMissingException() {
+            super("Oracle Health token response did not include patient context");
         }
     }
 }

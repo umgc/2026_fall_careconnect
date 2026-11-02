@@ -116,7 +116,7 @@ WBS 4.7 and 4.8 intentionally overlap. Carry AllergyIntolerance through all phas
 
 - Backend unit, frontend unit/widget, slice, contract, integration, and E2E tests must be deterministic, offline, and use synthetic fixtures.
 - WireMock represents Cerner FHIR and OAuth boundaries. Tests must never depend on live sandbox availability.
-- The live smoke test uses Oracle Health code Console Test Sandbox only, an approved synthetic patient, S256 PKCE, provider authentication, and short-lived bearer tokens.
+- The M3 live smoke baseline used Oracle Health code Console Test Sandbox, an approved synthetic patient, S256 PKCE, provider authentication, and short-lived bearer tokens.
 - Secrets, authorization codes, code verifiers, access/refresh tokens, cookies, and identifying headers must never enter fixtures, logs, screenshots, or commits.
 - Sanitized captures must follow [fixtures-README.md](fixtures-README.md).
 - QA records capture status in [cerner-fixture-capture-register.md](cerner-fixture-capture-register.md) and executes live checks with [cerner-secure-sandbox-smoke-checklist.md](cerner-secure-sandbox-smoke-checklist.md).
@@ -130,7 +130,11 @@ The following values were verified against Oracle Health discovery/capability me
 | Provider/non-patient access | `https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d` | Use the provider authorization endpoint and the token endpoint whose host segment is `fhir-ehr-code.cerner.com`. |
 | Patient access | `https://fhir-myrecord.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d` | Use the patient authorization endpoint and the token endpoint whose host segment is `fhir-myrecord.cerner.com`. |
 
-The provider discovery document is `{providerBase}/.well-known/smart-configuration`. Tests must verify S256 PKCE, exact redirect URI matching, FHIR audience consistency, approved read-only scopes, and rejection of a token used against the wrong FHIR host. No client secret, launch value, authorization code, verifier, access token, refresh token, cookie, or bearer header may be committed.
+The persona-specific discovery document is `{base}/.well-known/smart-configuration`. Tests must verify S256 PKCE, exact redirect URI matching, FHIR audience consistency, approved read-only scopes, and rejection of a token used against the wrong FHIR host. No client secret, launch value, authorization code, verifier, access token, refresh token, cookie, or bearer header may be committed.
+
+### M4 workflow amendment — October 31, 2026
+
+M3 provider/Code Console testing remains valid historical evidence for an EHR-initiated launch. During M4, the team confirmed that CareConnect's intended users open the deployed application directly and connect their own Oracle Health records. The supported release workflow therefore uses a Patient/Online Oracle Health registration, the patient-persona SMART endpoints, and the `fhir-myrecord.cerner.com` audience/issuer/base. The deployed patient flow returned through the backend callback with `status=ok`, displayed Connected, and loaded records in staging. Final M4 evidence remains subject to the five-resource smoke checklist, disconnect/reconnect, negative authorization cases, automated E2E, contract, CI, coverage, and sign-off gates.
 
 Resource request patterns for the secure sandbox are:
 
