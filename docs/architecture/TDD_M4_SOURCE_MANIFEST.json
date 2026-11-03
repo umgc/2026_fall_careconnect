@@ -1,0 +1,144 @@
+{
+  "review_date": "2026-10-27",
+  "baseline_branch": "team-c-develop",
+  "baseline_sha": "d730b752e125cbca09a11c742db66a01b3347cf4",
+  "documentation_branch": "docs/m4-updated-tdds-20261027",
+  "source_files": {
+    "pom": "backend/core/pom.xml",
+    "flutter": "frontend/pubspec.yaml",
+    "security": "backend/core/src/main/java/com/careconnect/config/SecurityConfig.java",
+    "auth": "backend/core/src/main/java/com/careconnect/controller/AuthController.java",
+    "controllers": "backend/core/src/main/java/com/careconnect/controller",
+    "models": "backend/core/src/main/java/com/careconnect/model",
+    "services": "backend/core/src/main/java/com/careconnect/service",
+    "schema": "backend/core/src/main/resources/db",
+    "config": "backend/core/src/main/resources/application.properties",
+    "cloud": "cloudformation-fargate",
+    "ci": ".github/workflows",
+    "gate": "quality/ci/gate/policy.yaml",
+    "ai": "backend/core/src/main/java/com/careconnect/service/ai/ask/AiAskService.java",
+    "aictl": "backend/core/src/main/java/com/careconnect/controller/AiAskController.java",
+    "hitl": "backend/core/src/main/java/com/careconnect/controller/HitlController.java",
+    "consent": "backend/core/src/main/java/com/careconnect/service/consent/ConsentService.java",
+    "props": "backend/core/src/main/java/com/careconnect/config/CernerProperties.java",
+    "oauth": "backend/core/src/main/java/com/careconnect/service/ehr/CernerOAuthService.java",
+    "state": "backend/core/src/main/java/com/careconnect/service/ehr/CernerAuthStateStore.java",
+    "crypt": "backend/core/src/main/java/com/careconnect/security/TokenCryptor.java",
+    "oauthctl": "backend/core/src/main/java/com/careconnect/controller/CernerOAuthController.java",
+    "link": "backend/core/src/main/java/com/careconnect/service/ehr/CernerPatientLinkService.java",
+    "access": "backend/core/src/main/java/com/careconnect/integration/cerner/DefaultCernerAccessPolicy.java",
+    "patientctl": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerPatientAppointmentController.java",
+    "clinicalctl": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerClinicalController.java",
+    "allergyctl": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerAllergyController.java",
+    "patientservice": "backend/core/src/main/java/com/careconnect/integration/cerner/DefaultCernerPatientAppointmentService.java",
+    "clinicalservice": "backend/core/src/main/java/com/careconnect/integration/cerner/DefaultCernerConditionEncounterService.java",
+    "http": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerFhirBundleHttpClient.java",
+    "allergyhttp": "backend/core/src/main/java/com/careconnect/integration/cerner/CernerAllergyHttpClient.java",
+    "purge": "backend/core/src/main/java/com/careconnect/service/ehr/EhrSourceDataPurger.java",
+    "retention": "backend/core/src/main/java/com/careconnect/service/ehr/EhrRetentionWorker.java",
+    "ehrmodel": "backend/core/src/main/java/com/careconnect/model/ehr",
+    "ehrui": "frontend/lib/features/health/health_data/services/ehr_data_service.dart",
+    "record": "frontend/lib/features/health/health_data/models/health_record.dart",
+    "locale": "frontend/lib/providers/locale_provider.dart",
+    "arb": "frontend/lib/l10n",
+    "l10n": "frontend/l10n.yaml",
+    "issuer": "frontend/lib/services/oracle_health_issuer.dart",
+    "connect": "frontend/lib/widgets/oracle_health_connect_tile.dart",
+    "share": "frontend/lib/services/api_service.dart",
+    "summary": "docs/testing/m4-test-summary.md",
+    "decision": "docs/team-c/M4_CONSENT_DISCONNECT_RETENTION_DECISION_BRIEF_2026-10-22.md",
+    "legacy": "docs/01_Technical_Design_Document_TeamE_tracked.docx",
+    "oauthtest": "backend/core/src/test/java/com/careconnect/service/ehr/CernerOAuthServiceTest.java",
+    "controllertest": "backend/core/src/test/java/com/careconnect/integration/cerner/CernerPatientAppointmentControllerTest.java",
+    "wiremock": "backend/core/src/test/java/com/careconnect/integration/cerner/CernerConditionEncounterWireMockIntegrationTest.java",
+    "httptest": "backend/core/src/test/java/com/careconnect/integration/cerner/CernerFhirBundleHttpClientTest.java",
+    "dbtest": "backend/core/src/test/java/com/careconnect/repository/ehr/EhrCanonicalSchemaPostgresTest.java",
+    "aitest": "backend/core/src/test/java/com/careconnect/service/ai/ask/AiAskServiceTest.java",
+    "localetest": "frontend/test/providers/locale_provider_test.dart",
+    "launchtest": "frontend/test/pages/oracle_health_launch_page_test.dart"
+  },
+  "application_tests_rerun": false,
+  "prior_test_sha": "ee5ce3963209a5d10301bdd34b2ef8b960673ba1",
+  "prior_pr": 429,
+  "prior_pr_state_at_review": "OPEN",
+  "prior_checks": "Both SUCCESS; quality policy report_only",
+  "validation": "All pinned source paths exist; 18 numbered sections in each TDD.",
+  "localization_scan": {
+    "am": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "ar": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "bn": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "en": {
+      "unique_keys": 1335,
+      "missing_count": 0,
+      "extra_count": 0
+    },
+    "es": {
+      "unique_keys": 1314,
+      "missing_count": 21,
+      "extra_count": 0
+    },
+    "fa": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "fr": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "hi": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "ja": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "ne": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "pt": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "ru": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    },
+    "ur": {
+      "unique_keys": 949,
+      "missing_count": 387,
+      "extra_count": 1
+    },
+    "zh": {
+      "unique_keys": 948,
+      "missing_count": 387,
+      "extra_count": 0
+    }
+  },
+  "historical_local_test_report": "/Volumes/TerenceB/SWEN670/output/M4/Test_Review_2026-10-25_Fixes/verification-summary.json",
+  "historical_version_manifest": "/Volumes/TerenceB/SWEN670/output/M4/Test_Review_2026-10-25_Fixes/version-manifest.json",
+  "prior_check_urls": [
+    "https://github.com/umgc/2026_fall_careconnect/actions/runs/40221816810",
+    "https://github.com/umgc/2026_fall_careconnect/actions/runs/40221816807"
+  ]
+}
