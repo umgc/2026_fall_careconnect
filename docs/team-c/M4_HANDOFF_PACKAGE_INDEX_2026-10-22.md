@@ -1,5 +1,7 @@
 # M4 handoff package index
 
+October 31 follow-up: [current source, test results and open receiving gates](M4_PRE_HANDOFF_REVIEW_2026-10-31.md). This October 22 index remains a historical preparation snapshot.
+
 Snapshot: 2026-10-22 14:42:21 EDT. Prepared for Terence Boyce, Technical Architect.
 Supports WBS 4.5.4 Deliverable Handoff and 4.5.6 Final Check Handoff.
 Status: preparation draft; not a delivered or accepted package.

@@ -3,14 +3,21 @@ package com.careconnect.service;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.MockedConstruction;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link KvsAudioTranscodeService}: ffmpeg command construction, including the
@@ -20,7 +27,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 class KvsAudioTranscodeServiceTest {
 
-    /** The JVM running this test: exits non-zero on ffmpeg's arguments, on every OS. */
+    /** Existing executable used only by input validation tests. */
     private static final String JAVA_BIN =
             Path.of(System.getProperty("java.home"), "bin", "java").toString();
 
@@ -46,11 +53,29 @@ class KvsAudioTranscodeServiceTest {
     void toWav_transcoderFails_throwsWithExitCodeAndOutput(@TempDir final Path dir) throws Exception {
         final Path raw = Files.writeString(dir.resolve("in.webm"), "not audio");
 
-        // `java -y ...` rejects the unknown option and exits 1, standing in for a failed ffmpeg.
-        assertThatThrownBy(() -> serviceWith(JAVA_BIN).toWav(clip(raw)))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("exitCode=1")
-                .hasMessageContaining("-y");
+        final Process process = mock(Process.class);
+        when(process.getInputStream()).thenReturn(new ByteArrayInputStream(
+                "invalid audio fixture".getBytes(StandardCharsets.UTF_8)));
+        when(process.waitFor()).thenReturn(17);
+        final AtomicReference<Path> output = new AtomicReference<>();
+
+        // Preserve PR #429's portable failure fixture with the current clip/list API.
+        try (MockedConstruction<ProcessBuilder> builders = mockConstruction(ProcessBuilder.class,
+                (builder, context) -> {
+                    final List<?> command = (List<?>) context.arguments().get(0);
+                    assertThat(command.indexOf(raw.toString())).isGreaterThan(0);
+                    assertThat(command.get(command.indexOf(raw.toString()) - 1)).isEqualTo("-i");
+                    output.set(Path.of((String) command.get(command.size() - 1)));
+                    when(builder.redirectErrorStream(true)).thenReturn(builder);
+                    when(builder.start()).thenReturn(process);
+                })) {
+            assertThatThrownBy(() -> serviceWith("ffmpeg-test").toWav(clip(raw)))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("exitCode=17")
+                    .hasMessageContaining("invalid audio fixture");
+            assertThat(builders.constructed()).hasSize(1);
+            assertThat(output.get()).doesNotExist();
+        }
     }
 
     @Test
